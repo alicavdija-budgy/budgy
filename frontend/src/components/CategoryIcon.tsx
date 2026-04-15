@@ -5,8 +5,8 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '../../data/swiss-data';
-import { Colors, BorderRadius, Spacing } from '../../constants/theme';
+import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '../data/swiss-data';
+import { Colors, BorderRadius, Spacing } from '../constants/theme';
 
 const CATEGORY_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   courses: 'cart',

@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../constants/theme';
+import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../constants/theme';
 
 // Button Component
 interface ButtonProps {

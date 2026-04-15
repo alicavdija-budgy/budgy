@@ -6,6 +6,18 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// Polyfill import.meta for non-ESM environments
+if (typeof globalThis !== 'undefined' && !(globalThis as any).importMeta) {
+  try {
+    // @ts-ignore
+    if (typeof import.meta === 'undefined') {
+      // noop
+    }
+  } catch {
+    // import.meta not available, that's fine
+  }
+}
 import type {
   User,
   UserPreferences,

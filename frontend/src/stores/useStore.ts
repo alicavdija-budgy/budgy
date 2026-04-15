@@ -1,0 +1,332 @@
+/**
+ * GUARDIAN MONEY CHF - Global State Store
+ * Using Zustand with MMKV persistence
+ */
+
+import { create } from 'zustand';
+import { createJSONStorage, persist } from 'zustand/middleware';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import type {
+  User,
+  UserPreferences,
+  Transaction,
+  ProExpense,
+  Income,
+  SavingsGoal,
+  Budget,
+  RecurringExpense,
+  Contract,
+  Debt,
+  Investment,
+  Notification,
+  ChatMessage,
+} from '../types';
+import { SEED_DATA } from '../data/seed-data';
+
+interface AppState {
+  // Auth
+  user: User | null;
+  isAuthenticated: boolean;
+  
+  // Preferences
+  preferences: UserPreferences;
+  
+  // Financial data
+  transactions: Transaction[];
+  proExpenses: ProExpense[];
+  incomes: Income[];
+  savingsGoals: SavingsGoal[];
+  budgets: Budget[];
+  recurringExpenses: RecurringExpense[];
+  contracts: Contract[];
+  debts: Debt[];
+  investments: Investment[];
+  
+  // Notifications & Chat
+  notifications: Notification[];
+  chatHistory: ChatMessage[];
+  
+  // UI state
+  isPro: boolean;
+  
+  // Actions
+  setUser: (user: User | null) => void;
+  setPreferences: (prefs: Partial<UserPreferences>) => void;
+  setPro: (isPro: boolean) => void;
+  
+  // Transaction actions
+  addTransaction: (tx: Transaction) => void;
+  updateTransaction: (id: string, tx: Partial<Transaction>) => void;
+  deleteTransaction: (id: string) => void;
+  
+  // Pro expense actions
+  addProExpense: (expense: ProExpense) => void;
+  deleteProExpense: (id: string) => void;
+  
+  // Income actions
+  addIncome: (income: Income) => void;
+  deleteIncome: (id: string) => void;
+  
+  // Savings actions
+  addSavingsGoal: (goal: SavingsGoal) => void;
+  updateSavingsGoal: (id: string, goal: Partial<SavingsGoal>) => void;
+  deleteSavingsGoal: (id: string) => void;
+  depositToGoal: (id: string, amount: number) => void;
+  
+  // Budget actions
+  addBudget: (budget: Budget) => void;
+  deleteBudget: (id: string) => void;
+  
+  // Recurring expense actions
+  addRecurringExpense: (expense: RecurringExpense) => void;
+  toggleRecurringExpense: (id: string) => void;
+  deleteRecurringExpense: (id: string) => void;
+  
+  // Contract actions
+  addContract: (contract: Contract) => void;
+  deleteContract: (id: string) => void;
+  
+  // Debt actions
+  addDebt: (debt: Debt) => void;
+  updateDebt: (id: string, debt: Partial<Debt>) => void;
+  deleteDebt: (id: string) => void;
+  
+  // Investment actions
+  addInvestment: (investment: Investment) => void;
+  updateInvestment: (id: string, investment: Partial<Investment>) => void;
+  deleteInvestment: (id: string) => void;
+  
+  // Notification actions
+  addNotification: (notification: Notification) => void;
+  markNotificationRead: (id: string) => void;
+  clearNotifications: () => void;
+  
+  // Chat actions
+  addChatMessage: (message: ChatMessage) => void;
+  clearChatHistory: () => void;
+  
+  // Data management
+  loadSeedData: () => void;
+  clearAllData: () => void;
+  logout: () => void;
+}
+
+const defaultPreferences: UserPreferences = {
+  language: 'fr',
+  currency: 'CHF',
+  canton: 'VD',
+  onboarded: false,
+  theme: 'dark',
+  biometricEnabled: false,
+};
+
+export const useStore = create<AppState>()(
+  persist(
+    (set, get) => ({
+      // Initial state
+      user: null,
+      isAuthenticated: false,
+      preferences: defaultPreferences,
+      transactions: [],
+      proExpenses: [],
+      incomes: [],
+      savingsGoals: [],
+      budgets: [],
+      recurringExpenses: [],
+      contracts: [],
+      debts: [],
+      investments: [],
+      notifications: [],
+      chatHistory: [],
+      isPro: false,
+      
+      // Auth actions
+      setUser: (user) => set({ user, isAuthenticated: !!user }),
+      
+      setPreferences: (prefs) => set((state) => ({
+        preferences: { ...state.preferences, ...prefs },
+      })),
+      
+      setPro: (isPro) => set({ isPro }),
+      
+      // Transaction actions
+      addTransaction: (tx) => set((state) => ({
+        transactions: [tx, ...state.transactions],
+      })),
+      
+      updateTransaction: (id, tx) => set((state) => ({
+        transactions: state.transactions.map((t) =>
+          t.id === id ? { ...t, ...tx, updatedAt: Date.now() } : t
+        ),
+      })),
+      
+      deleteTransaction: (id) => set((state) => ({
+        transactions: state.transactions.filter((t) => t.id !== id),
+      })),
+      
+      // Pro expense actions
+      addProExpense: (expense) => set((state) => ({
+        proExpenses: [expense, ...state.proExpenses],
+      })),
+      
+      deleteProExpense: (id) => set((state) => ({
+        proExpenses: state.proExpenses.filter((e) => e.id !== id),
+      })),
+      
+      // Income actions
+      addIncome: (income) => set((state) => ({
+        incomes: [income, ...state.incomes],
+      })),
+      
+      deleteIncome: (id) => set((state) => ({
+        incomes: state.incomes.filter((i) => i.id !== id),
+      })),
+      
+      // Savings actions
+      addSavingsGoal: (goal) => set((state) => ({
+        savingsGoals: [goal, ...state.savingsGoals],
+      })),
+      
+      updateSavingsGoal: (id, goal) => set((state) => ({
+        savingsGoals: state.savingsGoals.map((g) =>
+          g.id === id ? { ...g, ...goal } : g
+        ),
+      })),
+      
+      deleteSavingsGoal: (id) => set((state) => ({
+        savingsGoals: state.savingsGoals.filter((g) => g.id !== id),
+      })),
+      
+      depositToGoal: (id, amount) => set((state) => ({
+        savingsGoals: state.savingsGoals.map((g) =>
+          g.id === id ? { ...g, saved: Math.min(g.saved + amount, g.target) } : g
+        ),
+      })),
+      
+      // Budget actions
+      addBudget: (budget) => set((state) => ({
+        budgets: [budget, ...state.budgets.filter((b) => b.category !== budget.category)],
+      })),
+      
+      deleteBudget: (id) => set((state) => ({
+        budgets: state.budgets.filter((b) => b.id !== id),
+      })),
+      
+      // Recurring expense actions
+      addRecurringExpense: (expense) => set((state) => ({
+        recurringExpenses: [expense, ...state.recurringExpenses],
+      })),
+      
+      toggleRecurringExpense: (id) => set((state) => ({
+        recurringExpenses: state.recurringExpenses.map((e) =>
+          e.id === id ? { ...e, active: !e.active } : e
+        ),
+      })),
+      
+      deleteRecurringExpense: (id) => set((state) => ({
+        recurringExpenses: state.recurringExpenses.filter((e) => e.id !== id),
+      })),
+      
+      // Contract actions
+      addContract: (contract) => set((state) => ({
+        contracts: [contract, ...state.contracts],
+      })),
+      
+      deleteContract: (id) => set((state) => ({
+        contracts: state.contracts.filter((c) => c.id !== id),
+      })),
+      
+      // Debt actions
+      addDebt: (debt) => set((state) => ({
+        debts: [debt, ...state.debts],
+      })),
+      
+      updateDebt: (id, debt) => set((state) => ({
+        debts: state.debts.map((d) =>
+          d.id === id ? { ...d, ...debt } : d
+        ),
+      })),
+      
+      deleteDebt: (id) => set((state) => ({
+        debts: state.debts.filter((d) => d.id !== id),
+      })),
+      
+      // Investment actions
+      addInvestment: (investment) => set((state) => ({
+        investments: [investment, ...state.investments],
+      })),
+      
+      updateInvestment: (id, investment) => set((state) => ({
+        investments: state.investments.map((i) =>
+          i.id === id ? { ...i, ...investment } : i
+        ),
+      })),
+      
+      deleteInvestment: (id) => set((state) => ({
+        investments: state.investments.filter((i) => i.id !== id),
+      })),
+      
+      // Notification actions
+      addNotification: (notification) => set((state) => ({
+        notifications: [notification, ...state.notifications],
+      })),
+      
+      markNotificationRead: (id) => set((state) => ({
+        notifications: state.notifications.map((n) =>
+          n.id === id ? { ...n, read: true } : n
+        ),
+      })),
+      
+      clearNotifications: () => set({ notifications: [] }),
+      
+      // Chat actions
+      addChatMessage: (message) => set((state) => ({
+        chatHistory: [...state.chatHistory, message],
+      })),
+      
+      clearChatHistory: () => set({ chatHistory: [] }),
+      
+      // Data management
+      loadSeedData: () => set({
+        transactions: SEED_DATA.transactions,
+        proExpenses: SEED_DATA.proExpenses,
+        incomes: SEED_DATA.incomes,
+        savingsGoals: SEED_DATA.savingsGoals,
+        budgets: SEED_DATA.budgets,
+        recurringExpenses: SEED_DATA.recurringExpenses,
+        contracts: SEED_DATA.contracts,
+        debts: SEED_DATA.debts,
+        investments: SEED_DATA.investments,
+        notifications: SEED_DATA.notifications,
+      }),
+      
+      clearAllData: () => set({
+        user: null,
+        isAuthenticated: false,
+        preferences: defaultPreferences,
+        transactions: [],
+        proExpenses: [],
+        incomes: [],
+        savingsGoals: [],
+        budgets: [],
+        recurringExpenses: [],
+        contracts: [],
+        debts: [],
+        investments: [],
+        notifications: [],
+        chatHistory: [],
+        isPro: false,
+      }),
+      
+      logout: () => set({
+        user: null,
+        isAuthenticated: false,
+        preferences: { ...get().preferences, onboarded: false },
+      }),
+    }),
+    {
+      name: 'guardian-money-storage',
+      storage: createJSONStorage(() => AsyncStorage),
+    }
+  )
+);

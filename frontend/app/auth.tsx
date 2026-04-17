@@ -86,7 +86,8 @@ export default function AuthScreen() {
           };
           setUser(user);
           loadSeedData();
-          router.replace('/onboarding');
+          // Navigate with fallback
+          try { router.replace('/onboarding'); } catch { if (typeof window !== 'undefined') window.location.href = '/onboarding'; }
         } else {
           const { data, error } = await supabase.auth.signInWithPassword({
             email: email.toLowerCase().trim(),
@@ -103,7 +104,8 @@ export default function AuthScreen() {
           };
           setUser(user);
           setPreferences({ onboarded: true });
-          router.replace('/(tabs)');
+          loadSeedData();
+          try { router.replace('/(tabs)'); } catch { if (typeof window !== 'undefined') window.location.href = '/(tabs)'; }
         }
       } else {
         // Fallback to local auth
@@ -119,9 +121,9 @@ export default function AuthScreen() {
         loadSeedData();
         if (mode === 'login') {
           setPreferences({ onboarded: true });
-          router.replace('/(tabs)');
+          try { router.replace('/(tabs)'); } catch { if (typeof window !== 'undefined') window.location.href = '/(tabs)'; }
         } else {
-          router.replace('/onboarding');
+          try { router.replace('/onboarding'); } catch { if (typeof window !== 'undefined') window.location.href = '/onboarding'; }
         }
       }
     } catch (error: any) {
@@ -141,7 +143,6 @@ export default function AuthScreen() {
   const handleDemoMode = async () => {
     setLoading(true);
     try {
-      await new Promise(r => setTimeout(r, 400));
       const demoUser = {
         id: 'demo_user',
         email: 'demo@guardian.app',
@@ -154,8 +155,16 @@ export default function AuthScreen() {
       setPro(true);
       loadSeedData();
       setPreferences({ onboarded: true });
-      router.replace('/(tabs)');
-    } finally {
+      // Wait for AsyncStorage to persist, then navigate
+      await new Promise(r => setTimeout(r, 500));
+      // Use multiple navigation strategies for maximum compatibility
+      try { router.replace('/(tabs)'); } catch {}
+      setTimeout(() => {
+        if (typeof window !== 'undefined') {
+          window.location.assign('/(tabs)');
+        }
+      }, 200);
+    } catch {
       setLoading(false);
     }
   };

@@ -49,6 +49,14 @@
         {
           "cameraPermission": "Scanner vos tickets de caisse"
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#6366F1",
+          "sounds": []
+        }
       ]
     ],
     "experiments": {

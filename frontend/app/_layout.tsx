@@ -1,16 +1,31 @@
 /**
  * GUARDIAN MONEY CHF - Root Layout
- * Main navigation structure
+ * Main navigation structure + notifications init
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Colors } from '../src/constants/theme';
+import {
+  requestNotificationPermissions,
+  scheduleMonthlyReminder,
+} from '../src/services/notifications';
 
 export default function RootLayout() {
+  // Initialize push notifications on app start (native only)
+  useEffect(() => {
+    if (Platform.OS !== 'web') {
+      requestNotificationPermissions().then((granted) => {
+        if (granted) {
+          scheduleMonthlyReminder();
+        }
+      });
+    }
+  }, []);
+
   return (
     <SafeAreaProvider>
       <StatusBar style="light" />

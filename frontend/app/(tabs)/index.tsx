@@ -3,7 +3,7 @@
  * Dashboard with overview, quick actions, and notifications
  */
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -38,7 +38,15 @@ export default function HomeScreen() {
     notifications,
     isPro,
     markNotificationRead,
+    loadSeedData,
   } = useStore();
+
+  // Auto-load seed data if user is logged in but has no data
+  useEffect(() => {
+    if (user && transactions.length === 0 && incomes.length === 0) {
+      loadSeedData();
+    }
+  }, [user]);
 
   const [refreshing, setRefreshing] = React.useState(false);
 

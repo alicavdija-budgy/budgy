@@ -49,7 +49,7 @@ export default function MoreScreen() {
         {
           id: 'lamal',
           title: 'Comparateur LAMal',
-          subtitle: '8 assureurs · 26 cantons',
+          subtitle: '15 assureurs Priminfo · 26 cantons',
           icon: 'shield-checkmark',
           color: Colors.success,
           route: '/more/lamal-comparator',
@@ -108,6 +108,14 @@ export default function MoreScreen() {
           icon: 'card',
           color: Colors.error,
           route: '/more/debts',
+        },
+        {
+          id: 'export',
+          title: 'Export PDF',
+          subtitle: 'Notes de frais A4 · TVA 8.1%',
+          icon: 'document-text',
+          color: Colors.teal,
+          route: '/more/export-pdf',
         },
       ],
     },

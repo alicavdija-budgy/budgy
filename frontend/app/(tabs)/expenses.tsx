@@ -21,7 +21,7 @@ import { useStore } from '../../src/stores/useStore';
 import { Card, Button, EmptyState, Badge } from '../../src/components/ui';
 import { CategoryIcon, getCategoryName } from '../../src/components/CategoryIcon';
 import { formatNumber } from '../../src/utils/calculations';
-import { EXPENSE_CATEGORIES } from '../../src/data/swiss-data';
+import { EXPENSE_CATEGORIES, PAYMENT_METHODS } from '../../src/data/swiss-data';
 
 type Tab = 'daily' | 'pro' | 'contracts';
 
@@ -46,6 +46,7 @@ export default function ExpensesScreen() {
     amount: '',
     category: 'courses',
     justification: '',
+    paymentMethod: 'card',
   });
 
   const CUR = preferences.currency;
@@ -84,10 +85,10 @@ export default function ExpensesScreen() {
         note: '',
       });
     } else {
-      addTransaction({ ...expense, note: '' });
+      addTransaction({ ...expense, note: '', paymentMethod: newExpense.paymentMethod as any });
     }
 
-    setNewExpense({ title: '', amount: '', category: 'courses', justification: '' });
+    setNewExpense({ title: '', amount: '', category: 'courses', justification: '', paymentMethod: 'card' });
     setShowAddModal(false);
   };
 
@@ -198,6 +199,18 @@ export default function ExpensesScreen() {
                     </View>
                     <View style={styles.expenseRight}>
                       <Text style={styles.expenseAmount}>-{formatNumber(tx.amount, 2)}</Text>
+                      {tx.paymentMethod && (
+                        <View style={styles.paymentBadge}>
+                          <Ionicons
+                            name={(PAYMENT_METHODS.find(p => p.id === tx.paymentMethod)?.icon || 'card') as any}
+                            size={12}
+                            color={PAYMENT_METHODS.find(p => p.id === tx.paymentMethod)?.color || Colors.textTertiary}
+                          />
+                          <Text style={styles.paymentBadgeText}>
+                            {PAYMENT_METHODS.find(p => p.id === tx.paymentMethod)?.name || tx.paymentMethod}
+                          </Text>
+                        </View>
+                      )}
                       <TouchableOpacity onPress={() => handleDelete(tx.id)}>
                         <Ionicons name="trash-outline" size={18} color={Colors.textTertiary} />
                       </TouchableOpacity>
@@ -363,6 +376,29 @@ export default function ExpensesScreen() {
                 />
               </View>
             )}
+
+            {/* Payment Method Selector */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Mode de paiement</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View style={styles.categoryGrid}>
+                  {PAYMENT_METHODS.map((pm) => (
+                    <TouchableOpacity
+                      key={pm.id}
+                      testID={`payment-${pm.id}`}
+                      style={[
+                        styles.categoryItem,
+                        newExpense.paymentMethod === pm.id && { backgroundColor: `${pm.color}30`, borderWidth: 1, borderColor: pm.color },
+                      ]}
+                      onPress={() => setNewExpense((p) => ({ ...p, paymentMethod: pm.id }))}
+                    >
+                      <Ionicons name={pm.icon as any} size={18} color={pm.color} />
+                      <Text style={styles.categoryLabel}>{pm.name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
+            </View>
 
             <Button
               title="Ajouter"
@@ -589,5 +625,18 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     fontSize: FontSizes.xs,
     marginTop: Spacing.xs,
+  },
+  paymentBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Colors.card,
+    borderRadius: BorderRadius.sm,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  paymentBadgeText: {
+    color: Colors.textSecondary,
+    fontSize: 10,
   },
 });

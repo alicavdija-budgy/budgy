@@ -22,12 +22,15 @@ export interface UserPreferences {
   biometricEnabled: boolean;
 }
 
+export type PaymentMethod = 'cash' | 'card' | 'twint' | 'ebanking' | 'postfinance' | 'lsv' | 'other';
+
 export interface Transaction {
   id: string;
   title: string;
   amount: number;
   date: string;
   category: string;
+  paymentMethod?: PaymentMethod;
   note?: string;
   receipt?: string; // Base64 image
   createdAt: number;

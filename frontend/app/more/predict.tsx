@@ -1,18 +1,12 @@
 /**
- * GUARDIAN MONEY CHF - Guardian Predict IA
- * AI-powered predictions, alerts, and coach
+ * GUARDIAN MONEY CHF - Guardian Predict IA (with real LLM Coach)
+ * AI predictions, alerts, cash flow, insights, and GPT-powered coach
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
-  View,
-  Text,
-  ScrollView,
-  StyleSheet,
-  TouchableOpacity,
-  TextInput,
-  KeyboardAvoidingView,
-  Platform,
+  View, Text, ScrollView, StyleSheet, TouchableOpacity,
+  TextInput, KeyboardAvoidingView, Platform, ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,135 +15,150 @@ import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src
 import { useStore } from '../../src/stores/useStore';
 import { Card, Badge, ProgressBar } from '../../src/components/ui';
 import { CategoryIcon, getCategoryName } from '../../src/components/CategoryIcon';
-import { formatNumber, pct, predictMonthlyExpenses, detectAnomaly } from '../../src/utils/calculations';
-import { EXPENSE_CATEGORIES } from '../../src/data/swiss-data';
+import { DonutChart, MiniBarChart } from '../../src/components/Charts';
+import { formatNumber, pct, predictMonthlyExpenses } from '../../src/utils/calculations';
 
 type Tab = 'predictions' | 'alerts' | 'cashflow' | 'insights' | 'coach';
+
+const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 
 export default function PredictScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { preferences, transactions, incomes, budgets, chatHistory, addChatMessage } = useStore();
+  const { preferences, transactions, incomes, budgets, chatHistory, addChatMessage, user } = useStore();
+  const scrollRef = useRef<ScrollView>(null);
 
   const [activeTab, setActiveTab] = useState<Tab>('predictions');
   const [message, setMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   const CUR = preferences.currency;
   const dayOfMonth = new Date().getDate();
 
-  // Calculate predictions by category
   const categoryPredictions = useMemo(() => {
     const categories = ['courses', 'restaurant', 'loisirs', 'shopping', 'transport'];
     return categories.map(cat => {
       const catTx = transactions.filter(t => t.category === cat);
       const currentSpent = catTx.reduce((sum, t) => sum + t.amount, 0);
-      const historicalData = [{ month: 'prev', amount: currentSpent * 0.9, category: cat }];
-      const prediction = predictMonthlyExpenses(historicalData, currentSpent, dayOfMonth);
+      const prediction = predictMonthlyExpenses(
+        [{ month: 'prev', amount: currentSpent * 0.9, category: cat }],
+        currentSpent,
+        dayOfMonth
+      );
       const budget = budgets.find(b => b.category === cat);
       return { category: cat, currentSpent, ...prediction, budget: budget?.limit || 0 };
     });
   }, [transactions, budgets, dayOfMonth]);
 
   const totalPredicted = categoryPredictions.reduce((sum, p) => sum + p.predicted, 0);
-  const totalBudget = budgets.reduce((sum, b) => sum + b.limit, 0);
   const monthlyIncome = incomes.filter(i => i.type === 'recurring').reduce((sum, i) => sum + i.amount, 0);
+  const totalExpenses = transactions.reduce((sum, t) => sum + t.amount, 0);
+  const savingsRate = monthlyIncome > 0 ? ((monthlyIncome - totalPredicted) / monthlyIncome * 100) : 0;
 
-  // Generate alerts
+  // Alerts
   const alerts = useMemo(() => {
-    const result: { id: string; type: string; title: string; message: string; severity: 'low' | 'medium' | 'high' }[] = [];
-    
+    const result: { id: string; title: string; message: string; severity: 'low' | 'medium' | 'high'; icon: string }[] = [];
     categoryPredictions.forEach(p => {
       if (p.budget > 0 && p.predicted > p.budget) {
         result.push({
-          id: `alert_${p.category}`,
-          type: 'budget_exceeded',
-          title: `Budget ${getCategoryName(p.category)} dépassé`,
-          message: `Prévision: ${formatNumber(p.predicted)} / Budget: ${formatNumber(p.budget)}`,
-          severity: p.predicted > p.budget * 1.3 ? 'high' : 'medium',
+          id: `a_${p.category}`, title: `Budget ${getCategoryName(p.category)} dépassé`,
+          message: `Prévu: ${formatNumber(p.predicted)} / Budget: ${formatNumber(p.budget)}`,
+          severity: p.predicted > p.budget * 1.3 ? 'high' : 'medium', icon: 'warning',
         });
       }
     });
-
     if (totalPredicted > monthlyIncome * 0.8) {
       result.push({
-        id: 'alert_income',
-        type: 'income_warning',
-        title: 'Dépenses élevées',
-        message: `Vos dépenses prévues représentent ${pct(totalPredicted, monthlyIncome)}% de vos revenus`,
-        severity: totalPredicted > monthlyIncome ? 'high' : 'medium',
+        id: 'a_income', title: 'Dépenses élevées',
+        message: `${pct(totalPredicted, monthlyIncome)}% de vos revenus ce mois`,
+        severity: totalPredicted > monthlyIncome ? 'high' : 'medium', icon: 'trending-up',
       });
     }
-
     return result;
   }, [categoryPredictions, totalPredicted, monthlyIncome]);
 
-  // Insights
-  const insights = useMemo(() => {
-    const result: { icon: string; title: string; description: string; color: string }[] = [];
-    
-    const topCategory = categoryPredictions.sort((a, b) => b.currentSpent - a.currentSpent)[0];
-    if (topCategory) {
-      result.push({
-        icon: '📊',
-        title: 'Catégorie principale',
-        description: `${getCategoryName(topCategory.category)} représente ${pct(topCategory.currentSpent, transactions.reduce((s, t) => s + t.amount, 0))}% de vos dépenses`,
-        color: Colors.primary,
-      });
-    }
+  // Build financial context for AI
+  const financialContext = useMemo(() => {
+    return `Revenu mensuel: CHF ${formatNumber(monthlyIncome)}
+Dépenses ce mois: CHF ${formatNumber(totalExpenses)} (${transactions.length} transactions)
+Prévision fin de mois: CHF ${formatNumber(totalPredicted)}
+Taux d'épargne: ${savingsRate.toFixed(0)}%
+Canton: ${preferences.canton}
+Devise: ${preferences.currency}
+Objectifs d'épargne: ${useStore.getState().savingsGoals.length}
+Budgets: ${budgets.map(b => `${getCategoryName(b.category)}: ${formatNumber(b.limit)}`).join(', ')}
+Alertes actives: ${alerts.length}`;
+  }, [monthlyIncome, totalExpenses, totalPredicted, savingsRate, preferences, budgets, alerts]);
 
-    const savingsRate = monthlyIncome > 0 ? ((monthlyIncome - totalPredicted) / monthlyIncome) * 100 : 0;
-    result.push({
-      icon: savingsRate > 20 ? '🎉' : savingsRate > 10 ? '👍' : '⚠️',
-      title: "Taux d'épargne",
-      description: `${savingsRate.toFixed(0)}% de vos revenus ${savingsRate > 20 ? '- Excellent!' : savingsRate > 10 ? '- Bien' : '- Améliorable'}`,
-      color: savingsRate > 20 ? Colors.success : savingsRate > 10 ? Colors.warning : Colors.error,
-    });
-
-    return result;
-  }, [categoryPredictions, transactions, monthlyIncome, totalPredicted]);
-
-  const handleSendMessage = () => {
+  // Send message to real AI coach
+  const handleSendMessage = async () => {
     if (!message.trim()) return;
+    const userMsg = message.trim();
+    setMessage('');
 
-    addChatMessage({
-      id: `msg_${Date.now()}`,
-      role: 'user',
-      content: message,
-      timestamp: Date.now(),
-    });
+    addChatMessage({ id: `msg_${Date.now()}`, role: 'user', content: userMsg, timestamp: Date.now() });
+    setIsLoading(true);
 
-    // Generate AI response based on user data
-    const responses = [
-      `Basé sur vos dépenses, je prévois ${formatNumber(totalPredicted)} CHF ce mois. Conseil: Réduisez les dépenses restaurant de 20% pour économiser ~${formatNumber(categoryPredictions.find(p => p.category === 'restaurant')?.currentSpent || 0 * 0.2)}.`,
-      `Votre taux d'épargne actuel est de ${pct(monthlyIncome - totalPredicted, monthlyIncome)}%. Pour atteindre l'indépendance financière, visez 30-50%.`,
-      `Vous avez ${alerts.length} alertes actives. La plus urgente concerne vos dépenses ${alerts[0]?.title || 'courses'}.`,
-      `Conseil: Augmentez votre 3ème pilier au maximum (CHF 7'258) pour économiser jusqu'à 30% d'impôts.`,
-    ];
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
 
-    setTimeout(() => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/coach/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: `guardian_${user?.id || 'anon'}`,
+          message: userMsg,
+          financial_context: financialContext,
+        }),
+      });
+
+      if (!response.ok) throw new Error('API error');
+      const data = await response.json();
+
       addChatMessage({
         id: `msg_${Date.now()}_ai`,
         role: 'assistant',
-        content: responses[Math.floor(Math.random() * responses.length)],
+        content: data.response,
         timestamp: Date.now(),
       });
-    }, 500);
-
-    setMessage('');
+    } catch {
+      // Fallback to local response if API fails
+      const fallbacks = [
+        `Basé sur vos données, votre taux d'épargne est de ${savingsRate.toFixed(0)}%. ${savingsRate > 20 ? 'Excellent!' : 'Visez 20-30% pour l\'indépendance financière.'}`,
+        `Vous avez ${alerts.length} alertes budget. Revoyez vos dépenses ${categoryPredictions[0]?.category || 'courses'} en priorité.`,
+        `Conseil: Cotisez CHF 7'258 au 3ème pilier pour économiser jusqu'à 30% d'impôts dans le canton ${preferences.canton}.`,
+      ];
+      addChatMessage({
+        id: `msg_${Date.now()}_ai`,
+        role: 'assistant',
+        content: fallbacks[Math.floor(Math.random() * fallbacks.length)],
+        timestamp: Date.now(),
+      });
+    } finally {
+      setIsLoading(false);
+      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 200);
+    }
   };
+
+  const quickQuestions = [
+    'Comment réduire mes impôts?',
+    'Quelle franchise LAMal choisir?',
+    'Comment épargner plus?',
+    'Analyse mes dépenses',
+  ];
 
   const tabs: { key: Tab; label: string; icon: string }[] = [
     { key: 'predictions', label: 'Prédictions', icon: 'analytics' },
-    { key: 'alerts', label: 'Alertes', icon: 'warning' },
-    { key: 'cashflow', label: 'Cash Flow', icon: 'trending-up' },
+    { key: 'alerts', label: `Alertes${alerts.length ? ` (${alerts.length})` : ''}`, icon: 'warning' },
+    { key: 'cashflow', label: 'Cash Flow', icon: 'swap-vertical' },
     { key: 'insights', label: 'Insights', icon: 'bulb' },
-    { key: 'coach', label: 'Coach IA', icon: 'chatbubbles' },
+    { key: 'coach', label: 'Coach IA', icon: 'sparkles' },
   ];
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: insets.top }]} testID="predict-screen">
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={24} color={Colors.text} />
         </TouchableOpacity>
         <Text style={styles.title}>Guardian Predict IA</Text>
@@ -158,50 +167,56 @@ export default function PredictScreen() {
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabsScroll}>
         <View style={styles.tabs}>
-          {tabs.map((tab) => (
-            <TouchableOpacity
-              key={tab.key}
-              style={[styles.tab, activeTab === tab.key && styles.tabActive]}
-              onPress={() => setActiveTab(tab.key)}
-            >
-              <Ionicons
-                name={tab.icon as any}
-                size={16}
-                color={activeTab === tab.key ? Colors.text : Colors.textTertiary}
-              />
-              <Text style={[styles.tabText, activeTab === tab.key && styles.tabTextActive]}>
-                {tab.label}
-              </Text>
-              {tab.key === 'alerts' && alerts.length > 0 && (
-                <View style={styles.alertBadge}>
-                  <Text style={styles.alertBadgeText}>{alerts.length}</Text>
-                </View>
-              )}
+          {tabs.map(t => (
+            <TouchableOpacity key={t.key} style={[styles.tab, activeTab === t.key && styles.tabOn]} onPress={() => setActiveTab(t.key)}>
+              <Ionicons name={t.icon as any} size={16} color={activeTab === t.key ? Colors.text : Colors.textTertiary} />
+              <Text style={[styles.tabTxt, activeTab === t.key && styles.tabTxtOn]}>{t.label}</Text>
             </TouchableOpacity>
           ))}
         </View>
       </ScrollView>
 
+      {/* Coach IA Tab */}
       {activeTab === 'coach' ? (
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-          <ScrollView style={styles.chatScroll} contentContainerStyle={styles.chatContent}>
-            <View style={styles.aiIntro}>
-              <Ionicons name="sparkles" size={32} color={Colors.warning} />
-              <Text style={styles.aiIntroText}>Guardian Coach IA</Text>
-              <Text style={styles.aiIntroSub}>Posez vos questions financières</Text>
-            </View>
+          <ScrollView ref={scrollRef} style={styles.chatScroll} contentContainerStyle={styles.chatContent}>
+            {/* AI Intro */}
+            {chatHistory.length === 0 && (
+              <View style={styles.aiIntro}>
+                <View style={styles.aiAvatar}>
+                  <Ionicons name="sparkles" size={36} color={Colors.warning} />
+                </View>
+                <Text style={styles.aiTitle}>Coach IA Guardian</Text>
+                <Text style={styles.aiSub}>Posez vos questions financières. Je connais vos données et le système suisse.</Text>
+                <View style={styles.quickRow}>
+                  {quickQuestions.map((q, i) => (
+                    <TouchableOpacity key={i} style={styles.quickBtn} onPress={() => { setMessage(q); }}>
+                      <Text style={styles.quickTxt}>{q}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )}
 
-            {chatHistory.map((msg) => (
-              <View
-                key={msg.id}
-                style={[styles.chatBubble, msg.role === 'user' ? styles.userBubble : styles.aiBubble]}
-              >
-                <Text style={styles.chatText}>{msg.content}</Text>
+            {/* Messages */}
+            {chatHistory.map(msg => (
+              <View key={msg.id} style={[styles.bubble, msg.role === 'user' ? styles.userBubble : styles.aiBubble]}>
+                {msg.role === 'assistant' && (
+                  <Ionicons name="sparkles" size={14} color={Colors.warning} style={{ marginBottom: 4 }} />
+                )}
+                <Text style={[styles.bubbleTxt, msg.role === 'user' && { color: '#fff' }]}>{msg.content}</Text>
               </View>
             ))}
+
+            {isLoading && (
+              <View style={[styles.bubble, styles.aiBubble]}>
+                <ActivityIndicator size="small" color={Colors.warning} />
+                <Text style={styles.typingTxt}>Analyse en cours...</Text>
+              </View>
+            )}
           </ScrollView>
 
-          <View style={[styles.inputContainer, { paddingBottom: insets.bottom + 10 }]}>
+          <View style={[styles.inputBar, { paddingBottom: insets.bottom + 8 }]}>
             <TextInput
               style={styles.chatInput}
               value={message}
@@ -209,73 +224,61 @@ export default function PredictScreen() {
               placeholder="Posez votre question..."
               placeholderTextColor={Colors.textTertiary}
               multiline
+              onSubmitEditing={handleSendMessage}
+              returnKeyType="send"
             />
-            <TouchableOpacity style={styles.sendButton} onPress={handleSendMessage}>
+            <TouchableOpacity
+              style={[styles.sendBtn, !message.trim() && { opacity: 0.4 }]}
+              onPress={handleSendMessage}
+              disabled={!message.trim() || isLoading}
+            >
               <Ionicons name="send" size={20} color={Colors.text} />
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
       ) : (
         <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+          {/* Predictions */}
           {activeTab === 'predictions' && (
             <>
               <Card style={styles.heroCard}>
                 <Text style={styles.heroLabel}>Prévision fin de mois</Text>
-                <Text style={styles.heroAmount}>{CUR} {formatNumber(totalPredicted)}</Text>
+                <Text style={styles.heroAmt}>{CUR} {formatNumber(totalPredicted)}</Text>
                 <View style={styles.heroMeta}>
-                  <Text style={styles.heroMetaText}>Jour {dayOfMonth}/30</Text>
-                  <Badge text={`Confiance ${Math.round(categoryPredictions[0]?.confidence * 100 || 50)}%`} color={Colors.primary} />
+                  <Text style={styles.heroMetaTxt}>Jour {dayOfMonth}/30</Text>
+                  <Badge text={`Confiance ${Math.round((categoryPredictions[0]?.confidence || 0.5) * 100)}%`} color={Colors.primary} />
                 </View>
               </Card>
-
-              {categoryPredictions.map((p) => (
-                <Card key={p.category} style={styles.predictionCard}>
-                  <View style={styles.predictionHeader}>
+              {categoryPredictions.map(p => (
+                <Card key={p.category} style={styles.predCard}>
+                  <View style={styles.predRow}>
                     <CategoryIcon category={p.category} size="sm" />
-                    <Text style={styles.predictionName}>{getCategoryName(p.category)}</Text>
-                    <View style={styles.predictionAmounts}>
-                      <Text style={styles.predictionCurrent}>{formatNumber(p.currentSpent)}</Text>
-                      <Text style={styles.predictionArrow}>→</Text>
-                      <Text style={styles.predictionPredicted}>{formatNumber(p.predicted)}</Text>
-                    </View>
+                    <Text style={styles.predName}>{getCategoryName(p.category)}</Text>
+                    <Text style={styles.predCurrent}>{formatNumber(p.currentSpent)}</Text>
+                    <Ionicons name="arrow-forward" size={14} color={Colors.textTertiary} />
+                    <Text style={styles.predPredicted}>{formatNumber(p.predicted)}</Text>
                   </View>
-                  {p.budget > 0 && (
-                    <ProgressBar
-                      value={pct(p.predicted, p.budget)}
-                      color={p.predicted > p.budget ? Colors.error : Colors.success}
-                      height={6}
-                    />
-                  )}
+                  {p.budget > 0 && <ProgressBar value={pct(p.predicted, p.budget)} color={p.predicted > p.budget ? Colors.error : Colors.success} height={5} />}
                 </Card>
               ))}
             </>
           )}
 
+          {/* Alerts */}
           {activeTab === 'alerts' && (
             <>
               {alerts.length === 0 ? (
-                <Card style={styles.noAlertsCard}>
+                <Card style={styles.noAlerts}>
                   <Ionicons name="checkmark-circle" size={48} color={Colors.success} />
-                  <Text style={styles.noAlertsText}>Aucune alerte</Text>
-                  <Text style={styles.noAlertsSub}>Vos finances sont sous contrôle!</Text>
+                  <Text style={styles.noAlertsTxt}>Tout va bien!</Text>
+                  <Text style={styles.noAlertsSub}>Aucune alerte budget</Text>
                 </Card>
               ) : (
-                alerts.map((alert) => (
-                  <Card
-                    key={alert.id}
-                    style={styles.alertCard}
-                    borderColor={alert.severity === 'high' ? Colors.error : alert.severity === 'medium' ? Colors.warning : Colors.info}
-                  >
-                    <View style={styles.alertHeader}>
-                      <Ionicons
-                        name="warning"
-                        size={24}
-                        color={alert.severity === 'high' ? Colors.error : Colors.warning}
-                      />
-                      <View style={styles.alertContent}>
-                        <Text style={styles.alertTitle}>{alert.title}</Text>
-                        <Text style={styles.alertMessage}>{alert.message}</Text>
-                      </View>
+                alerts.map(a => (
+                  <Card key={a.id} style={styles.alertCard} borderColor={a.severity === 'high' ? Colors.error : Colors.warning}>
+                    <View style={styles.alertRow}>
+                      <Ionicons name={a.icon as any} size={24} color={a.severity === 'high' ? Colors.error : Colors.warning} />
+                      <View style={styles.alertContent}><Text style={styles.alertTitle}>{a.title}</Text><Text style={styles.alertMsg}>{a.message}</Text></View>
                     </View>
                   </Card>
                 ))
@@ -283,43 +286,36 @@ export default function PredictScreen() {
             </>
           )}
 
+          {/* Cash Flow */}
           {activeTab === 'cashflow' && (
-            <Card style={styles.cashflowCard}>
-              <Text style={styles.cashflowTitle}>💰 Cash Flow Mensuel</Text>
-              <View style={styles.cashflowRow}>
-                <View style={styles.cashflowItem}>
-                  <Ionicons name="arrow-up" size={20} color={Colors.success} />
-                  <Text style={styles.cashflowLabel}>Revenus</Text>
-                  <Text style={[styles.cashflowAmount, { color: Colors.success }]}>
-                    +{formatNumber(monthlyIncome)}
-                  </Text>
-                </View>
-                <View style={styles.cashflowItem}>
-                  <Ionicons name="arrow-down" size={20} color={Colors.error} />
-                  <Text style={styles.cashflowLabel}>Dépenses</Text>
-                  <Text style={[styles.cashflowAmount, { color: Colors.error }]}>
-                    -{formatNumber(totalPredicted)}
-                  </Text>
-                </View>
-                <View style={styles.cashflowItem}>
-                  <Ionicons name="wallet" size={20} color={Colors.primary} />
-                  <Text style={styles.cashflowLabel}>Net</Text>
-                  <Text style={[styles.cashflowAmount, { color: monthlyIncome - totalPredicted >= 0 ? Colors.success : Colors.error }]}>
-                    {monthlyIncome - totalPredicted >= 0 ? '+' : ''}{formatNumber(monthlyIncome - totalPredicted)}
-                  </Text>
-                </View>
+            <Card style={styles.cfCard}>
+              <Text style={styles.cfTitle}>Cash Flow Mensuel</Text>
+              <View style={styles.cfGrid}>
+                <View style={styles.cfItem}><Ionicons name="arrow-up-circle" size={28} color={Colors.success} /><Text style={styles.cfLabel}>Revenus</Text><Text style={[styles.cfAmt, { color: Colors.success }]}>+{formatNumber(monthlyIncome)}</Text></View>
+                <View style={styles.cfItem}><Ionicons name="arrow-down-circle" size={28} color={Colors.error} /><Text style={styles.cfLabel}>Dépenses</Text><Text style={[styles.cfAmt, { color: Colors.error }]}>-{formatNumber(totalPredicted)}</Text></View>
+                <View style={styles.cfItem}><Ionicons name="wallet" size={28} color={Colors.primary} /><Text style={styles.cfLabel}>Solde net</Text><Text style={[styles.cfAmt, { color: monthlyIncome - totalPredicted >= 0 ? Colors.success : Colors.error }]}>{monthlyIncome - totalPredicted >= 0 ? '+' : ''}{formatNumber(monthlyIncome - totalPredicted)}</Text></View>
+              </View>
+              <View style={styles.cfSavings}>
+                <Text style={styles.cfSavingsLabel}>Taux d'épargne</Text>
+                <Text style={[styles.cfSavingsVal, { color: savingsRate > 20 ? Colors.success : savingsRate > 10 ? Colors.warning : Colors.error }]}>{savingsRate.toFixed(0)}%</Text>
               </View>
             </Card>
           )}
 
+          {/* Insights */}
           {activeTab === 'insights' && (
             <>
-              {insights.map((insight, idx) => (
+              {[
+                { icon: '📊', title: `Taux d'épargne: ${savingsRate.toFixed(0)}%`, desc: savingsRate > 20 ? 'Excellent! Vous êtes sur la bonne voie.' : 'Visez 20-30% pour l\'indépendance financière.', color: savingsRate > 20 ? Colors.success : Colors.warning },
+                { icon: '🎯', title: `${alerts.length} alertes budget`, desc: alerts.length === 0 ? 'Vos budgets sont sous contrôle!' : `Attention à vos dépenses ${alerts[0]?.title?.split(' ').pop() || ''}`, color: alerts.length === 0 ? Colors.success : Colors.error },
+                { icon: '💡', title: '3ème pilier', desc: 'Cotisez CHF 7\'258 max pour économiser jusqu\'à 30% d\'impôts', color: Colors.primary },
+                { icon: '🏥', title: 'LAMal', desc: 'Changez avant le 30 novembre. Consultez priminfo.admin.ch', color: Colors.info },
+              ].map((insight, idx) => (
                 <Card key={idx} style={styles.insightCard}>
                   <Text style={styles.insightIcon}>{insight.icon}</Text>
                   <View style={styles.insightContent}>
                     <Text style={styles.insightTitle}>{insight.title}</Text>
-                    <Text style={[styles.insightDesc, { color: insight.color }]}>{insight.description}</Text>
+                    <Text style={[styles.insightDesc, { color: insight.color }]}>{insight.desc}</Text>
                   </View>
                 </Card>
               ))}
@@ -336,59 +332,69 @@ export default function PredictScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md },
-  backButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   title: { color: Colors.text, fontSize: FontSizes.xl, fontWeight: FontWeights.bold },
   tabsScroll: { paddingHorizontal: Spacing.lg, marginBottom: Spacing.md },
   tabs: { flexDirection: 'row', gap: Spacing.sm },
   tab: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: BorderRadius.md, backgroundColor: Colors.card },
-  tabActive: { backgroundColor: Colors.warning },
-  tabText: { color: Colors.textTertiary, fontSize: FontSizes.sm, fontWeight: FontWeights.semibold },
-  tabTextActive: { color: Colors.background },
-  alertBadge: { backgroundColor: Colors.error, borderRadius: 10, minWidth: 18, height: 18, alignItems: 'center', justifyContent: 'center', marginLeft: Spacing.xs },
-  alertBadgeText: { color: Colors.text, fontSize: 10, fontWeight: FontWeights.bold },
+  tabOn: { backgroundColor: Colors.warning },
+  tabTxt: { color: Colors.textTertiary, fontSize: FontSizes.sm, fontWeight: FontWeights.semibold },
+  tabTxtOn: { color: Colors.background },
   scroll: { flex: 1 },
   content: { padding: Spacing.lg },
+  // Hero
   heroCard: { marginBottom: Spacing.lg, alignItems: 'center' },
   heroLabel: { color: Colors.textSecondary, fontSize: FontSizes.sm },
-  heroAmount: { color: Colors.text, fontSize: FontSizes.hero, fontWeight: FontWeights.black },
+  heroAmt: { color: Colors.text, fontSize: FontSizes.hero, fontWeight: FontWeights.black },
   heroMeta: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, marginTop: Spacing.sm },
-  heroMetaText: { color: Colors.textSecondary, fontSize: FontSizes.sm },
-  predictionCard: { marginBottom: Spacing.md },
-  predictionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.sm },
-  predictionName: { flex: 1, marginLeft: Spacing.sm, color: Colors.text, fontSize: FontSizes.sm, fontWeight: FontWeights.semibold },
-  predictionAmounts: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
-  predictionCurrent: { color: Colors.textSecondary, fontSize: FontSizes.sm },
-  predictionArrow: { color: Colors.textTertiary, fontSize: FontSizes.sm },
-  predictionPredicted: { color: Colors.text, fontSize: FontSizes.sm, fontWeight: FontWeights.bold },
-  noAlertsCard: { alignItems: 'center', padding: Spacing.xxl },
-  noAlertsText: { color: Colors.success, fontSize: FontSizes.lg, fontWeight: FontWeights.bold, marginTop: Spacing.md },
+  heroMetaTxt: { color: Colors.textSecondary, fontSize: FontSizes.sm },
+  // Predictions
+  predCard: { marginBottom: Spacing.sm },
+  predRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: Spacing.sm },
+  predName: { flex: 1, color: Colors.text, fontSize: FontSizes.sm, fontWeight: FontWeights.semibold },
+  predCurrent: { color: Colors.textSecondary, fontSize: FontSizes.sm },
+  predPredicted: { color: Colors.text, fontSize: FontSizes.sm, fontWeight: FontWeights.bold },
+  // Alerts
+  noAlerts: { alignItems: 'center', padding: Spacing.xxl },
+  noAlertsTxt: { color: Colors.success, fontSize: FontSizes.lg, fontWeight: FontWeights.bold, marginTop: Spacing.md },
   noAlertsSub: { color: Colors.textSecondary, fontSize: FontSizes.sm },
   alertCard: { marginBottom: Spacing.md },
-  alertHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.md },
+  alertRow: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.md },
   alertContent: { flex: 1 },
   alertTitle: { color: Colors.text, fontSize: FontSizes.md, fontWeight: FontWeights.semibold },
-  alertMessage: { color: Colors.textSecondary, fontSize: FontSizes.sm },
-  cashflowCard: { marginBottom: Spacing.lg },
-  cashflowTitle: { color: Colors.text, fontSize: FontSizes.lg, fontWeight: FontWeights.bold, marginBottom: Spacing.lg, textAlign: 'center' },
-  cashflowRow: { flexDirection: 'row' },
-  cashflowItem: { flex: 1, alignItems: 'center' },
-  cashflowLabel: { color: Colors.textSecondary, fontSize: FontSizes.sm, marginTop: Spacing.xs },
-  cashflowAmount: { fontSize: FontSizes.lg, fontWeight: FontWeights.bold },
+  alertMsg: { color: Colors.textSecondary, fontSize: FontSizes.sm },
+  // Cash Flow
+  cfCard: { marginBottom: Spacing.lg },
+  cfTitle: { color: Colors.text, fontSize: FontSizes.lg, fontWeight: FontWeights.bold, textAlign: 'center', marginBottom: Spacing.lg },
+  cfGrid: { flexDirection: 'row' },
+  cfItem: { flex: 1, alignItems: 'center' },
+  cfLabel: { color: Colors.textSecondary, fontSize: FontSizes.sm, marginTop: Spacing.xs },
+  cfAmt: { fontSize: FontSizes.lg, fontWeight: FontWeights.bold },
+  cfSavings: { alignItems: 'center', marginTop: Spacing.lg, backgroundColor: Colors.card, borderRadius: BorderRadius.md, padding: Spacing.md },
+  cfSavingsLabel: { color: Colors.textSecondary, fontSize: FontSizes.sm },
+  cfSavingsVal: { fontSize: FontSizes.xxxl, fontWeight: FontWeights.black },
+  // Insights
   insightCard: { marginBottom: Spacing.md, flexDirection: 'row', alignItems: 'center' },
   insightIcon: { fontSize: 32, marginRight: Spacing.md },
   insightContent: { flex: 1 },
   insightTitle: { color: Colors.text, fontSize: FontSizes.md, fontWeight: FontWeights.semibold },
   insightDesc: { fontSize: FontSizes.sm },
+  // Coach Chat
   chatScroll: { flex: 1 },
-  chatContent: { padding: Spacing.lg },
+  chatContent: { padding: Spacing.lg, paddingBottom: 20 },
   aiIntro: { alignItems: 'center', marginBottom: Spacing.xl },
-  aiIntroText: { color: Colors.text, fontSize: FontSizes.xl, fontWeight: FontWeights.bold, marginTop: Spacing.sm },
-  aiIntroSub: { color: Colors.textSecondary, fontSize: FontSizes.sm },
-  chatBubble: { maxWidth: '80%', padding: Spacing.md, borderRadius: BorderRadius.lg, marginBottom: Spacing.md },
-  userBubble: { alignSelf: 'flex-end', backgroundColor: Colors.primary },
-  aiBubble: { alignSelf: 'flex-start', backgroundColor: Colors.card },
-  chatText: { color: Colors.text, fontSize: FontSizes.md },
-  inputContainer: { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm, borderTopWidth: 1, borderTopColor: Colors.cardBorder, backgroundColor: Colors.backgroundSecondary },
-  chatInput: { flex: 1, backgroundColor: Colors.card, borderRadius: BorderRadius.lg, padding: Spacing.md, color: Colors.text, fontSize: FontSizes.md, maxHeight: 100 },
-  sendButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.warning, alignItems: 'center', justifyContent: 'center', marginLeft: Spacing.sm },
+  aiAvatar: { width: 72, height: 72, borderRadius: 36, backgroundColor: `${Colors.warning}15`, alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.md },
+  aiTitle: { color: Colors.text, fontSize: FontSizes.xl, fontWeight: FontWeights.bold },
+  aiSub: { color: Colors.textSecondary, fontSize: FontSizes.sm, textAlign: 'center', marginTop: Spacing.sm, maxWidth: 300 },
+  quickRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: Spacing.sm, marginTop: Spacing.lg },
+  quickBtn: { backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: BorderRadius.full, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm },
+  quickTxt: { color: Colors.primary, fontSize: FontSizes.sm },
+  bubble: { maxWidth: '82%', padding: Spacing.md, borderRadius: BorderRadius.lg, marginBottom: Spacing.md },
+  userBubble: { alignSelf: 'flex-end', backgroundColor: Colors.primary, borderBottomRightRadius: 4 },
+  aiBubble: { alignSelf: 'flex-start', backgroundColor: Colors.card, borderBottomLeftRadius: 4 },
+  bubbleTxt: { color: Colors.text, fontSize: FontSizes.md, lineHeight: 22 },
+  typingTxt: { color: Colors.textSecondary, fontSize: FontSizes.sm, marginLeft: Spacing.sm },
+  inputBar: { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm, borderTopWidth: 1, borderTopColor: Colors.cardBorder, backgroundColor: Colors.backgroundSecondary },
+  chatInput: { flex: 1, backgroundColor: Colors.card, borderRadius: BorderRadius.xl, padding: Spacing.md, paddingRight: 50, color: Colors.text, fontSize: FontSizes.md, maxHeight: 100, borderWidth: 1, borderColor: Colors.cardBorder },
+  sendBtn: { position: 'absolute', right: Spacing.lg + 8, bottom: 16, width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.warning, alignItems: 'center', justifyContent: 'center' },
 });

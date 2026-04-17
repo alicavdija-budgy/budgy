@@ -1,6 +1,6 @@
 /**
  * GUARDIAN MONEY CHF - Auth Screen
- * Login and Register with SHA-256 password hashing
+ * Login and Register with Supabase Auth
  */
 
 import React, { useState } from 'react';
@@ -18,11 +18,11 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import * as Crypto from 'expo-crypto';
 import { useRouter } from 'expo-router';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../src/constants/theme';
 import { useStore } from '../src/stores/useStore';
 import { Button } from '../src/components/ui';
+import { supabase, isSupabaseConfigured } from '../src/lib/supabase';
 
 export default function AuthScreen() {
   const insets = useSafeAreaInsets();
@@ -37,14 +37,6 @@ export default function AuthScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-
-  const hashPassword = async (pw: string): Promise<string> => {
-    const digest = await Crypto.digestStringAsync(
-      Crypto.CryptoDigestAlgorithm.SHA256,
-      pw + 'guardian2025'
-    );
-    return digest;
-  };
 
   const validate = (): boolean => {
     const errs: Record<string, string> = {};
@@ -75,27 +67,72 @@ export default function AuthScreen() {
 
     setLoading(true);
     try {
-      await new Promise(r => setTimeout(r, 800)); // Simulate network delay
-
-      const pwHash = await hashPassword(password);
-
-      const user = {
-        id: `user_${Date.now()}`,
-        email: email.toLowerCase().trim(),
-        name: mode === 'register' ? name.trim() : email.split('@')[0],
-        createdAt: Date.now(),
-        isPro: false,
-      };
-
-      setUser(user);
-      loadSeedData();
-
-      if (mode === 'login') {
-        // For returning users, mark as onboarded
-        setPreferences({ onboarded: true });
+      if (isSupabaseConfigured()) {
+        // Use Supabase Auth
+        if (mode === 'register') {
+          const { data, error } = await supabase.auth.signUp({
+            email: email.toLowerCase().trim(),
+            password,
+            options: { data: { name: name.trim() } },
+          });
+          if (error) throw error;
+          
+          const user = {
+            id: data.user?.id || `user_${Date.now()}`,
+            email: email.toLowerCase().trim(),
+            name: name.trim(),
+            createdAt: Date.now(),
+            isPro: false,
+          };
+          setUser(user);
+          loadSeedData();
+          router.replace('/onboarding');
+        } else {
+          const { data, error } = await supabase.auth.signInWithPassword({
+            email: email.toLowerCase().trim(),
+            password,
+          });
+          if (error) throw error;
+          
+          const user = {
+            id: data.user?.id || `user_${Date.now()}`,
+            email: data.user?.email || email.toLowerCase().trim(),
+            name: data.user?.user_metadata?.name || email.split('@')[0],
+            createdAt: Date.now(),
+            isPro: false,
+          };
+          setUser(user);
+          setPreferences({ onboarded: true });
+          router.replace('/(tabs)');
+        }
+      } else {
+        // Fallback to local auth
+        await new Promise(r => setTimeout(r, 600));
+        const user = {
+          id: `user_${Date.now()}`,
+          email: email.toLowerCase().trim(),
+          name: mode === 'register' ? name.trim() : email.split('@')[0],
+          createdAt: Date.now(),
+          isPro: false,
+        };
+        setUser(user);
+        loadSeedData();
+        if (mode === 'login') {
+          setPreferences({ onboarded: true });
+          router.replace('/(tabs)');
+        } else {
+          router.replace('/onboarding');
+        }
       }
-    } catch (error) {
-      Alert.alert('Erreur', 'Une erreur est survenue. Veuillez réessayer.');
+    } catch (error: any) {
+      const msg = error?.message || 'Une erreur est survenue';
+      if (msg.includes('Invalid login')) {
+        Alert.alert('Erreur', 'Email ou mot de passe incorrect.');
+      } else if (msg.includes('already registered')) {
+        Alert.alert('Erreur', 'Cet email est déjà utilisé. Connectez-vous.');
+      } else {
+        Alert.alert('Erreur', msg);
+      }
     } finally {
       setLoading(false);
     }
@@ -104,8 +141,7 @@ export default function AuthScreen() {
   const handleDemoMode = async () => {
     setLoading(true);
     try {
-      await new Promise(r => setTimeout(r, 500));
-
+      await new Promise(r => setTimeout(r, 400));
       const demoUser = {
         id: 'demo_user',
         email: 'demo@guardian.app',
@@ -114,17 +150,18 @@ export default function AuthScreen() {
         isPro: true,
         isDemo: true,
       };
-
       setUser(demoUser);
       setPro(true);
       loadSeedData();
+      setPreferences({ onboarded: true });
+      router.replace('/(tabs)');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top + 20 }]}>
+    <View style={[styles.container, { paddingTop: insets.top + 20 }]} testID="auth-screen">
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
@@ -151,21 +188,11 @@ export default function AuthScreen() {
             {(['login', 'register'] as const).map((m) => (
               <TouchableOpacity
                 key={m}
-                style={[
-                  styles.modeButton,
-                  mode === m && styles.modeButtonActive,
-                ]}
-                onPress={() => {
-                  setMode(m);
-                  setErrors({});
-                }}
+                testID={`auth-mode-${m}`}
+                style={[styles.modeButton, mode === m && styles.modeButtonActive]}
+                onPress={() => { setMode(m); setErrors({}); }}
               >
-                <Text
-                  style={[
-                    styles.modeButtonText,
-                    mode === m && styles.modeButtonTextActive,
-                  ]}
-                >
+                <Text style={[styles.modeButtonText, mode === m && styles.modeButtonTextActive]}>
                   {m === 'login' ? 'Connexion' : 'Créer un compte'}
                 </Text>
               </TouchableOpacity>
@@ -180,6 +207,7 @@ export default function AuthScreen() {
                 <View style={[styles.inputContainer, errors.name && styles.inputError]}>
                   <Ionicons name="person-outline" size={20} color={Colors.textTertiary} />
                   <TextInput
+                    testID="auth-name-input"
                     style={styles.input}
                     value={name}
                     onChangeText={setName}
@@ -197,6 +225,7 @@ export default function AuthScreen() {
               <View style={[styles.inputContainer, errors.email && styles.inputError]}>
                 <Ionicons name="mail-outline" size={20} color={Colors.textTertiary} />
                 <TextInput
+                  testID="auth-email-input"
                   style={styles.input}
                   value={email}
                   onChangeText={setEmail}
@@ -215,6 +244,7 @@ export default function AuthScreen() {
               <View style={[styles.inputContainer, errors.password && styles.inputError]}>
                 <Ionicons name="lock-closed-outline" size={20} color={Colors.textTertiary} />
                 <TextInput
+                  testID="auth-password-input"
                   style={styles.input}
                   value={password}
                   onChangeText={setPassword}
@@ -239,6 +269,7 @@ export default function AuthScreen() {
                 <View style={[styles.inputContainer, errors.confirmPassword && styles.inputError]}>
                   <Ionicons name="lock-closed-outline" size={20} color={Colors.textTertiary} />
                   <TextInput
+                    testID="auth-confirm-password"
                     style={styles.input}
                     value={confirmPassword}
                     onChangeText={setConfirmPassword}
@@ -263,8 +294,17 @@ export default function AuthScreen() {
             />
           </View>
 
+          {/* Supabase indicator */}
+          {isSupabaseConfigured() && (
+            <View style={styles.cloudBadge}>
+              <Ionicons name="cloud-done" size={14} color={Colors.success} />
+              <Text style={styles.cloudText}>Cloud sync activé</Text>
+            </View>
+          )}
+
           {/* Demo Mode */}
           <TouchableOpacity
+            testID="demo-mode-button"
             style={styles.demoButton}
             onPress={handleDemoMode}
             disabled={loading}
@@ -275,7 +315,9 @@ export default function AuthScreen() {
 
           {/* Privacy Note */}
           <Text style={styles.privacyNote}>
-            Données stockées localement · 100% privé
+            {isSupabaseConfigured() 
+              ? 'Données chiffrées · Sync cloud sécurisé'
+              : 'Données stockées localement · 100% privé'}
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -284,117 +326,44 @@ export default function AuthScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  keyboardView: {
-    flex: 1,
-  },
-  scroll: {
-    flexGrow: 1,
-    padding: Spacing.xl,
-    justifyContent: 'center',
-  },
-  logoContainer: {
-    alignItems: 'center',
-    marginBottom: Spacing.xxxl,
-  },
+  container: { flex: 1, backgroundColor: Colors.background },
+  keyboardView: { flex: 1 },
+  scroll: { flexGrow: 1, padding: Spacing.xl, justifyContent: 'center' },
+  logoContainer: { alignItems: 'center', marginBottom: Spacing.xxxl },
   logoGradient: {
-    width: 80,
-    height: 80,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing.lg,
+    width: 80, height: 80, borderRadius: 24,
+    alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.lg,
   },
-  logoText: {
-    color: Colors.text,
-    fontSize: FontSizes.xxl,
-    fontWeight: FontWeights.black,
-    letterSpacing: 2,
-  },
-  tagline: {
-    color: Colors.textSecondary,
-    fontSize: FontSizes.md,
-    marginTop: Spacing.sm,
-  },
+  logoText: { color: Colors.text, fontSize: FontSizes.xxl, fontWeight: FontWeights.black, letterSpacing: 2 },
+  tagline: { color: Colors.textSecondary, fontSize: FontSizes.md, marginTop: Spacing.sm },
   modeToggle: {
-    flexDirection: 'row',
-    backgroundColor: Colors.card,
-    borderRadius: BorderRadius.lg,
-    padding: 4,
-    marginBottom: Spacing.xxl,
+    flexDirection: 'row', backgroundColor: Colors.card,
+    borderRadius: BorderRadius.lg, padding: 4, marginBottom: Spacing.xxl,
   },
-  modeButton: {
-    flex: 1,
-    paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.md,
-    alignItems: 'center',
-  },
-  modeButtonActive: {
-    backgroundColor: Colors.primary,
-  },
-  modeButtonText: {
-    color: Colors.textSecondary,
-    fontSize: FontSizes.sm,
-    fontWeight: FontWeights.semibold,
-  },
-  modeButtonTextActive: {
-    color: Colors.text,
-  },
-  form: {
-    marginBottom: Spacing.xl,
-  },
-  inputGroup: {
-    marginBottom: Spacing.lg,
-  },
-  label: {
-    color: Colors.textSecondary,
-    fontSize: FontSizes.sm,
-    fontWeight: FontWeights.semibold,
-    marginBottom: Spacing.sm,
-  },
+  modeButton: { flex: 1, paddingVertical: Spacing.md, borderRadius: BorderRadius.md, alignItems: 'center' },
+  modeButtonActive: { backgroundColor: Colors.primary },
+  modeButtonText: { color: Colors.textSecondary, fontSize: FontSizes.sm, fontWeight: FontWeights.semibold },
+  modeButtonTextActive: { color: Colors.text },
+  form: { marginBottom: Spacing.xl },
+  inputGroup: { marginBottom: Spacing.lg },
+  label: { color: Colors.textSecondary, fontSize: FontSizes.sm, fontWeight: FontWeights.semibold, marginBottom: Spacing.sm },
   inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.card,
-    borderWidth: 1,
-    borderColor: Colors.cardBorder,
-    borderRadius: BorderRadius.lg,
-    paddingHorizontal: Spacing.md,
-    gap: Spacing.md,
+    flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.card,
+    borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: BorderRadius.lg,
+    paddingHorizontal: Spacing.md, gap: Spacing.md,
   },
-  inputError: {
-    borderColor: Colors.error,
+  inputError: { borderColor: Colors.error },
+  input: { flex: 1, color: Colors.text, fontSize: FontSizes.md, paddingVertical: Spacing.md },
+  errorText: { color: Colors.error, fontSize: FontSizes.xs, marginTop: Spacing.xs },
+  cloudBadge: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: Spacing.xs, marginBottom: Spacing.md,
   },
-  input: {
-    flex: 1,
-    color: Colors.text,
-    fontSize: FontSizes.md,
-    paddingVertical: Spacing.md,
-  },
-  errorText: {
-    color: Colors.error,
-    fontSize: FontSizes.xs,
-    marginTop: Spacing.xs,
-  },
+  cloudText: { color: Colors.success, fontSize: FontSizes.xs, fontWeight: FontWeights.semibold },
   demoButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.sm,
-    paddingVertical: Spacing.md,
-    marginBottom: Spacing.lg,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: Spacing.sm, paddingVertical: Spacing.md, marginBottom: Spacing.lg,
   },
-  demoButtonText: {
-    color: Colors.primary,
-    fontSize: FontSizes.sm,
-    fontWeight: FontWeights.semibold,
-  },
-  privacyNote: {
-    color: Colors.textTertiary,
-    fontSize: FontSizes.xs,
-    textAlign: 'center',
-  },
+  demoButtonText: { color: Colors.primary, fontSize: FontSizes.sm, fontWeight: FontWeights.semibold },
+  privacyNote: { color: Colors.textTertiary, fontSize: FontSizes.xs, textAlign: 'center' },
 });

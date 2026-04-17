@@ -1,0 +1,87 @@
+{
+  "summary": "Guardian Money CHF - Backend APIs fully functional (13/13 tests passed). Frontend loads but has CRITICAL navigation and seed data issues. Demo mode button clicks but doesn't navigate to /(tabs). When accessing /(tabs) directly, page shows CHF 0 for all financial data, indicating seed data is not loading.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "Auth Screen - Demo Mode Navigation",
+        "issue": "Demo mode button clicks successfully but router.replace('/(tabs)') does NOT navigate. User stays on /auth screen. This is a critical navigation bug preventing demo mode from working.",
+        "testID": "demo-mode-button",
+        "priority": "CRITICAL",
+        "reproduction": "1. Go to /auth, 2. Click 'Essayer en mode démo', 3. Page stays on /auth instead of navigating to /(tabs)"
+      },
+      {
+        "component": "Home Screen - Seed Data Loading",
+        "issue": "When accessing /(tabs) directly, all financial data shows CHF 0 (Patrimoine: CHF 0, Revenus: 0, Dépenses: 0, Épargne: 0, Invest: 0). The loadSeedData() function is called in auth.tsx but data is not persisting or loading in the UI.",
+        "testID": "home-patrimoine",
+        "priority": "CRITICAL",
+        "reproduction": "1. Navigate to /(tabs) directly, 2. Observe all values are 0"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Demo Mode → Navigation → Seed Data",
+        "issue": "Complete demo mode flow is broken. After clicking demo button: (1) Navigation doesn't happen - stays on /auth, (2) Even when accessing /(tabs) directly, seed data doesn't display. Console shows 'Cannot use import.meta outside a module' error which may be related to Zustand store initialization.",
+        "affected_testIDs": ["demo-mode-button", "home-patrimoine", "expenses-list", "savings-list"],
+        "root_cause": "Likely issues: (a) router.replace() not working in auth.tsx, (b) Zustand persistence with AsyncStorage not working properly, (c) import.meta error preventing store initialization"
+      }
+    ],
+    "design_issues": [],
+    "react_native_issues": [
+      {
+        "component": "Zustand Store / AsyncStorage",
+        "issue": "Console error: 'Cannot use import.meta outside a module'. This error persists from iteration_1 and may be preventing proper Zustand store initialization and persistence. The error is not in useStore.ts directly but likely from a dependency."
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/test_reports/pytest/pytest_results.xml",
+    "/app/backend/tests/test_guardian_api.py",
+    "/tmp/01_auth_screen.png",
+    "/tmp/02_after_demo_activation.png",
+    "/tmp/direct_tabs_home.png"
+  ],
+  "action_items": [
+    "CRITICAL: Fix router.replace('/(tabs)') navigation in auth.tsx - it's not working after demo mode activation",
+    "CRITICAL: Fix seed data loading - loadSeedData() is called but data doesn't persist/display in UI",
+    "Investigate 'Cannot use import.meta outside a module' error - may be from Zustand or AsyncStorage dependency",
+    "Test if Zustand persistence is working - check if AsyncStorage is properly configured for web",
+    "Consider adding debug logging to loadSeedData() to verify it's being called and what data it's setting",
+    "Test if the issue is specific to demo mode or affects all auth flows (login/register)",
+    "Verify that setPreferences({ onboarded: true }) is persisting correctly"
+  ],
+  "critical_code_review_comments": [
+    "auth.tsx handleDemoMode (lines 141-161): router.replace('/(tabs)') is not navigating. Need to investigate why Expo Router navigation is failing.",
+    "useStore.ts loadSeedData (lines 290-301): Function looks correct but data is not appearing in UI. Need to verify Zustand persistence is working.",
+    "index.tsx (lines 18-30): The redirect logic checks isAuthenticated and onboarded. If these aren't set properly by demo mode, user won't be redirected.",
+    "The 'Cannot use import.meta outside a module' error needs investigation - it's blocking proper store initialization.",
+    "Consider testing if the issue is web-specific (AsyncStorage may not work properly in web builds without proper polyfills)"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_guardian_api.py"
+  ],
+  "success_rate": {
+    "backend": "100% - All 13 API tests passed (Health, Coach IA, Family Mode, PDF Export, Budget Alerts)",
+    "frontend": "20% - Auth screen loads, tabs structure exists, but demo mode navigation broken and seed data not loading"
+  },
+  "seed_data_creation": "No seed data created. App has built-in seed data in /app/frontend/src/data/seed-data.ts but loadSeedData() is not working.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend is fully functional with all APIs working correctly. Frontend has critical navigation and state management issues. Demo mode button clicks but doesn't navigate (router.replace not working). When accessing /(tabs) directly, all financial data shows 0, indicating Zustand store's loadSeedData() is not persisting data. Console shows 'Cannot use import.meta outside a module' error. This is likely a Zustand + AsyncStorage + Web build compatibility issue. The store persistence may not be configured correctly for web environments. Main agent needs to: (1) Fix router navigation in auth.tsx, (2) Fix Zustand persistence for web, (3) Resolve import.meta error.",
+  "rca_of_issue": "Root Cause Analysis:\n\n1. NAVIGATION ISSUE: router.replace('/(tabs)') in auth.tsx handleDemoMode is not working. After clicking demo button, page stays on /auth. This could be due to: (a) Expo Router not properly initialized, (b) Navigation happening before state updates complete, (c) Some error preventing navigation.\n\n2. SEED DATA ISSUE: loadSeedData() is called but data doesn't appear in UI. When accessing /(tabs) directly, all values show 0. This indicates: (a) Zustand persistence with AsyncStorage may not be working in web builds, (b) Data is set but not persisting across renders, (c) The store is being reset after loadSeedData() is called.\n\n3. IMPORT.META ERROR: 'Cannot use import.meta outside a module' error in console. This is likely from a dependency (Zustand or AsyncStorage) and may be preventing proper store initialization in web environment.\n\nSolution: (1) Add await or proper state update handling before router.replace(), (2) Configure Zustand persistence properly for web (may need different storage adapter), (3) Investigate and fix import.meta error (may need build config changes).",
+  "backend_test_results": {
+    "total_tests": 13,
+    "passed": 13,
+    "failed": 0,
+    "test_classes": [
+      "TestHealthCheck: 1/1 passed",
+      "TestCoachIA: 2/2 passed (GPT-4o-mini integration working)",
+      "TestFamilyMode: 4/4 passed (8-char codes, create, join, get)",
+      "TestPDFExport: 2/2 passed (TVA 8.1% calculation correct)",
+      "TestBudgetAlerts: 4/4 passed (exceeded, warning, pace alerts)"
+    ]
+  }
+}

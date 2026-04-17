@@ -19,7 +19,8 @@ import { useRouter } from 'expo-router';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
 import { useStore } from '../../src/stores/useStore';
 import { Card, ProgressBar, Badge, AmountDisplay } from '../../src/components/ui';
-import { CategoryIcon, getCategoryName } from '../../src/components/CategoryIcon';
+import { CategoryIcon, getCategoryName, getCategoryColor } from '../../src/components/CategoryIcon';
+import { DonutChart, MiniBarChart, RingProgress } from '../../src/components/Charts';
 import { formatNumber, pct, calculateGuardianScore } from '../../src/utils/calculations';
 
 export default function HomeScreen() {
@@ -102,6 +103,32 @@ export default function HomeScreen() {
   }, [monthlyIncome, monthlyAutoSave, budgets, transactions, monthlyRecurring]);
 
   const unreadNotifications = notifications.filter(n => !n.read);
+
+  // Expense breakdown by category for donut chart
+  const expenseBreakdown = useMemo(() => {
+    const byCategory: Record<string, number> = {};
+    transactions.forEach(t => {
+      byCategory[t.category] = (byCategory[t.category] || 0) + t.amount;
+    });
+    return Object.entries(byCategory)
+      .map(([cat, amount]) => ({
+        value: amount,
+        color: getCategoryColor(cat),
+        label: getCategoryName(cat),
+      }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 6); // Top 6 categories
+  }, [transactions]);
+
+  // Monthly trend data (simulated for demo)
+  const monthlyTrend = useMemo(() => {
+    const months = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun'];
+    return months.map((label, i) => ({
+      value: Math.round(totalExpenses * (0.7 + Math.random() * 0.6)),
+      label,
+      color: i === months.length - 1 ? Colors.primary : undefined,
+    }));
+  }, [totalExpenses]);
 
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
@@ -234,6 +261,70 @@ export default function HomeScreen() {
               </TouchableOpacity>
             ))}
           </Card>
+        )}
+
+        {/* ─── Expense Donut + Monthly Bars ─── */}
+        {(expenseBreakdown.length > 0 || monthlyTrend.length > 0) && (
+          <>
+            <Text style={styles.sectionTitle}>Vue d'ensemble</Text>
+            <View style={styles.chartsRow}>
+              {/* Donut Chart */}
+              {expenseBreakdown.length > 0 && (
+                <Card style={styles.chartCard}>
+                  <Text style={styles.chartLabel}>Répartition</Text>
+                  <DonutChart
+                    data={expenseBreakdown}
+                    size={140}
+                    strokeWidth={22}
+                    centerValue={formatNumber(totalExpenses, 0)}
+                    centerLabel="CHF"
+                  />
+                  <View style={styles.legendGrid}>
+                    {expenseBreakdown.slice(0, 4).map((item, idx) => (
+                      <View key={idx} style={styles.legendItem}>
+                        <View style={[styles.legendDot, { backgroundColor: item.color }]} />
+                        <Text style={styles.legendText} numberOfLines={1}>{item.label}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </Card>
+              )}
+
+              {/* Monthly Bars */}
+              <Card style={styles.chartCard}>
+                <Text style={styles.chartLabel}>Tendance 6 mois</Text>
+                <MiniBarChart data={monthlyTrend} height={110} barWidth={24} />
+              </Card>
+            </View>
+
+            {/* Budget Rings */}
+            {budgets.length > 0 && (
+              <Card style={styles.ringsCard}>
+                <Text style={styles.chartLabel}>Budgets</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <View style={styles.ringsRow}>
+                    {budgets.map(b => {
+                      const spent = transactions
+                        .filter(t => t.category === b.category)
+                        .reduce((sum, t) => sum + t.amount, 0);
+                      const pc = pct(spent, b.limit);
+                      return (
+                        <RingProgress
+                          key={b.id}
+                          value={pc}
+                          size={70}
+                          strokeWidth={7}
+                          color={pc > 100 ? Colors.error : pc > 80 ? Colors.warning : getCategoryColor(b.category)}
+                          label={getCategoryName(b.category)}
+                          sublabel={`${formatNumber(spent)}/${formatNumber(b.limit)}`}
+                        />
+                      );
+                    })}
+                  </View>
+                </ScrollView>
+              </Card>
+            )}
+          </>
         )}
 
         {/* Quick Actions */}
@@ -501,6 +592,55 @@ const styles = StyleSheet.create({
     fontSize: FontSizes.lg,
     fontWeight: FontWeights.bold,
     marginBottom: Spacing.md,
+  },
+  chartsRow: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  chartCard: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: Spacing.md,
+  },
+  chartLabel: {
+    color: Colors.textSecondary,
+    fontSize: FontSizes.xs,
+    fontWeight: FontWeights.bold,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: Spacing.md,
+    alignSelf: 'flex-start',
+  },
+  legendGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
+    justifyContent: 'center',
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  legendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  legendText: {
+    color: Colors.textTertiary,
+    fontSize: 10,
+    maxWidth: 70,
+  },
+  ringsCard: {
+    marginBottom: Spacing.lg,
+  },
+  ringsRow: {
+    flexDirection: 'row',
+    gap: Spacing.xl,
+    paddingVertical: Spacing.sm,
   },
   sectionAction: {
     color: Colors.primary,

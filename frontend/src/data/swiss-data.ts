@@ -133,14 +133,17 @@ export const SAVINGS_TEMPLATES = [
   { emoji: '📈', title: 'Portefeuille ETF', target: 50000, cat: 'Investissement', color: '#22C55E' },
 ] as const;
 
-// Payment methods (Switzerland)
+// Payment methods (Switzerland + International)
 export const PAYMENT_METHODS = [
   { id: 'card', name: 'Carte', icon: 'card', color: '#3B82F6' },
   { id: 'cash', name: 'Cash', icon: 'cash', color: '#10B981' },
   { id: 'twint', name: 'TWINT', icon: 'phone-portrait', color: '#000000' },
+  { id: 'apple_pay', name: 'Apple Pay', icon: 'logo-apple', color: '#A3A3A3' },
   { id: 'ebanking', name: 'E-Banking', icon: 'globe', color: '#6366F1' },
   { id: 'postfinance', name: 'PostFinance', icon: 'business', color: '#FFCC00' },
   { id: 'lsv', name: 'LSV/DD', icon: 'repeat', color: '#F97316' },
+  { id: 'google_pay', name: 'Google Pay', icon: 'logo-google', color: '#4285F4' },
+  { id: 'samsung_pay', name: 'Samsung Pay', icon: 'wallet', color: '#1428A0' },
   { id: 'other', name: 'Autre', icon: 'ellipsis-horizontal', color: '#6B7280' },
 ] as const;
 

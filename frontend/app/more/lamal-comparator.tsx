@@ -21,7 +21,13 @@ import {
 } from '../../src/data/priminfo-2026';
 
 type Tab = 'compare' | 'optimize' | 'subsidy' | 'ranking';
-const MAIN_CANTONS: CantonCode[] = ['VD', 'GE', 'ZH', 'BE', 'ZG', 'LU', 'BS', 'FR', 'TI', 'VS', 'AG', 'SG'];
+
+// ALL 26 cantons
+const ALL_CANTONS: CantonCode[] = [
+  'ZH', 'BE', 'LU', 'UR', 'SZ', 'OW', 'NW', 'GL', 'ZG', 'FR',
+  'SO', 'BS', 'BL', 'SH', 'AR', 'AI', 'SG', 'GR', 'AG', 'TG',
+  'TI', 'VD', 'VS', 'NE', 'GE', 'JU',
+];
 
 export default function LamalComparatorScreen() {
   const insets = useSafeAreaInsets();
@@ -82,15 +88,13 @@ export default function LamalComparatorScreen() {
         {/* Config */}
         <Card style={styles.configCard}>
           <Text style={styles.label}>Canton</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View style={styles.chipRow}>
-              {MAIN_CANTONS.map(c => (
-                <TouchableOpacity key={c} style={[styles.chip, canton === c && styles.chipOn]} onPress={() => setCanton(c)}>
-                  <Text style={[styles.chipTxt, canton === c && styles.chipTxtOn]}>{c}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </ScrollView>
+          <View style={styles.cantonGrid}>
+            {ALL_CANTONS.map(c => (
+              <TouchableOpacity key={c} style={[styles.chip, canton === c && styles.chipOn]} onPress={() => setCanton(c)}>
+                <Text style={[styles.chipTxt, canton === c && styles.chipTxtOn]}>{c}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
 
           <View style={styles.sliderRow}>
             <Text style={styles.label}>Âge</Text>
@@ -317,6 +321,7 @@ const styles = StyleSheet.create({
   configCard: { marginBottom: Spacing.md },
   label: { color: Colors.textSecondary, fontSize: FontSizes.sm, marginBottom: Spacing.sm, marginTop: Spacing.md },
   chipRow: { flexDirection: 'row', gap: Spacing.sm },
+  cantonGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
   chip: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: BorderRadius.md, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder },
   chipOn: { backgroundColor: `${Colors.primary}20`, borderColor: Colors.primary },
   chipTxt: { color: Colors.textSecondary, fontSize: FontSizes.sm, fontWeight: FontWeights.bold },

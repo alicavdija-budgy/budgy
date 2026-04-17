@@ -117,6 +117,14 @@ export default function MoreScreen() {
           color: Colors.teal,
           route: '/more/export-pdf',
         },
+        {
+          id: 'invoices',
+          title: 'Factures',
+          subtitle: 'Import email · Rappels échéances',
+          icon: 'receipt',
+          color: Colors.orange,
+          route: '/more/invoices',
+        },
       ],
     },
     {

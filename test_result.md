@@ -101,3 +101,86 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+user_problem_statement: "Guardian Money CHF - Application mobile complète (Expo, Supabase, RevenueCat, 5 onglets, scanner flottant, LAMal Priminfo 26 cantons, IA). Itération: Compléter le flux d'onboarding pour les nouveaux comptes (questions personnalisées) + vérifier/activer la caméra réelle pour le scanner."
+
+frontend:
+  - task: "Onboarding questionnaire (6 steps)"
+    implemented: true
+    working: true
+    file: "app/frontend/app/onboarding.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Refonte complète : 4 slides d'intro + 6 étapes de configuration (canton 26 CH, devise, situation pro, revenu mensuel avec chips rapides, situation familiale + compteur d'enfants, objectifs multi-select). Barre de progression, bouton retour, navigation finale vers /(tabs). Sauvegarde préférences + création d'une entrée Income si revenu fourni. Testé de bout en bout via screenshot, flux fonctionnel."
+
+  - task: "Camera Scanner (expo-camera)"
+    implemented: true
+    working: true
+    file: "app/frontend/app/scanner-modal.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Remplacement du Modal fake par un vrai écran scanner-modal (presentation: modal). Utilise expo-camera/useCameraPermissions + CameraView. Stages: permission -> camera (framing + flash + front/back toggle + capture 0.6 base64) -> edit (preview + montant + titre + catégorie + payment method + note). Sauvegarde la transaction avec reçu en base64. Fallback saisie manuelle sur web/Expo Go sans caméra. iOS usage description déjà présente dans app.json (NSCameraUsageDescription). Testé: scanner-modal ouvre correctement depuis le bouton flottant et affiche le formulaire de saisie."
+
+  - task: "Auth flow new account -> onboarding"
+    implemented: true
+    working: true
+    file: "app/frontend/app/auth.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Nouveaux comptes redirigent vers /onboarding (pas de seed data). Comptes Pro existants et mode démo vont directement sur /(tabs). Testé avec création nouveau compte testuser@guardian.ch -> redirige bien vers /onboarding."
+
+  - task: "Fix zustand import.meta web crash"
+    implemented: true
+    working: true
+    file: "node_modules/zustand/esm/middleware.mjs (patched)"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Patch in-place de zustand/esm/middleware.mjs (2 références à import.meta.env.MODE remplacées par 'production'). Résout le 'Cannot use import.meta outside a module' qui bloquait le bundle web. Confirmé via curl du bundle : plus de références à import.meta."
+
+backend:
+  - task: "Existing backend endpoints (health, chat, family, export/pdf, alerts)"
+    implemented: true
+    working: true
+    file: "app/backend/server.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Aucune modification backend dans cette itération. Tous les endpoints existants répondent 200 dans les logs supervisor."
+
+metadata:
+  created_by: "main_agent"
+  version: "3.1"
+  test_sequence: 3
+  run_ui: false
+
+test_plan:
+  current_focus:
+    - "Onboarding questionnaire (6 steps)"
+    - "Camera Scanner (expo-camera)"
+    - "Auth flow new account -> onboarding"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+  - agent: "main"
+    message: "Itération terminée : onboarding complet 6 étapes + scanner caméra réel via expo-camera. Patch zustand pour web. Testé au screenshot tool, flux OK de bout en bout. Prêt pour test utilisateur sur Expo Go (iOS/Android) où la caméra réelle pourra être essayée."

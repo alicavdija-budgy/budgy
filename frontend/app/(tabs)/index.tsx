@@ -41,9 +41,9 @@ export default function HomeScreen() {
     loadSeedData,
   } = useStore();
 
-  // Auto-load seed data if user is logged in but has no data
+  // Auto-load seed data ONLY for demo users who have no data
   useEffect(() => {
-    if (user && transactions.length === 0 && incomes.length === 0) {
+    if (user?.isDemo && transactions.length === 0 && incomes.length === 0) {
       loadSeedData();
     }
   }, [user]);

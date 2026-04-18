@@ -13,6 +13,8 @@ export interface User {
   isDemo?: boolean;
 }
 
+export type HouseholdType = 'single' | 'couple' | 'family' | 'single_parent';
+
 export interface UserPreferences {
   language: 'fr' | 'de' | 'en' | 'it' | 'es' | 'ru' | 'bs' | 'pt';
   currency: 'CHF' | 'EUR' | 'USD' | 'GBP' | 'RUB' | 'BAM' | 'BRL';
@@ -20,6 +22,11 @@ export interface UserPreferences {
   onboarded: boolean;
   theme: 'dark' | 'light';
   biometricEnabled: boolean;
+  monthlyIncome?: number;          // Net monthly income (CHF)
+  household?: HouseholdType;        // Situation familiale
+  children?: number;                // Nombre d'enfants
+  goals?: string[];                 // Objectifs sélectionnés
+  employmentType?: 'employee' | 'self_employed' | 'student' | 'retired' | 'other';
 }
 
 export type PaymentMethod = 'cash' | 'card' | 'twint' | 'ebanking' | 'postfinance' | 'lsv' | 'other';

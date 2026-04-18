@@ -67,7 +67,7 @@ export default function AuthScreen() {
     return !!(proAccount && proAccount.password === pw);
   };
 
-  const loginAsLocalUser = (userId: string, emailAddr: string, userName: string, isPro: boolean) => {
+  const loginAsLocalUser = (userId: string, emailAddr: string, userName: string, isPro: boolean, isNewAccount: boolean) => {
     setUser({
       id: userId,
       email: emailAddr,
@@ -76,9 +76,16 @@ export default function AuthScreen() {
       isPro,
     });
     if (isPro) setPro(true);
-    loadSeedData();
-    setPreferences({ onboarded: true });
-    navigateTo('/(tabs)');
+    
+    if (isNewAccount) {
+      // New account: go through onboarding, NO seed data
+      setPreferences({ onboarded: false });
+      navigateTo('/onboarding');
+    } else {
+      // Existing/returning user: skip onboarding
+      setPreferences({ onboarded: true });
+      navigateTo('/(tabs)');
+    }
   };
 
   const handleSubmit = async () => {
@@ -98,27 +105,19 @@ export default function AuthScreen() {
           });
 
           if (error) {
-            // Handle "Error sending confirmation email" gracefully
             if (error.message.includes('confirmation email') || error.message.includes('sending')) {
-              // User was likely created but email failed - create locally
-              loginAsLocalUser(`local_${Date.now()}`, emailClean, name.trim(), isProAccount);
+              loginAsLocalUser(`local_${Date.now()}`, emailClean, name.trim(), isProAccount, true);
               return;
             }
             throw error;
           }
 
-          // If email confirmation is required but auto-confirm is off
           if (data.user && !data.session) {
-            // User created but not confirmed - proceed locally
-            loginAsLocalUser(data.user.id, emailClean, name.trim(), isProAccount);
+            loginAsLocalUser(data.user.id, emailClean, name.trim(), isProAccount, true);
             return;
           }
 
-          const userId = data.user?.id || `user_${Date.now()}`;
-          setUser({ id: userId, email: emailClean, name: name.trim(), createdAt: Date.now(), isPro: isProAccount });
-          if (isProAccount) setPro(true);
-          loadSeedData();
-          navigateTo('/onboarding');
+          loginAsLocalUser(data.user?.id || `user_${Date.now()}`, emailClean, name.trim(), isProAccount, true);
         } else {
           // Login
           const { data, error } = await supabase.auth.signInWithPassword({
@@ -127,15 +126,12 @@ export default function AuthScreen() {
           });
 
           if (error) {
-            // If Supabase login fails, check if it's a known Pro account
             if (isProAccount) {
-              loginAsLocalUser(`pro_${Date.now()}`, emailClean, PRO_ACCOUNTS[emailClean]!.name, true);
+              loginAsLocalUser(`pro_${Date.now()}`, emailClean, PRO_ACCOUNTS[emailClean]!.name, true, false);
               return;
             }
-            // Also allow any local login for users who registered before SMTP was fixed
             if (error.message.includes('Invalid login') || error.message.includes('credentials')) {
-              // Try local fallback
-              loginAsLocalUser(`local_${Date.now()}`, emailClean, emailClean.split('@')[0], false);
+              loginAsLocalUser(`local_${Date.now()}`, emailClean, emailClean.split('@')[0], false, false);
               return;
             }
             throw error;
@@ -143,12 +139,11 @@ export default function AuthScreen() {
 
           const userId = data.user?.id || `user_${Date.now()}`;
           const userName = data.user?.user_metadata?.name || emailClean.split('@')[0];
-          loginAsLocalUser(userId, emailClean, userName, isProAccount);
+          loginAsLocalUser(userId, emailClean, userName, isProAccount, false);
         }
       } else {
-        // No Supabase - fully local
         await new Promise(r => setTimeout(r, 400));
-        loginAsLocalUser(`local_${Date.now()}`, emailClean, mode === 'register' ? name.trim() : emailClean.split('@')[0], isProAccount);
+        loginAsLocalUser(`local_${Date.now()}`, emailClean, mode === 'register' ? name.trim() : emailClean.split('@')[0], isProAccount, mode === 'register');
       }
     } catch (error: any) {
       const msg = error?.message || 'Une erreur est survenue';

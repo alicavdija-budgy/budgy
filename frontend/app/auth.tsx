@@ -50,8 +50,14 @@ export default function AuthScreen() {
 
   const navigateTo = (path: string) => {
     setTimeout(() => {
-      try { router.replace(path as any); } catch {}
-      if (typeof window !== 'undefined') window.location.assign(path);
+      try {
+        router.replace(path as any);
+      } catch (e) {
+        // Fallback only for web platform
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          try { window.location.assign(path); } catch {}
+        }
+      }
     }, 200);
   };
 

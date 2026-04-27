@@ -13,7 +13,7 @@
       "bundleIdentifier": "app.guardian.money.chf",
       "infoPlist": {
         "NSCameraUsageDescription": "Scanner vos tickets de caisse",
-        "NSPhotoLibraryUsageDescription": "Importer des photos de re\u00e7us"
+        "NSPhotoLibraryUsageDescription": "Importer des photos de reçus"
       }
     },
     "android": {
@@ -57,7 +57,8 @@
           "color": "#6366F1",
           "sounds": []
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true

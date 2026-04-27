@@ -20,6 +20,9 @@ import type {
   Investment,
   Notification,
   ChatMessage,
+  Receipt,
+  Invoice,
+  SyncQueueItem,
 } from '../types';
 import { SEED_DATA } from '../data/seed-data';
 
@@ -45,6 +48,16 @@ interface AppState {
   // Notifications & Chat
   notifications: Notification[];
   chatHistory: ChatMessage[];
+
+  // Receipts (scanned tickets)
+  receipts: Receipt[];
+
+  // Invoices (factures from email/manual)
+  invoices: Invoice[];
+
+  // Offline sync queue
+  syncQueue: SyncQueueItem[];
+  isOnline: boolean;
   
   // UI state
   isPro: boolean;
@@ -104,7 +117,23 @@ interface AppState {
   // Chat actions
   addChatMessage: (message: ChatMessage) => void;
   clearChatHistory: () => void;
-  
+
+  // Receipt actions
+  addReceipt: (receipt: Receipt) => void;
+  deleteReceipt: (id: string) => void;
+  updateReceipt: (id: string, receipt: Partial<Receipt>) => void;
+
+  // Invoice actions
+  addInvoice: (invoice: Invoice) => void;
+  updateInvoice: (id: string, invoice: Partial<Invoice>) => void;
+  deleteInvoice: (id: string) => void;
+  markInvoicePaid: (id: string) => void;
+
+  // Sync queue
+  enqueueSync: (item: Omit<SyncQueueItem, 'id' | 'createdAt' | 'retries'>) => void;
+  removeFromQueue: (id: string) => void;
+  setOnline: (online: boolean) => void;
+
   // Data management
   loadSeedData: () => void;
   clearAllData: () => void;
@@ -138,6 +167,10 @@ export const useStore = create<AppState>()(
       investments: [],
       notifications: [],
       chatHistory: [],
+      receipts: [],
+      invoices: [],
+      syncQueue: [],
+      isOnline: true,
       isPro: false,
       
       // Auth actions
@@ -285,6 +318,50 @@ export const useStore = create<AppState>()(
       })),
       
       clearChatHistory: () => set({ chatHistory: [] }),
+
+      // Receipt actions
+      addReceipt: (receipt) => set((state) => ({
+        receipts: [receipt, ...state.receipts],
+      })),
+      deleteReceipt: (id) => set((state) => ({
+        receipts: state.receipts.filter((r) => r.id !== id),
+      })),
+      updateReceipt: (id, receipt) => set((state) => ({
+        receipts: state.receipts.map((r) => (r.id === id ? { ...r, ...receipt } : r)),
+      })),
+
+      // Invoice actions
+      addInvoice: (invoice) => set((state) => ({
+        invoices: [invoice, ...state.invoices],
+      })),
+      updateInvoice: (id, invoice) => set((state) => ({
+        invoices: state.invoices.map((i) => (i.id === id ? { ...i, ...invoice } : i)),
+      })),
+      deleteInvoice: (id) => set((state) => ({
+        invoices: state.invoices.filter((i) => i.id !== id),
+      })),
+      markInvoicePaid: (id) => set((state) => ({
+        invoices: state.invoices.map((i) =>
+          i.id === id ? { ...i, status: 'paid' as const, paidAt: Date.now() } : i
+        ),
+      })),
+
+      // Sync queue
+      enqueueSync: (item) => set((state) => ({
+        syncQueue: [
+          ...state.syncQueue,
+          {
+            ...item,
+            id: `sq_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            createdAt: Date.now(),
+            retries: 0,
+          },
+        ],
+      })),
+      removeFromQueue: (id) => set((state) => ({
+        syncQueue: state.syncQueue.filter((q) => q.id !== id),
+      })),
+      setOnline: (online) => set({ isOnline: online }),
       
       // Data management
       loadSeedData: () => set({
@@ -315,6 +392,9 @@ export const useStore = create<AppState>()(
         investments: [],
         notifications: [],
         chatHistory: [],
+        receipts: [],
+        invoices: [],
+        syncQueue: [],
         isPro: false,
       }),
       

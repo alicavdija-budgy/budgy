@@ -13,6 +13,10 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
+import json
+import re
+import base64
+from emergentintegrations.llm.chat import ImageContent
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 
 load_dotenv()
@@ -377,3 +381,328 @@ async def check_budgets(req: CheckBudgetRequest):
 async def get_alerts(user_id: str):
     """Get stored alerts for a user"""
     return {"alerts": alerts_store.get(user_id, []), "count": len(alerts_store.get(user_id, []))}
+
+
+
+# ──────────────────────────────────────────────────
+# RECEIPT OCR - Vision AI to extract data from receipt photo
+# ──────────────────────────────────────────────────
+class OCRRequest(BaseModel):
+    image_base64: str  # raw base64, no data: prefix
+    mime_type: str = "image/jpeg"
+
+
+class OCRResponse(BaseModel):
+    success: bool
+    merchant: Optional[str] = None
+    total_amount: Optional[float] = None
+    currency: Optional[str] = "CHF"
+    date: Optional[str] = None
+    category: Optional[str] = None
+    receipt_type: Optional[str] = None  # "ticket" or "remboursement"
+    items: Optional[list] = None
+    raw_text: Optional[str] = None
+    confidence: Optional[float] = None
+    error: Optional[str] = None
+
+
+OCR_SYSTEM_PROMPT = """Tu es un assistant OCR expert pour les tickets de caisse et factures suisses.
+Analyse l'image fournie et extrais les informations dans un JSON STRICT (rien d'autre).
+
+CHAMPS À RETOURNER:
+{
+  "merchant": "nom du commerçant",
+  "total_amount": montant TTC en nombre (sans devise),
+  "currency": "CHF" | "EUR" | "USD",
+  "date": "YYYY-MM-DD",
+  "category": une de ["courses", "restaurant", "transport", "sante", "loisirs", "shopping", "abonnements", "telecoms", "autre"],
+  "receipt_type": "ticket" si c'est un ticket de caisse classique (Migros, Coop, Denner, restaurant, station-service, pharmacie, etc.) OU "remboursement" si c'est une facture professionnelle, frais médicaux, hôtel, taxi-pro, formation, ou justificatif pour remboursement employeur/assurance,
+  "items": ["item1", "item2", ...] (max 5),
+  "confidence": 0.0 à 1.0
+}
+
+RÈGLES:
+- Si tu ne peux pas lire un champ, mets null.
+- total_amount doit être le TOTAL FINAL (pas un sous-total).
+- Pour la catégorie: Migros/Coop/Denner = "courses", McDonald's/restaurant = "restaurant", CFF/SBB/Uber = "transport", pharmacie = "sante".
+- Pour receipt_type: pharmacie/médecin/hôpital = "remboursement"; courses/restos perso = "ticket"; déplacement pro/hôtel/repas affaires = "remboursement".
+- Réponds UNIQUEMENT avec le JSON, sans markdown, sans commentaire."""
+
+
+def parse_json_loose(text: str) -> dict:
+    """Try to extract JSON from a text response."""
+    text = text.strip()
+    # Remove markdown code fences
+    text = re.sub(r"^```(?:json)?\s*", "", text)
+    text = re.sub(r"\s*```$", "", text)
+    # Find first { ... last }
+    start = text.find("{")
+    end = text.rfind("}")
+    if start >= 0 and end > start:
+        text = text[start:end + 1]
+    try:
+        return json.loads(text)
+    except Exception:
+        return {}
+
+
+@app.post("/api/scanner/ocr", response_model=OCRResponse)
+async def scanner_ocr(req: OCRRequest):
+    """Extract structured data from a receipt image using vision LLM."""
+    if not EMERGENT_LLM_KEY:
+        return OCRResponse(success=False, error="LLM key not configured")
+
+    # Strip any data:image/...;base64, prefix if present
+    img_b64 = req.image_base64
+    if img_b64.startswith("data:"):
+        idx = img_b64.find(",")
+        if idx > 0:
+            img_b64 = img_b64[idx + 1:]
+
+    # Validate image briefly
+    try:
+        raw = base64.b64decode(img_b64[:200] + "=" * (-len(img_b64[:200]) % 4))
+        if len(raw) < 50:
+            return OCRResponse(success=False, error="Image trop petite")
+    except Exception:
+        return OCRResponse(success=False, error="Base64 invalide")
+
+    try:
+        session_id = f"ocr_{uuid.uuid4().hex[:12]}"
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=session_id,
+            system_message=OCR_SYSTEM_PROMPT,
+        )
+        chat.with_model("openai", "gpt-4o-mini")
+
+        image_content = ImageContent(image_base64=img_b64)
+        user_msg = UserMessage(
+            text="Voici un ticket/facture. Extrais les données au format JSON strict.",
+            file_contents=[image_content],
+        )
+        response = await chat.send_message(user_msg)
+
+        data = parse_json_loose(response)
+        if not data:
+            return OCRResponse(success=False, raw_text=response, error="JSON invalide retourné par le modèle")
+
+        # Coerce values
+        amt_raw = data.get("total_amount")
+        try:
+            amt = float(amt_raw) if amt_raw is not None else None
+        except Exception:
+            amt = None
+
+        return OCRResponse(
+            success=True,
+            merchant=data.get("merchant"),
+            total_amount=amt,
+            currency=data.get("currency") or "CHF",
+            date=data.get("date"),
+            category=data.get("category") or "autre",
+            receipt_type=data.get("receipt_type") or "ticket",
+            items=data.get("items") or [],
+            confidence=float(data.get("confidence", 0.7)) if data.get("confidence") is not None else 0.7,
+            raw_text=response,
+        )
+    except Exception as e:
+        return OCRResponse(success=False, error=str(e))
+
+
+# ──────────────────────────────────────────────────
+# EMAIL INVOICE PARSING - Parse forwarded email / pasted content
+# ──────────────────────────────────────────────────
+class EmailParseRequest(BaseModel):
+    content: str             # raw email text/html or pasted invoice
+    subject: Optional[str] = ""
+    from_addr: Optional[str] = ""
+
+
+class EmailParseResponse(BaseModel):
+    success: bool
+    title: Optional[str] = None
+    issuer: Optional[str] = None
+    amount: Optional[float] = None
+    currency: Optional[str] = "CHF"
+    due_date: Optional[str] = None
+    invoice_date: Optional[str] = None
+    iban: Optional[str] = None
+    reference: Optional[str] = None
+    qr_reference: Optional[str] = None
+    category: Optional[str] = None
+    error: Optional[str] = None
+
+
+EMAIL_PARSE_PROMPT = """Tu es un assistant qui extrait les données d'une facture suisse à partir d'un email.
+
+Réponds UNIQUEMENT avec un JSON STRICT:
+{
+  "title": "objet court de la facture",
+  "issuer": "émetteur (entreprise)",
+  "amount": montant TTC en CHF,
+  "currency": "CHF" | "EUR",
+  "due_date": "YYYY-MM-DD",
+  "invoice_date": "YYYY-MM-DD",
+  "iban": "IBAN si visible",
+  "reference": "numéro de référence/BVR",
+  "category": une de ["telecoms", "abonnements", "loyer", "assurance", "sante", "autre"]
+}
+Mets null pour les champs manquants. Pas de markdown, pas de commentaire."""
+
+
+@app.post("/api/email/parse", response_model=EmailParseResponse)
+async def email_parse(req: EmailParseRequest):
+    """Parse an email/invoice text into a structured invoice."""
+    if not EMERGENT_LLM_KEY:
+        return EmailParseResponse(success=False, error="LLM key not configured")
+
+    try:
+        session_id = f"email_{uuid.uuid4().hex[:12]}"
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=session_id,
+            system_message=EMAIL_PARSE_PROMPT,
+        )
+        chat.with_model("openai", "gpt-4o-mini")
+
+        body = (
+            f"Sujet: {req.subject or '-'}\n"
+            f"De: {req.from_addr or '-'}\n"
+            f"Contenu:\n{req.content[:8000]}"
+        )
+        response = await chat.send_message(UserMessage(text=body))
+        data = parse_json_loose(response)
+        if not data:
+            return EmailParseResponse(success=False, error="JSON invalide")
+
+        try:
+            amt = float(data.get("amount")) if data.get("amount") is not None else None
+        except Exception:
+            amt = None
+
+        return EmailParseResponse(
+            success=True,
+            title=data.get("title"),
+            issuer=data.get("issuer"),
+            amount=amt,
+            currency=data.get("currency") or "CHF",
+            due_date=data.get("due_date"),
+            invoice_date=data.get("invoice_date"),
+            iban=data.get("iban"),
+            reference=data.get("reference"),
+            category=data.get("category") or "autre",
+        )
+    except Exception as e:
+        return EmailParseResponse(success=False, error=str(e))
+
+
+# ──────────────────────────────────────────────────
+# LAMAL SUBSIDIES - Calculate subsidy eligibility per canton/income
+# ──────────────────────────────────────────────────
+# Approximate 2025 subsidy thresholds per canton (CHF/year, single household)
+# Source: simplified from cantonal published rules.
+LAMAL_SUBSIDY_DATA = {
+    # canton: (single_threshold, family_threshold, max_subsidy_single_chf_month)
+    "AG": (50000, 90000, 250),
+    "AI": (45000, 80000, 200),
+    "AR": (47000, 85000, 220),
+    "BE": (54000, 95000, 280),
+    "BL": (53000, 95000, 290),
+    "BS": (60000, 105000, 320),
+    "FR": (52000, 92000, 260),
+    "GE": (60000, 110000, 350),
+    "GL": (47000, 84000, 220),
+    "GR": (50000, 90000, 250),
+    "JU": (52000, 92000, 270),
+    "LU": (50000, 90000, 250),
+    "NE": (55000, 98000, 290),
+    "NW": (45000, 80000, 200),
+    "OW": (45000, 80000, 200),
+    "SG": (51000, 91000, 250),
+    "SH": (50000, 90000, 250),
+    "SO": (52000, 92000, 260),
+    "SZ": (47000, 85000, 220),
+    "TG": (51000, 91000, 250),
+    "TI": (54000, 96000, 280),
+    "UR": (47000, 84000, 210),
+    "VD": (58000, 102000, 320),
+    "VS": (53000, 95000, 270),
+    "ZG": (50000, 90000, 250),
+    "ZH": (54000, 96000, 290),
+}
+
+
+class SubsidyRequest(BaseModel):
+    canton: str
+    yearly_income: float
+    household: str = "single"  # single | couple | family | single_parent
+    children: int = 0
+    monthly_premium: float = 0
+
+
+class SubsidyResponse(BaseModel):
+    eligible: bool
+    estimated_monthly_subsidy: float
+    estimated_yearly_subsidy: float
+    threshold: float
+    income_used: float
+    explanation: str
+    final_premium: float
+
+
+@app.post("/api/lamal/subsidy", response_model=SubsidyResponse)
+async def lamal_subsidy(req: SubsidyRequest):
+    """Estimate LAMal subsidy eligibility based on income, canton, household."""
+    canton_data = LAMAL_SUBSIDY_DATA.get(req.canton.upper())
+    if not canton_data:
+        canton_data = (50000, 90000, 250)
+    single_thr, family_thr, max_sub = canton_data
+
+    # Pick threshold based on household
+    if req.household in ("couple", "family"):
+        threshold = family_thr + req.children * 7000
+    elif req.household == "single_parent":
+        threshold = single_thr + req.children * 7000 + 5000
+    else:
+        threshold = single_thr
+
+    income = max(0, req.yearly_income)
+    eligible = income <= threshold
+
+    if not eligible:
+        return SubsidyResponse(
+            eligible=False,
+            estimated_monthly_subsidy=0,
+            estimated_yearly_subsidy=0,
+            threshold=threshold,
+            income_used=income,
+            final_premium=req.monthly_premium,
+            explanation=(
+                f"Avec un revenu annuel de CHF {income:,.0f} vous êtes au-dessus du seuil "
+                f"cantonal {req.canton.upper()} ({threshold:,.0f} CHF). Aucun subside attendu."
+            ).replace(",", "'"),
+        )
+
+    # Linear scale: full max_sub at income=0, 0 at income=threshold
+    ratio = 1 - (income / threshold) if threshold > 0 else 0
+    monthly_sub = round(max_sub * ratio)
+    # Cap by actual premium
+    if req.monthly_premium > 0:
+        monthly_sub = min(monthly_sub, int(req.monthly_premium * 0.9))
+
+    final_premium = max(0, req.monthly_premium - monthly_sub) if req.monthly_premium > 0 else 0
+
+    return SubsidyResponse(
+        eligible=True,
+        estimated_monthly_subsidy=float(monthly_sub),
+        estimated_yearly_subsidy=float(monthly_sub * 12),
+        threshold=float(threshold),
+        income_used=income,
+        final_premium=float(final_premium),
+        explanation=(
+            f"Vous êtes éligible aux subsides LAMal {req.canton.upper()}. "
+            f"Estimation: CHF {monthly_sub}/mois (~CHF {monthly_sub*12}/an). "
+            f"Demande à faire auprès de l'Office cantonal d'assurance-maladie."
+        ),
+    )

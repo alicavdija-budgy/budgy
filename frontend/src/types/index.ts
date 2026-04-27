@@ -164,3 +164,46 @@ export interface ChatMessage {
   content: string;
   timestamp: number;
 }
+
+export type ReceiptType = 'ticket' | 'remboursement';
+
+export interface Receipt {
+  id: string;
+  imageBase64: string;            // data URL
+  merchant: string;
+  amount: number;
+  currency: string;
+  date: string;                   // YYYY-MM-DD or display date
+  category: string;
+  type: ReceiptType;
+  items?: string[];
+  note?: string;
+  transactionId?: string;         // linked transaction id
+  createdAt: number;
+}
+
+export interface Invoice {
+  id: string;
+  title: string;
+  issuer: string;
+  amount: number;
+  currency: string;
+  dueDate?: string;
+  invoiceDate?: string;
+  iban?: string;
+  reference?: string;
+  category?: string;
+  status: 'pending' | 'paid' | 'overdue';
+  source: 'manual' | 'email' | 'scan';
+  createdAt: number;
+  paidAt?: number;
+}
+
+export interface SyncQueueItem {
+  id: string;
+  type: 'transaction' | 'income' | 'savings' | 'invoice' | 'receipt';
+  action: 'add' | 'update' | 'delete';
+  payload: any;
+  createdAt: number;
+  retries: number;
+}

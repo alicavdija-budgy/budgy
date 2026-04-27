@@ -36,13 +36,17 @@ import { useStore } from '../src/stores/useStore';
 import { Button } from '../src/components/ui';
 import { EXPENSE_CATEGORIES, PAYMENT_METHODS } from '../src/data/swiss-data';
 import { CategoryIcon } from '../src/components/CategoryIcon';
+import type { ReceiptType } from '../src/types';
 
-type Stage = 'permission' | 'camera' | 'edit' | 'saving';
+const BACKEND_URL =
+  process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:8001';
+
+type Stage = 'permission' | 'camera' | 'ocr' | 'edit' | 'saving';
 
 export default function ScannerModal() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { addTransaction } = useStore();
+  const { addTransaction, addReceipt } = useStore();
 
   const [permission, requestPermission] = useCameraPermissions();
   const [stage, setStage] = useState<Stage>('camera');
@@ -58,6 +62,9 @@ export default function ScannerModal() {
   const [category, setCategory] = useState('courses');
   const [paymentMethod, setPaymentMethod] = useState('card');
   const [note, setNote] = useState('Ajouté via scan');
+  const [receiptType, setReceiptType] = useState<ReceiptType>('ticket');
+  const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
+  const [ocrError, setOcrError] = useState<string | null>(null);
 
   // Decide initial stage once we know permission status
   useEffect(() => {
@@ -92,6 +99,35 @@ export default function ScannerModal() {
     router.back();
   };
 
+  const runOcr = async (b64: string) => {
+    setStage('ocr');
+    setOcrError(null);
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/scanner/ocr`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image_base64: b64, mime_type: 'image/jpeg' }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        if (data.merchant) setTitle(data.merchant);
+        if (data.total_amount) setAmount(String(data.total_amount));
+        if (data.category) setCategory(data.category);
+        if (data.receipt_type) setReceiptType(data.receipt_type as ReceiptType);
+        setOcrConfidence(data.confidence || null);
+        if (data.items && data.items.length) {
+          setNote(`Articles: ${data.items.slice(0, 3).join(', ')}`);
+        }
+      } else {
+        setOcrError(data.error || 'OCR a échoué — saisie manuelle');
+      }
+    } catch (e: any) {
+      setOcrError(e?.message || 'Erreur réseau OCR');
+    } finally {
+      setStage('edit');
+    }
+  };
+
   const handleCapture = async () => {
     if (!cameraRef.current || capturing) return;
     try {
@@ -103,7 +139,11 @@ export default function ScannerModal() {
       });
       if (pic?.uri) {
         setPhoto({ uri: pic.uri, base64: pic.base64 });
-        setStage('edit');
+        if (pic.base64) {
+          await runOcr(pic.base64);
+        } else {
+          setStage('edit');
+        }
       }
     } catch (e: any) {
       Alert.alert('Erreur', e?.message || 'Impossible de capturer la photo');
@@ -129,11 +169,13 @@ export default function ScannerModal() {
     }
     setStage('saving');
     const now = new Date();
+    const txId = `tx_${Date.now()}`;
     const receiptData = photo?.base64
       ? `data:image/jpeg;base64,${photo.base64}`
       : undefined;
+
     addTransaction({
-      id: `tx_${Date.now()}`,
+      id: txId,
       title: title.trim(),
       amount: amt,
       date: now.toLocaleDateString('fr-CH'),
@@ -145,6 +187,24 @@ export default function ScannerModal() {
       updatedAt: now.getTime(),
       synced: false,
     });
+
+    // Save to receipt gallery if we have a photo
+    if (receiptData) {
+      addReceipt({
+        id: `rec_${Date.now()}`,
+        imageBase64: receiptData,
+        merchant: title.trim(),
+        amount: amt,
+        currency: 'CHF',
+        date: now.toISOString().split('T')[0],
+        category,
+        type: receiptType,
+        note: note.trim() || undefined,
+        transactionId: txId,
+        createdAt: now.getTime(),
+      });
+    }
+
     setTimeout(() => {
       router.back();
     }, 300);
@@ -259,6 +319,26 @@ export default function ScannerModal() {
     );
   }
 
+  // ---------- OCR LOADING STAGE ----------
+  if (stage === 'ocr') {
+    return (
+      <View style={styles.ocrContainer}>
+        {photo && (
+          <Image source={{ uri: photo.uri }} style={styles.ocrBgImage} resizeMode="cover" blurRadius={6} />
+        )}
+        <View style={styles.ocrOverlay}>
+          <View style={styles.ocrCard}>
+            <ActivityIndicator size="large" color={Colors.primaryLight} />
+            <Text style={styles.ocrTitle}>Analyse du ticket par IA</Text>
+            <Text style={styles.ocrSubtitle}>
+              Extraction du commerçant, montant, date et catégorie...
+            </Text>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
   // ---------- EDIT STAGE ----------
   return (
     <KeyboardAvoidingView
@@ -278,6 +358,62 @@ export default function ScannerModal() {
         contentContainerStyle={styles.editContent}
         keyboardShouldPersistTaps="handled"
       >
+        {/* OCR result banner */}
+        {ocrConfidence !== null && (
+          <View style={styles.ocrBanner}>
+            <Ionicons name="sparkles" size={16} color={Colors.primaryLight} />
+            <Text style={styles.ocrBannerText}>
+              Données pré-remplies par IA · confiance {Math.round(ocrConfidence * 100)}%
+            </Text>
+          </View>
+        )}
+        {ocrError && (
+          <View style={[styles.ocrBanner, { backgroundColor: `${Colors.warning}15` }]}>
+            <Ionicons name="alert-circle" size={16} color={Colors.warning} />
+            <Text style={[styles.ocrBannerText, { color: Colors.warning }]}>{ocrError}</Text>
+          </View>
+        )}
+
+        {/* Receipt type toggle */}
+        <View style={styles.fieldGroup}>
+          <Text style={styles.label}>Type de reçu</Text>
+          <View style={styles.typeToggle}>
+            <TouchableOpacity
+              style={[
+                styles.typeOption,
+                receiptType === 'ticket' && styles.typeOptionSelected,
+              ]}
+              onPress={() => setReceiptType('ticket')}
+            >
+              <Text style={styles.typeEmoji}>🛒</Text>
+              <Text
+                style={[
+                  styles.typeLabel,
+                  receiptType === 'ticket' && styles.typeLabelSelected,
+                ]}
+              >
+                Ticket de caisse
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.typeOption,
+                receiptType === 'remboursement' && styles.typeOptionSelected,
+              ]}
+              onPress={() => setReceiptType('remboursement')}
+            >
+              <Text style={styles.typeEmoji}>💼</Text>
+              <Text
+                style={[
+                  styles.typeLabel,
+                  receiptType === 'remboursement' && styles.typeLabelSelected,
+                ]}
+              >
+                Remboursement
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
         {/* Preview */}
         {photo ? (
           <View style={styles.previewCard}>
@@ -704,5 +840,88 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
     borderTopWidth: 1,
     borderTopColor: Colors.cardBorder,
+  },
+
+  // OCR loading
+  ocrContainer: {
+    flex: 1,
+    backgroundColor: '#000',
+  },
+  ocrBgImage: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.4,
+  },
+  ocrOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: Spacing.xl,
+  },
+  ocrCard: {
+    backgroundColor: Colors.backgroundSecondary,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.xxl,
+    alignItems: 'center',
+    gap: Spacing.md,
+    minWidth: 240,
+  },
+  ocrTitle: {
+    color: Colors.text,
+    fontSize: FontSizes.lg,
+    fontWeight: FontWeights.bold,
+    marginTop: Spacing.md,
+    textAlign: 'center',
+  },
+  ocrSubtitle: {
+    color: Colors.textSecondary,
+    fontSize: FontSizes.sm,
+    textAlign: 'center',
+  },
+
+  // OCR banner in edit
+  ocrBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    backgroundColor: `${Colors.primary}18`,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  ocrBannerText: {
+    flex: 1,
+    color: Colors.primaryLight,
+    fontSize: FontSizes.xs,
+    fontWeight: FontWeights.semibold,
+  },
+
+  // Type toggle
+  typeToggle: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+  },
+  typeOption: {
+    flex: 1,
+    backgroundColor: Colors.card,
+    borderWidth: 1,
+    borderColor: Colors.cardBorder,
+    borderRadius: BorderRadius.lg,
+    paddingVertical: Spacing.md,
+    alignItems: 'center',
+    gap: Spacing.xs,
+  },
+  typeOptionSelected: {
+    backgroundColor: `${Colors.primary}20`,
+    borderColor: Colors.primary,
+  },
+  typeEmoji: { fontSize: 22 },
+  typeLabel: {
+    color: Colors.textSecondary,
+    fontSize: FontSizes.xs,
+    fontWeight: FontWeights.semibold,
+  },
+  typeLabelSelected: {
+    color: Colors.text,
   },
 });

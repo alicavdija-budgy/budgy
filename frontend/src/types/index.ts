@@ -207,3 +207,85 @@ export interface SyncQueueItem {
   createdAt: number;
   retries: number;
 }
+
+// ─── Documents Classeur ────────────────────────────────
+export type DocumentCategory =
+  | 'contracts'
+  | 'insurance'
+  | 'banking'
+  | 'health'
+  | 'tax'
+  | 'identity'
+  | 'other';
+
+export interface PersonalDocument {
+  id: string;
+  title: string;
+  category: DocumentCategory;
+  imageBase64: string;        // data URL
+  tags: string[];
+  note?: string;
+  expiresAt?: string;          // YYYY-MM-DD optional expiration
+  createdAt: number;
+  updatedAt: number;
+}
+
+// ─── Groups (shared expenses, Splitwise-like) ──────────
+export interface GroupMember {
+  id: string;
+  name: string;
+  color: string;
+  email?: string;
+  isMe?: boolean;
+}
+
+export type SplitMode = 'equal' | 'shares' | 'percentages' | 'exact';
+
+export interface GroupExpense {
+  id: string;
+  groupId: string;
+  title: string;
+  amount: number;
+  currency: string;
+  paidBy: string;             // memberId
+  splitMode: SplitMode;
+  shares: Record<string, number>; // memberId → number (interpretation depends on splitMode)
+  date: string;
+  category?: string;
+  note?: string;
+  createdAt: number;
+}
+
+export type GroupSettlementStatus = 'pending' | 'settled';
+
+export interface GroupSettlement {
+  id: string;
+  groupId: string;
+  fromMember: string;
+  toMember: string;
+  amount: number;
+  currency: string;
+  status: GroupSettlementStatus;
+  createdAt: number;
+  settledAt?: number;
+}
+
+export interface ExpenseGroup {
+  id: string;
+  name: string;
+  emoji: string;
+  color: string;
+  members: GroupMember[];
+  currency: string;
+  createdAt: number;
+}
+
+// ─── Security ──────────────────────────────────────────
+export interface SecuritySettings {
+  appLockEnabled: boolean;
+  pinHash?: string;            // sha256 of PIN
+  decoyPinHash?: string;       // panic code
+  biometricEnabled: boolean;
+  autoLockSeconds: number;     // background timeout
+  lastUnlockAt?: number;
+}

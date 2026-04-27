@@ -3,10 +3,10 @@
  * Main navigation structure + notifications init
  */
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Platform, View, Text, StyleSheet } from 'react-native';
+import { Platform, View, Text, StyleSheet, AppState, AppStateStatus } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Colors, FontSizes, FontWeights, Spacing } from '../src/constants/theme';
 import {
@@ -15,6 +15,7 @@ import {
 } from '../src/services/notifications';
 import { startSyncMonitor } from '../src/services/sync';
 import { useStore } from '../src/stores/useStore';
+import LockScreen from './lock';
 
 function OfflineBadge() {
   const isOnline = useStore((s) => s.isOnline);
@@ -29,6 +30,47 @@ function OfflineBadge() {
       </Text>
     </View>
   );
+}
+
+function LockGate({ children }: { children: React.ReactNode }) {
+  const { security, isLocked, setLocked, isAuthenticated, setDecoyMode } = useStore();
+  const backgroundedAt = useRef<number | null>(null);
+
+  // Re-lock when app goes to background past timeout
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state: AppStateStatus) => {
+      if (!security.appLockEnabled || !security.pinHash) return;
+      if (state === 'background' || state === 'inactive') {
+        backgroundedAt.current = Date.now();
+      } else if (state === 'active' && backgroundedAt.current) {
+        const elapsed = (Date.now() - backgroundedAt.current) / 1000;
+        if (elapsed >= (security.autoLockSeconds || 60)) {
+          setLocked(true);
+        }
+        backgroundedAt.current = null;
+      }
+    });
+    return () => sub.remove();
+  }, [security.appLockEnabled, security.pinHash, security.autoLockSeconds]);
+
+  // Auto-lock on first mount if user has app lock enabled
+  useEffect(() => {
+    if (security.appLockEnabled && security.pinHash && isAuthenticated) {
+      setLocked(true);
+    }
+  }, []);
+
+  if (security.appLockEnabled && security.pinHash && isLocked && isAuthenticated) {
+    return (
+      <LockScreen
+        onUnlock={(decoy) => {
+          setDecoyMode(decoy);
+          setLocked(false);
+        }}
+      />
+    );
+  }
+  return <>{children}</>;
 }
 
 export default function RootLayout() {
@@ -49,27 +91,30 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <StatusBar style="light" />
       <OfflineBadge />
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: Colors.background },
-          animation: 'fade',
-        }}
-      >
-        <Stack.Screen name="index" options={{ headerShown: false }} />
-        <Stack.Screen name="auth" options={{ headerShown: false }} />
-        <Stack.Screen name="onboarding" options={{ headerShown: false }} />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="more" options={{ headerShown: false }} />
-        <Stack.Screen
-          name="scanner-modal"
-          options={{
+      <LockGate>
+        <Stack
+          screenOptions={{
             headerShown: false,
-            presentation: 'modal',
-            animation: 'slide_from_bottom',
+            contentStyle: { backgroundColor: Colors.background },
+            animation: 'fade',
           }}
-        />
-      </Stack>
+        >
+          <Stack.Screen name="index" options={{ headerShown: false }} />
+          <Stack.Screen name="auth" options={{ headerShown: false }} />
+          <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="more" options={{ headerShown: false }} />
+          <Stack.Screen name="lock" options={{ headerShown: false }} />
+          <Stack.Screen
+            name="scanner-modal"
+            options={{
+              headerShown: false,
+              presentation: 'modal',
+              animation: 'slide_from_bottom',
+            }}
+          />
+        </Stack>
+      </LockGate>
     </SafeAreaProvider>
   );
 }

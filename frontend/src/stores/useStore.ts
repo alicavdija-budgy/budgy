@@ -23,6 +23,11 @@ import type {
   Receipt,
   Invoice,
   SyncQueueItem,
+  PersonalDocument,
+  ExpenseGroup,
+  GroupExpense,
+  GroupSettlement,
+  SecuritySettings,
 } from '../types';
 import { SEED_DATA } from '../data/seed-data';
 
@@ -134,6 +139,32 @@ interface AppState {
   removeFromQueue: (id: string) => void;
   setOnline: (online: boolean) => void;
 
+  // Documents
+  documents: PersonalDocument[];
+  addDocument: (doc: PersonalDocument) => void;
+  updateDocument: (id: string, doc: Partial<PersonalDocument>) => void;
+  deleteDocument: (id: string) => void;
+
+  // Groups
+  groups: ExpenseGroup[];
+  groupExpenses: GroupExpense[];
+  groupSettlements: GroupSettlement[];
+  addGroup: (group: ExpenseGroup) => void;
+  updateGroup: (id: string, group: Partial<ExpenseGroup>) => void;
+  deleteGroup: (id: string) => void;
+  addGroupExpense: (expense: GroupExpense) => void;
+  deleteGroupExpense: (id: string) => void;
+  addGroupSettlement: (settlement: GroupSettlement) => void;
+  markSettlementPaid: (id: string) => void;
+
+  // Security
+  security: SecuritySettings;
+  setSecurity: (settings: Partial<SecuritySettings>) => void;
+  isLocked: boolean;
+  setLocked: (locked: boolean) => void;
+  isDecoyMode: boolean;
+  setDecoyMode: (decoy: boolean) => void;
+
   // Data management
   loadSeedData: () => void;
   clearAllData: () => void;
@@ -172,6 +203,17 @@ export const useStore = create<AppState>()(
       syncQueue: [],
       isOnline: true,
       isPro: false,
+      documents: [],
+      groups: [],
+      groupExpenses: [],
+      groupSettlements: [],
+      security: {
+        appLockEnabled: false,
+        biometricEnabled: false,
+        autoLockSeconds: 60,
+      },
+      isLocked: false,
+      isDecoyMode: false,
       
       // Auth actions
       setUser: (user) => set({ user, isAuthenticated: !!user }),
@@ -362,6 +404,46 @@ export const useStore = create<AppState>()(
         syncQueue: state.syncQueue.filter((q) => q.id !== id),
       })),
       setOnline: (online) => set({ isOnline: online }),
+
+      // Documents
+      addDocument: (doc) => set((s) => ({ documents: [doc, ...s.documents] })),
+      updateDocument: (id, doc) =>
+        set((s) => ({
+          documents: s.documents.map((d) => (d.id === id ? { ...d, ...doc, updatedAt: Date.now() } : d)),
+        })),
+      deleteDocument: (id) =>
+        set((s) => ({ documents: s.documents.filter((d) => d.id !== id) })),
+
+      // Groups
+      addGroup: (group) => set((s) => ({ groups: [group, ...s.groups] })),
+      updateGroup: (id, group) =>
+        set((s) => ({
+          groups: s.groups.map((g) => (g.id === id ? { ...g, ...group } : g)),
+        })),
+      deleteGroup: (id) =>
+        set((s) => ({
+          groups: s.groups.filter((g) => g.id !== id),
+          groupExpenses: s.groupExpenses.filter((e) => e.groupId !== id),
+          groupSettlements: s.groupSettlements.filter((set) => set.groupId !== id),
+        })),
+      addGroupExpense: (expense) =>
+        set((s) => ({ groupExpenses: [expense, ...s.groupExpenses] })),
+      deleteGroupExpense: (id) =>
+        set((s) => ({ groupExpenses: s.groupExpenses.filter((e) => e.id !== id) })),
+      addGroupSettlement: (settlement) =>
+        set((s) => ({ groupSettlements: [settlement, ...s.groupSettlements] })),
+      markSettlementPaid: (id) =>
+        set((s) => ({
+          groupSettlements: s.groupSettlements.map((st) =>
+            st.id === id ? { ...st, status: 'settled' as const, settledAt: Date.now() } : st
+          ),
+        })),
+
+      // Security
+      setSecurity: (settings) =>
+        set((s) => ({ security: { ...s.security, ...settings } })),
+      setLocked: (locked) => set({ isLocked: locked }),
+      setDecoyMode: (decoy) => set({ isDecoyMode: decoy }),
       
       // Data management
       loadSeedData: () => set({
@@ -395,6 +477,10 @@ export const useStore = create<AppState>()(
         receipts: [],
         invoices: [],
         syncQueue: [],
+        documents: [],
+        groups: [],
+        groupExpenses: [],
+        groupSettlements: [],
         isPro: false,
       }),
       

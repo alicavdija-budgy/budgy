@@ -173,6 +173,14 @@ export default function MoreScreen() {
           color: '#10B981',
           route: '/more/security',
         },
+        {
+          id: 'cloud-sync',
+          title: 'Sync Cloud',
+          subtitle: 'Sauvegarde Supabase · multi-appareils',
+          icon: 'cloud-done',
+          color: '#0EA5E9',
+          route: '/more/cloud-sync',
+        },
       ],
     },
     {

@@ -16,6 +16,7 @@ import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../src/co
 import { useStore } from '../src/stores/useStore';
 import { Button } from '../src/components/ui';
 import { supabase, isSupabaseConfigured } from '../src/lib/supabase';
+import { pullAllFromCloud, pushAllToCloud } from '../src/services/cloudSync';
 
 // Hardcoded Pro accounts (for users whose Supabase can't send confirmation emails)
 const PRO_ACCOUNTS: Record<string, { password: string; name: string }> = {
@@ -88,6 +89,21 @@ export default function AuthScreen() {
     }
   };
 
+  // Cloud sync after successful Supabase login (non-blocking)
+  const triggerCloudSync = async (isNewAccount: boolean) => {
+    try {
+      if (isNewAccount) {
+        // For new accounts, push the initial state (user_preferences row)
+        await pushAllToCloud();
+      } else {
+        // For returning users, pull cloud data to hydrate local store
+        await pullAllFromCloud();
+      }
+    } catch (e) {
+      console.warn('[auth] cloud sync failed (non-fatal):', e);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!validate()) return;
     setLoading(true);
@@ -114,10 +130,13 @@ export default function AuthScreen() {
 
           if (data.user && !data.session) {
             loginAsLocalUser(data.user.id, emailClean, name.trim(), isProAccount, true);
+            // Trigger cloud sync in background (non-blocking)
+            triggerCloudSync(true);
             return;
           }
 
           loginAsLocalUser(data.user?.id || `user_${Date.now()}`, emailClean, name.trim(), isProAccount, true);
+          triggerCloudSync(true);
         } else {
           // Login
           const { data, error } = await supabase.auth.signInWithPassword({
@@ -140,6 +159,8 @@ export default function AuthScreen() {
           const userId = data.user?.id || `user_${Date.now()}`;
           const userName = data.user?.user_metadata?.name || emailClean.split('@')[0];
           loginAsLocalUser(userId, emailClean, userName, isProAccount, false);
+          // Pull cloud data in background to hydrate local store
+          triggerCloudSync(false);
         }
       } else {
         await new Promise(r => setTimeout(r, 400));

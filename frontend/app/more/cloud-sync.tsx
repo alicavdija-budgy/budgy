@@ -166,12 +166,21 @@ export default function CloudSyncScreen() {
         {working && <ActivityIndicator color={Colors.primaryLight} style={{ marginTop: Spacing.lg }} />}
 
         <Card style={[styles.helpCard, { marginTop: Spacing.xl }]}>
-          <Text style={styles.helpTitle}>Comment ça marche ?</Text>
+          <Text style={styles.helpTitle}>Sync automatique activée ✨</Text>
+          <Text style={styles.helpText}>
+            • 🔐 <Text style={styles.bold}>À la connexion</Text> : récupération automatique des données cloud{'\n'}
+            • 📲 <Text style={styles.bold}>Retour dans l'app</Text> : pull automatique (toutes les 30 s max){'\n'}
+            • 💾 <Text style={styles.bold}>Mise en arrière-plan</Text> : push automatique de vos changements{'\n'}
+            • 🔄 <Text style={styles.bold}>Sync manuelle</Text> : utilisez les boutons ci-dessus pour forcer
+          </Text>
+        </Card>
+
+        <Card style={[styles.helpCard, { marginTop: Spacing.md }]}>
+          <Text style={styles.helpTitle}>Actions manuelles</Text>
           <Text style={styles.helpText}>
             • La <Text style={styles.bold}>sync complète</Text> envoie vos données puis récupère le cloud{'\n'}
             • <Text style={styles.bold}>Envoyer ↑</Text> : vos données locales écrasent le cloud{'\n'}
-            • <Text style={styles.bold}>Récupérer ↓</Text> : le cloud écrase vos données locales{'\n'}
-            • La sync s'effectue aussi <Text style={styles.bold}>automatiquement à la connexion</Text>
+            • <Text style={styles.bold}>Récupérer ↓</Text> : le cloud écrase vos données locales
           </Text>
         </Card>
       </ScrollView>

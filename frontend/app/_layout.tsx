@@ -14,6 +14,7 @@ import {
   scheduleMonthlyReminder,
 } from '../src/services/notifications';
 import { startSyncMonitor } from '../src/services/sync';
+import { pullAllFromCloud, pushAllToCloud, isSignedInToSupabase } from '../src/services/cloudSync';
 import { useStore } from '../src/stores/useStore';
 import LockScreen from './lock';
 
@@ -74,6 +75,8 @@ function LockGate({ children }: { children: React.ReactNode }) {
 }
 
 export default function RootLayout() {
+  const lastForegroundSync = useRef<number>(0);
+
   // Initialize push notifications on app start (native only)
   useEffect(() => {
     if (Platform.OS !== 'web') {
@@ -85,6 +88,35 @@ export default function RootLayout() {
     }
     // Start offline sync monitor
     startSyncMonitor();
+  }, []);
+
+  // Auto-sync with cloud on AppState changes:
+  // - Foreground: pull latest data from cloud (throttled 30s)
+  // - Background: push local data to cloud (fire & forget)
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', async (state: AppStateStatus) => {
+      // Only run on native (web has no real foreground/background)
+      if (Platform.OS === 'web') return;
+
+      try {
+        const signedIn = await isSignedInToSupabase();
+        if (!signedIn) return;
+
+        if (state === 'active') {
+          const now = Date.now();
+          if (now - lastForegroundSync.current < 30_000) return; // throttle
+          lastForegroundSync.current = now;
+          const r = await pullAllFromCloud();
+          if (r.ok) console.log(`[foreground-sync] pulled ${r.pulled} items`);
+        } else if (state === 'background' || state === 'inactive') {
+          const r = await pushAllToCloud();
+          if (r.ok) console.log(`[background-sync] pushed ${r.pushed} items`);
+        }
+      } catch (e) {
+        console.warn('[app-state-sync] failed:', e);
+      }
+    });
+    return () => sub.remove();
   }, []);
 
   return (

@@ -233,6 +233,18 @@ frontend:
         agent: "main"
         comment: "Previous iteration. Tested OK."
 
+  - task: "Automated Cloud Sync (login + foreground pull + background push)"
+    implemented: true
+    working: "NA"
+    file: "app/frontend/app/auth.tsx, app/frontend/app/_layout.tsx, app/frontend/app/more/cloud-sync.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "NEW: Automated Cloud Sync hooks. (1) auth.tsx: after successful Supabase signUp triggers pushAllToCloud() to create user_preferences row; after successful signIn triggers pullAllFromCloud() to hydrate local store from cloud (both non-blocking). (2) _layout.tsx: AppState listener — on 'active' (foreground) pulls from cloud with 30s throttle, on 'background'/'inactive' pushes local data to cloud. Guarded by isSignedInToSupabase(). Web is skipped for AppState (no real bg/fg). (3) cloud-sync.tsx: added info card explaining auto-sync triggers (login, foreground pull, background push, manual). Requires user verification in UI. Frontend-only changes — backend untouched."
+
 metadata:
   created_by: "main_agent"
   version: "3.5"

@@ -21,6 +21,7 @@ export interface UserPreferences {
   canton: CantonCode;
   onboarded: boolean;
   theme: 'dark' | 'light';
+  themeMode?: 'dark' | 'light' | 'system';  // NEW: user-selected theme mode
   biometricEnabled: boolean;
   monthlyIncome?: number;          // Net monthly income (CHF)
   household?: HouseholdType;        // Situation familiale

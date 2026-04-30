@@ -706,3 +706,226 @@ async def lamal_subsidy(req: SubsidyRequest):
             f"Demande à faire auprès de l'Office cantonal d'assurance-maladie."
         ),
     )
+
+
+# ──────────────────────────────────────────────────
+# AI OPTIMIZER - Smart savings recommendations
+# ──────────────────────────────────────────────────
+class OptimizerRequest(BaseModel):
+    monthly_income: float
+    yearly_income: Optional[float] = None
+    currency: str = "CHF"
+    canton: str = "VD"
+    transactions: list[dict] = []        # [{title, amount, category, date}]
+    recurring_expenses: list[dict] = []  # [{title, amount, category, frequency}]
+    contracts: list[dict] = []           # [{name, type, monthlyCost}]
+    debts: list[dict] = []               # [{name, balance, rate, monthlyPayment}]
+    goals: list[dict] = []               # [{title, target, saved, deadline}]
+
+
+class SavingProposal(BaseModel):
+    title: str
+    category: str                # 'subscription' | 'insurance' | 'food' | 'energy' | 'telco' | 'bank' | 'other'
+    current_monthly: float
+    potential_saving_monthly: float
+    potential_saving_yearly: float
+    effort: str                  # 'easy' | 'medium' | 'hard'
+    action: str                  # concrete actionable step
+    explanation: str
+
+
+class OptimizerResponse(BaseModel):
+    success: bool
+    summary: str
+    monthly_potential: float
+    yearly_potential: float
+    proposals: list[SavingProposal] = []
+    tips: list[str] = []
+    error: Optional[str] = None
+
+
+def _fallback_optimizer(req: OptimizerRequest) -> OptimizerResponse:
+    """Heuristic optimizer used if LLM fails."""
+    proposals: list[SavingProposal] = []
+    # Detect subscriptions
+    for r in req.recurring_expenses or []:
+        title = str(r.get("title", "")).lower()
+        amount = float(r.get("amount") or 0)
+        if amount <= 0:
+            continue
+        if any(k in title for k in ["netflix", "spotify", "disney", "youtube", "hbo", "prime", "apple tv"]):
+            proposals.append(SavingProposal(
+                title=f"Revoir abonnement {r.get('title')}",
+                category="subscription",
+                current_monthly=amount,
+                potential_saving_monthly=round(amount * 0.5, 2),
+                potential_saving_yearly=round(amount * 6, 2),
+                effort="easy",
+                action=f"Partagez {r.get('title')} en famille ou alternez un mois sur deux.",
+                explanation="Le streaming partagé divise le coût jusqu'à 2x."
+            ))
+    # Insurance check (LAMal)
+    lamal = [r for r in req.recurring_expenses or [] if "assur" in str(r.get("title", "")).lower() or "lamal" in str(r.get("title", "")).lower()]
+    if lamal:
+        total = sum(float(r.get("amount") or 0) for r in lamal)
+        if total > 350:
+            proposals.append(SavingProposal(
+                title="Comparer votre LAMal",
+                category="insurance",
+                current_monthly=total,
+                potential_saving_monthly=round(total * 0.2, 2),
+                potential_saving_yearly=round(total * 2.4, 2),
+                effort="medium",
+                action="Utilisez le comparateur LAMal (26 cantons, 15 assureurs Priminfo 2026).",
+                explanation="Changer d'assureur peut économiser 15-25% à prestations identiques."
+            ))
+    # High frequency small purchases
+    small_bills = [t for t in req.transactions or [] if 0 < float(t.get("amount") or 0) < 15]
+    if len(small_bills) > 20:
+        total = sum(float(t.get("amount") or 0) for t in small_bills)
+        proposals.append(SavingProposal(
+            title="Micro-dépenses fréquentes",
+            category="food",
+            current_monthly=round(total, 2),
+            potential_saving_monthly=round(total * 0.3, 2),
+            potential_saving_yearly=round(total * 3.6, 2),
+            effort="easy",
+            action="Préparez vos cafés & repas à la maison 2 jours/semaine.",
+            explanation=f"{len(small_bills)} micro-transactions détectées — réduire de 30% équivaut à CHF {round(total*0.3)} économisés."
+        ))
+
+    monthly_total = sum(p.potential_saving_monthly for p in proposals)
+    return OptimizerResponse(
+        success=True,
+        summary=f"Analyse heuristique (fallback) : {len(proposals)} pistes d'économie détectées.",
+        monthly_potential=round(monthly_total, 2),
+        yearly_potential=round(monthly_total * 12, 2),
+        proposals=proposals,
+        tips=[
+            "Renégociez vos assurances chaque automne (délai résiliation : 30 novembre).",
+            "Mettez en place un virement automatique de 10% de votre salaire vers l'épargne.",
+            "Utilisez le 3ᵉ pilier (CHF 7'258/an en 2025) pour réduire vos impôts.",
+        ],
+    )
+
+
+@app.post("/api/optimizer/analyze", response_model=OptimizerResponse)
+async def optimizer_analyze(req: OptimizerRequest):
+    """Analyze user's financial snapshot and propose concrete savings via AI."""
+    if not EMERGENT_LLM_KEY:
+        return _fallback_optimizer(req)
+
+    # Build compact snapshot for the LLM
+    yearly = req.yearly_income or (req.monthly_income * 12)
+
+    # Aggregate transactions by category
+    cat_totals: dict[str, float] = {}
+    for t in req.transactions or []:
+        c = str(t.get("category") or "autre")
+        cat_totals[c] = cat_totals.get(c, 0) + abs(float(t.get("amount") or 0))
+
+    rec_summary = "\n".join(
+        f"- {r.get('title')}: {r.get('amount')} {req.currency}/{r.get('frequency','monthly')}"
+        for r in (req.recurring_expenses or [])[:15]
+    ) or "(aucun abonnement listé)"
+
+    cat_summary = "\n".join(
+        f"- {c}: {v:.0f} {req.currency}" for c, v in sorted(cat_totals.items(), key=lambda x: -x[1])[:10]
+    ) or "(aucune transaction)"
+
+    contracts_summary = "\n".join(
+        f"- {c.get('name')} ({c.get('type', '?')}): {c.get('monthlyCost', 0)} {req.currency}/mois"
+        for c in (req.contracts or [])[:10]
+    ) or "(aucun contrat)"
+
+    debts_summary = "\n".join(
+        f"- {d.get('name')}: solde {d.get('balance', 0)} {req.currency} à {d.get('rate', 0)}% ({d.get('monthlyPayment', 0)}/mois)"
+        for d in (req.debts or [])[:10]
+    ) or "(aucune dette)"
+
+    prompt = f"""Tu es un conseiller financier suisse expert. Analyse cette situation et propose 3 à 6 ÉCONOMIES concrètes.
+
+REVENU MENSUEL NET : {req.monthly_income:.0f} {req.currency}
+REVENU ANNUEL : {yearly:.0f} {req.currency}
+CANTON : {req.canton}
+
+DÉPENSES PAR CATÉGORIE (mois courant) :
+{cat_summary}
+
+ABONNEMENTS / CHARGES RÉCURRENTES :
+{rec_summary}
+
+CONTRATS :
+{contracts_summary}
+
+DETTES :
+{debts_summary}
+
+Rends UNIQUEMENT un JSON strict (sans texte avant/après) avec cette forme :
+{{
+  "summary": "Résumé en 1-2 phrases en français.",
+  "proposals": [
+    {{
+      "title": "Titre court de l'économie",
+      "category": "subscription|insurance|food|energy|telco|bank|tax|other",
+      "current_monthly": 0,
+      "potential_saving_monthly": 0,
+      "potential_saving_yearly": 0,
+      "effort": "easy|medium|hard",
+      "action": "Action concrète et actionnable en 1 phrase.",
+      "explanation": "Pourquoi cette économie est réaliste."
+    }}
+  ],
+  "tips": ["Conseil général 1", "Conseil général 2", "Conseil général 3"]
+}}
+
+RÈGLES :
+- Propose des économies RÉALISTES basées sur les données réelles.
+- Cite des montants précis en {req.currency}.
+- Si LAMal > 300 CHF/mois, suggère comparateur LAMal.
+- Mentionne le 3ᵉ pilier si pertinent (CHF 7'258/an en 2025).
+- Si dette à taux > 8%, propose consolidation.
+- Effort 'easy' = faisable en 10 min, 'medium' = 1h, 'hard' = démarche longue.
+"""
+
+    try:
+        session_id = f"optimizer_{uuid.uuid4().hex[:8]}"
+        chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=session_id, system_message="Tu es un conseiller financier suisse qui ne répond qu'en JSON strict.") \
+            .with_model("openai", "gpt-4o-mini")
+        response = await chat.send_message(UserMessage(text=prompt))
+
+        # Extract JSON loosely
+        raw = response if isinstance(response, str) else str(response)
+        match = re.search(r"\{[\s\S]*\}", raw)
+        if not match:
+            return _fallback_optimizer(req)
+        data = json.loads(match.group(0))
+
+        proposals: list[SavingProposal] = []
+        for p in data.get("proposals", [])[:8]:
+            try:
+                proposals.append(SavingProposal(
+                    title=str(p.get("title", "Économie"))[:80],
+                    category=str(p.get("category", "other")),
+                    current_monthly=float(p.get("current_monthly") or 0),
+                    potential_saving_monthly=float(p.get("potential_saving_monthly") or 0),
+                    potential_saving_yearly=float(p.get("potential_saving_yearly") or (float(p.get("potential_saving_monthly") or 0) * 12)),
+                    effort=str(p.get("effort", "medium")),
+                    action=str(p.get("action", ""))[:240],
+                    explanation=str(p.get("explanation", ""))[:240],
+                ))
+            except Exception:
+                continue
+
+        monthly_total = sum(p.potential_saving_monthly for p in proposals)
+        return OptimizerResponse(
+            success=True,
+            summary=str(data.get("summary", "Analyse complétée."))[:200],
+            monthly_potential=round(monthly_total, 2),
+            yearly_potential=round(monthly_total * 12, 2),
+            proposals=proposals,
+            tips=[str(t)[:160] for t in (data.get("tips", []) or [])[:5]],
+        )
+    except Exception as e:
+        print(f"[optimizer] LLM failed, using fallback: {e}")
+        return _fallback_optimizer(req)

@@ -26,12 +26,28 @@ import { EXPENSE_CATEGORIES } from '../../src/data/swiss-data';
 export default function BudgetsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { preferences, budgets, transactions, addBudget, deleteBudget } = useStore();
+  const { preferences, budgets, transactions, incomes, addBudget, deleteBudget } = useStore();
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [newBudget, setNewBudget] = useState({ category: 'courses', limit: '' });
+  const [incomeView, setIncomeView] = useState<'monthly' | 'yearly'>('monthly');
 
   const CUR = preferences.currency;
+
+  // Compute total income (from incomes store, normalized to monthly)
+  const monthlyIncome = useMemo(() => {
+    const fromIncomes = incomes.reduce((sum, i) => {
+      if (i.type !== 'recurring') return sum;
+      const amt = Number(i.amount) || 0;
+      if (i.frequency === 'yearly') return sum + amt / 12;
+      if (i.frequency === 'quarterly') return sum + amt / 3;
+      return sum + amt;
+    }, 0);
+    return fromIncomes || (preferences as any).monthlyIncome || 0;
+  }, [incomes, preferences]);
+  const yearlyIncome = monthlyIncome * 12;
+  const displayedIncome = incomeView === 'monthly' ? monthlyIncome : yearlyIncome;
+  const displayedBudget = 0; // computed below
 
   const budgetData = useMemo(() => {
     return budgets.map(b => {
@@ -46,6 +62,10 @@ export default function BudgetsScreen() {
 
   const totalBudget = budgets.reduce((sum, b) => sum + b.limit, 0);
   const totalSpent = budgetData.reduce((sum, b) => sum + b.spent, 0);
+  // Adjust totals for the selected view (monthly is base; yearly = ×12)
+  const viewBudget = incomeView === 'monthly' ? totalBudget : totalBudget * 12;
+  const viewSpent = incomeView === 'monthly' ? totalSpent : totalSpent * 12;
+  const savingsCapacity = displayedIncome - viewBudget;
 
   const handleAddBudget = () => {
     if (!newBudget.limit) {
@@ -78,14 +98,62 @@ export default function BudgetsScreen() {
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+        {/* Revenue card with monthly/yearly toggle */}
         <Card style={styles.summaryCard}>
-          <Text style={styles.summaryLabel}>Budget total</Text>
-          <Text style={styles.summaryAmount}>{CUR} {formatNumber(totalBudget)}</Text>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summarySpent}>Dépensé: {formatNumber(totalSpent)}</Text>
-            <Text style={styles.summaryRemaining}>Reste: {formatNumber(totalBudget - totalSpent)}</Text>
+          <View style={styles.toggleRow}>
+            {(['monthly', 'yearly'] as const).map((m) => (
+              <TouchableOpacity
+                key={m}
+                style={[styles.toggleBtn, incomeView === m && styles.toggleBtnActive]}
+                onPress={() => setIncomeView(m)}
+              >
+                <Text style={[styles.toggleText, incomeView === m && styles.toggleTextActive]}>
+                  {m === 'monthly' ? 'Mensuel' : 'Annuel'}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
-          <ProgressBar value={pct(totalSpent, totalBudget)} color={totalSpent > totalBudget ? Colors.error : Colors.primary} height={10} />
+
+          <Text style={styles.summaryLabel}>
+            Revenu {incomeView === 'monthly' ? 'mensuel' : 'annuel'}
+          </Text>
+          <Text style={styles.summaryIncome}>{CUR} {formatNumber(displayedIncome)}</Text>
+
+          <View style={styles.divider} />
+
+          <Text style={styles.summaryLabel}>
+            Budget total {incomeView === 'monthly' ? 'mensuel' : 'annuel'}
+          </Text>
+          <Text style={styles.summaryAmount}>{CUR} {formatNumber(viewBudget)}</Text>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summarySpent}>Dépensé: {formatNumber(viewSpent)}</Text>
+            <Text style={styles.summaryRemaining}>Reste: {formatNumber(viewBudget - viewSpent)}</Text>
+          </View>
+          <ProgressBar
+            value={pct(viewSpent, viewBudget)}
+            color={viewSpent > viewBudget ? Colors.error : Colors.primary}
+            height={10}
+          />
+
+          {/* Savings capacity = revenu - budget */}
+          {displayedIncome > 0 && (
+            <View style={styles.capacityBox}>
+              <Ionicons
+                name={savingsCapacity >= 0 ? 'trending-up' : 'trending-down'}
+                size={18}
+                color={savingsCapacity >= 0 ? Colors.success : Colors.error}
+              />
+              <Text style={styles.capacityLabel}>
+                Capacité d'épargne {incomeView === 'monthly' ? '/mois' : '/an'}
+              </Text>
+              <Text style={[
+                styles.capacityValue,
+                { color: savingsCapacity >= 0 ? Colors.success : Colors.error }
+              ]}>
+                {savingsCapacity >= 0 ? '+' : ''}{CUR} {formatNumber(savingsCapacity)}
+              </Text>
+            </View>
+          )}
         </Card>
 
         {budgetData.length === 0 ? (
@@ -182,8 +250,27 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   content: { padding: Spacing.lg },
   summaryCard: { marginBottom: Spacing.lg },
+  toggleRow: {
+    flexDirection: 'row', backgroundColor: Colors.backgroundSecondary,
+    borderRadius: BorderRadius.lg, padding: 4, marginBottom: Spacing.md, gap: 4,
+  },
+  toggleBtn: {
+    flex: 1, paddingVertical: Spacing.sm, borderRadius: BorderRadius.md, alignItems: 'center',
+  },
+  toggleBtnActive: { backgroundColor: Colors.primary },
+  toggleText: { color: Colors.textSecondary, fontSize: FontSizes.sm, fontWeight: FontWeights.semibold },
+  toggleTextActive: { color: Colors.text },
   summaryLabel: { color: Colors.textSecondary, fontSize: FontSizes.sm },
+  summaryIncome: { color: Colors.success, fontSize: FontSizes.xxl, fontWeight: FontWeights.black, marginTop: 4 },
   summaryAmount: { color: Colors.text, fontSize: FontSizes.xxxl, fontWeight: FontWeights.black },
+  divider: { height: 1, backgroundColor: Colors.cardBorder, marginVertical: Spacing.md },
+  capacityBox: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
+    marginTop: Spacing.md, paddingTop: Spacing.md,
+    borderTopWidth: 1, borderTopColor: Colors.cardBorder,
+  },
+  capacityLabel: { flex: 1, color: Colors.textSecondary, fontSize: FontSizes.sm },
+  capacityValue: { fontSize: FontSizes.md, fontWeight: FontWeights.bold },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginVertical: Spacing.sm },
   summarySpent: { color: Colors.textSecondary, fontSize: FontSizes.sm },
   summaryRemaining: { color: Colors.success, fontSize: FontSizes.sm, fontWeight: FontWeights.semibold },

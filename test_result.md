@@ -233,6 +233,18 @@ frontend:
         agent: "main"
         comment: "Previous iteration. Tested OK."
 
+  - task: "POST /api/optimizer/analyze - AI savings recommendations"
+    implemented: true
+    working: true
+    file: "app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "NEW endpoint using emergentintegrations (gpt-4o-mini) analyzing user's financial snapshot (income, transactions, recurring expenses, contracts, debts) and returning structured JSON with: summary, monthly_potential, yearly_potential, proposals[{title, category, current_monthly, potential_saving_monthly/yearly, effort, action, explanation}], tips[]. Includes heuristic fallback when LLM fails. Tested: VD/7500/month with Netflix/Spotify/LAMal Swica/car insurance + high-rate debt → CHF 238/mo = CHF 2856/yr savings across 4 proposals (LAMal comparison, Netflix cancel, debt consolidation, Spotify reduction). All schema fields populated correctly. Verified via curl."
+
   - task: "Automated Cloud Sync (login + foreground pull + background push)"
     implemented: true
     working: "NA"

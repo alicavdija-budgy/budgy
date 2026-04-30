@@ -116,6 +116,40 @@ export default function SettingsScreen() {
           </View>
         </Card>
 
+        {/* Theme mode */}
+        <Card style={styles.card}>
+          <Text style={styles.sectionTitle}>Apparence</Text>
+          <View style={styles.themeRow}>
+            {([
+              { key: 'dark', label: 'Sombre', icon: 'moon' },
+              { key: 'light', label: 'Clair', icon: 'sunny' },
+              { key: 'system', label: 'Auto', icon: 'phone-portrait' },
+            ] as const).map((opt) => {
+              const current = (preferences as any).themeMode || 'dark';
+              const active = current === opt.key;
+              return (
+                <TouchableOpacity
+                  key={opt.key}
+                  style={[styles.themeBtn, active && styles.themeBtnActive]}
+                  onPress={() => setPreferences({ themeMode: opt.key } as any)}
+                >
+                  <Ionicons
+                    name={opt.icon as any}
+                    size={20}
+                    color={active ? Colors.text : Colors.textSecondary}
+                  />
+                  <Text style={[styles.themeLabel, active && styles.themeLabelActive]}>
+                    {opt.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          <Text style={styles.themeHint}>
+            "Auto" suit automatiquement le thème de votre appareil.
+          </Text>
+        </Card>
+
         {/* Data Info */}
         <Card style={styles.card}>
           <Text style={styles.sectionTitle}>Données</Text>
@@ -253,6 +287,19 @@ const styles = StyleSheet.create({
   currencyCodeSelected: {
     color: Colors.success,
   },
+  themeRow: { flexDirection: 'row', gap: Spacing.sm },
+  themeBtn: {
+    flex: 1, flexDirection: 'column', alignItems: 'center', gap: 4,
+    paddingVertical: Spacing.md, borderRadius: BorderRadius.lg,
+    backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder,
+  },
+  themeBtnActive: {
+    backgroundColor: `${Colors.primary}20`,
+    borderColor: Colors.primary,
+  },
+  themeLabel: { color: Colors.textSecondary, fontSize: FontSizes.sm, fontWeight: FontWeights.semibold },
+  themeLabelActive: { color: Colors.text },
+  themeHint: { color: Colors.textTertiary, fontSize: FontSizes.xs, marginTop: Spacing.sm, fontStyle: 'italic' },
   infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

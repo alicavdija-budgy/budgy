@@ -23,7 +23,7 @@ load_dotenv()
 
 EMERGENT_LLM_KEY = os.getenv("EMERGENT_LLM_KEY", "")
 
-app = FastAPI(title="Guardian Money CHF API")
+app = FastAPI(title="Budgy API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -44,13 +44,13 @@ alerts_store: dict[str, list] = {}   # user_id -> [alerts]
 # ──────────────────────────────────────────────────
 @app.get("/api/health")
 async def health_check():
-    return {"status": "ok", "version": "3.4", "app": "Guardian Money CHF"}
+    return {"status": "ok", "version": "3.4", "app": "Budgy"}
 
 
 # ──────────────────────────────────────────────────
 # COACH IA - GPT-4o-mini powered financial advisor
 # ──────────────────────────────────────────────────
-SYSTEM_PROMPT = """Tu es le Coach IA de Guardian Money CHF, un conseiller financier suisse expert.
+SYSTEM_PROMPT = """Tu es le Coach IA de Budgy, un conseiller financier suisse expert.
 
 RÈGLES STRICTES:
 - Réponds TOUJOURS en français
@@ -118,7 +118,7 @@ async def coach_chat(req: ChatRequest):
 # ──────────────────────────────────────────────────
 class PDFExportRequest(BaseModel):
     user_name: str
-    company: Optional[str] = "Guardian Money CHF"
+    company: Optional[str] = "Budgy"
     expenses: list[dict]
     mode: str = "employee"  # employee | independent
     canton: str = "VD"
@@ -227,7 +227,7 @@ async def export_pdf(req: PDFExportRequest):
   </div>
 
   <div class="footer">
-    <div>Guardian Money CHF v3.4 — Document généré automatiquement</div>
+    <div>Budgy v3.4 — Document généré automatiquement</div>
     <div>TVA {tva_rate}% · Taux suisse 2026</div>
   </div>
 </body>

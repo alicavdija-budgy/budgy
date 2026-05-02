@@ -31,7 +31,7 @@ export default function LegalScreen() {
     {
       id: 'terms',
       title: 'Conditions d’utilisation',
-      subtitle: 'CGU de l’application Guardian Money CHF',
+      subtitle: 'CGU de l’application Budgy',
       icon: 'document-text' as const,
       color: C.primary,
       route: '/more/legal/terms',
@@ -103,7 +103,7 @@ export default function LegalScreen() {
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Text style={styles.intro}>
-          Guardian Money CHF est une application d’assistance budgétaire personnelle destinée à un usage
+          Budgy est une application d’assistance budgétaire personnelle destinée à un usage
           privé et éducatif. Elle n’est affiliée à aucune institution financière ni à aucun organisme officiel suisse.
         </Text>
 
@@ -128,9 +128,9 @@ export default function LegalScreen() {
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>
-            © {new Date().getFullYear()} Guardian Money CHF{'\n'}
+            © {new Date().getFullYear()} Budgy{'\n'}
             Application éditée par un particulier — Suisse{'\n'}
-            contact: support@guardianmoney.ch
+            contact: support@budgy.ch
           </Text>
         </View>
       </ScrollView>

@@ -1,7 +1,6 @@
 /**
- * GUARDIAN MONEY CHF - Home Screen (Redesigned)
- * Inspired by Monarch Money, Copilot, YNAB, Linxo.
- * Clean hierarchy: Hero balance → Daily spending → Quick actions → Insights.
+ * BUDGY - Home Screen (Premium redesign)
+ * Revolut/N26-inspired: glow hero, count-up, press-scale, minimal cognitive load.
  */
 
 import React, { useMemo, useEffect, useState, useCallback } from 'react';
@@ -10,7 +9,6 @@ import {
   Text,
   ScrollView,
   StyleSheet,
-  TouchableOpacity,
   RefreshControl,
   Dimensions,
 } from 'react-native';
@@ -18,22 +16,27 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
+import Animated, {
+  FadeInDown,
+  FadeIn,
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withTiming,
+  Easing,
+} from 'react-native-reanimated';
 import { BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
 import { useTheme } from '../../src/hooks/useTheme';
 import { useStore } from '../../src/stores/useStore';
 import { CategoryIcon, getCategoryName, getCategoryColor } from '../../src/components/CategoryIcon';
+import AnimatedNumber from '../../src/components/AnimatedNumber';
+import PressScale from '../../src/components/PressScale';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-// Compact number formatter — CH style with apostrophes as thousands separator
 const fmt = (n: number) => {
   const s = Math.round(Math.abs(n)).toString();
   return s.replace(/\B(?=(\d{3})+(?!\d))/g, "'");
-};
-const fmt2 = (n: number) => {
-  const rounded = (Math.round(n * 100) / 100).toFixed(2);
-  const [int, dec] = rounded.split('.');
-  return `${int.replace(/\B(?=(\d{3})+(?!\d))/g, "'")}.${dec}`;
 };
 
 export default function HomeScreen() {
@@ -46,7 +49,6 @@ export default function HomeScreen() {
     transactions,
     incomes,
     savingsGoals,
-    budgets,
     recurringExpenses,
     notifications,
     isPro,
@@ -63,7 +65,7 @@ export default function HomeScreen() {
 
   const CUR = preferences.currency;
 
-  // ─── Key financial metrics ───────────────────────────
+  // ─── Metrics ─────────────────────────────────────────
   const monthlyIncome = useMemo(() => {
     return incomes.reduce((sum, i) => {
       if (i.type !== 'recurring') return sum;
@@ -74,7 +76,6 @@ export default function HomeScreen() {
     }, 0);
   }, [incomes]);
 
-  // This month transactions
   const now = new Date();
   const thisMonthTx = useMemo(() => {
     const year = now.getFullYear();
@@ -85,85 +86,27 @@ export default function HomeScreen() {
     });
   }, [transactions]);
 
-  const monthExpenses = useMemo(
-    () => thisMonthTx.reduce((s, t) => s + t.amount, 0),
-    [thisMonthTx]
-  );
+  const monthExpenses = thisMonthTx.reduce((s, t) => s + t.amount, 0);
+  const monthlyRecurring = recurringExpenses
+    .filter((r) => r.active && r.frequency === 'monthly')
+    .reduce((sum, r) => sum + r.amount, 0);
 
-  const monthlyRecurring = useMemo(
-    () =>
-      recurringExpenses
-        .filter((r) => r.active && r.frequency === 'monthly')
-        .reduce((sum, r) => sum + r.amount, 0),
-    [recurringExpenses]
-  );
-
-  // "Safe to spend" = revenu - dépenses fixes - dépenses variables du mois
   const available = Math.max(0, monthlyIncome - monthlyRecurring - monthExpenses);
-  const spentPct = monthlyIncome > 0 ? Math.min(100, ((monthExpenses + monthlyRecurring) / monthlyIncome) * 100) : 0;
+  const spentPct = monthlyIncome > 0
+    ? Math.min(100, ((monthExpenses + monthlyRecurring) / monthlyIncome) * 100)
+    : 0;
 
-  // Today & this week
-  const today = new Date().toDateString();
-  const todayExpenses = useMemo(
-    () =>
-      transactions
-        .filter((t) => new Date(t.date).toDateString() === today)
-        .reduce((s, t) => s + t.amount, 0),
-    [transactions]
-  );
+  // Today / week
+  const todayStr = new Date().toDateString();
+  const todayExpenses = transactions
+    .filter((t) => new Date(t.date).toDateString() === todayStr)
+    .reduce((s, t) => s + t.amount, 0);
 
   const weekAgo = new Date();
   weekAgo.setDate(weekAgo.getDate() - 7);
-  const weekExpenses = useMemo(
-    () =>
-      transactions
-        .filter((t) => new Date(t.date) >= weekAgo)
-        .reduce((s, t) => s + t.amount, 0),
-    [transactions]
-  );
-
-  // Savings
-  const totalSaved = useMemo(
-    () => savingsGoals.reduce((s, g) => s + g.saved, 0),
-    [savingsGoals]
-  );
-  const totalTarget = useMemo(
-    () => savingsGoals.reduce((s, g) => s + g.target, 0),
-    [savingsGoals]
-  );
-  const savingsPct = totalTarget > 0 ? (totalSaved / totalTarget) * 100 : 0;
-
-  // Top categories of the month
-  const topCategories = useMemo(() => {
-    const byCategory: Record<string, number> = {};
-    thisMonthTx.forEach((t) => {
-      byCategory[t.category] = (byCategory[t.category] || 0) + t.amount;
-    });
-    return Object.entries(byCategory)
-      .map(([cat, amount]) => ({ cat, amount }))
-      .sort((a, b) => b.amount - a.amount)
-      .slice(0, 4);
-  }, [thisMonthTx]);
-
-  // Recent transactions (5 last)
-  const recentTx = useMemo(
-    () => [...transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5),
-    [transactions]
-  );
-
-  // Next recurring payments (sorted by day of month)
-  const upcomingBills = useMemo(() => {
-    const dom = new Date().getDate();
-    return recurringExpenses
-      .filter((r) => r.active)
-      .map((r) => {
-        const day = r.dayOfMonth || 1;
-        const daysUntil = day >= dom ? day - dom : 30 - dom + day;
-        return { ...r, daysUntil };
-      })
-      .sort((a, b) => a.daysUntil - b.daysUntil)
-      .slice(0, 3);
-  }, [recurringExpenses]);
+  const weekExpenses = transactions
+    .filter((t) => new Date(t.date) >= weekAgo)
+    .reduce((s, t) => s + t.amount, 0);
 
   const unreadNotifs = notifications.filter((n) => !n.read).length;
 
@@ -173,8 +116,23 @@ export default function HomeScreen() {
     if (h < 18) return 'Bon après-midi';
     return 'Bonsoir';
   }, []);
-
   const firstName = user?.name?.split(' ')[0] || '';
+
+  // Savings preview
+  const totalSaved = savingsGoals.reduce((s, g) => s + g.saved, 0);
+  const totalTarget = savingsGoals.reduce((s, g) => s + g.target, 0);
+  const savingsPct = totalTarget > 0 ? (totalSaved / totalTarget) * 100 : 0;
+
+  // Hero glow pulse
+  const glow = useSharedValue(0.35);
+  useEffect(() => {
+    glow.value = withRepeat(
+      withTiming(0.65, { duration: 2200, easing: Easing.inOut(Easing.quad) }),
+      -1,
+      true
+    );
+  }, []);
+  const glowStyle = useAnimatedStyle(() => ({ opacity: glow.value }));
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -183,164 +141,169 @@ export default function HomeScreen() {
 
   const styles = makeStyles(C);
 
+  const quickActions = [
+    { icon: 'scan' as const, label: 'Scanner', color: C.purple, route: '/scanner-modal' },
+    { icon: 'remove-circle' as const, label: 'Dépense', color: C.error, route: '/(tabs)/expenses' },
+    { icon: 'trending-up' as const, label: 'Épargne', color: C.success, route: '/(tabs)/savings' },
+    { icon: 'sparkles' as const, label: 'Économiser', color: C.secondary, route: '/more/ai-optimizer', isNew: true },
+  ];
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 100 }]}
         showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.primary} />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.primary} />}
       >
-        {/* ─── Minimal Header ─── */}
-        <View style={styles.header}>
+        {/* ─── HEADER ─── */}
+        <Animated.View entering={FadeIn.duration(400)} style={styles.header}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.greeting}>{greeting}{firstName ? `, ${firstName}` : ''}</Text>
+            <Text style={styles.greeting}>
+              {greeting}{firstName ? `, ${firstName}` : ''} 👋
+            </Text>
             <Text style={styles.date}>
               {new Date().toLocaleDateString('fr-CH', { weekday: 'long', day: 'numeric', month: 'long' })}
             </Text>
           </View>
-          <TouchableOpacity style={styles.headerBtn} onPress={() => router.push('/more/notifications' as any)}>
-            <Ionicons name="notifications-outline" size={22} color={C.text} />
-            {unreadNotifs > 0 && (
-              <View style={styles.notifDot}>
-                <Text style={styles.notifDotText}>{unreadNotifs}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.headerBtn}
-            onPress={() => router.push('/(tabs)/more' as any)}
-          >
-            <View style={styles.avatar}>
+          <PressScale onPress={() => router.push('/more/notifications' as any)} style={styles.headerBtn}>
+            <View style={styles.headerBtnInner}>
+              <Ionicons name="notifications-outline" size={22} color={C.text} />
+              {unreadNotifs > 0 && (
+                <View style={styles.notifDot}>
+                  <Text style={styles.notifDotText}>{unreadNotifs}</Text>
+                </View>
+              )}
+            </View>
+          </PressScale>
+          <PressScale onPress={() => router.push('/(tabs)/more' as any)} style={styles.headerBtn}>
+            <LinearGradient colors={C.gradientPrimary as [string, string]} style={styles.avatar}>
               <Text style={styles.avatarText}>
                 {(user?.name || 'U').slice(0, 1).toUpperCase()}
               </Text>
-            </View>
-          </TouchableOpacity>
-        </View>
+            </LinearGradient>
+          </PressScale>
+        </Animated.View>
 
-        {/* ─── HERO: Safe to spend card ─── */}
-        <LinearGradient
-          colors={C.gradientPrimary as [string, string]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.hero}
-        >
-          <View style={styles.heroTop}>
-            <Text style={styles.heroLabel}>DISPONIBLE CE MOIS</Text>
-            {isPro && (
-              <View style={styles.proPill}>
-                <Ionicons name="flash" size={10} color="#FFF" />
-                <Text style={styles.proPillText}>PRO</Text>
+        {/* ─── HERO CARD (glow + gradient + count-up) ─── */}
+        <Animated.View entering={FadeInDown.duration(500).delay(100)} style={styles.heroWrap}>
+          {/* Animated glow behind */}
+          <Animated.View style={[styles.heroGlow, glowStyle, { backgroundColor: C.gradientGlow }]} />
+
+          <LinearGradient
+            colors={C.gradientHero as [string, string, string]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.hero}
+          >
+            <View style={styles.heroTop}>
+              <Text style={styles.heroLabel}>DISPONIBLE CE MOIS</Text>
+              <View style={[styles.proPill, { backgroundColor: isPro ? 'rgba(251, 191, 36, 0.95)' : 'rgba(255,255,255,0.22)' }]}>
+                <Ionicons name="flash" size={10} color={isPro ? '#1C1917' : '#FFF'} />
+                <Text style={[styles.proPillText, { color: isPro ? '#1C1917' : '#FFF' }]}>
+                  {isPro ? 'PRO' : 'Free'}
+                </Text>
               </View>
-            )}
-          </View>
-          <Text style={styles.heroAmount}>
-            {CUR} <Text style={styles.heroAmountBig}>{fmt(available)}</Text>
-          </Text>
+            </View>
 
-          <View style={styles.heroProgressBg}>
-            <View
-              style={[
+            <View style={styles.heroAmountRow}>
+              <Text style={styles.heroCurrency}>{CUR}</Text>
+              <AnimatedNumber
+                value={available}
+                duration={1400}
+                style={styles.heroAmount}
+              />
+            </View>
+
+            {/* progress bar */}
+            <View style={styles.heroProgressBg}>
+              <View style={[
                 styles.heroProgressFill,
-                { width: `${spentPct}%`, backgroundColor: spentPct > 85 ? '#FCA5A5' : 'rgba(255,255,255,0.9)' },
-              ]}
-            />
-          </View>
-          <View style={styles.heroStatsRow}>
-            <View style={styles.heroStat}>
-              <Text style={styles.heroStatLabel}>Revenus</Text>
-              <Text style={styles.heroStatValue}>{CUR} {fmt(monthlyIncome)}</Text>
+                { width: `${spentPct}%`, backgroundColor: spentPct > 85 ? '#FCA5A5' : 'rgba(255,255,255,0.95)' },
+              ]} />
             </View>
-            <View style={styles.heroStatDivider} />
-            <View style={styles.heroStat}>
-              <Text style={styles.heroStatLabel}>Dépenses</Text>
-              <Text style={styles.heroStatValue}>{CUR} {fmt(monthExpenses + monthlyRecurring)}</Text>
-            </View>
-          </View>
-        </LinearGradient>
 
-        {/* ─── Quick stats row (today + week) ─── */}
-        <View style={styles.quickStats}>
+            <View style={styles.heroStatsRow}>
+              <View style={styles.heroStat}>
+                <View style={styles.heroStatDot} />
+                <View>
+                  <Text style={styles.heroStatLabel}>Revenus</Text>
+                  <Text style={styles.heroStatValue}>{CUR} {fmt(monthlyIncome)}</Text>
+                </View>
+              </View>
+              <View style={styles.heroStatSep} />
+              <View style={styles.heroStat}>
+                <View style={[styles.heroStatDot, { backgroundColor: '#FCA5A5' }]} />
+                <View>
+                  <Text style={styles.heroStatLabel}>Dépenses</Text>
+                  <Text style={styles.heroStatValue}>{CUR} {fmt(monthExpenses + monthlyRecurring)}</Text>
+                </View>
+              </View>
+            </View>
+          </LinearGradient>
+        </Animated.View>
+
+        {/* ─── 2 QUICK STATS ─── */}
+        <Animated.View entering={FadeInDown.duration(500).delay(200)} style={styles.quickStats}>
           <View style={styles.quickStatCard}>
-            <View style={styles.quickStatIconWrap}>
-              <Ionicons name="today-outline" size={18} color={C.primary} />
+            <View style={[styles.quickStatIconWrap, { backgroundColor: `${C.error}20` }]}>
+              <Ionicons name="today" size={18} color={C.error} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.quickStatLabel}>Aujourd'hui</Text>
-              <Text style={styles.quickStatValue}>{CUR} {fmt2(todayExpenses)}</Text>
+              <Text style={styles.quickStatValue}>{CUR} {fmt(todayExpenses)}</Text>
             </View>
           </View>
           <View style={styles.quickStatCard}>
-            <View style={[styles.quickStatIconWrap, { backgroundColor: `${C.orange}25` }]}>
-              <Ionicons name="calendar-outline" size={18} color={C.orange} />
+            <View style={[styles.quickStatIconWrap, { backgroundColor: `${C.warning}20` }]}>
+              <Ionicons name="calendar" size={18} color={C.warning} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.quickStatLabel}>Cette semaine</Text>
               <Text style={styles.quickStatValue}>{CUR} {fmt(weekExpenses)}</Text>
             </View>
           </View>
-        </View>
+        </Animated.View>
 
-        {/* ─── Quick actions (2x2 grid like Monarch) ─── */}
-        <Text style={styles.sectionTitle}>Actions rapides</Text>
-        <View style={styles.actionsGrid}>
-          <TouchableOpacity
-            style={styles.actionCard}
-            onPress={() => router.push('/scanner-modal' as any)}
-          >
-            <View style={[styles.actionIcon, { backgroundColor: `${C.purple}20` }]}>
-              <Ionicons name="scan" size={22} color={C.purple} />
-            </View>
-            <Text style={styles.actionLabel}>Scanner</Text>
-          </TouchableOpacity>
+        {/* ─── QUICK ACTIONS (4 cols) ─── */}
+        <Animated.View entering={FadeInDown.duration(500).delay(300)}>
+          <View style={styles.actionsGrid}>
+            {quickActions.map((a) => (
+              <PressScale
+                key={a.label}
+                haptic="light"
+                onPress={() => router.push(a.route as any)}
+                style={styles.actionCard}
+              >
+                <View style={styles.actionCardInner}>
+                  <View style={[styles.actionIcon, { backgroundColor: `${a.color}20` }]}>
+                    <Ionicons name={a.icon} size={22} color={a.color} />
+                  </View>
+                  <Text style={styles.actionLabel}>{a.label}</Text>
+                  {a.isNew && <View style={[styles.newDot, { backgroundColor: C.error }]} />}
+                </View>
+              </PressScale>
+            ))}
+          </View>
+        </Animated.View>
 
-          <TouchableOpacity
-            style={styles.actionCard}
-            onPress={() => router.push('/(tabs)/expenses' as any)}
-          >
-            <View style={[styles.actionIcon, { backgroundColor: `${C.error}20` }]}>
-              <Ionicons name="remove-circle" size={22} color={C.error} />
-            </View>
-            <Text style={styles.actionLabel}>Dépense</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.actionCard}
-            onPress={() => router.push('/(tabs)/savings' as any)}
-          >
-            <View style={[styles.actionIcon, { backgroundColor: `${C.success}20` }]}>
-              <Ionicons name="trending-up" size={22} color={C.success} />
-            </View>
-            <Text style={styles.actionLabel}>Épargne</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.actionCard}
-            onPress={() => router.push('/more/ai-optimizer' as any)}
-          >
-            <View style={[styles.actionIcon, { backgroundColor: `${C.pink}20` }]}>
-              <Ionicons name="sparkles" size={22} color={C.pink} />
-            </View>
-            <Text style={styles.actionLabel}>Économiser</Text>
-            <View style={styles.newDot} />
-          </TouchableOpacity>
-        </View>
-
-        {/* ─── Savings goal progress (if exists) ─── */}
+        {/* ─── SAVINGS progress ─── */}
         {savingsGoals.length > 0 && (
-          <>
+          <Animated.View entering={FadeInDown.duration(500).delay(400)}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Objectifs d'épargne</Text>
-              <TouchableOpacity onPress={() => router.push('/(tabs)/savings' as any)}>
+              <Text style={styles.sectionTitle}>🎯 Objectifs</Text>
+              <PressScale haptic="selection" onPress={() => router.push('/(tabs)/savings' as any)}>
                 <Text style={styles.seeAll}>Voir tout</Text>
-              </TouchableOpacity>
+              </PressScale>
             </View>
             <View style={styles.savingsCard}>
               <View style={styles.savingsTop}>
-                <Text style={styles.savingsAmount}>{CUR} {fmt(totalSaved)}</Text>
+                <AnimatedNumber
+                  value={totalSaved}
+                  prefix={`${CUR} `}
+                  duration={1200}
+                  style={styles.savingsAmount}
+                />
                 <Text style={styles.savingsTarget}>sur {CUR} {fmt(totalTarget)}</Text>
               </View>
               <View style={styles.savingsProgressBg}>
@@ -353,144 +316,48 @@ export default function HomeScreen() {
               </View>
               <Text style={styles.savingsPct}>{Math.round(savingsPct)}% atteint</Text>
             </View>
-          </>
+          </Animated.View>
         )}
 
-        {/* ─── Top categories (budget breakdown this month) ─── */}
-        {topCategories.length > 0 && (
-          <>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Top catégories ce mois</Text>
-              <TouchableOpacity onPress={() => router.push('/(tabs)/expenses' as any)}>
-                <Text style={styles.seeAll}>Voir tout</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.catCard}>
-              {topCategories.map((c, i) => {
-                const pct = monthExpenses > 0 ? (c.amount / monthExpenses) * 100 : 0;
-                const color = getCategoryColor(c.cat);
-                return (
-                  <View key={c.cat} style={[styles.catRow, i < topCategories.length - 1 && styles.catRowBorder]}>
-                    <CategoryIcon category={c.cat} size="sm" />
-                    <View style={styles.catMiddle}>
-                      <Text style={styles.catName}>{getCategoryName(c.cat)}</Text>
-                      <View style={styles.catBarBg}>
-                        <View style={[styles.catBarFill, { width: `${pct}%`, backgroundColor: color }]} />
-                      </View>
-                    </View>
-                    <View style={styles.catAmountBox}>
-                      <Text style={styles.catAmount}>{CUR} {fmt(c.amount)}</Text>
-                      <Text style={styles.catPct}>{Math.round(pct)}%</Text>
-                    </View>
-                  </View>
-                );
-              })}
-            </View>
-          </>
-        )}
-
-        {/* ─── Upcoming bills ─── */}
-        {upcomingBills.length > 0 && (
-          <>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Prochains paiements</Text>
-              <TouchableOpacity onPress={() => router.push('/more/recurring' as any)}>
-                <Text style={styles.seeAll}>Voir tout</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.billsCard}>
-              {upcomingBills.map((b, i) => (
-                <View key={b.id} style={[styles.billRow, i < upcomingBills.length - 1 && styles.billRowBorder]}>
-                  <View style={[styles.billDateBox, { backgroundColor: `${C.warning}20` }]}>
-                    <Text style={[styles.billDateBig, { color: C.warning }]}>{b.dayOfMonth}</Text>
-                    <Text style={[styles.billDateSmall, { color: C.warning }]}>
-                      {b.daysUntil === 0 ? 'auj.' : `+${b.daysUntil}j`}
-                    </Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.billName}>{b.title}</Text>
-                    <Text style={styles.billCategory}>{getCategoryName(b.category)}</Text>
-                  </View>
-                  <Text style={styles.billAmount}>{CUR} {fmt(b.amount)}</Text>
+        {/* ─── AI TEASER (hero-width banner) ─── */}
+        {transactions.length >= 3 && (
+          <Animated.View entering={FadeInDown.duration(500).delay(500)}>
+            <PressScale haptic="medium" onPress={() => router.push('/more/ai-optimizer' as any)}>
+              <LinearGradient
+                colors={['#F43F5E', '#7C3AED', '#22D3EE']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.aiTeaser}
+              >
+                <View style={styles.aiSparkle}>
+                  <Ionicons name="sparkles" size={28} color="#FFF" />
                 </View>
-              ))}
-            </View>
-          </>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.aiTitle}>Trouvez des économies</Text>
+                  <Text style={styles.aiSub}>L'IA analyse vos dépenses et propose des pistes concrètes</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={22} color="#FFF" />
+              </LinearGradient>
+            </PressScale>
+          </Animated.View>
         )}
 
-        {/* ─── Recent transactions ─── */}
-        {recentTx.length > 0 && (
-          <>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Transactions récentes</Text>
-              <TouchableOpacity onPress={() => router.push('/(tabs)/expenses' as any)}>
-                <Text style={styles.seeAll}>Voir tout</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.recentCard}>
-              {recentTx.map((t, i) => {
-                const d = new Date(t.date);
-                const isToday = d.toDateString() === new Date().toDateString();
-                const dateLabel = isToday
-                  ? "Aujourd'hui"
-                  : d.toLocaleDateString('fr-CH', { day: 'numeric', month: 'short' });
-                return (
-                  <View key={t.id} style={[styles.recentRow, i < recentTx.length - 1 && styles.recentRowBorder]}>
-                    <CategoryIcon category={t.category} size="sm" />
-                    <View style={styles.recentMiddle}>
-                      <Text style={styles.recentTitle}>{t.title}</Text>
-                      <Text style={styles.recentMeta}>
-                        {dateLabel} · {getCategoryName(t.category)}
-                      </Text>
-                    </View>
-                    <Text style={styles.recentAmount}>−{CUR} {fmt2(t.amount)}</Text>
-                  </View>
-                );
-              })}
-            </View>
-          </>
-        )}
-
-        {/* ─── AI insight teaser (if transactions exist) ─── */}
-        {transactions.length >= 5 && (
-          <TouchableOpacity
-            style={styles.aiTeaser}
-            activeOpacity={0.85}
-            onPress={() => router.push('/more/ai-optimizer' as any)}
-          >
-            <LinearGradient
-              colors={['#EC4899', '#8B5CF6']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.aiTeaserGradient}
-            >
-              <Ionicons name="sparkles" size={28} color="#FFF" />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.aiTeaserTitle}>Trouvez des économies</Text>
-                <Text style={styles.aiTeaserSub}>
-                  L'IA analyse vos dépenses et propose des pistes concrètes
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color="#FFF" />
-            </LinearGradient>
-          </TouchableOpacity>
-        )}
-
-        {/* ─── Empty state: call to action to add first income ─── */}
+        {/* ─── EMPTY STATE ─── */}
         {transactions.length === 0 && incomes.length === 0 && (
-          <View style={styles.emptyBox}>
-            <Ionicons name="rocket-outline" size={48} color={C.primary} />
-            <Text style={styles.emptyTitle}>Bienvenue sur Guardian 🇨🇭</Text>
+          <Animated.View entering={FadeInDown.duration(500).delay(300)} style={styles.emptyBox}>
+            <LinearGradient colors={C.gradientPrimary as [string, string]} style={styles.emptyIcon}>
+              <Ionicons name="rocket" size={32} color="#FFF" />
+            </LinearGradient>
+            <Text style={styles.emptyTitle}>Bienvenue sur Budgy 🇨🇭</Text>
             <Text style={styles.emptySub}>
               Commencez par ajouter votre revenu mensuel pour voir votre budget en temps réel.
             </Text>
-            <TouchableOpacity
-              style={styles.emptyBtn}
-              onPress={() => router.push('/(tabs)/savings' as any)}
-            >
-              <Text style={styles.emptyBtnText}>Ajouter mon premier revenu</Text>
-            </TouchableOpacity>
-          </View>
+            <PressScale haptic="medium" onPress={() => router.push('/(tabs)/savings' as any)}>
+              <LinearGradient colors={C.gradientPrimary as [string, string]} style={styles.emptyBtn}>
+                <Text style={styles.emptyBtnText}>Commencer →</Text>
+              </LinearGradient>
+            </PressScale>
+          </Animated.View>
         )}
       </ScrollView>
     </View>
@@ -505,54 +372,75 @@ const makeStyles = (C: any) =>
 
     // Header
     header: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: Spacing.lg },
-    greeting: { color: C.text, fontSize: FontSizes.xl, fontWeight: FontWeights.black },
+    greeting: { color: C.text, fontSize: FontSizes.xl, fontWeight: FontWeights.black, letterSpacing: -0.5 },
     date: { color: C.textSecondary, fontSize: FontSizes.xs, marginTop: 2, textTransform: 'capitalize' },
-    headerBtn: {
+    headerBtn: { borderRadius: 21 },
+    headerBtnInner: {
       width: 42, height: 42, borderRadius: 21,
       backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder,
       alignItems: 'center', justifyContent: 'center', position: 'relative',
     },
     notifDot: {
-      position: 'absolute', top: 2, right: 2, minWidth: 16, height: 16,
-      borderRadius: 8, backgroundColor: C.error,
+      position: 'absolute', top: 2, right: 2, minWidth: 17, height: 17,
+      borderRadius: 9, backgroundColor: C.error,
       alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4,
+      borderWidth: 2, borderColor: C.background,
     },
     notifDotText: { color: '#FFF', fontSize: 10, fontWeight: FontWeights.bold },
     avatar: {
-      width: 32, height: 32, borderRadius: 16, backgroundColor: C.primary,
+      width: 42, height: 42, borderRadius: 21,
       alignItems: 'center', justifyContent: 'center',
     },
-    avatarText: { color: '#FFF', fontSize: FontSizes.sm, fontWeight: FontWeights.bold },
+    avatarText: { color: '#FFF', fontSize: FontSizes.md, fontWeight: FontWeights.bold },
 
-    // Hero
+    // HERO
+    heroWrap: { marginBottom: Spacing.lg, position: 'relative' },
+    heroGlow: {
+      position: 'absolute', top: 30, left: 20, right: 20, bottom: -10,
+      borderRadius: 60,
+      filter: 'blur(40px)' as any,
+    },
     hero: {
-      borderRadius: BorderRadius.xxl, padding: Spacing.xl, marginBottom: Spacing.md,
+      borderRadius: BorderRadius.xxl, padding: Spacing.xl,
+      overflow: 'hidden',
     },
     heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     heroLabel: {
-      color: 'rgba(255,255,255,0.8)', fontSize: 11, fontWeight: FontWeights.bold,
-      letterSpacing: 1.2, textTransform: 'uppercase',
+      color: 'rgba(255,255,255,0.85)', fontSize: 11, fontWeight: FontWeights.bold,
+      letterSpacing: 1.3, textTransform: 'uppercase',
     },
     proPill: {
-      flexDirection: 'row', alignItems: 'center', gap: 3,
-      backgroundColor: 'rgba(255,255,255,0.25)', paddingHorizontal: 8, paddingVertical: 3,
-      borderRadius: 999,
+      flexDirection: 'row', alignItems: 'center', gap: 4,
+      paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999,
     },
-    proPillText: { color: '#FFF', fontSize: 9, fontWeight: FontWeights.black, letterSpacing: 0.5 },
-    heroAmount: { color: '#FFF', fontSize: FontSizes.xl, fontWeight: FontWeights.semibold, marginTop: Spacing.sm, opacity: 0.85 },
-    heroAmountBig: { color: '#FFF', fontSize: 44, fontWeight: FontWeights.black, opacity: 1 },
+    proPillText: { fontSize: 10, fontWeight: FontWeights.black, letterSpacing: 0.5 },
+
+    heroAmountRow: { flexDirection: 'row', alignItems: 'baseline', marginTop: Spacing.md },
+    heroCurrency: {
+      color: 'rgba(255,255,255,0.85)', fontSize: FontSizes.xl,
+      fontWeight: FontWeights.semibold, marginRight: 6,
+    },
+    heroAmount: {
+      color: '#FFF', fontSize: 52, fontWeight: FontWeights.black,
+      letterSpacing: -2, lineHeight: 58,
+    },
+
     heroProgressBg: {
-      height: 6, backgroundColor: 'rgba(255,255,255,0.25)', borderRadius: 999,
+      height: 8, backgroundColor: 'rgba(255,255,255,0.22)', borderRadius: 999,
       marginTop: Spacing.lg, overflow: 'hidden',
     },
     heroProgressFill: { height: '100%', borderRadius: 999 },
+
     heroStatsRow: {
       flexDirection: 'row', marginTop: Spacing.lg, alignItems: 'center',
     },
-    heroStat: { flex: 1 },
-    heroStatDivider: { width: 1, height: 28, backgroundColor: 'rgba(255,255,255,0.3)', marginHorizontal: Spacing.md },
+    heroStat: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
+    heroStatDot: {
+      width: 10, height: 10, borderRadius: 5, backgroundColor: '#6EE7B7',
+    },
+    heroStatSep: { width: 1, height: 32, backgroundColor: 'rgba(255,255,255,0.3)', marginHorizontal: Spacing.sm },
     heroStatLabel: { color: 'rgba(255,255,255,0.8)', fontSize: FontSizes.xs, fontWeight: FontWeights.semibold },
-    heroStatValue: { color: '#FFF', fontSize: FontSizes.md, fontWeight: FontWeights.bold, marginTop: 2 },
+    heroStatValue: { color: '#FFF', fontSize: FontSizes.md, fontWeight: FontWeights.bold, marginTop: 1 },
 
     // Quick stats
     quickStats: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.lg },
@@ -562,27 +450,16 @@ const makeStyles = (C: any) =>
       borderRadius: BorderRadius.lg, padding: Spacing.md,
     },
     quickStatIconWrap: {
-      width: 34, height: 34, borderRadius: 10,
-      backgroundColor: `${C.primary}25`, alignItems: 'center', justifyContent: 'center',
+      width: 36, height: 36, borderRadius: 10,
+      alignItems: 'center', justifyContent: 'center',
     },
     quickStatLabel: { color: C.textSecondary, fontSize: 11, fontWeight: FontWeights.semibold },
     quickStatValue: { color: C.text, fontSize: FontSizes.md, fontWeight: FontWeights.bold, marginTop: 1 },
 
-    // Sections
-    sectionTitle: { color: C.text, fontSize: FontSizes.lg, fontWeight: FontWeights.bold, marginBottom: Spacing.sm },
-    sectionHeader: {
-      flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-      marginTop: Spacing.lg, marginBottom: Spacing.sm,
-    },
-    seeAll: { color: C.primary, fontSize: FontSizes.sm, fontWeight: FontWeights.semibold },
-
     // Actions grid
-    actionsGrid: {
-      flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm,
-      marginBottom: Spacing.md,
-    },
-    actionCard: {
-      flex: 1, minWidth: (SCREEN_WIDTH - Spacing.lg * 2 - Spacing.sm) / 4 - 1,
+    actionsGrid: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.lg },
+    actionCard: { flex: 1 },
+    actionCardInner: {
       backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder,
       borderRadius: BorderRadius.lg,
       paddingVertical: Spacing.md, paddingHorizontal: Spacing.xs,
@@ -594,75 +471,45 @@ const makeStyles = (C: any) =>
     },
     actionLabel: { color: C.text, fontSize: FontSizes.xs, fontWeight: FontWeights.semibold },
     newDot: {
-      position: 'absolute', top: 8, right: 10,
-      width: 8, height: 8, borderRadius: 4, backgroundColor: C.error,
+      position: 'absolute', top: 10, right: 10,
+      width: 8, height: 8, borderRadius: 4,
     },
+
+    // Sections
+    sectionTitle: { color: C.text, fontSize: FontSizes.lg, fontWeight: FontWeights.bold, letterSpacing: -0.3 },
+    sectionHeader: {
+      flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+      marginTop: Spacing.md, marginBottom: Spacing.sm,
+    },
+    seeAll: { color: C.primaryLight, fontSize: FontSizes.sm, fontWeight: FontWeights.semibold },
 
     // Savings
     savingsCard: {
       backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder,
-      borderRadius: BorderRadius.lg, padding: Spacing.lg,
+      borderRadius: BorderRadius.xl, padding: Spacing.lg,
     },
     savingsTop: { flexDirection: 'row', alignItems: 'baseline', gap: Spacing.sm },
-    savingsAmount: { color: C.text, fontSize: FontSizes.xxl, fontWeight: FontWeights.black },
+    savingsAmount: { color: C.text, fontSize: FontSizes.xxl, fontWeight: FontWeights.black, letterSpacing: -1 },
     savingsTarget: { color: C.textSecondary, fontSize: FontSizes.sm },
     savingsProgressBg: {
-      height: 8, backgroundColor: C.cardHover, borderRadius: 999,
+      height: 10, backgroundColor: C.cardHover, borderRadius: 999,
       marginTop: Spacing.md, overflow: 'hidden',
     },
     savingsProgressFill: { height: '100%', borderRadius: 999 },
     savingsPct: { color: C.success, fontSize: FontSizes.xs, fontWeight: FontWeights.bold, marginTop: Spacing.sm },
 
-    // Categories
-    catCard: {
-      backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder,
-      borderRadius: BorderRadius.lg, paddingHorizontal: Spacing.md,
-    },
-    catRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, paddingVertical: Spacing.md },
-    catRowBorder: { borderBottomWidth: 1, borderBottomColor: C.cardBorder },
-    catMiddle: { flex: 1 },
-    catName: { color: C.text, fontSize: FontSizes.sm, fontWeight: FontWeights.semibold, marginBottom: 6 },
-    catBarBg: { height: 5, backgroundColor: C.cardHover, borderRadius: 999, overflow: 'hidden' },
-    catBarFill: { height: '100%', borderRadius: 999 },
-    catAmountBox: { alignItems: 'flex-end' },
-    catAmount: { color: C.text, fontSize: FontSizes.sm, fontWeight: FontWeights.bold },
-    catPct: { color: C.textTertiary, fontSize: 11, marginTop: 1 },
-
-    // Bills
-    billsCard: {
-      backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder,
-      borderRadius: BorderRadius.lg, paddingHorizontal: Spacing.md,
-    },
-    billRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, paddingVertical: Spacing.md },
-    billRowBorder: { borderBottomWidth: 1, borderBottomColor: C.cardBorder },
-    billDateBox: {
-      width: 48, height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center',
-    },
-    billDateBig: { fontSize: FontSizes.lg, fontWeight: FontWeights.black, lineHeight: 20 },
-    billDateSmall: { fontSize: 10, fontWeight: FontWeights.bold, marginTop: 1 },
-    billName: { color: C.text, fontSize: FontSizes.sm, fontWeight: FontWeights.semibold },
-    billCategory: { color: C.textTertiary, fontSize: 11, marginTop: 1 },
-    billAmount: { color: C.text, fontSize: FontSizes.md, fontWeight: FontWeights.bold },
-
-    // Recent
-    recentCard: {
-      backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder,
-      borderRadius: BorderRadius.lg, paddingHorizontal: Spacing.md,
-    },
-    recentRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, paddingVertical: Spacing.md },
-    recentRowBorder: { borderBottomWidth: 1, borderBottomColor: C.cardBorder },
-    recentMiddle: { flex: 1 },
-    recentTitle: { color: C.text, fontSize: FontSizes.sm, fontWeight: FontWeights.semibold },
-    recentMeta: { color: C.textTertiary, fontSize: 11, marginTop: 1, textTransform: 'capitalize' },
-    recentAmount: { color: C.error, fontSize: FontSizes.sm, fontWeight: FontWeights.bold },
-
-    // AI teaser
-    aiTeaser: { marginTop: Spacing.lg, borderRadius: BorderRadius.xl, overflow: 'hidden' },
-    aiTeaserGradient: {
+    // AI Teaser
+    aiTeaser: {
+      marginTop: Spacing.lg, borderRadius: BorderRadius.xl,
       padding: Spacing.lg, flexDirection: 'row', alignItems: 'center', gap: Spacing.md,
     },
-    aiTeaserTitle: { color: '#FFF', fontSize: FontSizes.md, fontWeight: FontWeights.bold },
-    aiTeaserSub: { color: 'rgba(255,255,255,0.9)', fontSize: FontSizes.xs, marginTop: 2 },
+    aiSparkle: {
+      width: 52, height: 52, borderRadius: 26,
+      backgroundColor: 'rgba(255,255,255,0.22)',
+      alignItems: 'center', justifyContent: 'center',
+    },
+    aiTitle: { color: '#FFF', fontSize: FontSizes.md, fontWeight: FontWeights.black, letterSpacing: -0.3 },
+    aiSub: { color: 'rgba(255,255,255,0.92)', fontSize: FontSizes.xs, marginTop: 2, lineHeight: 16 },
 
     // Empty state
     emptyBox: {
@@ -670,14 +517,18 @@ const makeStyles = (C: any) =>
       backgroundColor: C.card, borderRadius: BorderRadius.xl, marginTop: Spacing.lg,
       borderWidth: 1, borderColor: C.cardBorder,
     },
-    emptyTitle: { color: C.text, fontSize: FontSizes.lg, fontWeight: FontWeights.bold, marginTop: Spacing.md },
+    emptyIcon: {
+      width: 72, height: 72, borderRadius: 36,
+      alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.md,
+    },
+    emptyTitle: { color: C.text, fontSize: FontSizes.lg, fontWeight: FontWeights.bold, marginBottom: Spacing.xs },
     emptySub: {
       color: C.textSecondary, fontSize: FontSizes.sm, textAlign: 'center',
-      marginTop: Spacing.sm, lineHeight: 20, marginBottom: Spacing.lg,
+      marginBottom: Spacing.lg, lineHeight: 20,
     },
     emptyBtn: {
-      backgroundColor: C.primary, paddingVertical: Spacing.md, paddingHorizontal: Spacing.xl,
+      paddingVertical: Spacing.md, paddingHorizontal: Spacing.xl,
       borderRadius: BorderRadius.lg,
     },
-    emptyBtnText: { color: '#FFF', fontSize: FontSizes.sm, fontWeight: FontWeights.bold },
+    emptyBtnText: { color: '#FFF', fontSize: FontSizes.sm, fontWeight: FontWeights.bold, letterSpacing: 0.3 },
   });

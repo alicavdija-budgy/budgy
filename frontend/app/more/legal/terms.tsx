@@ -32,7 +32,7 @@ export default function TermsScreen() {
 
         <Text style={styles.h2}>Article 1 – Objet</Text>
         <Text style={styles.p}>
-          Les présentes CGU régissent l’utilisation de l’application mobile « Guardian Money CHF » (ci-après « l’application »),
+          Les présentes CGU régissent l’utilisation de l’application mobile « Budgy » (ci-après « l’application »),
           outil d’assistance budgétaire personnelle à destination des particuliers résidant en Suisse.
         </Text>
 
@@ -72,7 +72,7 @@ export default function TermsScreen() {
 
         <Text style={styles.h2}>Article 7 – Propriété intellectuelle</Text>
         <Text style={styles.p}>
-          Le nom « Guardian Money CHF », le logo, les écrans et le code source appartiennent à leur auteur. Toute reproduction,
+          Le nom « Budgy », le logo, les écrans et le code source appartiennent à leur auteur. Toute reproduction,
           distribution ou modification sans autorisation écrite est interdite.
         </Text>
 
@@ -98,7 +98,7 @@ export default function TermsScreen() {
 
         <Text style={styles.h2}>Article 11 – Contact</Text>
         <Text style={styles.p}>
-          Pour toute question : <Text style={styles.b}>support@guardianmoney.ch</Text>
+          Pour toute question : <Text style={styles.b}>support@budgy.ch</Text>
         </Text>
 
         <View style={{ height: 40 }} />

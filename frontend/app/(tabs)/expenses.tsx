@@ -230,7 +230,7 @@ export default function ExpensesScreen() {
                 <Ionicons name="lock-closed" size={32} color={Colors.primary} />
                 <Text style={styles.proLockedTitle}>Fonctionnalité Pro</Text>
                 <Text style={styles.proLockedText}>
-                  Passez à Guardian Pro pour gérer vos frais professionnels et exporter des notes de frais PDF.
+                  Passez à Budgy Pro pour gérer vos frais professionnels et exporter des notes de frais PDF.
                 </Text>
               </Card>
             )}

@@ -74,7 +74,7 @@ export default function SourcesScreen() {
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Text style={styles.intro}>
-          Guardian Money CHF exploite exclusivement des données publiques officielles. Toutes les sources sont
+          Budgy exploite exclusivement des données publiques officielles. Toutes les sources sont
           citées ci-dessous. L’application n’est affiliée à aucun des organismes mentionnés.
         </Text>
 
@@ -107,7 +107,7 @@ export default function SourcesScreen() {
         <Text style={styles.h2}>Signaler une source manquante</Text>
         <Text style={styles.p}>
           Si vous pensez qu’une donnée utilisée dans l’application n’est pas correctement attribuée, écrivez-nous à{'\n'}
-          <Text style={styles.b}>support@guardianmoney.ch</Text> — nous corrigeons sous 72 heures.
+          <Text style={styles.b}>support@budgy.ch</Text> — nous corrigeons sous 72 heures.
         </Text>
 
         <View style={{ height: 40 }} />

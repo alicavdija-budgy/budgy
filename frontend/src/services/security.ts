@@ -61,7 +61,7 @@ export async function isBiometricAvailable(): Promise<boolean> {
 }
 
 export async function requestBiometric(
-  reason = 'Déverrouiller Guardian',
+  reason = 'Déverrouiller Budgy',
 ): Promise<boolean> {
   if (Platform.OS === 'web') return false;
   try {

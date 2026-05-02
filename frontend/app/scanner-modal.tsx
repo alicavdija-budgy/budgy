@@ -226,7 +226,7 @@ export default function ScannerModal() {
           </LinearGradient>
           <Text style={styles.permTitle}>Accès à la caméra</Text>
           <Text style={styles.permDesc}>
-            Pour scanner vos tickets et factures, Guardian a besoin d'utiliser votre appareil
+            Pour scanner vos tickets et factures, Budgy a besoin d'utiliser votre appareil
             photo.
           </Text>
           <Button

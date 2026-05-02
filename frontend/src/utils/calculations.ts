@@ -172,7 +172,7 @@ export function calculateAnnualLamalCost(
 }
 
 /**
- * Guardian Predict IA - Prediction algorithm
+ * Budgy Predict IA - Prediction algorithm
  */
 export function predictMonthlyExpenses(
   historicalData: { month: string; amount: number; category: string }[],
@@ -257,9 +257,9 @@ export function detectAnomaly(
 }
 
 /**
- * Guardian Score calculation (0-100)
+ * Budgy Score calculation (0-100)
  */
-export function calculateGuardianScore(
+export function calculateBudgyScore(
   savingsRate: number,
   budgetsRespected: number,
   totalBudgets: number,

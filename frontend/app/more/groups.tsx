@@ -87,7 +87,7 @@ export default function GroupsScreen() {
           <Ionicons name="people" size={32} color={Colors.text} />
           <View style={{ flex: 1 }}>
             <Text style={styles.heroTitle}>Partagez vos dépenses</Text>
-            <Text style={styles.heroSub}>Bureau, coloc, voyage — Guardian calcule qui doit quoi.</Text>
+            <Text style={styles.heroSub}>Bureau, coloc, voyage — Budgy calcule qui doit quoi.</Text>
           </View>
         </LinearGradient>
 

@@ -1,6 +1,6 @@
 /**
  * GUARDIAN MONEY CHF - Subscription Screen
- * Guardian Pro subscription management
+ * Budgy Pro subscription management
  */
 
 import React from 'react';
@@ -28,8 +28,8 @@ const PRO_FEATURES = [
   'Portefeuille investissements',
   'Rapports avancés',
   '8 langues · multi-devises',
-  'Guardian IA conseiller',
-  'Guardian Score™',
+  'Budgy IA conseiller',
+  'Budgy Score™',
   'Projection 10 ans',
   '3 piliers CH · FIRE tracker',
   'Biométrie & sécurité',
@@ -43,7 +43,7 @@ export default function SubscriptionScreen() {
   const handleSubscribe = () => {
     // In a real app, this would use RevenueCat
     Alert.alert(
-      'Guardian Pro',
+      'Budgy Pro',
       'Cette fonctionnalité sera disponible avec RevenueCat. Pour l\'instant, activez le mode Pro gratuitement.',
       [
         { text: 'Annuler', style: 'cancel' },
@@ -51,7 +51,7 @@ export default function SubscriptionScreen() {
           text: 'Activer Pro',
           onPress: () => {
             setPro(true);
-            Alert.alert('⭐ Bienvenue dans Guardian Pro !', 'Toutes les fonctionnalités sont maintenant déverrouillées.');
+            Alert.alert('⭐ Bienvenue dans Budgy Pro !', 'Toutes les fonctionnalités sont maintenant déverrouillées.');
           },
         },
       ]
@@ -69,7 +69,7 @@ export default function SubscriptionScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={Colors.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>Guardian Pro</Text>
+        <Text style={styles.title}>Budgy Pro</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -86,7 +86,7 @@ export default function SubscriptionScreen() {
           >
             <Ionicons name="flash" size={48} color={Colors.text} />
           </LinearGradient>
-          <Text style={styles.heroTitle}>Guardian Pro</Text>
+          <Text style={styles.heroTitle}>Budgy Pro</Text>
           <Text style={styles.heroPrice}>7.90 CHF/mois</Text>
           <Text style={styles.heroSubtitle}>Tout déverrouiller</Text>
         </View>
@@ -96,7 +96,7 @@ export default function SubscriptionScreen() {
           <Card style={styles.statusCard}>
             <View style={styles.statusRow}>
               <Ionicons name="checkmark-circle" size={24} color={Colors.success} />
-              <Text style={styles.statusText}>Vous êtes abonné à Guardian Pro</Text>
+              <Text style={styles.statusText}>Vous êtes abonné à Budgy Pro</Text>
             </View>
           </Card>
         )}

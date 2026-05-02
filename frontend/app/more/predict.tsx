@@ -1,5 +1,5 @@
 /**
- * GUARDIAN MONEY CHF - Guardian Predict IA (with real LLM Coach)
+ * GUARDIAN MONEY CHF - Budgy Predict IA (with real LLM Coach)
  * AI predictions, alerts, cash flow, insights, and GPT-powered coach
  */
 
@@ -161,7 +161,7 @@ Alertes actives: ${alerts.length}`;
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={24} color={Colors.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>Guardian Predict IA</Text>
+        <Text style={styles.title}>Budgy Predict IA</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -186,7 +186,7 @@ Alertes actives: ${alerts.length}`;
                 <View style={styles.aiAvatar}>
                   <Ionicons name="sparkles" size={36} color={Colors.warning} />
                 </View>
-                <Text style={styles.aiTitle}>Coach IA Guardian</Text>
+                <Text style={styles.aiTitle}>Coach IA Budgy</Text>
                 <Text style={styles.aiSub}>Posez vos questions financières. Je connais vos données et le système suisse.</Text>
                 <View style={styles.quickRow}>
                   {quickQuestions.map((q, i) => (

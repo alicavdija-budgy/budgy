@@ -33,7 +33,7 @@ export default function LockScreen({
 
   const tryBiometric = async () => {
     if (!security.biometricEnabled) return;
-    const ok = await requestBiometric('Déverrouiller Guardian');
+    const ok = await requestBiometric('Déverrouiller Budgy');
     if (ok) onUnlock(false);
   };
 
@@ -89,7 +89,7 @@ export default function LockScreen({
       >
         <Ionicons name="shield-checkmark" size={32} color={Colors.text} />
       </LinearGradient>
-      <Text style={styles.title}>Guardian verrouillé</Text>
+      <Text style={styles.title}>Budgy verrouillé</Text>
       <Text style={styles.subtitle}>Saisissez votre code à 6 chiffres</Text>
 
       <View style={styles.dotsRow}>

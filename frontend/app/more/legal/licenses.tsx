@@ -45,7 +45,7 @@ export default function LicensesScreen() {
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Text style={styles.intro}>
-          Guardian Money CHF est construit avec des bibliothèques open source. Nous remercions leurs auteurs pour leur
+          Budgy est construit avec des bibliothèques open source. Nous remercions leurs auteurs pour leur
           travail. Chaque bibliothèque est utilisée conformément à sa licence d’origine.
         </Text>
 

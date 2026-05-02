@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Guardian Money CHF",
-    "slug": "guardian-money-chf",
+    "name": "Budgy",
+    "slug": "budgy",
     "version": "3.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -10,7 +10,7 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "app.guardian.money.chf",
+      "bundleIdentifier": "ch.budgy.app",
       "infoPlist": {
         "NSCameraUsageDescription": "Scanner vos tickets de caisse",
         "NSPhotoLibraryUsageDescription": "Importer des photos de reçus"
@@ -22,7 +22,7 @@
         "backgroundColor": "#07070F"
       },
       "edgeToEdgeEnabled": true,
-      "package": "app.guardian.money.chf",
+      "package": "ch.budgy.app",
       "permissions": [
         "android.permission.CAMERA"
       ]

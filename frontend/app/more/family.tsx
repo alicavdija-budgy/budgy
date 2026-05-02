@@ -79,7 +79,7 @@ export default function FamilyScreen() {
   const handleShare = async () => {
     if (!family) return;
     await Share.share({
-      message: `Rejoignez ma famille "${family.name}" sur Guardian Money CHF!\n\nCode d'invitation: ${family.code}\n\nTéléchargez l'app et entrez ce code dans Plus > Mode Famille.`,
+      message: `Rejoignez ma famille "${family.name}" sur Budgy!\n\nCode d'invitation: ${family.code}\n\nTéléchargez l'app et entrez ce code dans Plus > Mode Famille.`,
     });
   };
 

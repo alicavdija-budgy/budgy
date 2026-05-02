@@ -33,7 +33,7 @@ const SLIDES = [
   {
     emoji: '⚡',
     title: 'Votre argent, enfin maîtrisé',
-    description: 'Guardian centralise revenus, dépenses, épargne et patrimoine en un seul endroit.',
+    description: 'Budgy centralise revenus, dépenses, épargne et patrimoine en un seul endroit.',
     color: Colors.primary,
   },
   {

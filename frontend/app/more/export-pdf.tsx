@@ -87,7 +87,7 @@ export default function ExportPDFScreen() {
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(uri, {
           mimeType: 'application/pdf',
-          dialogTitle: 'Note de frais Guardian Money',
+          dialogTitle: 'Note de frais Budgy',
           UTI: 'com.adobe.pdf',
         });
       } else {
@@ -212,7 +212,7 @@ export default function ExportPDFScreen() {
         <Card style={styles.infoCard}>
           <Ionicons name="information-circle" size={18} color={Colors.info} />
           <Text style={styles.infoTxt}>
-            Le PDF est au format A4 avec en-tête Guardian Money, TVA suisse 8.1%, et espace pour signature. Compatible avec toutes les imprimantes et logiciels comptables.
+            Le PDF est au format A4 avec en-tête Budgy, TVA suisse 8.1%, et espace pour signature. Compatible avec toutes les imprimantes et logiciels comptables.
           </Text>
         </Card>
 

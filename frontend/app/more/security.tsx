@@ -228,7 +228,7 @@ export default function SecurityScreen() {
               </View>
               <View style={styles.divider} />
               <Text style={styles.helperText}>
-                En cas de contrainte (ex: réquisition forcée), saisir ce code ouvre une version vide de Guardian, sans vos vraies données.
+                En cas de contrainte (ex: réquisition forcée), saisir ce code ouvre une version vide de Budgy, sans vos vraies données.
               </Text>
             </Card>
           </>

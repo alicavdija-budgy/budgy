@@ -329,7 +329,7 @@ export default function AIOptimizerScreen() {
 
             {result.tips.length > 0 && (
               <Card style={styles.tipsCard}>
-                <Text style={styles.tipsTitle}>💡 Conseils Guardian</Text>
+                <Text style={styles.tipsTitle}>💡 Conseils Budgy</Text>
                 {result.tips.map((tip, i) => (
                   <View key={i} style={styles.tipItem}>
                     <Text style={styles.tipBullet}>•</Text>

@@ -32,7 +32,7 @@ export default function PrivacyScreen() {
         <Text style={styles.meta}>Dernière mise à jour : {new Date().toLocaleDateString('fr-CH')}</Text>
 
         <Text style={styles.p}>
-          La présente politique décrit comment Guardian Money CHF (« l’application ») collecte, utilise et protège
+          La présente politique décrit comment Budgy (« l’application ») collecte, utilise et protège
           vos données personnelles. Elle est conforme à la Loi fédérale suisse sur la protection des données (nLPD, en
           vigueur depuis le 1ᵉʳ septembre 2023) ainsi qu’au Règlement général européen sur la protection des données (RGPD).
         </Text>
@@ -96,7 +96,7 @@ export default function PrivacyScreen() {
         <Text style={styles.p}>
           Conformément à la nLPD et au RGPD, vous disposez des droits d’accès, de rectification, de suppression, de
           limitation, de portabilité et d’opposition. Ces droits peuvent être exercés directement depuis l’application
-          (Paramètres → Supprimer mes données) ou par e-mail à : <Text style={styles.b}>support@guardianmoney.ch</Text>.
+          (Paramètres → Supprimer mes données) ou par e-mail à : <Text style={styles.b}>support@budgy.ch</Text>.
         </Text>
 
         <Text style={styles.h2}>9. Sécurité</Text>
@@ -121,7 +121,7 @@ export default function PrivacyScreen() {
         <Text style={styles.h2}>12. Contact</Text>
         <Text style={styles.p}>
           Pour toute question concernant vos données personnelles :{'\n'}
-          <Text style={styles.b}>support@guardianmoney.ch</Text>
+          <Text style={styles.b}>support@budgy.ch</Text>
         </Text>
 
         <View style={{ height: 40 }} />

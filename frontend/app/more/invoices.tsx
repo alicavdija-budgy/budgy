@@ -298,7 +298,7 @@ export default function InvoicesScreen() {
               </Text>
 
               <Card style={styles.emailAddressCard}>
-                <Text style={styles.emailAddressLabel}>Votre adresse Guardian</Text>
+                <Text style={styles.emailAddressLabel}>Votre adresse Budgy</Text>
                 <Text style={styles.emailAddress}>factures@guardian-money.ch</Text>
                 <Text style={styles.emailHint}>Transférez vos factures à cette adresse</Text>
               </Card>
@@ -307,7 +307,7 @@ export default function InvoicesScreen() {
               {[
                 { step: '1', title: 'Recevez une facture par email', icon: 'mail-open' },
                 { step: '2', title: 'Transférez-la à factures@guardian-money.ch', icon: 'arrow-redo' },
-                { step: '3', title: 'Guardian extrait le montant et l\'échéance', icon: 'scan' },
+                { step: '3', title: 'Budgy extrait le montant et l\'échéance', icon: 'scan' },
                 { step: '4', title: 'Recevez un rappel avant la date limite', icon: 'notifications' },
               ].map((s, i) => (
                 <View key={i} style={styles.stepRow}>

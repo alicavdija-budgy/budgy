@@ -41,7 +41,7 @@ export default function DisclaimerScreen() {
 
         <Text style={styles.h2}>1. Nature de l’application</Text>
         <Text style={styles.p}>
-          Guardian Money CHF est un outil d’assistance budgétaire personnel. Il n’est ni une banque, ni un
+          Budgy est un outil d’assistance budgétaire personnel. Il n’est ni une banque, ni un
           intermédiaire financier au sens de la LSFin, ni un conseiller en placements agréé par la FINMA,
           ni un comparateur officiel d’assurances au sens de l’article 40 LSA.
         </Text>
@@ -105,7 +105,7 @@ export default function DisclaimerScreen() {
         <Text style={styles.h2}>9. Signaler une erreur</Text>
         <Text style={styles.p}>
           Si vous constatez une donnée inexacte ou une recommandation problématique, merci de nous contacter :
-          <Text style={styles.b}> support@guardianmoney.ch</Text>.
+          <Text style={styles.b}> support@budgy.ch</Text>.
         </Text>
 
         <Text style={styles.h2}>10. Acceptation</Text>

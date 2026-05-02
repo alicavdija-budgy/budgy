@@ -245,6 +245,18 @@ frontend:
         agent: "main"
         comment: "NEW endpoint using emergentintegrations (gpt-4o-mini) analyzing user's financial snapshot (income, transactions, recurring expenses, contracts, debts) and returning structured JSON with: summary, monthly_potential, yearly_potential, proposals[{title, category, current_monthly, potential_saving_monthly/yearly, effort, action, explanation}], tips[]. Includes heuristic fallback when LLM fails. Tested: VD/7500/month with Netflix/Spotify/LAMal Swica/car insurance + high-rate debt → CHF 238/mo = CHF 2856/yr savings across 4 proposals (LAMal comparison, Netflix cancel, debt consolidation, Spotify reduction). All schema fields populated correctly. Verified via curl."
 
+  - task: "PHASE 1 - Rebrand Guardian Money CHF → Budgy (branding premium)"
+    implemented: true
+    working: "NA"
+    file: "app/frontend/app.json, app/frontend/app/**/*, app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "PHASE 1 COMPLETE: (1) Full rebrand across all files — app name 'Budgy', slug 'budgy', bundleId 'ch.budgy.app'. All 'Guardian' references replaced in 18+ files. (2) Premium palette: violet primary (#7C3AED→#6366F1), gold secondary (#FBBF24) for PRO/CTA, cyan-emerald success (#06D6A0), rose-red error (#F43F5E), 3-stop hero gradient violet→indigo→cyan. (3) AnimatedNumber component (count-up via Reanimated useSharedValue+useDerivedValue, Swiss 1'234 formatting). (4) PressScale component (universal press-scale 0.96 + expo-haptics feedback). (5) Homepage redesign: glow pulse behind hero, 52pt count-up balance, 2-stat quick row, 4-col actions grid with haptic, savings progress animated, AI teaser 3-color gradient banner, empty state with gradient rocket icon, FadeInDown staggered entrance animations. (6) Menu 'Plus' simplified to 6 sections (IA, Finances, Documents, Partage, Sécurité, Paramètres) with premium spacing, Pro gold badge, lock icons on locked Pro items, FadeInDown stagger. Bundle: 1473 modules Web, 0 errors. Backend version string updated to 'Budgy'."
+
   - task: "Home Screen Redesign (Monarch/Copilot/YNAB-inspired)"
     implemented: true
     working: "NA"

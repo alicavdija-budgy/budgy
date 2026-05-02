@@ -245,6 +245,18 @@ frontend:
         agent: "main"
         comment: "NEW endpoint using emergentintegrations (gpt-4o-mini) analyzing user's financial snapshot (income, transactions, recurring expenses, contracts, debts) and returning structured JSON with: summary, monthly_potential, yearly_potential, proposals[{title, category, current_monthly, potential_saving_monthly/yearly, effort, action, explanation}], tips[]. Includes heuristic fallback when LLM fails. Tested: VD/7500/month with Netflix/Spotify/LAMal Swica/car insurance + high-rate debt → CHF 238/mo = CHF 2856/yr savings across 4 proposals (LAMal comparison, Netflix cancel, debt consolidation, Spotify reduction). All schema fields populated correctly. Verified via curl."
 
+  - task: "PHASE 2 - Premium screens: Invoices swipe-to-pay, Recurring % revenue, Budgets animated bars, Savings confetti + projection"
+    implemented: true
+    working: "NA"
+    file: "app/frontend/app/more/invoices.tsx, app/frontend/app/more/recurring.tsx, app/frontend/app/more/budgets.tsx, app/frontend/app/(tabs)/savings.tsx + new components"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "PHASE 2 COMPLETE: (1) New AnimatedProgressBar component — dynamic gradient color (green <80%, orange 80-100%, red >100%), Reanimated 60fps withTiming ease-out cubic. (2) New ConfettiBurst component — 28 particles, 7 Budgy colors, physics-based random trajectories, auto-dismiss. (3) Invoices redesign: Swipeable (react-native-gesture-handler/ReanimatedSwipeable) for swipe-right Mark Paid / Undo with gradient background + haptic success; 4px vertical status stripe; dominant status badge with icon; 24pt amount; overdue cards with red border + tinted bg; 'Glisser pour marquer payé' hint. (4) Recurring: hero gauge showing % of income with smart status emoji (🔥 >50% / ⚠️ >30% / ✅ sain); per-row priority emoji + % revenue bar with dynamic color (🔥/⚠️/🟡/✅); sorted by amount desc; FadeInDown stagger. (5) Budgets: AnimatedProgressBar replaces static ProgressBar on both total budget AND per-category budgets — automatic color transitions. (6) Savings: replace ProgressBar with AnimatedProgressBar; AI projection box showing 'Atteint le [date]' computed from autoSave with color-matched border; confetti burst + haptic success on goal completion (tracked per-id to avoid re-triggering); trophy icon + celebratory message. All routes HTTP 200, bundle clean."
+
   - task: "PHASE 1 - Rebrand Guardian Money CHF → Budgy (branding premium)"
     implemented: true
     working: "NA"

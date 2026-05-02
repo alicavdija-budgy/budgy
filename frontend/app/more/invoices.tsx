@@ -3,14 +3,18 @@
  * Centralized invoice tracking - never miss a payment
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  TextInput, Modal, Alert, Linking,
+  TextInput, Modal, Alert, Linking, Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
+import Animated, { FadeInDown, SlideOutRight } from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
 import { Card, Button, Badge, EmptyState, ProgressBar } from '../../src/components/ui';
 import { formatNumber } from '../../src/utils/calculations';
@@ -183,49 +187,124 @@ export default function InvoicesScreen() {
           ))}
         </View>
 
-        {/* Invoice List */}
+        {/* Invoice List with swipeable actions */}
         {filtered.length === 0 ? (
           <EmptyState icon="receipt-outline" title="Aucune facture" subtitle="Ajoutez vos factures pour ne rien oublier" action={{ label: 'Ajouter', onPress: () => setShowAdd(true) }} />
         ) : (
-          filtered.map(inv => {
+          filtered.map((inv, idx) => {
             const cat = getCat(inv.category);
+            const statusColor = getStatusColor(inv.status);
+            const isOverdue = inv.status === 'overdue';
+            const isPaid = inv.status === 'paid';
+
+            const renderRightActions = () => (
+              <View style={styles.swipeRightAction}>
+                <LinearGradient
+                  colors={isPaid ? ['#F43F5E', '#DC2626'] : ['#06D6A0', '#0891B2']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.swipeGradient}
+                >
+                  <Ionicons
+                    name={isPaid ? 'refresh-circle' : 'checkmark-circle'}
+                    size={28} color="#FFF"
+                  />
+                  <Text style={styles.swipeTxt}>
+                    {isPaid ? 'Annuler' : 'Marquer payé'}
+                  </Text>
+                </LinearGradient>
+              </View>
+            );
+
             return (
-              <Card key={inv.id} style={[styles.invCard, inv.status === 'overdue' && { borderColor: `${Colors.error}40` }]}>
-                <View style={styles.invRow}>
-                  <TouchableOpacity style={styles.checkBox} onPress={() => toggleStatus(inv.id)}>
-                    <Ionicons
-                      name={inv.status === 'paid' ? 'checkmark-circle' : 'ellipse-outline'}
-                      size={28}
-                      color={getStatusColor(inv.status)}
-                    />
-                  </TouchableOpacity>
-                  <View style={styles.invInfo}>
-                    <View style={styles.invTitleRow}>
-                      <Text style={[styles.invTitle, inv.status === 'paid' && styles.invTitlePaid]}>{inv.title}</Text>
-                      {inv.recurring && <Ionicons name="repeat" size={14} color={Colors.textTertiary} />}
-                    </View>
-                    <Text style={styles.invSender}>{inv.sender}</Text>
-                    <View style={styles.invMeta}>
-                      <View style={[styles.catBadge, { backgroundColor: `${cat.color}15` }]}>
-                        <Ionicons name={cat.icon as any} size={12} color={cat.color} />
-                        <Text style={[styles.catTxt, { color: cat.color }]}>{cat.name}</Text>
+              <Animated.View
+                key={inv.id}
+                entering={FadeInDown.duration(300).delay(idx * 50)}
+                exiting={SlideOutRight.duration(300)}
+                style={{ marginBottom: Spacing.md }}
+              >
+                <Swipeable
+                  renderRightActions={renderRightActions}
+                  overshootRight={false}
+                  rightThreshold={80}
+                  onSwipeableOpen={() => {
+                    if (Platform.OS !== 'web') {
+                      try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
+                    }
+                    toggleStatus(inv.id);
+                  }}
+                >
+                  <View style={[
+                    styles.invCardPremium,
+                    isOverdue && styles.invCardOverdue,
+                    isPaid && styles.invCardPaid,
+                  ]}>
+                    {/* Status vertical stripe */}
+                    <View style={[styles.statusStripe, { backgroundColor: statusColor }]} />
+
+                    <View style={styles.invBody}>
+                      {/* Top row: big status badge + amount dominant */}
+                      <View style={styles.invTopRow}>
+                        <View style={[styles.statusBadgeBig, { backgroundColor: `${statusColor}22`, borderColor: `${statusColor}60` }]}>
+                          <Ionicons
+                            name={isPaid ? 'checkmark-circle' : isOverdue ? 'alert-circle' : 'time'}
+                            size={14} color={statusColor}
+                          />
+                          <Text style={[styles.statusBadgeBigTxt, { color: statusColor }]}>
+                            {getStatusLabel(inv.status)}
+                          </Text>
+                        </View>
+                        <Text style={[
+                          styles.invAmountBig,
+                          isPaid && { textDecorationLine: 'line-through', opacity: 0.5 },
+                        ]}>
+                          CHF {formatNumber(inv.amount, 2)}
+                        </Text>
                       </View>
-                      <Text style={[styles.invDue, { color: inv.status === 'overdue' ? Colors.error : Colors.textTertiary }]}>
-                        {inv.status === 'overdue' ? '⚠️ ' : '📅 '}{inv.dueDate}
+
+                      {/* Title block */}
+                      <Text style={[styles.invTitleBig, isPaid && { opacity: 0.6 }]}>
+                        {inv.title}
                       </Text>
+
+                      {/* Bottom row: sender + category + due date */}
+                      <View style={styles.invMetaRow}>
+                        <View style={[styles.catChip, { backgroundColor: `${cat.color}15` }]}>
+                          <Ionicons name={cat.icon as any} size={12} color={cat.color} />
+                          <Text style={[styles.catChipTxt, { color: cat.color }]}>{cat.name}</Text>
+                        </View>
+                        <View style={styles.invMetaRight}>
+                          <Ionicons
+                            name={isOverdue ? 'warning' : 'calendar-outline'}
+                            size={12}
+                            color={isOverdue ? Colors.error : Colors.textTertiary}
+                          />
+                          <Text style={[
+                            styles.invDueTxt,
+                            { color: isOverdue ? Colors.error : Colors.textSecondary },
+                          ]}>
+                            {inv.dueDate}
+                          </Text>
+                          {inv.recurring && (
+                            <>
+                              <View style={{ width: 6 }} />
+                              <Ionicons name="repeat" size={12} color={Colors.textTertiary} />
+                            </>
+                          )}
+                        </View>
+                      </View>
+
+                      {/* Swipe hint (only on pending/overdue) */}
+                      {!isPaid && (
+                        <View style={styles.swipeHint}>
+                          <Ionicons name="arrow-back" size={11} color={Colors.textTertiary} />
+                          <Text style={styles.swipeHintTxt}>Glisser pour marquer payé</Text>
+                        </View>
+                      )}
                     </View>
                   </View>
-                  <View style={styles.invRight}>
-                    <Text style={[styles.invAmount, { color: getStatusColor(inv.status) }]}>
-                      {formatNumber(inv.amount, 2)}
-                    </Text>
-                    <Badge text={getStatusLabel(inv.status)} color={getStatusColor(inv.status)} size="sm" />
-                    <TouchableOpacity onPress={() => deleteInvoice(inv.id)} style={{ marginTop: 4 }}>
-                      <Ionicons name="trash-outline" size={16} color={Colors.textTertiary} />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </Card>
+                </Swipeable>
+              </Animated.View>
             );
           })
         )}
@@ -373,6 +452,60 @@ const styles = StyleSheet.create({
   invDue: { fontSize: FontSizes.xs },
   invRight: { alignItems: 'flex-end', gap: 4 },
   invAmount: { fontSize: FontSizes.md, fontWeight: FontWeights.black },
+
+  // Premium swipeable invoice card
+  invCardPremium: {
+    flexDirection: 'row',
+    backgroundColor: Colors.card,
+    borderWidth: 1,
+    borderColor: Colors.cardBorder,
+    borderRadius: BorderRadius.xl,
+    overflow: 'hidden',
+  },
+  invCardOverdue: { borderColor: `${Colors.error}50`, backgroundColor: `${Colors.error}08` },
+  invCardPaid: { opacity: 0.7 },
+  statusStripe: { width: 4, alignSelf: 'stretch' },
+  invBody: { flex: 1, padding: Spacing.md, paddingLeft: Spacing.md },
+  invTopRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    marginBottom: Spacing.sm,
+  },
+  statusBadgeBig: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 10, paddingVertical: 4,
+    borderRadius: 999, borderWidth: 1,
+  },
+  statusBadgeBigTxt: { fontSize: 11, fontWeight: FontWeights.black, letterSpacing: 0.3, textTransform: 'uppercase' },
+  invAmountBig: {
+    color: Colors.text, fontSize: 24, fontWeight: FontWeights.black,
+    letterSpacing: -0.8,
+  },
+  invTitleBig: { color: Colors.text, fontSize: FontSizes.md, fontWeight: FontWeights.semibold, marginBottom: Spacing.sm },
+  invMetaRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+  },
+  catChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999,
+  },
+  catChipTxt: { fontSize: 10, fontWeight: FontWeights.bold },
+  invMetaRight: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  invDueTxt: { fontSize: FontSizes.xs, fontWeight: FontWeights.semibold },
+  swipeHint: {
+    flexDirection: 'row', alignItems: 'center', gap: 4, justifyContent: 'flex-end',
+    marginTop: 8, opacity: 0.6,
+  },
+  swipeHintTxt: { color: Colors.textTertiary, fontSize: 10, fontStyle: 'italic' },
+
+  // Swipe right action (Mark paid / Undo)
+  swipeRightAction: {
+    width: 120, marginBottom: 0, borderRadius: BorderRadius.xl, overflow: 'hidden',
+  },
+  swipeGradient: {
+    flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4,
+  },
+  swipeTxt: { color: '#FFF', fontSize: 11, fontWeight: FontWeights.bold, letterSpacing: 0.3 },
+
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: Colors.backgroundSecondary, borderTopLeftRadius: BorderRadius.xxl, borderTopRightRadius: BorderRadius.xxl, padding: Spacing.xl, paddingBottom: 40, maxHeight: '90%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.xl },

@@ -19,6 +19,7 @@ import { useRouter } from 'expo-router';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
 import { useStore } from '../../src/stores/useStore';
 import { Card, Button, ProgressBar, EmptyState } from '../../src/components/ui';
+import AnimatedProgressBar from '../../src/components/AnimatedProgressBar';
 import { CategoryIcon, getCategoryName, getCategoryColor } from '../../src/components/CategoryIcon';
 import { formatNumber, pct } from '../../src/utils/calculations';
 import { EXPENSE_CATEGORIES } from '../../src/data/swiss-data';
@@ -129,9 +130,8 @@ export default function BudgetsScreen() {
             <Text style={styles.summarySpent}>Dépensé: {formatNumber(viewSpent)}</Text>
             <Text style={styles.summaryRemaining}>Reste: {formatNumber(viewBudget - viewSpent)}</Text>
           </View>
-          <ProgressBar
+          <AnimatedProgressBar
             value={pct(viewSpent, viewBudget)}
-            color={viewSpent > viewBudget ? Colors.error : Colors.primary}
             height={10}
           />
 
@@ -181,11 +181,9 @@ export default function BudgetsScreen() {
                   </Text>
                 </View>
               </View>
-              <ProgressBar
+              <AnimatedProgressBar
                 value={b.percentage}
-                color={b.percentage > 100 ? Colors.error : b.percentage > 80 ? Colors.warning : getCategoryColor(b.category)}
-                height={8}
-                showLabel
+                height={10}
               />
               <TouchableOpacity style={styles.deleteBtn} onPress={() => deleteBudget(b.id)}>
                 <Ionicons name="trash-outline" size={16} color={Colors.textTertiary} />

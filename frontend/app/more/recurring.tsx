@@ -1,5 +1,5 @@
 /**
- * GUARDIAN MONEY CHF - Recurring Expenses Screen
+ * BUDGY - Recurring Expenses (with revenue impact %)
  */
 
 import React, { useState, useMemo } from 'react';
@@ -16,7 +16,9 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
 import { useStore } from '../../src/stores/useStore';
 import { Card, Button, EmptyState } from '../../src/components/ui';
@@ -27,25 +29,50 @@ import { EXPENSE_CATEGORIES } from '../../src/data/swiss-data';
 export default function RecurringScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { preferences, recurringExpenses, addRecurringExpense, toggleRecurringExpense, deleteRecurringExpense } = useStore();
+  const { preferences, recurringExpenses, incomes, addRecurringExpense, toggleRecurringExpense, deleteRecurringExpense } = useStore();
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [newRec, setNewRec] = useState({ title: '', amount: '', category: 'abonnements', dayOfMonth: '1' });
 
   const CUR = preferences.currency;
 
+  const monthlyIncome = useMemo(() => {
+    return incomes.reduce((sum, i) => {
+      if (i.type !== 'recurring') return sum;
+      const amt = Number(i.amount) || 0;
+      if (i.frequency === 'yearly') return sum + amt / 12;
+      if (i.frequency === 'quarterly') return sum + amt / 3;
+      return sum + amt;
+    }, 0);
+  }, [incomes]);
+
   const totalMonthly = useMemo(() => {
     return recurringExpenses.filter(r => r.active).reduce((sum, r) => sum + r.amount, 0);
   }, [recurringExpenses]);
 
   const totalYearly = totalMonthly * 12;
+  const totalPctIncome = monthlyIncome > 0 ? (totalMonthly / monthlyIncome) * 100 : 0;
+
+  // Sort by amount desc to surface biggest impact first
+  const sorted = useMemo(
+    () => [...recurringExpenses].sort((a, b) => b.amount - a.amount),
+    [recurringExpenses]
+  );
+
+  const getPriority = (amount: number): { label: string; emoji: string; color: string } => {
+    if (monthlyIncome <= 0) return { label: 'Impact inconnu', emoji: 'ℹ️', color: Colors.textTertiary };
+    const pct = (amount / monthlyIncome) * 100;
+    if (pct >= 20) return { label: 'Impact élevé', emoji: '🔥', color: Colors.error };
+    if (pct >= 10) return { label: 'Impact moyen', emoji: '⚠️', color: Colors.warning };
+    if (pct >= 5)  return { label: 'Impact modéré', emoji: '🟡', color: '#EAB308' };
+    return { label: 'Faible impact', emoji: '✅', color: Colors.success };
+  };
 
   const handleAdd = () => {
     if (!newRec.title || !newRec.amount) {
       Alert.alert('Erreur', 'Veuillez remplir tous les champs');
       return;
     }
-
     addRecurringExpense({
       id: `rec_${Date.now()}`,
       title: newRec.title,
@@ -57,7 +84,6 @@ export default function RecurringScreen() {
       active: true,
       createdAt: Date.now(),
     });
-
     setNewRec({ title: '', amount: '', category: 'abonnements', dayOfMonth: '1' });
     setShowAddModal(false);
   };
@@ -75,19 +101,35 @@ export default function RecurringScreen() {
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-        <Card style={styles.summaryCard}>
-          <View style={styles.summaryRow}>
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Mensuel</Text>
-              <Text style={styles.summaryAmount}>{CUR} {formatNumber(totalMonthly)}</Text>
-            </View>
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Annuel</Text>
-              <Text style={styles.summaryAmount}>{CUR} {formatNumber(totalYearly)}</Text>
-            </View>
-          </View>
-          <Text style={styles.summaryCount}>{recurringExpenses.filter(r => r.active).length} abonnements actifs</Text>
-        </Card>
+        {/* Hero summary with revenue-share gauge */}
+        <Animated.View entering={FadeInDown.duration(500)}>
+          <LinearGradient
+            colors={totalPctIncome >= 50 ? [Colors.error, Colors.errorDark] as any : Colors.gradientPrimary as any}
+            style={styles.heroSummary}
+          >
+            <Text style={styles.heroLabel}>CHARGES FIXES MENSUELLES</Text>
+            <Text style={styles.heroAmount}>{CUR} {formatNumber(totalMonthly)}</Text>
+            <Text style={styles.heroYearly}>≈ {CUR} {formatNumber(totalYearly)} / an</Text>
+
+            {monthlyIncome > 0 && (
+              <>
+                <View style={styles.heroBarBg}>
+                  <View style={[styles.heroBarFill, { width: `${Math.min(100, totalPctIncome)}%` }]} />
+                </View>
+                <View style={styles.heroBarRow}>
+                  <Text style={styles.heroBarText}>
+                    {totalPctIncome.toFixed(1)}% de vos revenus
+                  </Text>
+                  <Text style={styles.heroBarStatus}>
+                    {totalPctIncome >= 50 ? '🔥 Trop élevé' : totalPctIncome >= 30 ? '⚠️ Élevé' : '✅ Sain'}
+                  </Text>
+                </View>
+              </>
+            )}
+
+            <Text style={styles.heroCount}>{recurringExpenses.filter(r => r.active).length} abonnements actifs</Text>
+          </LinearGradient>
+        </Animated.View>
 
         {recurringExpenses.length === 0 ? (
           <EmptyState
@@ -97,35 +139,61 @@ export default function RecurringScreen() {
             action={{ label: 'Ajouter', onPress: () => setShowAddModal(true) }}
           />
         ) : (
-          recurringExpenses.map((rec) => (
-            <Card key={rec.id} style={[styles.recCard, !rec.active && styles.recCardInactive]}>
-              <View style={styles.recRow}>
-                <CategoryIcon category={rec.category} size="md" />
-                <View style={styles.recInfo}>
-                  <Text style={styles.recTitle}>{rec.title}</Text>
-                  <Text style={styles.recDate}>Le {rec.dayOfMonth} de chaque mois</Text>
-                </View>
-                <View style={styles.recRight}>
-                  <Text style={styles.recAmount}>{CUR} {formatNumber(rec.amount)}</Text>
-                  <Switch
-                    value={rec.active}
-                    onValueChange={() => toggleRecurringExpense(rec.id)}
-                    trackColor={{ false: Colors.cardBorder, true: `${Colors.success}50` }}
-                    thumbColor={rec.active ? Colors.success : Colors.textTertiary}
-                  />
-                </View>
-              </View>
-              <TouchableOpacity
-                style={styles.deleteBtn}
-                onPress={() => Alert.alert('Supprimer', 'Confirmer ?', [
-                  { text: 'Annuler', style: 'cancel' },
-                  { text: 'Supprimer', style: 'destructive', onPress: () => deleteRecurringExpense(rec.id) },
-                ])}
-              >
-                <Ionicons name="trash-outline" size={16} color={Colors.textTertiary} />
-              </TouchableOpacity>
-            </Card>
-          ))
+          sorted.map((rec, idx) => {
+            const pctOfIncome = monthlyIncome > 0 ? (rec.amount / monthlyIncome) * 100 : 0;
+            const priority = getPriority(rec.amount);
+            const barColor = priority.color;
+            return (
+              <Animated.View key={rec.id} entering={FadeInDown.duration(300).delay(idx * 40)}>
+                <Card style={[styles.recCard, !rec.active && styles.recCardInactive]}>
+                  <View style={styles.recTopRow}>
+                    <CategoryIcon category={rec.category} size="md" />
+                    <View style={styles.recInfo}>
+                      <View style={styles.recTitleRow}>
+                        <Text style={styles.recTitle}>{rec.title}</Text>
+                        <Text style={styles.recPriorityEmoji}>{priority.emoji}</Text>
+                      </View>
+                      <Text style={styles.recDate}>Le {rec.dayOfMonth} de chaque mois</Text>
+                    </View>
+                    <View style={styles.recRight}>
+                      <Text style={styles.recAmount}>{CUR} {formatNumber(rec.amount)}</Text>
+                      <Switch
+                        value={rec.active}
+                        onValueChange={() => toggleRecurringExpense(rec.id)}
+                        trackColor={{ false: Colors.cardBorder, true: `${Colors.success}50` }}
+                        thumbColor={rec.active ? Colors.success : Colors.textTertiary}
+                      />
+                    </View>
+                  </View>
+
+                  {/* Revenue-share bar */}
+                  {monthlyIncome > 0 && rec.active && (
+                    <View style={styles.recImpactWrap}>
+                      <View style={styles.recBarBg}>
+                        <View style={[styles.recBarFill, { width: `${Math.min(100, pctOfIncome * 3)}%`, backgroundColor: barColor }]} />
+                      </View>
+                      <View style={styles.recImpactRow}>
+                        <Text style={[styles.recImpactText, { color: barColor }]}>
+                          {pctOfIncome.toFixed(1)}% du revenu · {priority.label}
+                        </Text>
+                        <Text style={styles.recYearly}>{CUR} {formatNumber(rec.amount * 12)}/an</Text>
+                      </View>
+                    </View>
+                  )}
+
+                  <TouchableOpacity
+                    style={styles.deleteBtn}
+                    onPress={() => Alert.alert('Supprimer', 'Confirmer ?', [
+                      { text: 'Annuler', style: 'cancel' },
+                      { text: 'Supprimer', style: 'destructive', onPress: () => deleteRecurringExpense(rec.id) },
+                    ])}
+                  >
+                    <Ionicons name="trash-outline" size={16} color={Colors.textTertiary} />
+                  </TouchableOpacity>
+                </Card>
+              </Animated.View>
+            );
+          })
         )}
 
         <View style={{ height: 40 }} />
@@ -191,20 +259,44 @@ const styles = StyleSheet.create({
   addButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   scroll: { flex: 1 },
   content: { padding: Spacing.lg },
-  summaryCard: { marginBottom: Spacing.lg },
-  summaryRow: { flexDirection: 'row' },
-  summaryItem: { flex: 1, alignItems: 'center' },
-  summaryLabel: { color: Colors.textSecondary, fontSize: FontSizes.sm },
-  summaryAmount: { color: Colors.text, fontSize: FontSizes.xxl, fontWeight: FontWeights.black },
-  summaryCount: { color: Colors.textTertiary, fontSize: FontSizes.sm, textAlign: 'center', marginTop: Spacing.sm },
+
+  heroSummary: {
+    borderRadius: BorderRadius.xl, padding: Spacing.xl, marginBottom: Spacing.lg,
+  },
+  heroLabel: {
+    color: 'rgba(255,255,255,0.85)', fontSize: 11, fontWeight: FontWeights.bold,
+    letterSpacing: 1.2, textTransform: 'uppercase',
+  },
+  heroAmount: { color: '#FFF', fontSize: 40, fontWeight: FontWeights.black, letterSpacing: -1.5, marginTop: 4 },
+  heroYearly: { color: 'rgba(255,255,255,0.85)', fontSize: FontSizes.sm, fontWeight: FontWeights.semibold },
+  heroBarBg: {
+    height: 8, backgroundColor: 'rgba(255,255,255,0.22)', borderRadius: 999,
+    marginTop: Spacing.md, overflow: 'hidden',
+  },
+  heroBarFill: { height: '100%', backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 999 },
+  heroBarRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: Spacing.sm },
+  heroBarText: { color: 'rgba(255,255,255,0.95)', fontSize: FontSizes.sm, fontWeight: FontWeights.bold },
+  heroBarStatus: { color: '#FFF', fontSize: FontSizes.sm, fontWeight: FontWeights.black },
+  heroCount: { color: 'rgba(255,255,255,0.8)', fontSize: FontSizes.xs, marginTop: Spacing.sm },
+
   recCard: { marginBottom: Spacing.md, position: 'relative' },
   recCardInactive: { opacity: 0.5 },
-  recRow: { flexDirection: 'row', alignItems: 'center' },
+  recTopRow: { flexDirection: 'row', alignItems: 'center' },
   recInfo: { flex: 1, marginLeft: Spacing.md },
+  recTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   recTitle: { color: Colors.text, fontSize: FontSizes.md, fontWeight: FontWeights.semibold },
-  recDate: { color: Colors.textSecondary, fontSize: FontSizes.xs },
+  recPriorityEmoji: { fontSize: 14 },
+  recDate: { color: Colors.textSecondary, fontSize: FontSizes.xs, marginTop: 2 },
   recRight: { alignItems: 'flex-end' },
   recAmount: { color: Colors.text, fontSize: FontSizes.md, fontWeight: FontWeights.bold, marginBottom: Spacing.xs },
+
+  recImpactWrap: { marginTop: Spacing.md },
+  recBarBg: { height: 5, backgroundColor: Colors.cardHover, borderRadius: 999, overflow: 'hidden' },
+  recBarFill: { height: '100%', borderRadius: 999 },
+  recImpactRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
+  recImpactText: { fontSize: FontSizes.xs, fontWeight: FontWeights.bold },
+  recYearly: { color: Colors.textTertiary, fontSize: FontSizes.xs, fontWeight: FontWeights.semibold },
+
   deleteBtn: { position: 'absolute', top: Spacing.sm, right: Spacing.sm },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: Colors.backgroundSecondary, borderTopLeftRadius: BorderRadius.xxl, borderTopRightRadius: BorderRadius.xxl, padding: Spacing.xl, paddingBottom: 40 },

@@ -3,7 +3,7 @@
  * Savings goals with progress tracking
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,17 +13,23 @@ import {
   TextInput,
   Modal,
   Alert,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
 import { useStore } from '../../src/stores/useStore';
 import { Card, Button, ProgressBar, EmptyState } from '../../src/components/ui';
 import { formatNumber, pct } from '../../src/utils/calculations';
 import { SAVINGS_TEMPLATES } from '../../src/data/swiss-data';
+import AnimatedProgressBar from '../../src/components/AnimatedProgressBar';
+import ConfettiBurst from '../../src/components/ConfettiBurst';
 
 export default function SavingsScreen() {
   const insets = useSafeAreaInsets();
+  const [confetti, setConfetti] = useState(false);
+  const [celebratedIds, setCelebratedIds] = useState<Set<string>>(new Set());
   const {
     preferences,
     savingsGoals,
@@ -120,6 +126,9 @@ export default function SavingsScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
+      {/* Confetti overlay */}
+      <ConfettiBurst trigger={confetti} onDone={() => setConfetti(false)} />
+
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>🎯 Épargne</Text>
@@ -174,6 +183,26 @@ export default function SavingsScreen() {
             const monthsLeft = goal.autoSave > 0 ? Math.ceil(remaining / goal.autoSave) : null;
             const isComplete = progress >= 100;
 
+            // Projection: "Atteint le 15 mars 2026" if auto-save configured
+            const projectedDate = (() => {
+              if (!monthsLeft || isComplete) return null;
+              const d = new Date();
+              d.setMonth(d.getMonth() + monthsLeft);
+              return d.toLocaleDateString('fr-CH', { day: 'numeric', month: 'long', year: 'numeric' });
+            })();
+
+            // Trigger confetti on newly-completed goal
+            if (isComplete && !celebratedIds.has(goal.id)) {
+              setTimeout(() => {
+                setCelebratedIds((prev) => new Set(prev).add(goal.id));
+                setConfetti(true);
+                if (Platform.OS !== 'web') {
+                  try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
+                }
+                setTimeout(() => setConfetti(false), 2500);
+              }, 200);
+            }
+
             return (
               <Card
                 key={goal.id}
@@ -182,9 +211,9 @@ export default function SavingsScreen() {
               >
                 {isComplete && (
                   <View style={[styles.completeBadge, { backgroundColor: `${goal.color}20` }]}>
-                    <Ionicons name="checkmark-circle" size={14} color={goal.color} />
+                    <Ionicons name="trophy" size={14} color={goal.color} />
                     <Text style={[styles.completeBadgeText, { color: goal.color }]}>
-                      Objectif atteint !
+                      🎉 Objectif atteint !
                     </Text>
                   </View>
                 )}
@@ -195,7 +224,7 @@ export default function SavingsScreen() {
                     <Text style={styles.goalTitle}>{goal.title}</Text>
                     {goal.autoSave > 0 && (
                       <Text style={styles.goalAuto}>
-                        {CUR} {formatNumber(goal.autoSave)}/mois auto
+                        💰 {CUR} {formatNumber(goal.autoSave)}/mois auto
                       </Text>
                     )}
                   </View>
@@ -205,15 +234,32 @@ export default function SavingsScreen() {
                   </View>
                 </View>
 
-                <ProgressBar value={progress} color={goal.color} height={8} showLabel />
+                <AnimatedProgressBar
+                  value={progress}
+                  height={10}
+                  forceColor={isComplete ? ['#06D6A0', '#0891B2'] : [goal.color, goal.color]}
+                />
 
                 <View style={styles.goalMeta}>
                   <Text style={styles.goalMetaText}>
-                    {formatNumber(remaining)} manque
-                    {monthsLeft ? ` · ≈ ${monthsLeft} mois` : ''}
-                    {goal.deadline ? ` · 🏁 ${goal.deadline}` : ''}
+                    {isComplete
+                      ? `✨ Bravo ! Vous avez économisé ${CUR} ${formatNumber(goal.saved)}`
+                      : `${formatNumber(remaining)} ${CUR} manque · ${Math.round(progress)}% atteint`}
                   </Text>
                 </View>
+
+                {/* Projection card (AI-style) */}
+                {projectedDate && !isComplete && (
+                  <View style={[styles.projectionBox, { backgroundColor: `${goal.color}15`, borderColor: `${goal.color}30` }]}>
+                    <Ionicons name="sparkles" size={14} color={goal.color} />
+                    <Text style={[styles.projectionText, { color: goal.color }]}>
+                      Atteint le {projectedDate}
+                    </Text>
+                    <Text style={[styles.projectionSub, { color: Colors.textSecondary }]}>
+                      dans {monthsLeft} mois
+                    </Text>
+                  </View>
+                )}
 
                 {goal.tip && (
                   <View style={styles.tipRow}>
@@ -572,6 +618,25 @@ const styles = StyleSheet.create({
     color: Colors.warning,
     fontSize: FontSizes.xs,
     flex: 1,
+  },
+  // AI Projection box
+  projectionBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+  },
+  projectionText: {
+    fontSize: FontSizes.sm,
+    fontWeight: FontWeights.bold,
+    flex: 1,
+  },
+  projectionSub: {
+    fontSize: FontSizes.xs,
+    fontWeight: FontWeights.semibold,
   },
   goalActions: {
     flexDirection: 'row',

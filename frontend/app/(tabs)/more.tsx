@@ -230,6 +230,14 @@ export default function MoreScreen() {
           color: C.textSecondary,
           route: '/more/settings',
         },
+        {
+          id: 'legal',
+          title: 'Informations légales',
+          subtitle: 'Confidentialité · CGU · Sources · Licences',
+          icon: 'shield-half',
+          color: C.info,
+          route: '/more/legal',
+        },
       ],
     },
   ];

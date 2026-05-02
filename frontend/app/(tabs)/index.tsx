@@ -1,9 +1,10 @@
 /**
- * GUARDIAN MONEY CHF - Home Screen
- * Dashboard with overview, quick actions, and notifications
+ * GUARDIAN MONEY CHF - Home Screen (Redesigned)
+ * Inspired by Monarch Money, Copilot, YNAB, Linxo.
+ * Clean hierarchy: Hero balance → Daily spending → Quick actions → Insights.
  */
 
-import React, { useMemo, useEffect } from 'react';
+import React, { useMemo, useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,21 +12,34 @@ import {
   StyleSheet,
   TouchableOpacity,
   RefreshControl,
+  Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
+import { BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
+import { useTheme } from '../../src/hooks/useTheme';
 import { useStore } from '../../src/stores/useStore';
-import { Card, ProgressBar, Badge, AmountDisplay } from '../../src/components/ui';
 import { CategoryIcon, getCategoryName, getCategoryColor } from '../../src/components/CategoryIcon';
-import { DonutChart, MiniBarChart, RingProgress } from '../../src/components/Charts';
-import { formatNumber, pct, calculateGuardianScore } from '../../src/utils/calculations';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// Compact number formatter — CH style with apostrophes as thousands separator
+const fmt = (n: number) => {
+  const s = Math.round(Math.abs(n)).toString();
+  return s.replace(/\B(?=(\d{3})+(?!\d))/g, "'");
+};
+const fmt2 = (n: number) => {
+  const rounded = (Math.round(n * 100) / 100).toFixed(2);
+  const [int, dec] = rounded.split('.');
+  return `${int.replace(/\B(?=(\d{3})+(?!\d))/g, "'")}.${dec}`;
+};
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const C = useTheme();
   const {
     user,
     preferences,
@@ -34,734 +48,636 @@ export default function HomeScreen() {
     savingsGoals,
     budgets,
     recurringExpenses,
-    investments,
     notifications,
     isPro,
-    markNotificationRead,
     loadSeedData,
   } = useStore();
 
-  // Auto-load seed data ONLY for demo users who have no data
+  const [refreshing, setRefreshing] = useState(false);
+
   useEffect(() => {
     if (user?.isDemo && transactions.length === 0 && incomes.length === 0) {
       loadSeedData();
     }
   }, [user]);
 
-  const [refreshing, setRefreshing] = React.useState(false);
+  const CUR = preferences.currency;
 
-  // Calculate totals
+  // ─── Key financial metrics ───────────────────────────
   const monthlyIncome = useMemo(() => {
-    return incomes
-      .filter(i => i.type === 'recurring' && i.frequency === 'monthly')
-      .reduce((sum, i) => sum + i.amount, 0);
+    return incomes.reduce((sum, i) => {
+      if (i.type !== 'recurring') return sum;
+      const amt = Number(i.amount) || 0;
+      if (i.frequency === 'yearly') return sum + amt / 12;
+      if (i.frequency === 'quarterly') return sum + amt / 3;
+      return sum + amt;
+    }, 0);
   }, [incomes]);
 
-  const totalExpenses = useMemo(() => {
-    return transactions.reduce((sum, t) => sum + t.amount, 0);
+  // This month transactions
+  const now = new Date();
+  const thisMonthTx = useMemo(() => {
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    return transactions.filter((t) => {
+      const d = new Date(t.date);
+      return d.getFullYear() === year && d.getMonth() === month;
+    });
   }, [transactions]);
 
-  const totalSaved = useMemo(() => {
-    return savingsGoals.reduce((sum, g) => sum + g.saved, 0);
-  }, [savingsGoals]);
+  const monthExpenses = useMemo(
+    () => thisMonthTx.reduce((s, t) => s + t.amount, 0),
+    [thisMonthTx]
+  );
 
-  const totalTarget = useMemo(() => {
-    return savingsGoals.reduce((sum, g) => sum + g.target, 0);
-  }, [savingsGoals]);
+  const monthlyRecurring = useMemo(
+    () =>
+      recurringExpenses
+        .filter((r) => r.active && r.frequency === 'monthly')
+        .reduce((sum, r) => sum + r.amount, 0),
+    [recurringExpenses]
+  );
 
-  const monthlyAutoSave = useMemo(() => {
-    return savingsGoals.reduce((sum, g) => sum + g.autoSave, 0);
-  }, [savingsGoals]);
+  // "Safe to spend" = revenu - dépenses fixes - dépenses variables du mois
+  const available = Math.max(0, monthlyIncome - monthlyRecurring - monthExpenses);
+  const spentPct = monthlyIncome > 0 ? Math.min(100, ((monthExpenses + monthlyRecurring) / monthlyIncome) * 100) : 0;
 
-  const monthlyRecurring = useMemo(() => {
-    return recurringExpenses
-      .filter(r => r.active && r.frequency === 'monthly')
-      .reduce((sum, r) => sum + r.amount, 0);
-  }, [recurringExpenses]);
+  // Today & this week
+  const today = new Date().toDateString();
+  const todayExpenses = useMemo(
+    () =>
+      transactions
+        .filter((t) => new Date(t.date).toDateString() === today)
+        .reduce((s, t) => s + t.amount, 0),
+    [transactions]
+  );
 
-  const totalInvestments = useMemo(() => {
-    return investments.reduce((sum, i) => sum + i.quantity * i.currentPrice, 0);
-  }, [investments]);
+  const weekAgo = new Date();
+  weekAgo.setDate(weekAgo.getDate() - 7);
+  const weekExpenses = useMemo(
+    () =>
+      transactions
+        .filter((t) => new Date(t.date) >= weekAgo)
+        .reduce((s, t) => s + t.amount, 0),
+    [transactions]
+  );
 
-  const investmentPnL = useMemo(() => {
-    return investments.reduce(
-      (sum, i) => sum + i.quantity * (i.currentPrice - i.buyPrice),
-      0
-    );
-  }, [investments]);
+  // Savings
+  const totalSaved = useMemo(
+    () => savingsGoals.reduce((s, g) => s + g.saved, 0),
+    [savingsGoals]
+  );
+  const totalTarget = useMemo(
+    () => savingsGoals.reduce((s, g) => s + g.target, 0),
+    [savingsGoals]
+  );
+  const savingsPct = totalTarget > 0 ? (totalSaved / totalTarget) * 100 : 0;
 
-  const patrimoine = totalSaved + totalInvestments;
-
-  const guardianScore = useMemo(() => {
-    const savingsRate = monthlyIncome > 0 ? (monthlyAutoSave / monthlyIncome) * 100 : 0;
-    const budgetsRespected = budgets.filter(b => {
-      const spent = transactions
-        .filter(t => t.category === b.category)
-        .reduce((sum, t) => sum + t.amount, 0);
-      return spent <= b.limit;
-    }).length;
-    
-    return calculateGuardianScore(
-      savingsRate,
-      budgetsRespected,
-      budgets.length,
-      0, // anomalies count
-      monthlyIncome > 0 ? monthlyRecurring / monthlyIncome : 0
-    );
-  }, [monthlyIncome, monthlyAutoSave, budgets, transactions, monthlyRecurring]);
-
-  const unreadNotifications = notifications.filter(n => !n.read);
-
-  // Expense breakdown by category for donut chart
-  const expenseBreakdown = useMemo(() => {
+  // Top categories of the month
+  const topCategories = useMemo(() => {
     const byCategory: Record<string, number> = {};
-    transactions.forEach(t => {
+    thisMonthTx.forEach((t) => {
       byCategory[t.category] = (byCategory[t.category] || 0) + t.amount;
     });
     return Object.entries(byCategory)
-      .map(([cat, amount]) => ({
-        value: amount,
-        color: getCategoryColor(cat),
-        label: getCategoryName(cat),
-      }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 6); // Top 6 categories
-  }, [transactions]);
+      .map(([cat, amount]) => ({ cat, amount }))
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 4);
+  }, [thisMonthTx]);
 
-  // Monthly trend data (simulated for demo)
-  const monthlyTrend = useMemo(() => {
-    const months = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun'];
-    return months.map((label, i) => ({
-      value: Math.round(totalExpenses * (0.7 + Math.random() * 0.6)),
-      label,
-      color: i === months.length - 1 ? Colors.primary : undefined,
-    }));
-  }, [totalExpenses]);
+  // Recent transactions (5 last)
+  const recentTx = useMemo(
+    () => [...transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5),
+    [transactions]
+  );
 
-  const onRefresh = React.useCallback(() => {
-    setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1000);
-  }, []);
+  // Next recurring payments (sorted by day of month)
+  const upcomingBills = useMemo(() => {
+    const dom = new Date().getDate();
+    return recurringExpenses
+      .filter((r) => r.active)
+      .map((r) => {
+        const day = r.dayOfMonth || 1;
+        const daysUntil = day >= dom ? day - dom : 30 - dom + day;
+        return { ...r, daysUntil };
+      })
+      .sort((a, b) => a.daysUntil - b.daysUntil)
+      .slice(0, 3);
+  }, [recurringExpenses]);
+
+  const unreadNotifs = notifications.filter((n) => !n.read).length;
 
   const greeting = useMemo(() => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Bonjour';
-    if (hour < 18) return 'Bon après-midi';
+    const h = new Date().getHours();
+    if (h < 12) return 'Bonjour';
+    if (h < 18) return 'Bon après-midi';
     return 'Bonsoir';
   }, []);
 
-  const CUR = preferences.currency;
+  const firstName = user?.name?.split(' ')[0] || '';
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    setTimeout(() => setRefreshing(false), 700);
+  }, []);
+
+  const styles = makeStyles(C);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 100 }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.primary} />
         }
       >
-        {/* Header */}
+        {/* ─── Minimal Header ─── */}
         <View style={styles.header}>
-          <View>
-            <Text style={styles.greeting}>{greeting}, {user?.name?.split(' ')[0] || 'Guest'} 👋</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.greeting}>{greeting}{firstName ? `, ${firstName}` : ''}</Text>
             <Text style={styles.date}>
-              {new Date().toLocaleDateString('fr-CH', {
-                weekday: 'long',
-                day: 'numeric',
-                month: 'long',
-              })}
+              {new Date().toLocaleDateString('fr-CH', { weekday: 'long', day: 'numeric', month: 'long' })}
             </Text>
           </View>
-          <TouchableOpacity
-            style={styles.notifButton}
-            onPress={() => router.push('/more/notifications')}
-          >
-            <Ionicons name="notifications-outline" size={24} color={Colors.text} />
-            {unreadNotifications.length > 0 && (
-              <View style={styles.notifBadge}>
-                <Text style={styles.notifBadgeText}>{unreadNotifications.length}</Text>
+          <TouchableOpacity style={styles.headerBtn} onPress={() => router.push('/more/notifications' as any)}>
+            <Ionicons name="notifications-outline" size={22} color={C.text} />
+            {unreadNotifs > 0 && (
+              <View style={styles.notifDot}>
+                <Text style={styles.notifDotText}>{unreadNotifs}</Text>
               </View>
             )}
           </TouchableOpacity>
-        </View>
-
-        {/* Pro Badge */}
-        {!isPro && (
           <TouchableOpacity
-            style={styles.proBanner}
-            onPress={() => router.push('/more/subscription')}
-            activeOpacity={0.8}
+            style={styles.headerBtn}
+            onPress={() => router.push('/(tabs)/more' as any)}
           >
-            <View style={styles.proBannerContent}>
-              <Ionicons name="flash" size={16} color={Colors.primary} />
-              <Text style={styles.proBannerText}>
-                GRATUIT · {transactions.length}/5 transactions
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>
+                {(user?.name || 'U').slice(0, 1).toUpperCase()}
               </Text>
             </View>
-            <Text style={styles.proBannerAction}>Pro →</Text>
           </TouchableOpacity>
-        )}
-
-        {/* Patrimoine Card */}
-        <Card style={styles.heroCard}>
-          <Text style={styles.heroLabel}>Patrimoine total</Text>
-          <View style={styles.heroRow}>
-            <Text style={styles.heroAmount}>
-              {CUR} {formatNumber(patrimoine)}
-            </Text>
-            <View style={styles.scoreContainer}>
-              <Text style={styles.scoreValue}>{guardianScore}</Text>
-              <Text style={styles.scoreLabel}>score</Text>
-            </View>
-          </View>
-          <View style={styles.heroTrend}>
-            <Ionicons name="trending-up" size={14} color={Colors.success} />
-            <Text style={styles.heroTrendText}>+{Math.round(guardianScore / 5 + 8)}% 12 mois</Text>
-          </View>
-
-          {/* Quick Stats */}
-          <View style={styles.statsGrid}>
-            {[
-              { label: 'Revenus', value: monthlyIncome, color: Colors.success, icon: 'arrow-up' },
-              { label: 'Dépenses', value: totalExpenses, color: Colors.error, icon: 'arrow-down' },
-              { label: 'Épargne', value: totalSaved, color: Colors.primary, icon: 'flag' },
-              { label: 'Invest.', value: totalInvestments, color: investmentPnL >= 0 ? Colors.success : Colors.error, icon: 'trending-up' },
-            ].map((stat, idx) => (
-              <TouchableOpacity
-                key={idx}
-                style={styles.statItem}
-                onPress={() => {
-                  if (stat.label === 'Dépenses') router.push('/expenses');
-                  else if (stat.label === 'Épargne') router.push('/savings');
-                  else router.push('/more/analytics');
-                }}
-              >
-                <Ionicons name={stat.icon as any} size={16} color={stat.color} />
-                <Text style={styles.statLabel}>{stat.label}</Text>
-                <Text style={[styles.statValue, { color: stat.color }]}>
-                  {formatNumber(stat.value, 0)}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </Card>
-
-        {/* Notifications */}
-        {unreadNotifications.length > 0 && (
-          <Card style={styles.notifsCard}>
-            {unreadNotifications.slice(0, 2).map((notif, idx) => (
-              <TouchableOpacity
-                key={notif.id}
-                style={[
-                  styles.notifItem,
-                  idx < unreadNotifications.length - 1 && styles.notifItemBorder,
-                ]}
-                onPress={() => markNotificationRead(notif.id)}
-              >
-                <Text style={styles.notifIcon}>{notif.icon}</Text>
-                <View style={styles.notifContent}>
-                  <Text style={styles.notifTitle}>{notif.title}</Text>
-                  <Text style={styles.notifSubtitle}>{notif.subtitle}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={16} color={Colors.textTertiary} />
-              </TouchableOpacity>
-            ))}
-          </Card>
-        )}
-
-        {/* ─── Expense Donut + Monthly Bars ─── */}
-        {(expenseBreakdown.length > 0 || monthlyTrend.length > 0) && (
-          <>
-            <Text style={styles.sectionTitle}>Vue d'ensemble</Text>
-            <View style={styles.chartsRow}>
-              {/* Donut Chart */}
-              {expenseBreakdown.length > 0 && (
-                <Card style={styles.chartCard}>
-                  <Text style={styles.chartLabel}>Répartition</Text>
-                  <DonutChart
-                    data={expenseBreakdown}
-                    size={140}
-                    strokeWidth={22}
-                    centerValue={formatNumber(totalExpenses, 0)}
-                    centerLabel="CHF"
-                  />
-                  <View style={styles.legendGrid}>
-                    {expenseBreakdown.slice(0, 4).map((item, idx) => (
-                      <View key={idx} style={styles.legendItem}>
-                        <View style={[styles.legendDot, { backgroundColor: item.color }]} />
-                        <Text style={styles.legendText} numberOfLines={1}>{item.label}</Text>
-                      </View>
-                    ))}
-                  </View>
-                </Card>
-              )}
-
-              {/* Monthly Bars */}
-              <Card style={styles.chartCard}>
-                <Text style={styles.chartLabel}>Tendance 6 mois</Text>
-                <MiniBarChart data={monthlyTrend} height={110} barWidth={24} />
-              </Card>
-            </View>
-
-            {/* Budget Rings */}
-            {budgets.length > 0 && (
-              <Card style={styles.ringsCard}>
-                <Text style={styles.chartLabel}>Budgets</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  <View style={styles.ringsRow}>
-                    {budgets.map(b => {
-                      const spent = transactions
-                        .filter(t => t.category === b.category)
-                        .reduce((sum, t) => sum + t.amount, 0);
-                      const pc = pct(spent, b.limit);
-                      return (
-                        <RingProgress
-                          key={b.id}
-                          value={pc}
-                          size={70}
-                          strokeWidth={7}
-                          color={pc > 100 ? Colors.error : pc > 80 ? Colors.warning : getCategoryColor(b.category)}
-                          label={getCategoryName(b.category)}
-                          sublabel={`${formatNumber(spent)}/${formatNumber(b.limit)}`}
-                        />
-                      );
-                    })}
-                  </View>
-                </ScrollView>
-              </Card>
-            )}
-          </>
-        )}
-
-        {/* Quick Actions */}
-        <Text style={styles.sectionTitle}>Actions rapides</Text>
-        <View style={styles.actionsGrid}>
-          {[
-            { icon: 'arrow-up', label: 'Revenus', sub: 'flux', color: Colors.success, route: '/more/analytics' },
-            { icon: 'arrow-down', label: 'Dépenses', sub: 'scan IA', color: Colors.error, route: '/expenses' },
-            { icon: 'flag', label: 'Épargne', sub: 'objectifs', color: Colors.primary, route: '/savings' },
-            { icon: 'wallet', label: 'Budgets', sub: 'enveloppes', color: Colors.warning, route: '/more/budgets' },
-            { icon: 'refresh', label: 'Récurrents', sub: 'abonnements', color: Colors.purple, route: '/more/recurring' },
-            { icon: 'calculator', label: 'Impôts', sub: 'Swiss Tax', color: Colors.info, route: '/more/tax-optimizer' },
-          ].map((action, idx) => (
-            <TouchableOpacity
-              key={idx}
-              style={[styles.actionItem, { borderColor: `${action.color}30` }]}
-              onPress={() => router.push(action.route as any)}
-            >
-              <View style={[styles.actionIcon, { backgroundColor: `${action.color}15` }]}>
-                <Ionicons name={action.icon as any} size={20} color={action.color} />
-              </View>
-              <Text style={styles.actionLabel}>{action.label}</Text>
-              <Text style={styles.actionSub}>{action.sub}</Text>
-            </TouchableOpacity>
-          ))}
         </View>
 
-        {/* Recurring Strip */}
-        {recurringExpenses.filter(r => r.active).length > 0 && (
-          <Card style={styles.recurringCard}>
-            <View style={styles.recurringHeader}>
-              <Text style={styles.recurringTitle}>🔄 Sorties ce mois</Text>
-              <Text style={styles.recurringAmount}>-{formatNumber(monthlyRecurring, 0)} {CUR}</Text>
-            </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.recurringScroll}>
-              {recurringExpenses.filter(r => r.active).slice(0, 5).map(rec => (
-                <View key={rec.id} style={styles.recurringItem}>
-                  <CategoryIcon category={rec.category} size="sm" />
-                  <Text style={styles.recurringItemTitle} numberOfLines={1}>{rec.title}</Text>
-                  <Text style={styles.recurringItemAmount}>{formatNumber(rec.amount, 0)}</Text>
-                  <Text style={styles.recurringItemDate}>Le {rec.dayOfMonth}</Text>
-                </View>
-              ))}
-            </ScrollView>
-          </Card>
-        )}
+        {/* ─── HERO: Safe to spend card ─── */}
+        <LinearGradient
+          colors={C.gradientPrimary as [string, string]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.hero}
+        >
+          <View style={styles.heroTop}>
+            <Text style={styles.heroLabel}>DISPONIBLE CE MOIS</Text>
+            {isPro && (
+              <View style={styles.proPill}>
+                <Ionicons name="flash" size={10} color="#FFF" />
+                <Text style={styles.proPillText}>PRO</Text>
+              </View>
+            )}
+          </View>
+          <Text style={styles.heroAmount}>
+            {CUR} <Text style={styles.heroAmountBig}>{fmt(available)}</Text>
+          </Text>
 
-        {/* Savings Preview */}
+          <View style={styles.heroProgressBg}>
+            <View
+              style={[
+                styles.heroProgressFill,
+                { width: `${spentPct}%`, backgroundColor: spentPct > 85 ? '#FCA5A5' : 'rgba(255,255,255,0.9)' },
+              ]}
+            />
+          </View>
+          <View style={styles.heroStatsRow}>
+            <View style={styles.heroStat}>
+              <Text style={styles.heroStatLabel}>Revenus</Text>
+              <Text style={styles.heroStatValue}>{CUR} {fmt(monthlyIncome)}</Text>
+            </View>
+            <View style={styles.heroStatDivider} />
+            <View style={styles.heroStat}>
+              <Text style={styles.heroStatLabel}>Dépenses</Text>
+              <Text style={styles.heroStatValue}>{CUR} {fmt(monthExpenses + monthlyRecurring)}</Text>
+            </View>
+          </View>
+        </LinearGradient>
+
+        {/* ─── Quick stats row (today + week) ─── */}
+        <View style={styles.quickStats}>
+          <View style={styles.quickStatCard}>
+            <View style={styles.quickStatIconWrap}>
+              <Ionicons name="today-outline" size={18} color={C.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.quickStatLabel}>Aujourd'hui</Text>
+              <Text style={styles.quickStatValue}>{CUR} {fmt2(todayExpenses)}</Text>
+            </View>
+          </View>
+          <View style={styles.quickStatCard}>
+            <View style={[styles.quickStatIconWrap, { backgroundColor: `${C.orange}25` }]}>
+              <Ionicons name="calendar-outline" size={18} color={C.orange} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.quickStatLabel}>Cette semaine</Text>
+              <Text style={styles.quickStatValue}>{CUR} {fmt(weekExpenses)}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* ─── Quick actions (2x2 grid like Monarch) ─── */}
+        <Text style={styles.sectionTitle}>Actions rapides</Text>
+        <View style={styles.actionsGrid}>
+          <TouchableOpacity
+            style={styles.actionCard}
+            onPress={() => router.push('/scanner-modal' as any)}
+          >
+            <View style={[styles.actionIcon, { backgroundColor: `${C.purple}20` }]}>
+              <Ionicons name="scan" size={22} color={C.purple} />
+            </View>
+            <Text style={styles.actionLabel}>Scanner</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionCard}
+            onPress={() => router.push('/(tabs)/expenses' as any)}
+          >
+            <View style={[styles.actionIcon, { backgroundColor: `${C.error}20` }]}>
+              <Ionicons name="remove-circle" size={22} color={C.error} />
+            </View>
+            <Text style={styles.actionLabel}>Dépense</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionCard}
+            onPress={() => router.push('/(tabs)/savings' as any)}
+          >
+            <View style={[styles.actionIcon, { backgroundColor: `${C.success}20` }]}>
+              <Ionicons name="trending-up" size={22} color={C.success} />
+            </View>
+            <Text style={styles.actionLabel}>Épargne</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionCard}
+            onPress={() => router.push('/more/ai-optimizer' as any)}
+          >
+            <View style={[styles.actionIcon, { backgroundColor: `${C.pink}20` }]}>
+              <Ionicons name="sparkles" size={22} color={C.pink} />
+            </View>
+            <Text style={styles.actionLabel}>Économiser</Text>
+            <View style={styles.newDot} />
+          </TouchableOpacity>
+        </View>
+
+        {/* ─── Savings goal progress (if exists) ─── */}
         {savingsGoals.length > 0 && (
           <>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>🎯 Épargne</Text>
-              <TouchableOpacity onPress={() => router.push('/savings')}>
-                <Text style={styles.sectionAction}>Tout voir →</Text>
+              <Text style={styles.sectionTitle}>Objectifs d'épargne</Text>
+              <TouchableOpacity onPress={() => router.push('/(tabs)/savings' as any)}>
+                <Text style={styles.seeAll}>Voir tout</Text>
               </TouchableOpacity>
             </View>
-            {savingsGoals.slice(0, 2).map(goal => (
-              <Card key={goal.id} style={styles.goalCard}>
-                <View style={styles.goalHeader}>
-                  <Text style={styles.goalEmoji}>{goal.emoji}</Text>
-                  <View style={styles.goalInfo}>
-                    <Text style={styles.goalTitle}>{goal.title}</Text>
-                    <Text style={styles.goalAuto}>{CUR} {formatNumber(goal.autoSave, 0)}/mois</Text>
-                  </View>
-                  <View style={styles.goalAmounts}>
-                    <Text style={styles.goalSaved}>{formatNumber(goal.saved, 0)}</Text>
-                    <Text style={styles.goalTarget}>/ {formatNumber(goal.target, 0)}</Text>
-                  </View>
-                </View>
-                <ProgressBar
-                  value={pct(goal.saved, goal.target)}
-                  color={goal.color}
-                  height={8}
-                  showLabel
+            <View style={styles.savingsCard}>
+              <View style={styles.savingsTop}>
+                <Text style={styles.savingsAmount}>{CUR} {fmt(totalSaved)}</Text>
+                <Text style={styles.savingsTarget}>sur {CUR} {fmt(totalTarget)}</Text>
+              </View>
+              <View style={styles.savingsProgressBg}>
+                <LinearGradient
+                  colors={C.gradientSuccess as [string, string]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={[styles.savingsProgressFill, { width: `${Math.min(100, savingsPct)}%` }]}
                 />
-              </Card>
-            ))}
+              </View>
+              <Text style={styles.savingsPct}>{Math.round(savingsPct)}% atteint</Text>
+            </View>
           </>
         )}
 
-        <View style={{ height: 100 }} />
+        {/* ─── Top categories (budget breakdown this month) ─── */}
+        {topCategories.length > 0 && (
+          <>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Top catégories ce mois</Text>
+              <TouchableOpacity onPress={() => router.push('/(tabs)/expenses' as any)}>
+                <Text style={styles.seeAll}>Voir tout</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.catCard}>
+              {topCategories.map((c, i) => {
+                const pct = monthExpenses > 0 ? (c.amount / monthExpenses) * 100 : 0;
+                const color = getCategoryColor(c.cat);
+                return (
+                  <View key={c.cat} style={[styles.catRow, i < topCategories.length - 1 && styles.catRowBorder]}>
+                    <CategoryIcon category={c.cat} size="sm" />
+                    <View style={styles.catMiddle}>
+                      <Text style={styles.catName}>{getCategoryName(c.cat)}</Text>
+                      <View style={styles.catBarBg}>
+                        <View style={[styles.catBarFill, { width: `${pct}%`, backgroundColor: color }]} />
+                      </View>
+                    </View>
+                    <View style={styles.catAmountBox}>
+                      <Text style={styles.catAmount}>{CUR} {fmt(c.amount)}</Text>
+                      <Text style={styles.catPct}>{Math.round(pct)}%</Text>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          </>
+        )}
+
+        {/* ─── Upcoming bills ─── */}
+        {upcomingBills.length > 0 && (
+          <>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Prochains paiements</Text>
+              <TouchableOpacity onPress={() => router.push('/more/recurring' as any)}>
+                <Text style={styles.seeAll}>Voir tout</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.billsCard}>
+              {upcomingBills.map((b, i) => (
+                <View key={b.id} style={[styles.billRow, i < upcomingBills.length - 1 && styles.billRowBorder]}>
+                  <View style={[styles.billDateBox, { backgroundColor: `${C.warning}20` }]}>
+                    <Text style={[styles.billDateBig, { color: C.warning }]}>{b.dayOfMonth}</Text>
+                    <Text style={[styles.billDateSmall, { color: C.warning }]}>
+                      {b.daysUntil === 0 ? 'auj.' : `+${b.daysUntil}j`}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.billName}>{b.title}</Text>
+                    <Text style={styles.billCategory}>{getCategoryName(b.category)}</Text>
+                  </View>
+                  <Text style={styles.billAmount}>{CUR} {fmt(b.amount)}</Text>
+                </View>
+              ))}
+            </View>
+          </>
+        )}
+
+        {/* ─── Recent transactions ─── */}
+        {recentTx.length > 0 && (
+          <>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Transactions récentes</Text>
+              <TouchableOpacity onPress={() => router.push('/(tabs)/expenses' as any)}>
+                <Text style={styles.seeAll}>Voir tout</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.recentCard}>
+              {recentTx.map((t, i) => {
+                const d = new Date(t.date);
+                const isToday = d.toDateString() === new Date().toDateString();
+                const dateLabel = isToday
+                  ? "Aujourd'hui"
+                  : d.toLocaleDateString('fr-CH', { day: 'numeric', month: 'short' });
+                return (
+                  <View key={t.id} style={[styles.recentRow, i < recentTx.length - 1 && styles.recentRowBorder]}>
+                    <CategoryIcon category={t.category} size="sm" />
+                    <View style={styles.recentMiddle}>
+                      <Text style={styles.recentTitle}>{t.title}</Text>
+                      <Text style={styles.recentMeta}>
+                        {dateLabel} · {getCategoryName(t.category)}
+                      </Text>
+                    </View>
+                    <Text style={styles.recentAmount}>−{CUR} {fmt2(t.amount)}</Text>
+                  </View>
+                );
+              })}
+            </View>
+          </>
+        )}
+
+        {/* ─── AI insight teaser (if transactions exist) ─── */}
+        {transactions.length >= 5 && (
+          <TouchableOpacity
+            style={styles.aiTeaser}
+            activeOpacity={0.85}
+            onPress={() => router.push('/more/ai-optimizer' as any)}
+          >
+            <LinearGradient
+              colors={['#EC4899', '#8B5CF6']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.aiTeaserGradient}
+            >
+              <Ionicons name="sparkles" size={28} color="#FFF" />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.aiTeaserTitle}>Trouvez des économies</Text>
+                <Text style={styles.aiTeaserSub}>
+                  L'IA analyse vos dépenses et propose des pistes concrètes
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#FFF" />
+            </LinearGradient>
+          </TouchableOpacity>
+        )}
+
+        {/* ─── Empty state: call to action to add first income ─── */}
+        {transactions.length === 0 && incomes.length === 0 && (
+          <View style={styles.emptyBox}>
+            <Ionicons name="rocket-outline" size={48} color={C.primary} />
+            <Text style={styles.emptyTitle}>Bienvenue sur Guardian 🇨🇭</Text>
+            <Text style={styles.emptySub}>
+              Commencez par ajouter votre revenu mensuel pour voir votre budget en temps réel.
+            </Text>
+            <TouchableOpacity
+              style={styles.emptyBtn}
+              onPress={() => router.push('/(tabs)/savings' as any)}
+            >
+              <Text style={styles.emptyBtnText}>Ajouter mon premier revenu</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </ScrollView>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  scroll: {
-    flex: 1,
-  },
-  content: {
-    padding: Spacing.lg,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: Spacing.lg,
-  },
-  greeting: {
-    color: Colors.text,
-    fontSize: FontSizes.xl,
-    fontWeight: FontWeights.bold,
-  },
-  date: {
-    color: Colors.textSecondary,
-    fontSize: FontSizes.sm,
-    marginTop: 2,
-  },
-  notifButton: {
-    position: 'relative',
-    padding: Spacing.sm,
-  },
-  notifBadge: {
-    position: 'absolute',
-    top: 4,
-    right: 4,
-    backgroundColor: Colors.error,
-    borderRadius: 10,
-    minWidth: 18,
-    height: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  notifBadgeText: {
-    color: Colors.text,
-    fontSize: 10,
-    fontWeight: FontWeights.bold,
-  },
-  proBanner: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: `${Colors.primary}12`,
-    borderWidth: 1,
-    borderColor: `${Colors.primary}30`,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.md,
-    marginBottom: Spacing.lg,
-  },
-  proBannerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-  },
-  proBannerText: {
-    color: Colors.textSecondary,
-    fontSize: FontSizes.sm,
-    fontWeight: FontWeights.bold,
-  },
-  proBannerAction: {
-    color: Colors.primary,
-    fontSize: FontSizes.sm,
-    fontWeight: FontWeights.bold,
-  },
-  heroCard: {
-    marginBottom: Spacing.lg,
-  },
-  heroLabel: {
-    color: Colors.textSecondary,
-    fontSize: FontSizes.sm,
-    marginBottom: Spacing.xs,
-  },
-  heroRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  heroAmount: {
-    color: Colors.text,
-    fontSize: FontSizes.xxxl,
-    fontWeight: FontWeights.black,
-  },
-  scoreContainer: {
-    alignItems: 'center',
-    backgroundColor: `${Colors.primary}20`,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.md,
-  },
-  scoreValue: {
-    color: Colors.primary,
-    fontSize: FontSizes.xxl,
-    fontWeight: FontWeights.black,
-  },
-  scoreLabel: {
-    color: Colors.primary,
-    fontSize: FontSizes.xs,
-    fontWeight: FontWeights.bold,
-  },
-  heroTrend: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: Spacing.sm,
-  },
-  heroTrendText: {
-    color: Colors.success,
-    fontSize: FontSizes.sm,
-    fontWeight: FontWeights.semibold,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    marginTop: Spacing.lg,
-    gap: Spacing.sm,
-  },
-  statItem: {
-    flex: 1,
-    backgroundColor: Colors.card,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.sm,
-    alignItems: 'center',
-  },
-  statLabel: {
-    color: Colors.textSecondary,
-    fontSize: FontSizes.xs,
-    marginTop: 4,
-  },
-  statValue: {
-    fontSize: FontSizes.sm,
-    fontWeight: FontWeights.bold,
-    marginTop: 2,
-  },
-  notifsCard: {
-    marginBottom: Spacing.lg,
-    padding: 0,
-    overflow: 'hidden',
-  },
-  notifItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: Spacing.md,
-    gap: Spacing.md,
-  },
-  notifItemBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.cardBorder,
-  },
-  notifIcon: {
-    fontSize: 24,
-  },
-  notifContent: {
-    flex: 1,
-  },
-  notifTitle: {
-    color: Colors.text,
-    fontSize: FontSizes.md,
-    fontWeight: FontWeights.semibold,
-  },
-  notifSubtitle: {
-    color: Colors.textSecondary,
-    fontSize: FontSizes.sm,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.md,
-  },
-  sectionTitle: {
-    color: Colors.text,
-    fontSize: FontSizes.lg,
-    fontWeight: FontWeights.bold,
-    marginBottom: Spacing.md,
-  },
-  chartsRow: {
-    flexDirection: 'row',
-    gap: Spacing.md,
-    marginBottom: Spacing.md,
-  },
-  chartCard: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: Spacing.md,
-  },
-  chartLabel: {
-    color: Colors.textSecondary,
-    fontSize: FontSizes.xs,
-    fontWeight: FontWeights.bold,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: Spacing.md,
-    alignSelf: 'flex-start',
-  },
-  legendGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.sm,
-    marginTop: Spacing.md,
-    justifyContent: 'center',
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  legendDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  legendText: {
-    color: Colors.textTertiary,
-    fontSize: 10,
-    maxWidth: 70,
-  },
-  ringsCard: {
-    marginBottom: Spacing.lg,
-  },
-  ringsRow: {
-    flexDirection: 'row',
-    gap: Spacing.xl,
-    paddingVertical: Spacing.sm,
-  },
-  sectionAction: {
-    color: Colors.primary,
-    fontSize: FontSizes.sm,
-    fontWeight: FontWeights.semibold,
-  },
-  actionsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.md,
-    marginBottom: Spacing.lg,
-  },
-  actionItem: {
-    width: '30%',
-    backgroundColor: Colors.card,
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
-    padding: Spacing.md,
-    alignItems: 'center',
-  },
-  actionIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing.sm,
-  },
-  actionLabel: {
-    color: Colors.text,
-    fontSize: FontSizes.sm,
-    fontWeight: FontWeights.semibold,
-  },
-  actionSub: {
-    color: Colors.textTertiary,
-    fontSize: FontSizes.xs,
-  },
-  recurringCard: {
-    marginBottom: Spacing.lg,
-  },
-  recurringHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.md,
-  },
-  recurringTitle: {
-    color: Colors.text,
-    fontSize: FontSizes.md,
-    fontWeight: FontWeights.semibold,
-  },
-  recurringAmount: {
-    color: Colors.error,
-    fontSize: FontSizes.md,
-    fontWeight: FontWeights.bold,
-  },
-  recurringScroll: {
-    marginHorizontal: -Spacing.sm,
-  },
-  recurringItem: {
-    alignItems: 'center',
-    paddingHorizontal: Spacing.md,
-    width: 80,
-  },
-  recurringItemTitle: {
-    color: Colors.textSecondary,
-    fontSize: FontSizes.xs,
-    marginTop: Spacing.xs,
-    textAlign: 'center',
-  },
-  recurringItemAmount: {
-    color: Colors.text,
-    fontSize: FontSizes.sm,
-    fontWeight: FontWeights.bold,
-  },
-  recurringItemDate: {
-    color: Colors.textTertiary,
-    fontSize: 10,
-  },
-  goalCard: {
-    marginBottom: Spacing.md,
-  },
-  goalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: Spacing.md,
-  },
-  goalEmoji: {
-    fontSize: 32,
-    marginRight: Spacing.md,
-  },
-  goalInfo: {
-    flex: 1,
-  },
-  goalTitle: {
-    color: Colors.text,
-    fontSize: FontSizes.md,
-    fontWeight: FontWeights.semibold,
-  },
-  goalAuto: {
-    color: Colors.textSecondary,
-    fontSize: FontSizes.xs,
-  },
-  goalAmounts: {
-    alignItems: 'flex-end',
-  },
-  goalSaved: {
-    color: Colors.text,
-    fontSize: FontSizes.lg,
-    fontWeight: FontWeights.bold,
-  },
-  goalTarget: {
-    color: Colors.textSecondary,
-    fontSize: FontSizes.xs,
-  },
-});
+const makeStyles = (C: any) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: C.background },
+    scroll: { flex: 1 },
+    content: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm },
+
+    // Header
+    header: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: Spacing.lg },
+    greeting: { color: C.text, fontSize: FontSizes.xl, fontWeight: FontWeights.black },
+    date: { color: C.textSecondary, fontSize: FontSizes.xs, marginTop: 2, textTransform: 'capitalize' },
+    headerBtn: {
+      width: 42, height: 42, borderRadius: 21,
+      backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder,
+      alignItems: 'center', justifyContent: 'center', position: 'relative',
+    },
+    notifDot: {
+      position: 'absolute', top: 2, right: 2, minWidth: 16, height: 16,
+      borderRadius: 8, backgroundColor: C.error,
+      alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4,
+    },
+    notifDotText: { color: '#FFF', fontSize: 10, fontWeight: FontWeights.bold },
+    avatar: {
+      width: 32, height: 32, borderRadius: 16, backgroundColor: C.primary,
+      alignItems: 'center', justifyContent: 'center',
+    },
+    avatarText: { color: '#FFF', fontSize: FontSizes.sm, fontWeight: FontWeights.bold },
+
+    // Hero
+    hero: {
+      borderRadius: BorderRadius.xxl, padding: Spacing.xl, marginBottom: Spacing.md,
+    },
+    heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    heroLabel: {
+      color: 'rgba(255,255,255,0.8)', fontSize: 11, fontWeight: FontWeights.bold,
+      letterSpacing: 1.2, textTransform: 'uppercase',
+    },
+    proPill: {
+      flexDirection: 'row', alignItems: 'center', gap: 3,
+      backgroundColor: 'rgba(255,255,255,0.25)', paddingHorizontal: 8, paddingVertical: 3,
+      borderRadius: 999,
+    },
+    proPillText: { color: '#FFF', fontSize: 9, fontWeight: FontWeights.black, letterSpacing: 0.5 },
+    heroAmount: { color: '#FFF', fontSize: FontSizes.xl, fontWeight: FontWeights.semibold, marginTop: Spacing.sm, opacity: 0.85 },
+    heroAmountBig: { color: '#FFF', fontSize: 44, fontWeight: FontWeights.black, opacity: 1 },
+    heroProgressBg: {
+      height: 6, backgroundColor: 'rgba(255,255,255,0.25)', borderRadius: 999,
+      marginTop: Spacing.lg, overflow: 'hidden',
+    },
+    heroProgressFill: { height: '100%', borderRadius: 999 },
+    heroStatsRow: {
+      flexDirection: 'row', marginTop: Spacing.lg, alignItems: 'center',
+    },
+    heroStat: { flex: 1 },
+    heroStatDivider: { width: 1, height: 28, backgroundColor: 'rgba(255,255,255,0.3)', marginHorizontal: Spacing.md },
+    heroStatLabel: { color: 'rgba(255,255,255,0.8)', fontSize: FontSizes.xs, fontWeight: FontWeights.semibold },
+    heroStatValue: { color: '#FFF', fontSize: FontSizes.md, fontWeight: FontWeights.bold, marginTop: 2 },
+
+    // Quick stats
+    quickStats: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.lg },
+    quickStatCard: {
+      flex: 1, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
+      backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder,
+      borderRadius: BorderRadius.lg, padding: Spacing.md,
+    },
+    quickStatIconWrap: {
+      width: 34, height: 34, borderRadius: 10,
+      backgroundColor: `${C.primary}25`, alignItems: 'center', justifyContent: 'center',
+    },
+    quickStatLabel: { color: C.textSecondary, fontSize: 11, fontWeight: FontWeights.semibold },
+    quickStatValue: { color: C.text, fontSize: FontSizes.md, fontWeight: FontWeights.bold, marginTop: 1 },
+
+    // Sections
+    sectionTitle: { color: C.text, fontSize: FontSizes.lg, fontWeight: FontWeights.bold, marginBottom: Spacing.sm },
+    sectionHeader: {
+      flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+      marginTop: Spacing.lg, marginBottom: Spacing.sm,
+    },
+    seeAll: { color: C.primary, fontSize: FontSizes.sm, fontWeight: FontWeights.semibold },
+
+    // Actions grid
+    actionsGrid: {
+      flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm,
+      marginBottom: Spacing.md,
+    },
+    actionCard: {
+      flex: 1, minWidth: (SCREEN_WIDTH - Spacing.lg * 2 - Spacing.sm) / 4 - 1,
+      backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder,
+      borderRadius: BorderRadius.lg,
+      paddingVertical: Spacing.md, paddingHorizontal: Spacing.xs,
+      alignItems: 'center', position: 'relative',
+    },
+    actionIcon: {
+      width: 44, height: 44, borderRadius: 22,
+      alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.xs,
+    },
+    actionLabel: { color: C.text, fontSize: FontSizes.xs, fontWeight: FontWeights.semibold },
+    newDot: {
+      position: 'absolute', top: 8, right: 10,
+      width: 8, height: 8, borderRadius: 4, backgroundColor: C.error,
+    },
+
+    // Savings
+    savingsCard: {
+      backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder,
+      borderRadius: BorderRadius.lg, padding: Spacing.lg,
+    },
+    savingsTop: { flexDirection: 'row', alignItems: 'baseline', gap: Spacing.sm },
+    savingsAmount: { color: C.text, fontSize: FontSizes.xxl, fontWeight: FontWeights.black },
+    savingsTarget: { color: C.textSecondary, fontSize: FontSizes.sm },
+    savingsProgressBg: {
+      height: 8, backgroundColor: C.cardHover, borderRadius: 999,
+      marginTop: Spacing.md, overflow: 'hidden',
+    },
+    savingsProgressFill: { height: '100%', borderRadius: 999 },
+    savingsPct: { color: C.success, fontSize: FontSizes.xs, fontWeight: FontWeights.bold, marginTop: Spacing.sm },
+
+    // Categories
+    catCard: {
+      backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder,
+      borderRadius: BorderRadius.lg, paddingHorizontal: Spacing.md,
+    },
+    catRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, paddingVertical: Spacing.md },
+    catRowBorder: { borderBottomWidth: 1, borderBottomColor: C.cardBorder },
+    catMiddle: { flex: 1 },
+    catName: { color: C.text, fontSize: FontSizes.sm, fontWeight: FontWeights.semibold, marginBottom: 6 },
+    catBarBg: { height: 5, backgroundColor: C.cardHover, borderRadius: 999, overflow: 'hidden' },
+    catBarFill: { height: '100%', borderRadius: 999 },
+    catAmountBox: { alignItems: 'flex-end' },
+    catAmount: { color: C.text, fontSize: FontSizes.sm, fontWeight: FontWeights.bold },
+    catPct: { color: C.textTertiary, fontSize: 11, marginTop: 1 },
+
+    // Bills
+    billsCard: {
+      backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder,
+      borderRadius: BorderRadius.lg, paddingHorizontal: Spacing.md,
+    },
+    billRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, paddingVertical: Spacing.md },
+    billRowBorder: { borderBottomWidth: 1, borderBottomColor: C.cardBorder },
+    billDateBox: {
+      width: 48, height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center',
+    },
+    billDateBig: { fontSize: FontSizes.lg, fontWeight: FontWeights.black, lineHeight: 20 },
+    billDateSmall: { fontSize: 10, fontWeight: FontWeights.bold, marginTop: 1 },
+    billName: { color: C.text, fontSize: FontSizes.sm, fontWeight: FontWeights.semibold },
+    billCategory: { color: C.textTertiary, fontSize: 11, marginTop: 1 },
+    billAmount: { color: C.text, fontSize: FontSizes.md, fontWeight: FontWeights.bold },
+
+    // Recent
+    recentCard: {
+      backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder,
+      borderRadius: BorderRadius.lg, paddingHorizontal: Spacing.md,
+    },
+    recentRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, paddingVertical: Spacing.md },
+    recentRowBorder: { borderBottomWidth: 1, borderBottomColor: C.cardBorder },
+    recentMiddle: { flex: 1 },
+    recentTitle: { color: C.text, fontSize: FontSizes.sm, fontWeight: FontWeights.semibold },
+    recentMeta: { color: C.textTertiary, fontSize: 11, marginTop: 1, textTransform: 'capitalize' },
+    recentAmount: { color: C.error, fontSize: FontSizes.sm, fontWeight: FontWeights.bold },
+
+    // AI teaser
+    aiTeaser: { marginTop: Spacing.lg, borderRadius: BorderRadius.xl, overflow: 'hidden' },
+    aiTeaserGradient: {
+      padding: Spacing.lg, flexDirection: 'row', alignItems: 'center', gap: Spacing.md,
+    },
+    aiTeaserTitle: { color: '#FFF', fontSize: FontSizes.md, fontWeight: FontWeights.bold },
+    aiTeaserSub: { color: 'rgba(255,255,255,0.9)', fontSize: FontSizes.xs, marginTop: 2 },
+
+    // Empty state
+    emptyBox: {
+      alignItems: 'center', paddingVertical: Spacing.xxxl, paddingHorizontal: Spacing.lg,
+      backgroundColor: C.card, borderRadius: BorderRadius.xl, marginTop: Spacing.lg,
+      borderWidth: 1, borderColor: C.cardBorder,
+    },
+    emptyTitle: { color: C.text, fontSize: FontSizes.lg, fontWeight: FontWeights.bold, marginTop: Spacing.md },
+    emptySub: {
+      color: C.textSecondary, fontSize: FontSizes.sm, textAlign: 'center',
+      marginTop: Spacing.sm, lineHeight: 20, marginBottom: Spacing.lg,
+    },
+    emptyBtn: {
+      backgroundColor: C.primary, paddingVertical: Spacing.md, paddingHorizontal: Spacing.xl,
+      borderRadius: BorderRadius.lg,
+    },
+    emptyBtnText: { color: '#FFF', fontSize: FontSizes.sm, fontWeight: FontWeights.bold },
+  });

@@ -245,6 +245,30 @@ frontend:
         agent: "main"
         comment: "NEW endpoint using emergentintegrations (gpt-4o-mini) analyzing user's financial snapshot (income, transactions, recurring expenses, contracts, debts) and returning structured JSON with: summary, monthly_potential, yearly_potential, proposals[{title, category, current_monthly, potential_saving_monthly/yearly, effort, action, explanation}], tips[]. Includes heuristic fallback when LLM fails. Tested: VD/7500/month with Netflix/Spotify/LAMal Swica/car insurance + high-rate debt → CHF 238/mo = CHF 2856/yr savings across 4 proposals (LAMal comparison, Netflix cancel, debt consolidation, Spotify reduction). All schema fields populated correctly. Verified via curl."
 
+  - task: "Home Screen Redesign (Monarch/Copilot/YNAB-inspired)"
+    implemented: true
+    working: "NA"
+    file: "app/frontend/app/(tabs)/index.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "COMPLETE REDESIGN: hero 'Safe to spend' gradient card with inline progress bar + Revenus/Dépenses split; quick-stats row (today + week); 2x2 quick-actions grid (Scanner, Dépense, Épargne, Économiser IA); savings goal progress; top-4 categories with inline bars + %; upcoming bills with date boxes; recent 5 transactions; AI teaser banner; empty state for brand-new users. Uses useTheme() for live dark/light adaptation. Bundle compiles 1593 modules."
+
+  - task: "Legal pages (Privacy, Terms, Disclaimer, Sources, Licenses)"
+    implemented: true
+    working: "NA"
+    file: "app/frontend/app/more/legal.tsx + /app/more/legal/*.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "6 new screens + Stack layout: /more/legal (hub), /more/legal/privacy (nLPD+RGPD compliant), /more/legal/terms (CGU), /more/legal/disclaimer (Limitation of liability protecting publisher from claims about LAMal/tax calcs), /more/legal/sources (OFSP, Priminfo, AFC, BNS attribution), /more/legal/licenses (open source). All FR. All pages use useTheme() for dark/light. Linked from More menu (Paramètres section). All routes return HTTP 200. Required for App Store / Play Store submission."
+
   - task: "Automated Cloud Sync (login + foreground pull + background push)"
     implemented: true
     working: "NA"

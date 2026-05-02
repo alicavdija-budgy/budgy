@@ -10,9 +10,9 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
-import { useTheme } from '../../src/hooks/useTheme';
-import { Card } from '../../src/components/ui';
+import { BorderRadius, Spacing, FontSizes, FontWeights } from '../../../src/constants/theme';
+import { useTheme } from '../../../src/hooks/useTheme';
+import { Card } from '../../../src/components/ui';
 
 export default function LegalScreen() {
   const insets = useSafeAreaInsets();

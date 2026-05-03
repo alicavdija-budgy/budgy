@@ -1,17 +1,14 @@
 /**
  * BUDGY - Animated Splash Screen
- * Premium violet→cyan gradient with logo pulse
- * Optional: shows before home for 1.5s on cold start
+ * Displays the official Budgy icon on the brand-navy background.
  */
 
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { View, Text, StyleSheet, Image } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
-  withSequence,
   withRepeat,
   Easing,
 } from 'react-native-reanimated';
@@ -19,13 +16,13 @@ import Animated, {
 export default function Splash({ onDone }: { onDone?: () => void }) {
   const scale = useSharedValue(0.6);
   const opacity = useSharedValue(0);
-  const glow = useSharedValue(0.3);
+  const glow = useSharedValue(0.25);
 
   useEffect(() => {
     scale.value = withTiming(1, { duration: 800, easing: Easing.out(Easing.back(1.5)) });
     opacity.value = withTiming(1, { duration: 600 });
     glow.value = withRepeat(
-      withTiming(0.7, { duration: 1400, easing: Easing.inOut(Easing.quad) }),
+      withTiming(0.55, { duration: 1400, easing: Easing.inOut(Easing.quad) }),
       -1,
       true
     );
@@ -40,21 +37,18 @@ export default function Splash({ onDone }: { onDone?: () => void }) {
   const glowStyle = useAnimatedStyle(() => ({ opacity: glow.value }));
 
   return (
-    <LinearGradient
-      colors={['#7C3AED', '#6366F1', '#22D3EE']}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.container}
-    >
+    <View style={styles.container}>
       <Animated.View style={[styles.glow, glowStyle]} />
       <Animated.View style={[styles.logoWrap, logoStyle]}>
-        <View style={styles.logoCircle}>
-          <Text style={styles.logoB}>B</Text>
-        </View>
+        <Image
+          source={require('../assets/images/icon.png')}
+          style={styles.icon}
+          resizeMode="contain"
+        />
         <Text style={styles.name}>Budgy</Text>
         <Text style={styles.tag}>Vos finances, en toute sérénité 🇨🇭</Text>
       </Animated.View>
-    </LinearGradient>
+    </View>
   );
 }
 
@@ -63,27 +57,23 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#0E1530',
   },
   glow: {
     position: 'absolute',
-    width: 400, height: 400, borderRadius: 200,
-    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    width: 340,
+    height: 340,
+    borderRadius: 170,
+    backgroundColor: 'rgba(52, 211, 153, 0.18)',
   },
   logoWrap: {
     alignItems: 'center',
   },
-  logoCircle: {
-    width: 110, height: 110, borderRadius: 55,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderWidth: 2, borderColor: 'rgba(255,255,255,0.35)',
-    alignItems: 'center', justifyContent: 'center',
-    marginBottom: 24,
-  },
-  logoB: {
-    color: '#FFF',
-    fontSize: 62,
-    fontWeight: '900',
-    letterSpacing: -2,
+  icon: {
+    width: 140,
+    height: 140,
+    borderRadius: 32,
+    marginBottom: 22,
   },
   name: {
     color: '#FFF',
@@ -92,10 +82,10 @@ const styles = StyleSheet.create({
     letterSpacing: -1.5,
   },
   tag: {
-    color: 'rgba(255,255,255,0.9)',
+    color: 'rgba(255,255,255,0.85)',
     fontSize: 14,
     fontWeight: '600',
-    marginTop: 8,
+    marginTop: 6,
     letterSpacing: 0.3,
   },
 });

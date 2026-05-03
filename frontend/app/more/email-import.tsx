@@ -1,5 +1,5 @@
 /**
- * GUARDIAN MONEY CHF - Email Invoice Auto-Import
+ * BUDGY - Email Invoice Auto-Import
  * Paste an email content -> AI parses it -> saved as Invoice
  * Also shows the dedicated forwarding address (mocked).
  */
@@ -44,7 +44,7 @@ export default function EmailImportScreen() {
     .replace(/[@.+]/g, '-')
     .toLowerCase()
     .slice(0, 24);
-  const forwardingAddress = `${fwdSlug}@invoice.guardian-money.ch`;
+  const forwardingAddress = `${fwdSlug}@invoice.budgy.ch`;
 
   const copyAddress = async () => {
     try {
@@ -57,7 +57,7 @@ export default function EmailImportScreen() {
 
   const parseEmail = async () => {
     if (!content.trim() || content.trim().length < 20) {
-      Alert.alert('Contenu trop court', 'Collez le contenu complet de l\u2019email.');
+      Alert.alert('Contenu trop court', 'Collez le contenu complet de l’email.');
       return;
     }
     setParsing(true);
@@ -72,10 +72,10 @@ export default function EmailImportScreen() {
       if (data.success) {
         setResult(data);
       } else {
-        Alert.alert('\u00c9chec', data.error || 'Impossible de parser l\u2019email.');
+        Alert.alert('Échec', data.error || 'Impossible de parser l’email.');
       }
     } catch (e: any) {
-      Alert.alert('Erreur', e?.message || 'R\u00e9seau');
+      Alert.alert('Erreur', e?.message || 'Réseau');
     } finally {
       setParsing(false);
     }
@@ -98,7 +98,7 @@ export default function EmailImportScreen() {
       source: 'email',
       createdAt: Date.now(),
     });
-    Alert.alert('Facture import\u00e9e', 'Retrouvez-la dans Plus \u2192 Factures.');
+    Alert.alert('Facture importée', 'Retrouvez-la dans Plus → Factures.');
     setSubject('');
     setFrom('');
     setContent('');
@@ -132,7 +132,7 @@ export default function EmailImportScreen() {
           <Text style={styles.fwdTitle}>Votre adresse de transfert</Text>
           <Text style={styles.fwdAddress}>{forwardingAddress}</Text>
           <Text style={styles.fwdDesc}>
-            Transf\u00e9rez vos factures \u00e0 cette adresse. Elles appara\u00eetront automatiquement dans vos Factures (P1 \u2014 mode simul\u00e9, copiez/collez ci-dessous en attendant).
+            Transférez vos factures à cette adresse. Elles apparaîtront automatiquement dans vos Factures (mode simulé en bêta — copiez/collez ci-dessous en attendant).
           </Text>
           <TouchableOpacity style={styles.fwdButton} onPress={copyAddress}>
             <Ionicons name="copy-outline" size={16} color={Colors.text} />
@@ -140,8 +140,8 @@ export default function EmailImportScreen() {
           </TouchableOpacity>
         </LinearGradient>
 
-        <Text style={styles.sectionTitle}>Coller le contenu d\u2019un email</Text>
-        <Text style={styles.sectionSub}>L\u2019IA extrait montant, \u00e9metteur, IBAN, ch\u00e9ance et r\u00e9f\u00e9rence.</Text>
+        <Text style={styles.sectionTitle}>Coller le contenu d’un email</Text>
+        <Text style={styles.sectionSub}>L’IA extrait montant, émetteur, IBAN, échéance et référence.</Text>
 
         <TextInput
           style={styles.input}
@@ -163,13 +163,13 @@ export default function EmailImportScreen() {
           style={[styles.input, styles.textArea]}
           value={content}
           onChangeText={setContent}
-          placeholder="Coller ici le contenu complet de l\u2019email (texte ou HTML)..."
+          placeholder="Coller ici le contenu complet de l’email (texte ou HTML)..."
           placeholderTextColor={Colors.textTertiary}
           multiline
         />
 
         <Button
-          title={parsing ? 'Analyse...' : 'Analyser avec l\u2019IA'}
+          title={parsing ? 'Analyse...' : 'Analyser avec l’IA'}
           onPress={parseEmail}
           loading={parsing}
           fullWidth
@@ -187,9 +187,9 @@ export default function EmailImportScreen() {
 
         {result && (
           <Card style={styles.resultCard}>
-            <Text style={styles.resultTitle}>R\u00e9sultat</Text>
+            <Text style={styles.resultTitle}>Résultat</Text>
             <View style={styles.resultRow}>
-              <Text style={styles.resultLabel}>\u00c9metteur</Text>
+              <Text style={styles.resultLabel}>Émetteur</Text>
               <Text style={styles.resultValue}>{result.issuer || '-'}</Text>
             </View>
             <View style={styles.resultRow}>
@@ -203,7 +203,7 @@ export default function EmailImportScreen() {
               </Text>
             </View>
             <View style={styles.resultRow}>
-              <Text style={styles.resultLabel}>\u00c9ch\u00e9ance</Text>
+              <Text style={styles.resultLabel}>Échéance</Text>
               <Text style={styles.resultValue}>{result.due_date || '-'}</Text>
             </View>
             {result.iban && (
@@ -214,7 +214,7 @@ export default function EmailImportScreen() {
             )}
             {result.reference && (
               <View style={styles.resultRow}>
-                <Text style={styles.resultLabel}>R\u00e9f\u00e9rence</Text>
+                <Text style={styles.resultLabel}>Référence</Text>
                 <Text style={[styles.resultValue, { fontSize: FontSizes.xs }]}>{result.reference}</Text>
               </View>
             )}

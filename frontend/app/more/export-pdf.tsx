@@ -117,7 +117,7 @@ export default function ExportPDFScreen() {
         <Card style={styles.previewCard}>
           <View style={styles.previewHeader}>
             <Ionicons name="flash" size={24} color={Colors.primary} />
-            <Text style={styles.previewTitle}>GUARDIAN MONEY</Text>
+            <Text style={styles.previewTitle}>BUDGY</Text>
           </View>
           <Text style={styles.previewSubtitle}>Note de frais — {new Date().toLocaleDateString('fr-CH', { month: 'long', year: 'numeric' })}</Text>
           <View style={styles.previewMeta}>

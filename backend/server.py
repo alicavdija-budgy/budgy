@@ -177,7 +177,7 @@ async def export_pdf(req: PDFExportRequest):
 <body>
   <div class="header">
     <div>
-      <div class="logo">⚡ GUARDIAN MONEY</div>
+      <div class="logo">⚡ BUDGY</div>
       <div class="logo-sub">Note de frais professionnels</div>
     </div>
     <div class="info">

@@ -28,10 +28,10 @@ import { formatNumber } from '../../src/utils/calculations';
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:8001';
 
 const HOUSEHOLD_OPTIONS = [
-  { id: 'single', emoji: '\ud83d\udc64', label: 'C\u00e9libataire' },
-  { id: 'couple', emoji: '\ud83d\udc6b', label: 'Couple' },
-  { id: 'family', emoji: '\ud83d\udc68\u200d\ud83d\udc69\u200d\ud83d\udc67', label: 'Famille' },
-  { id: 'single_parent', emoji: '\ud83d\udc69\u200d\ud83d\udc66', label: 'Parent solo' },
+  { id: 'single', emoji: '👤', label: 'Célibataire' },
+  { id: 'couple', emoji: '👫', label: 'Couple' },
+  { id: 'family', emoji: '👨‍👩‍👧', label: 'Famille' },
+  { id: 'single_parent', emoji: '👩‍👦', label: 'Parent solo' },
 ] as const;
 
 export default function LamalSubsidyScreen() {
@@ -95,7 +95,7 @@ export default function LamalSubsidyScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <Text style={styles.intro}>
-          Estimez vos droits aux subsides cantonaux d\u2019assurance-maladie selon votre revenu, canton et situation familiale.
+          Estimez vos droits aux subsides cantonaux d’assurance-maladie selon votre revenu, canton et situation familiale.
         </Text>
 
         {/* Canton */}
@@ -157,7 +157,7 @@ export default function LamalSubsidyScreen() {
 
         {(household === 'family' || household === 'single_parent') && (
           <>
-            <Text style={styles.sectionLabel}>Nombre d\u2019enfants</Text>
+            <Text style={styles.sectionLabel}>Nombre d’enfants</Text>
             <View style={styles.counterRow}>
               <TouchableOpacity
                 style={styles.counterBtn}
@@ -221,7 +221,7 @@ export default function LamalSubsidyScreen() {
                 color={Colors.text}
               />
               <Text style={styles.resultTitle}>
-                {result.eligible ? 'Vous \u00eates \u00e9ligible !' : 'Pas de subside attendu'}
+                {result.eligible ? 'Vous êtes éligible !' : 'Pas de subside attendu'}
               </Text>
               {result.eligible && (
                 <>
@@ -233,7 +233,7 @@ export default function LamalSubsidyScreen() {
                   </Text>
                   {result.final_premium > 0 && (
                     <View style={styles.savingsBox}>
-                      <Text style={styles.savingsLabel}>Prime apr\u00e8s subside</Text>
+                      <Text style={styles.savingsLabel}>Prime après subside</Text>
                       <Text style={styles.savingsValue}>
                         CHF {formatNumber(result.final_premium)}/mois
                       </Text>
@@ -245,9 +245,9 @@ export default function LamalSubsidyScreen() {
             </LinearGradient>
 
             <Card style={{ marginTop: Spacing.md, padding: Spacing.lg }}>
-              <Text style={styles.tipTitle}>\ud83d\udca1 Comment demander ?</Text>
+              <Text style={styles.tipTitle}>💡 Comment demander ?</Text>
               <Text style={styles.tipText}>
-                Adressez-vous \u00e0 l\u2019Office cantonal d\u2019assurance-maladie ({canton}). Pr\u00e9parez votre derni\u00e8re d\u00e9cision de taxation et un justificatif d\u2019affiliation.
+                Adressez-vous à l’Office cantonal d’assurance-maladie ({canton}). Préparez votre dernière décision de taxation et un justificatif d’affiliation.
               </Text>
             </Card>
           </View>

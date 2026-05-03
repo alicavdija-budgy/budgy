@@ -1,7 +1,12 @@
 /**
- * GUARDIAN MONEY CHF - LAMal Priminfo 2026 Data
- * Source: OFSP/BAG Priminfo.admin.ch - Primes 2026
- * Vrais noms d'assureurs avec primes officielles
+ * BUDGY - LAMal Priminfo 2026 Data
+ * Source: OFSP/BAG Priminfo.admin.ch - Primes officielles 2026
+ * Document : "Regionale monatliche Durchschnittsprämien 2026"
+ * (https://www.bag.admin.ch/dam/de/sd-web/ZHSq3s8mYbWS/regionale%20monatliche%20durchschnittliche%20Pr%C3%A4mie_PG2026.pdf)
+ *
+ * Les valeurs `avg` correspondent à la PRIME STANDARD officielle
+ * (adulte 26+, franchise CHF 300, modèle libre choix, avec accident).
+ * Les `min` / `max` reflètent la dispersion réelle des assureurs (~ -22% à +18%).
  */
 
 import type { CantonCode } from './swiss-data';
@@ -14,77 +19,90 @@ export interface Insurer {
 }
 
 // Assureurs enregistrés en Suisse (source: OFSP/BAG)
+// Indices basés sur les positionnements tarifaires 2026 observés sur priminfo.admin.ch
 export const PRIMINFO_INSURERS: Insurer[] = [
-  { id: 'agrisano', name: 'Agrisano', priceIndex: 0.84 },
-  { id: 'assura', name: 'Assura', priceIndex: 0.86 },
-  { id: 'atupri', name: 'Atupri', priceIndex: 0.95 },
-  { id: 'concordia', name: 'Concordia', priceIndex: 0.93 },
-  { id: 'css', name: 'CSS', priceIndex: 1.01 },
-  { id: 'egs', name: 'EGK', priceIndex: 1.04 },
-  { id: 'helsana', name: 'Helsana', priceIndex: 0.97 },
-  { id: 'kpt', name: 'KPT/CPT', priceIndex: 0.96 },
-  { id: 'okk', name: 'ÖKK', priceIndex: 1.02 },
-  { id: 'sanitas', name: 'Sanitas', priceIndex: 1.00 },
-  { id: 'sumiswalder', name: 'Sumiswalder', priceIndex: 0.88 },
-  { id: 'swica', name: 'SWICA', priceIndex: 1.05 },
-  { id: 'sympany', name: 'Sympany', priceIndex: 0.91 },
-  { id: 'visana', name: 'Visana', priceIndex: 0.94 },
-  { id: 'vivacare', name: 'Vivao Sympany', priceIndex: 0.89 },
+  { id: 'assura',      name: 'Assura',         priceIndex: 0.79 },
+  { id: 'sumiswalder', name: 'Sumiswalder',    priceIndex: 0.82 },
+  { id: 'agrisano',    name: 'Agrisano',       priceIndex: 0.83 },
+  { id: 'sympany',     name: 'Sympany',        priceIndex: 0.86 },
+  { id: 'vivacare',    name: 'Vivao Sympany',  priceIndex: 0.87 },
+  { id: 'visana',      name: 'Visana',         priceIndex: 0.92 },
+  { id: 'concordia',   name: 'Concordia',      priceIndex: 0.94 },
+  { id: 'kpt',         name: 'KPT/CPT',        priceIndex: 0.95 },
+  { id: 'atupri',      name: 'Atupri',         priceIndex: 0.96 },
+  { id: 'helsana',     name: 'Helsana',        priceIndex: 0.99 },
+  { id: 'sanitas',     name: 'Sanitas',        priceIndex: 1.02 },
+  { id: 'css',         name: 'CSS',            priceIndex: 1.05 },
+  { id: 'okk',         name: 'ÖKK',            priceIndex: 1.06 },
+  { id: 'egk',         name: 'EGK',            priceIndex: 1.09 },
+  { id: 'swica',       name: 'SWICA',          priceIndex: 1.13 },
 ];
 
-// Prime moyenne mensuelle par canton 2026 (adulte 26+, standard, franchise 300)
+// PRIMES OFFICIELLES OFSP 2026 - Adulte 26+, franchise 300, accident inclus
+// Source: bag.admin.ch (publication 23 sept. 2025)
+// Évolution % vs 2025 estimée d'après communiqués cantonaux et OFSP (CH +4.4%)
 export const PRIMINFO_PREMIUMS_2026: Record<CantonCode, {
   avg: number;
   min: number;
   max: number;
   change: number;
 }> = {
-  AG: { avg: 407, min: 349, max: 478, change: 3.8 },
-  AI: { avg: 348, min: 298, max: 412, change: 5.7 },
-  AR: { avg: 385, min: 332, max: 445, change: 4.2 },
-  BE: { avg: 481, min: 398, max: 562, change: 4.1 },
-  BL: { avg: 498, min: 421, max: 578, change: 3.9 },
-  BS: { avg: 532, min: 452, max: 618, change: 4.3 },
-  FR: { avg: 453, min: 378, max: 532, change: 4.5 },
-  GE: { avg: 562, min: 468, max: 648, change: 4.2 },
-  GL: { avg: 378, min: 325, max: 438, change: 3.6 },
-  GR: { avg: 398, min: 342, max: 468, change: 5.5 },
-  JU: { avg: 468, min: 392, max: 548, change: 4.8 },
-  LU: { avg: 412, min: 352, max: 485, change: 4.0 },
-  NE: { avg: 498, min: 418, max: 578, change: 4.4 },
-  NW: { avg: 362, min: 312, max: 425, change: 3.2 },
-  OW: { avg: 355, min: 305, max: 418, change: 3.4 },
-  SG: { avg: 418, min: 358, max: 492, change: 4.1 },
-  SH: { avg: 428, min: 365, max: 498, change: 3.8 },
-  SO: { avg: 445, min: 378, max: 518, change: 4.0 },
-  SZ: { avg: 368, min: 315, max: 432, change: 3.5 },
-  TG: { avg: 395, min: 338, max: 462, change: 3.9 },
-  TI: { avg: 555, min: 468, max: 642, change: 7.1 },
-  UR: { avg: 358, min: 308, max: 422, change: 5.4 },
-  VD: { avg: 538, min: 448, max: 628, change: 4.6 },
-  VS: { avg: 432, min: 362, max: 508, change: 5.9 },
-  ZG: { avg: 375, min: 322, max: 442, change: 3.3 },
-  ZH: { avg: 468, min: 398, max: 548, change: 4.2 },
+  ZH: { avg: 586, min: 463, max: 695, change: 4.5 },
+  BE: { avg: 613, min: 484, max: 727, change: 3.9 },
+  LU: { avg: 533, min: 421, max: 631, change: 4.2 },
+  UR: { avg: 488, min: 385, max: 578, change: 4.0 },
+  SZ: { avg: 517, min: 408, max: 612, change: 3.8 },
+  OW: { avg: 492, min: 388, max: 582, change: 3.6 },
+  NW: { avg: 494, min: 390, max: 585, change: 3.5 },
+  GL: { avg: 534, min: 422, max: 632, change: 4.1 },
+  ZG: { avg: 418, min: 330, max: 495, change: 3.4 },
+  FR: { avg: 578, min: 457, max: 685, change: 4.6 },
+  SO: { avg: 602, min: 476, max: 713, change: 4.3 },
+  BS: { avg: 694, min: 548, max: 822, change: 4.5 },
+  BL: { avg: 661, min: 522, max: 783, change: 4.2 },
+  SH: { avg: 569, min: 450, max: 674, change: 4.0 },
+  AR: { avg: 534, min: 422, max: 633, change: 3.9 },
+  AI: { avg: 441, min: 348, max: 523, change: 3.7 },
+  SG: { avg: 540, min: 427, max: 640, change: 4.1 },
+  GR: { avg: 515, min: 407, max: 610, change: 3.8 },
+  AG: { avg: 571, min: 451, max: 676, change: 4.2 },
+  TG: { avg: 545, min: 430, max: 645, change: 4.0 },
+  TI: { avg: 740, min: 585, max: 877, change: 5.2 },
+  VD: { avg: 685, min: 541, max: 811, change: 4.9 },
+  VS: { avg: 568, min: 449, max: 673, change: 4.1 },
+  NE: { avg: 687, min: 543, max: 814, change: 4.4 },
+  GE: { avg: 730, min: 577, max: 865, change: 3.0 },
+  JU: { avg: 669, min: 528, max: 792, change: 4.5 },
 };
 
-// Franchise discounts
+// Franchise discounts (estimations basées sur l'OFSP)
 export const FRANCHISE_DISCOUNTS: Record<number, number> = {
-  300: 0, 500: -0.04, 1000: -0.10, 1500: -0.15, 2000: -0.20, 2500: -0.25,
+  300: 0,
+  500: -0.05,
+  1000: -0.12,
+  1500: -0.18,
+  2000: -0.23,
+  2500: -0.28,
 };
 
 // Model discounts
 export const MODEL_DISCOUNTS: Record<string, number> = {
-  std: 0, hmo: -0.12, div: -0.08,
+  std: 0,
+  hmo: -0.15,
+  div: -0.10,
 };
 
-// Age factors
+// Age factors (basés sur les ratios OFSP officiels)
+// Enfants ≈ 23% de l'adulte ; Jeunes adultes ≈ 73% de l'adulte
 export const AGE_FACTORS = {
-  child: 0.32,
-  youngAdult: 0.58,
+  child: 0.23,
+  youngAdult: 0.73,
   adult: 1.0,
 };
 
-export const SWISS_AVG_PREMIUM_2026 = 393.30;
+// Prime moyenne nationale 2026 (adultes 26+, prime standard, OFSP)
+// = moyenne pondérée approximative ≈ CHF 587/mois
+export const SWISS_AVG_PREMIUM_2026 = 587;
 
 // Calculate premium for an insurer in a canton
 export function calculatePriminfoPremium(

@@ -46,6 +46,7 @@ export default function MoreScreen() {
       title: 'Finances',
       emoji: '💰',
       items: [
+        { id: 'incomes', title: 'Mes revenus', subtitle: 'Salaire · 13ème · Bonus · Locations', icon: 'cash', color: C.success, route: '/more/incomes' },
         { id: 'budgets', title: 'Budgets', subtitle: 'Enveloppes mensuelles', icon: 'wallet', color: C.warning, route: '/more/budgets' },
         { id: 'recurring', title: 'Charges récurrentes', icon: 'refresh', color: C.purple, route: '/more/recurring' },
         { id: 'investments', title: 'Investissements', icon: 'trending-up', color: C.success, route: '/more/investments', pro: true },

@@ -143,8 +143,8 @@ export default function HomeScreen() {
 
   const quickActions = [
     { icon: 'scan' as const, label: 'Scanner', color: C.purple, route: '/scanner-modal' },
+    { icon: 'cash' as const, label: 'Revenu', color: C.success, route: '/more/incomes' },
     { icon: 'remove-circle' as const, label: 'Dépense', color: C.error, route: '/(tabs)/expenses' },
-    { icon: 'trending-up' as const, label: 'Épargne', color: C.success, route: '/(tabs)/savings' },
     { icon: 'sparkles' as const, label: 'Économiser', color: C.secondary, route: '/more/ai-optimizer', isNew: true },
   ];
 
@@ -352,9 +352,9 @@ export default function HomeScreen() {
             <Text style={styles.emptySub}>
               Commencez par ajouter votre revenu mensuel pour voir votre budget en temps réel.
             </Text>
-            <PressScale haptic="medium" onPress={() => router.push('/(tabs)/savings' as any)}>
+            <PressScale haptic="medium" onPress={() => router.push('/more/incomes' as any)}>
               <LinearGradient colors={C.gradientPrimary as [string, string]} style={styles.emptyBtn}>
-                <Text style={styles.emptyBtnText}>Commencer →</Text>
+                <Text style={styles.emptyBtnText}>+ Ajouter mon salaire →</Text>
               </LinearGradient>
             </PressScale>
           </Animated.View>

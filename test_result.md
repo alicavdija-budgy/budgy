@@ -245,7 +245,18 @@ frontend:
         agent: "main"
         comment: "NEW endpoint using emergentintegrations (gpt-4o-mini) analyzing user's financial snapshot (income, transactions, recurring expenses, contracts, debts) and returning structured JSON with: summary, monthly_potential, yearly_potential, proposals[{title, category, current_monthly, potential_saving_monthly/yearly, effort, action, explanation}], tips[]. Includes heuristic fallback when LLM fails. Tested: VD/7500/month with Netflix/Spotify/LAMal Swica/car insurance + high-rate debt → CHF 238/mo = CHF 2856/yr savings across 4 proposals (LAMal comparison, Netflix cancel, debt consolidation, Spotify reduction). All schema fields populated correctly. Verified via curl."
 
-  - task: "CRITICAL FIX - iPhone auto-close crash (GestureHandlerRootView + AnimatedNumber + confetti trigger)"
+  - task: "INCOMES MANAGEMENT + BRAND LOGOS (100+ Swiss brands)"
+    implemented: true
+    working: "NA"
+    file: "app/frontend/app/more/incomes.tsx (NEW), app/frontend/src/data/swiss-brands.ts (NEW), app/frontend/src/components/BrandLogo.tsx (NEW)"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "(1) NEW /more/incomes screen: full CRUD for salary/freelance/rental/investment/bonus/side income. Hero gradient card (green→cyan) showing monthly + yearly totals side-by-side. 7 income types (💼🧑‍💻🏠📈🎁✨💰). Quick-add suggestions for empty state. Frequency (monthly/quarterly/yearly) + nature (recurring/occasional) segments. Amount-equivalent display (e.g. 'Salary CHF 78000/yr ≈ CHF 6500/mo'). Linked from More → Finances (top of list) AND Home empty state button '+ Ajouter mon salaire' AND Home quick-action 💰 Revenu. (2) NEW swiss-brands.ts: 100+ brands database (Migros/Coop/Denner/Lidl/Aldi/Manor/Spar/Volg/Landi/IKEA + McDo/Starbucks/BK/Subway/KFC + Swisscom/Sunrise/Salt/Yallo/Wingo/Lebara + Netflix/Spotify/Disney+/Apple Music/Apple TV+/YouTube/Prime/HBO/DAZN + CSS/Helsana/Swica/Sanitas/Concordia/Groupe Mutuel/Assura/Visana/KPT/ÖKK/Atupri/EGK/Sympany + AXA/Zurich/Mobilière/Generali/TCS/Allianz + UBS/CS/PostFinance/Raiffeisen/BCV/Revolut/Yuh/Neon/TWINT + CFF/TPG/TL/VBZ/Uber/Mobility/Avia/Shell/BP/Migrol + Amavita/Benu/Sun Store + H&M/Zara/C&A/Uniqlo/Chicorée/Nike/Adidas/Ochsner + Apple/Digitec/Galaxus/MediaMarkt/Interdiscount/Fust + SIG/EWZ/Romande Energie/Billag). Each brand: detection keywords + brand color + contrast text color + initials + emoji + category. findBrand(text) auto-detects from transaction name. (3) NEW BrandLogo component: colored circular tile (32-56px) with brand color + initials, emoji badge in corner. Legally safe (colored initials, not trademarked logos). Integrated in /(tabs)/expenses.tsx (both transaction views) and /more/recurring.tsx. All routes HTTP 200."
+
     implemented: true
     working: "NA"
     file: "app/frontend/app/_layout.tsx, app/frontend/src/components/AnimatedNumber.tsx, app/frontend/app/(tabs)/savings.tsx"

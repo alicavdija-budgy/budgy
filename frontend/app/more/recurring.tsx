@@ -23,6 +23,7 @@ import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src
 import { useStore } from '../../src/stores/useStore';
 import { Card, Button, EmptyState } from '../../src/components/ui';
 import { CategoryIcon, getCategoryName, getCategoryColor } from '../../src/components/CategoryIcon';
+import BrandLogo from '../../src/components/BrandLogo';
 import { formatNumber } from '../../src/utils/calculations';
 import { EXPENSE_CATEGORIES } from '../../src/data/swiss-data';
 
@@ -147,7 +148,7 @@ export default function RecurringScreen() {
               <Animated.View key={rec.id} entering={FadeInDown.duration(300).delay(idx * 40)}>
                 <Card style={[styles.recCard, !rec.active && styles.recCardInactive]}>
                   <View style={styles.recTopRow}>
-                    <CategoryIcon category={rec.category} size="md" />
+                    <BrandLogo merchant={rec.title} size="md" fallbackColor={getCategoryColor(rec.category)} />
                     <View style={styles.recInfo}>
                       <View style={styles.recTitleRow}>
                         <Text style={styles.recTitle}>{rec.title}</Text>

@@ -19,7 +19,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
 import { useStore } from '../../src/stores/useStore';
 import { Card, Button, EmptyState, Badge } from '../../src/components/ui';
-import { CategoryIcon, getCategoryName } from '../../src/components/CategoryIcon';
+import { CategoryIcon, getCategoryName, getCategoryColor } from '../../src/components/CategoryIcon';
+import BrandLogo from '../../src/components/BrandLogo';
 import { formatNumber } from '../../src/utils/calculations';
 import { EXPENSE_CATEGORIES, PAYMENT_METHODS } from '../../src/data/swiss-data';
 
@@ -192,7 +193,7 @@ export default function ExpensesScreen() {
               transactions.map((tx) => (
                 <Card key={tx.id} style={styles.expenseCard}>
                   <View style={styles.expenseRow}>
-                    <CategoryIcon category={tx.category} size="md" />
+                    <BrandLogo merchant={tx.title} size="md" fallbackColor={getCategoryColor(tx.category)} />
                     <View style={styles.expenseInfo}>
                       <Text style={styles.expenseTitle}>{tx.title}</Text>
                       <Text style={styles.expenseDate}>{tx.date}</Text>
@@ -245,7 +246,7 @@ export default function ExpensesScreen() {
               isPro && proExpenses.map((exp) => (
                 <Card key={exp.id} style={styles.expenseCard}>
                   <View style={styles.expenseRow}>
-                    <CategoryIcon category={exp.category} size="md" />
+                    <BrandLogo merchant={exp.title} size="md" fallbackColor={getCategoryColor(exp.category)} />
                     <View style={styles.expenseInfo}>
                       <Text style={styles.expenseTitle}>{exp.title}</Text>
                       <Text style={styles.expenseJustif}>{exp.justification}</Text>

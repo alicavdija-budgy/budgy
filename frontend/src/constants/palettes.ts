@@ -1,8 +1,9 @@
 /**
- * BUDGY - Premium Light & Dark Palettes (Revolut/N26-inspired)
- * Primary: Violet (signature)
- * Secondary: Gold (PRO/CTA accent)
- * Success: Cyan-Emerald (financial positive)
+ * BUDGY - Premium Light & Dark Palettes
+ * Brand identity: Navy + Emerald green + Teal cyan
+ * Primary: Emerald green (#34D399)
+ * Secondary: Teal cyan (#22D3EE) — accents / PRO / CTA
+ * Background: Navy (#0A0F20 / #0E1530)
  */
 
 export interface ThemePalette {
@@ -15,7 +16,7 @@ export interface ThemePalette {
   primary: string;
   primaryLight: string;
   primaryDark: string;
-  secondary: string;       // NEW - gold accent
+  secondary: string;
   secondaryLight: string;
   success: string;
   successLight: string;
@@ -36,78 +37,77 @@ export interface ThemePalette {
   orange: string;
   teal: string;
   cyan: string;
-  // Signature gradients
   gradientPrimary: readonly [string, string, ...string[]];
   gradientSuccess: readonly [string, string];
   gradientWarning: readonly [string, string];
   gradientError: readonly [string, string];
-  gradientHero: readonly [string, string, string];   // 3-stop for hero card
-  gradientGlow: string;                               // glow under hero
+  gradientHero: readonly [string, string, string];
+  gradientGlow: string;
 }
 
-// ─── DARK — signature Budgy ─────────────────────────
+// ─── DARK — signature Budgy (Navy + Emerald) ─────────
 export const darkColors: ThemePalette = {
-  background: '#0A0A14',            // deep near-black with hint of violet
-  backgroundSecondary: '#12121F',
-  backgroundTertiary: '#1C1C2E',
+  background: '#0A0F20',
+  backgroundSecondary: '#0E1530',
+  backgroundTertiary: '#161E40',
   card: 'rgba(255, 255, 255, 0.045)',
   cardHover: 'rgba(255, 255, 255, 0.09)',
   cardBorder: 'rgba(255, 255, 255, 0.08)',
 
-  primary: '#7C3AED',                // bolder violet
-  primaryLight: '#A78BFA',
-  primaryDark: '#5B21B6',
+  primary: '#34D399',                 // Emerald green (Budgy signature)
+  primaryLight: '#6EE7B7',
+  primaryDark: '#10B981',
 
-  secondary: '#FBBF24',              // gold accent (PRO / CTA)
-  secondaryLight: '#FCD34D',
+  secondary: '#22D3EE',               // Teal cyan accent
+  secondaryLight: '#67E8F9',
 
-  success: '#06D6A0',                // mint/cyan-emerald
-  successLight: '#34E5B2',
-  successDark: '#04A97D',
+  success: '#10B981',
+  successLight: '#34D399',
+  successDark: '#059669',
 
-  error: '#F43F5E',                  // rose-red premium
+  error: '#F43F5E',
   errorLight: '#FB7185',
   errorDark: '#E11D48',
 
   warning: '#F59E0B',
   warningLight: '#FBBF24',
-  info: '#22D3EE',                   // cyan
+  info: '#22D3EE',
   infoLight: '#67E8F9',
 
   text: '#FFFFFF',
-  textSecondary: '#9CA3AF',
+  textSecondary: '#B7C0D6',
   textTertiary: '#6B7280',
   textMuted: '#4B5563',
 
-  purple: '#A78BFA',
-  pink: '#F472B6',
+  purple: '#8B5CF6',
+  pink: '#EC4899',
   orange: '#FB923C',
   teal: '#2DD4BF',
   cyan: '#22D3EE',
 
-  gradientPrimary: ['#7C3AED', '#6366F1'],
-  gradientSuccess: ['#06D6A0', '#0891B2'],
+  gradientPrimary: ['#34D399', '#22D3EE'],
+  gradientSuccess: ['#10B981', '#34D399'],
   gradientWarning: ['#FBBF24', '#F59E0B'],
   gradientError: ['#F43F5E', '#E11D48'],
-  gradientHero: ['#7C3AED', '#6366F1', '#22D3EE'],   // violet→indigo→cyan magic
-  gradientGlow: 'rgba(124, 58, 237, 0.35)',
+  gradientHero: ['#0E1530', '#143A2E', '#34D399'],
+  gradientGlow: 'rgba(52, 211, 153, 0.35)',
 };
 
 // ─── LIGHT — soft premium ───────────────────────────
 export const lightColors: ThemePalette = {
-  background: '#F7F7FB',
+  background: '#F7FAF9',
   backgroundSecondary: '#FFFFFF',
-  backgroundTertiary: '#EFEFF4',
+  backgroundTertiary: '#ECFDF5',
   card: '#FFFFFF',
-  cardHover: 'rgba(124, 58, 237, 0.04)',
+  cardHover: 'rgba(52, 211, 153, 0.06)',
   cardBorder: 'rgba(15, 23, 42, 0.08)',
 
-  primary: '#7C3AED',
-  primaryLight: '#A78BFA',
-  primaryDark: '#5B21B6',
+  primary: '#059669',
+  primaryLight: '#10B981',
+  primaryDark: '#047857',
 
-  secondary: '#D97706',
-  secondaryLight: '#F59E0B',
+  secondary: '#0891B2',
+  secondaryLight: '#06B6D4',
 
   success: '#059669',
   successLight: '#10B981',
@@ -122,21 +122,21 @@ export const lightColors: ThemePalette = {
   info: '#0891B2',
   infoLight: '#06B6D4',
 
-  text: '#0F172A',
+  text: '#0A0F20',
   textSecondary: '#475569',
   textTertiary: '#64748B',
   textMuted: '#94A3B8',
 
-  purple: '#7C3AED',
+  purple: '#8B5CF6',
   pink: '#DB2777',
   orange: '#EA580C',
   teal: '#0D9488',
   cyan: '#0891B2',
 
-  gradientPrimary: ['#7C3AED', '#6366F1'],
-  gradientSuccess: ['#059669', '#0891B2'],
+  gradientPrimary: ['#34D399', '#22D3EE'],
+  gradientSuccess: ['#10B981', '#34D399'],
   gradientWarning: ['#D97706', '#B45309'],
   gradientError: ['#DC2626', '#B91C1C'],
-  gradientHero: ['#7C3AED', '#6366F1', '#22D3EE'],
-  gradientGlow: 'rgba(124, 58, 237, 0.20)',
+  gradientHero: ['#ECFDF5', '#A7F3D0', '#34D399'],
+  gradientGlow: 'rgba(52, 211, 153, 0.18)',
 };

@@ -26,6 +26,7 @@ interface MenuItem {
   route: string;
   badge?: string;
   pro?: boolean;
+  feature?: import('../../src/stores/usePremiumStore').ProFeature;
 }
 
 export default function MoreScreen() {
@@ -43,9 +44,9 @@ export default function MoreScreen() {
       title: 'IA',
       emoji: '🧠',
       items: [
-        { id: 'ai-optimizer', title: 'Économiseur IA', subtitle: 'Trouve des économies concrètes', icon: 'sparkles', color: C.pink, route: '/more/ai-optimizer', badge: 'NEW', pro: true },
-        { id: 'predict', title: 'Coach Predict', subtitle: 'Prédictions & conseils GPT', icon: 'analytics', color: C.secondary, route: '/more/predict', pro: true },
-        { id: 'tax', title: 'Optimiseur d\'impôts', subtitle: 'IFD + ICC', icon: 'calculator', color: C.primaryLight, route: '/more/tax-optimizer', pro: true },
+        { id: 'ai-optimizer', title: 'Économiseur IA', subtitle: 'Trouve des économies concrètes', icon: 'sparkles', color: C.pink, route: '/more/ai-optimizer', badge: 'NEW', pro: true, feature: 'ai' },
+        { id: 'predict', title: 'Coach Predict', subtitle: 'Prédictions & conseils GPT', icon: 'analytics', color: C.secondary, route: '/more/predict', pro: true, feature: 'predict' },
+        { id: 'tax', title: 'Optimiseur d\'impôts', subtitle: 'IFD + ICC', icon: 'calculator', color: C.primaryLight, route: '/more/tax-optimizer', pro: true, feature: 'tax' },
       ],
     },
     {
@@ -54,10 +55,10 @@ export default function MoreScreen() {
       items: [
         { id: 'incomes', title: 'Mes revenus', subtitle: 'Salaire · 13ème · Bonus · Locations', icon: 'cash', color: C.success, route: '/more/incomes' },
         { id: 'budgets', title: 'Budgets', subtitle: 'Enveloppes mensuelles', icon: 'wallet', color: C.warning, route: '/more/budgets' },
-        { id: 'recurring', title: 'Charges récurrentes', subtitle: 'Frais & abonnements', icon: 'refresh', color: C.purple, route: '/more/recurring', pro: true },
-        { id: 'investments', title: 'Investissements', icon: 'trending-up', color: C.success, route: '/more/investments', pro: true },
+        { id: 'recurring', title: 'Charges récurrentes', subtitle: 'Frais & abonnements', icon: 'refresh', color: C.purple, route: '/more/recurring', pro: true, feature: 'recurring' },
+        { id: 'investments', title: 'Investissements', icon: 'trending-up', color: C.success, route: '/more/investments', pro: true, feature: 'investments' },
         { id: 'debts', title: 'Dettes', icon: 'card', color: C.error, route: '/more/debts' },
-        { id: 'invoices', title: 'Factures', subtitle: 'QR-bills · paiements', icon: 'receipt', color: C.orange, route: '/more/invoices', pro: true },
+        { id: 'invoices', title: 'Factures', subtitle: 'QR-bills · paiements', icon: 'receipt', color: C.orange, route: '/more/invoices', pro: true, feature: 'invoices' },
         { id: 'lamal', title: 'LAMal & Subsides', subtitle: '26 cantons · 15 assureurs', icon: 'shield-checkmark', color: C.cyan, route: '/more/lamal-comparator' },
       ],
     },
@@ -68,7 +69,7 @@ export default function MoreScreen() {
         { id: 'receipts', title: 'Tickets & reçus', icon: 'images', color: C.purple, route: '/more/receipts' },
         { id: 'documents', title: 'Mon classeur', icon: 'folder-open', color: C.primaryLight, route: '/more/documents' },
         { id: 'email-import', title: 'Import email IA', icon: 'mail-open', color: C.cyan, route: '/more/email-import' },
-        { id: 'export', title: 'Export PDF', icon: 'document-text', color: C.teal, route: '/more/export-pdf', pro: true },
+        { id: 'export', title: 'Export PDF', icon: 'document-text', color: C.teal, route: '/more/export-pdf', pro: true, feature: 'export' },
       ],
     },
     {
@@ -187,19 +188,14 @@ export default function MoreScreen() {
                   key={item.id}
                   haptic="selection"
                   onPress={() => {
-                    // Pro-gated items route to paywall with feature trigger
+                    // Pro-gated items: use gateFeature for preview quota logic
+                    if (item.pro && item.feature) {
+                      paywall.gateFeature(item.feature, () => router.push(item.route as any));
+                      return;
+                    }
+                    // Non-feature Pro items: open paywall directly
                     if (item.pro && !isPro) {
-                      const triggerMap: Record<string, string> = {
-                        'ai-optimizer': 'feature_ai',
-                        'predict': 'feature_ai',
-                        'tax': 'feature_tax',
-                        'export': 'feature_export',
-                        'investments': 'feature_analytics',
-                        'invoices': 'feature_export',
-                        'recurring': 'feature_analytics',
-                      };
-                      const trigger = triggerMap[item.id] || 'manual';
-                      paywall.open(trigger as any);
+                      paywall.open('manual');
                       return;
                     }
                     router.push(item.route as any);

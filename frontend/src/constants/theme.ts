@@ -1,42 +1,48 @@
 /**
- * GUARDIAN MONEY CHF - Design System
+ * BUDGY - Design System
  * Colors, Typography, Spacing
+ * Brand identity: Navy blue + Emerald green + Teal cyan
  */
 
 export const Colors = {
-  // Primary backgrounds
-  background: '#07070F',
-  backgroundSecondary: '#0F0F1A',
-  backgroundTertiary: '#1A1A2E',
+  // Primary backgrounds (Budgy navy)
+  background: '#0A0F20',
+  backgroundSecondary: '#0E1530',
+  backgroundTertiary: '#161E40',
   
   // Cards and surfaces
   card: 'rgba(255, 255, 255, 0.04)',
   cardHover: 'rgba(255, 255, 255, 0.08)',
   cardBorder: 'rgba(255, 255, 255, 0.07)',
   
-  // Brand colors
-  primary: '#6366F1', // Violet
-  primaryLight: '#818CF8',
-  primaryDark: '#4F46E5',
+  // Brand colors (Budgy green/teal)
+  primary: '#34D399', // Emerald green
+  primaryLight: '#6EE7B7',
+  primaryDark: '#10B981',
+  
+  // Secondary (Teal cyan - accents)
+  secondary: '#22D3EE',
+  secondaryLight: '#67E8F9',
+  secondaryDark: '#0891B2',
   
   // Semantic colors
-  success: '#10B981', // Green for income/positive
+  success: '#10B981',
   successLight: '#34D399',
   successDark: '#059669',
   
-  error: '#EF4444', // Red for expenses/negative
+  error: '#EF4444',
   errorLight: '#F87171',
   errorDark: '#DC2626',
   
   warning: '#F59E0B',
   warningLight: '#FBBF24',
   
-  info: '#0EA5E9',
-  infoLight: '#38BDF8',
+  info: '#22D3EE',
+  infoLight: '#67E8F9',
   
   // Text colors
   text: '#FFFFFF',
-  textSecondary: '#9CA3AF',
+  textSecondary: '#B7C0D6',
   textTertiary: '#6B7280',
   textMuted: '#4B5563',
   
@@ -45,13 +51,14 @@ export const Colors = {
   pink: '#EC4899',
   orange: '#F97316',
   teal: '#14B8A6',
-  cyan: '#0EA5E9',
+  cyan: '#22D3EE',
   
-  // Gradients
-  gradientPrimary: ['#6366F1', '#8B5CF6'],
-  gradientSuccess: ['#10B981', '#059669'],
+  // Gradients (Budgy green/teal)
+  gradientPrimary: ['#34D399', '#22D3EE'],
+  gradientSuccess: ['#10B981', '#34D399'],
   gradientWarning: ['#F59E0B', '#D97706'],
   gradientError: ['#EF4444', '#DC2626'],
+  gradientCool: ['#22D3EE', '#8B5CF6'],
 } as const;
 
 export const Spacing = {

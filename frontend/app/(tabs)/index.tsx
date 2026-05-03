@@ -28,6 +28,7 @@ import Animated, {
 import { BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
 import { useTheme } from '../../src/hooks/useTheme';
 import { useStore } from '../../src/stores/useStore';
+import { useOrganicPaywall } from '../../src/hooks/usePaywall';
 import { CategoryIcon, getCategoryName, getCategoryColor } from '../../src/components/CategoryIcon';
 import AnimatedNumber from '../../src/components/AnimatedNumber';
 import PressScale from '../../src/components/PressScale';
@@ -43,6 +44,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const C = useTheme();
+  useOrganicPaywall();
   const {
     user,
     preferences,

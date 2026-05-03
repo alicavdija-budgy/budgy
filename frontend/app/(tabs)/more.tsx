@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { View, Text, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -13,6 +13,8 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
 import { useTheme } from '../../src/hooks/useTheme';
 import { useStore } from '../../src/stores/useStore';
+import { usePremiumStore } from '../../src/stores/usePremiumStore';
+import { usePaywall } from '../../src/hooks/usePaywall';
 import PressScale from '../../src/components/PressScale';
 
 interface MenuItem {
@@ -30,16 +32,20 @@ export default function MoreScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const C = useTheme();
-  const { user, isPro } = useStore();
+  const { user } = useStore();
+  const isPro = usePremiumStore((s) => s.isPro || (s.trialEndsAt !== null && s.trialEndsAt > Date.now()));
+  const isTrial = usePremiumStore((s) => s.trialEndsAt !== null && s.trialEndsAt > Date.now() && !s.plan);
+  const trialEndsAt = usePremiumStore((s) => s.trialEndsAt);
+  const paywall = usePaywall();
 
   const sections: { title: string; emoji: string; items: MenuItem[] }[] = [
     {
       title: 'IA',
       emoji: '🧠',
       items: [
-        { id: 'ai-optimizer', title: 'Économiseur IA', subtitle: 'Trouve des économies concrètes', icon: 'sparkles', color: C.pink, route: '/more/ai-optimizer', badge: 'NEW' },
+        { id: 'ai-optimizer', title: 'Économiseur IA', subtitle: 'Trouve des économies concrètes', icon: 'sparkles', color: C.pink, route: '/more/ai-optimizer', badge: 'NEW', pro: true },
         { id: 'predict', title: 'Coach Predict', subtitle: 'Prédictions & conseils GPT', icon: 'analytics', color: C.secondary, route: '/more/predict', pro: true },
-        { id: 'tax', title: 'Optimiseur d\'impôts', subtitle: 'IFD + ICC', icon: 'calculator', color: C.primaryLight, route: '/more/tax-optimizer' },
+        { id: 'tax', title: 'Optimiseur d\'impôts', subtitle: 'IFD + ICC', icon: 'calculator', color: C.primaryLight, route: '/more/tax-optimizer', pro: true },
       ],
     },
     {
@@ -62,7 +68,7 @@ export default function MoreScreen() {
         { id: 'receipts', title: 'Tickets & reçus', icon: 'images', color: C.purple, route: '/more/receipts' },
         { id: 'documents', title: 'Mon classeur', icon: 'folder-open', color: C.primaryLight, route: '/more/documents' },
         { id: 'email-import', title: 'Import email IA', icon: 'mail-open', color: C.cyan, route: '/more/email-import' },
-        { id: 'export', title: 'Export PDF', icon: 'document-text', color: C.teal, route: '/more/export-pdf' },
+        { id: 'export', title: 'Export PDF', icon: 'document-text', color: C.teal, route: '/more/export-pdf', pro: true },
       ],
     },
     {
@@ -85,7 +91,7 @@ export default function MoreScreen() {
       title: 'Paramètres',
       emoji: '⚙️',
       items: [
-        { id: 'subscription', title: 'Budgy Pro', subtitle: isPro ? 'Actif · merci !' : 'CHF 7.90/mois', icon: 'flash', color: C.secondary, route: '/more/subscription', badge: isPro ? 'PRO' : undefined },
+        { id: 'subscription', title: 'Budgy Pro', subtitle: isPro ? (isTrial ? `Essai · fin ${new Date(trialEndsAt!).toLocaleDateString('fr-CH')}` : 'Actif · merci !') : 'CHF 4.90/mois · 7j d\'essai gratuit', icon: 'flash', color: C.secondary, route: '/paywall', badge: isPro ? 'PRO' : undefined },
         { id: 'settings', title: 'Préférences', subtitle: 'Langue · devise · thème', icon: 'settings', color: C.textSecondary, route: '/more/settings' },
         { id: 'legal', title: 'Informations légales', subtitle: 'Confidentialité · CGU · Sources', icon: 'shield-half', color: C.info, route: '/more/legal' },
       ],
@@ -119,7 +125,51 @@ export default function MoreScreen() {
           </View>
         </Animated.View>
 
-        {sections.map((section, idx) => (
+        {/* Upgrade banner (non-pro users only) */}
+        {!isPro && (
+          <Animated.View entering={FadeInDown.duration(500).delay(100)}>
+            <TouchableOpacity
+              activeOpacity={0.92}
+              onPress={() => paywall.open('manual')}
+              style={{ marginBottom: Spacing.xl }}
+            >
+              <LinearGradient
+                colors={['#34D399', '#22D3EE']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.upgradeBanner}
+              >
+                <View style={styles.upgradeIconWrap}>
+                  <Ionicons name="sparkles" size={22} color="#0E1530" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.upgradeTitle}>Passez à Budgy Pro</Text>
+                  <Text style={styles.upgradeSub}>
+                    IA illimitée · Tax · Export · Cloud — 7 jours gratuits
+                  </Text>
+                </View>
+                <View style={styles.upgradeArrow}>
+                  <Ionicons name="arrow-forward" size={18} color="#0E1530" />
+                </View>
+              </LinearGradient>
+            </TouchableOpacity>
+          </Animated.View>
+        )}
+
+        {/* Trial banner (user in trial) */}
+        {isTrial && trialEndsAt && (
+          <Animated.View entering={FadeInDown.duration(500).delay(100)}>
+            <View style={styles.trialBanner}>
+              <Ionicons name="time" size={18} color="#34D399" />
+              <Text style={styles.trialText}>
+                Essai gratuit actif · {Math.max(0, Math.ceil((trialEndsAt - Date.now()) / (24 * 3600 * 1000)))} jours restants
+              </Text>
+              <TouchableOpacity onPress={() => paywall.open('manual')}>
+                <Text style={styles.trialCta}>S'abonner</Text>
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+        )}
           <Animated.View
             key={section.title}
             entering={FadeInDown.duration(400).delay(100 + idx * 60)}
@@ -135,8 +185,20 @@ export default function MoreScreen() {
                   key={item.id}
                   haptic="selection"
                   onPress={() => {
-                    if (item.pro && !isPro) router.push('/more/subscription');
-                    else router.push(item.route as any);
+                    // Pro-gated items route to paywall with feature trigger
+                    if (item.pro && !isPro) {
+                      const triggerMap: Record<string, string> = {
+                        'ai-optimizer': 'feature_ai',
+                        'predict': 'feature_ai',
+                        'tax': 'feature_tax',
+                        'export': 'feature_export',
+                        'investments': 'feature_analytics',
+                      };
+                      const trigger = triggerMap[item.id] || 'manual';
+                      paywall.open(trigger as any);
+                      return;
+                    }
+                    router.push(item.route as any);
                   }}
                   style={[styles.menuItem, i < section.items.length - 1 && styles.menuItemBorder]}
                 >
@@ -204,6 +266,38 @@ const makeStyles = (C: any) => StyleSheet.create({
     borderRadius: 999,
   },
   proBadgeText: { color: '#1C1917', fontSize: 10, fontWeight: FontWeights.black, letterSpacing: 0.5 },
+
+  upgradeBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.md,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.xl,
+  },
+  upgradeIconWrap: {
+    width: 42, height: 42, borderRadius: 12,
+    backgroundColor: 'rgba(14,21,48,0.15)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  upgradeTitle: {
+    color: '#0E1530', fontSize: 16, fontWeight: '900', letterSpacing: -0.3,
+  },
+  upgradeSub: {
+    color: 'rgba(14,21,48,0.75)', fontSize: 12, marginTop: 2, fontWeight: '600',
+  },
+  upgradeArrow: {
+    width: 30, height: 30, borderRadius: 15,
+    backgroundColor: 'rgba(14,21,48,0.18)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  trialBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
+    padding: Spacing.md,
+    marginBottom: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+    backgroundColor: 'rgba(52,211,153,0.1)',
+    borderWidth: 1, borderColor: 'rgba(52,211,153,0.25)',
+  },
+  trialText: { flex: 1, color: C.text, fontSize: 13, fontWeight: '600' },
+  trialCta: { color: '#34D399', fontSize: 13, fontWeight: '800' },
 
   section: { marginBottom: Spacing.xl },
   sectionHeader: {

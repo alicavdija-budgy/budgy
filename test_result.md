@@ -245,6 +245,18 @@ frontend:
         agent: "main"
         comment: "NEW endpoint using emergentintegrations (gpt-4o-mini) analyzing user's financial snapshot (income, transactions, recurring expenses, contracts, debts) and returning structured JSON with: summary, monthly_potential, yearly_potential, proposals[{title, category, current_monthly, potential_saving_monthly/yearly, effort, action, explanation}], tips[]. Includes heuristic fallback when LLM fails. Tested: VD/7500/month with Netflix/Spotify/LAMal Swica/car insurance + high-rate debt → CHF 238/mo = CHF 2856/yr savings across 4 proposals (LAMal comparison, Netflix cancel, debt consolidation, Spotify reduction). All schema fields populated correctly. Verified via curl."
 
+  - task: "Swiss Tax Simulator (family-aware) + Real brand logos via Clearbit"
+    implemented: true
+    working: "NA"
+    file: "app/backend/server.py (POST /api/tax/simulate), app/frontend/app/more/tax-optimizer.tsx, app/frontend/src/components/BrandLogo.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "(1) BACKEND /api/tax/simulate: full Swiss tax computation with LAMAL_PREMIUMS_CH per canton/franchise (GE,VD,ZH,BE,FR,NE,VS,JU,TI,BS), LAMAL_CHILD rates, ICC_MULTIPLIERS for 18 cantons. Auto-deducts: professional expenses 3% (2000-4000), social AVS/AI/APG/AC 6.4%, LPP 7%, 3a (max 7258), insurance premiums (capped 1800/3600 + 700/child), children 6700 each, married 2800, transport (max 3200). Computes IFD (art.36 LIFD brackets single+married) and ICC base × canton coef. Returns deductions list, taxable income, IFD, ICC, total tax, LAMal monthly+yearly, effective rate, personalized savings tips. Verified: married VD 85k+45k with 2 kids+3a max → CHF 5513 tax (4.24%), LAMal 820/mo; single GE 75k+3a 5k → CHF 2606 tax (3.5%), LAMal 430/mo. (2) FRONTEND /more/tax-optimizer: 2-step (form→result), 7 guided questions (salary/canton/civil status/spouse/children counter/LAMal franchise chips/3a/transport). Result screen: green hero with total tax + IFD/ICC split, LAMal card with CTA to comparator, full deduction breakdown with source citations, personalized tips. (3) REAL LOGOS: 90 Swiss brands with domains added. BrandLogo rewritten to fetch https://logo.clearbit.com/{domain}?size=128 with onError fallback to colored-initials tile. Brands with logos: Migros, Coop, Netflix, Spotify, Swisscom, Helsana, UBS, CFF, McDonald's, IKEA, Apple, H&M, etc. (4) /more/incomes screen created for salary CRUD."
+
   - task: "INCOMES MANAGEMENT + BRAND LOGOS (100+ Swiss brands)"
     implemented: true
     working: "NA"

@@ -709,12 +709,195 @@ async def lamal_subsidy(req: SubsidyRequest):
 
 
 # ──────────────────────────────────────────────────
+# TAX SIMULATOR - Swiss tax with family situation
+# ──────────────────────────────────────────────────
+
+LAMAL_PREMIUMS_CH = {
+    "GE": {300: 480, 500: 460, 1000: 430, 1500: 410, 2000: 395, 2500: 375},
+    "VD": {300: 435, 500: 415, 1000: 385, 1500: 365, 2000: 350, 2500: 330},
+    "ZH": {300: 420, 500: 400, 1000: 370, 1500: 350, 2000: 335, 2500: 315},
+    "BE": {300: 395, 500: 375, 1000: 345, 1500: 325, 2000: 310, 2500: 290},
+    "FR": {300: 395, 500: 375, 1000: 345, 1500: 325, 2000: 310, 2500: 290},
+    "NE": {300: 440, 500: 420, 1000: 390, 1500: 370, 2000: 355, 2500: 335},
+    "VS": {300: 390, 500: 370, 1000: 340, 1500: 320, 2000: 305, 2500: 285},
+    "JU": {300: 415, 500: 395, 1000: 365, 1500: 345, 2000: 330, 2500: 310},
+    "TI": {300: 395, 500: 375, 1000: 345, 1500: 325, 2000: 310, 2500: 290},
+    "BS": {300: 440, 500: 420, 1000: 390, 1500: 370, 2000: 355, 2500: 335},
+}
+LAMAL_CHILD = {300: 130, 500: 115, 1000: 100, 1500: 90, 2000: 85, 2500: 80}
+ICC_MULTIPLIERS = {
+    "GE": 1.055, "VD": 1.545, "ZH": 1.11, "BE": 1.54, "FR": 1.37, "NE": 1.35,
+    "VS": 1.30, "JU": 1.69, "TI": 1.00, "BS": 1.00, "LU": 1.585, "SG": 1.15,
+    "AG": 1.12, "SO": 1.17, "GR": 0.98, "SH": 1.00, "ZG": 0.59, "SZ": 1.26,
+}
+
+
+class TaxSimulatorRequest(BaseModel):
+    gross_salary: float
+    canton: str = "VD"
+    civil_status: str = "single"
+    spouse_income: Optional[float] = 0
+    num_children: int = 0
+    age: int = 35
+    lamal_franchise: int = 300
+    pillar_3a: float = 0
+    transport_costs: float = 0
+    other_deductions: float = 0
+
+
+class TaxDeduction(BaseModel):
+    label: str
+    amount: float
+    source: str
+
+
+class TaxSimulatorResponse(BaseModel):
+    success: bool
+    gross_salary: float
+    lamal_annual: float
+    lamal_monthly: float
+    deductions: list[TaxDeduction]
+    total_deductions: float
+    taxable_income: float
+    ifd: float
+    icc: float
+    total_tax: float
+    net_income: float
+    effective_rate: float
+    savings_tips: list[str]
+
+
+def _compute_ifd(taxable: float, married: bool) -> float:
+    t = max(0, taxable)
+    if married:
+        if t <= 30800: return 0
+        if t <= 50900: return (t - 30800) * 0.01
+        if t <= 58400: return 201 + (t - 50900) * 0.02
+        if t <= 75300: return 351 + (t - 58400) * 0.03
+        if t <= 90300: return 858 + (t - 75300) * 0.04
+        if t <= 103400: return 1458 + (t - 90300) * 0.05
+        if t <= 114700: return 2113 + (t - 103400) * 0.06
+        if t <= 124200: return 2791 + (t - 114700) * 0.07
+        if t <= 131700: return 3456 + (t - 124200) * 0.08
+        if t <= 137300: return 4056 + (t - 131700) * 0.09
+        if t <= 141200: return 4560 + (t - 137300) * 0.10
+        return 4950 + (t - 141200) * 0.11
+    if t <= 15900: return 0
+    if t <= 34600: return (t - 15900) * 0.0077
+    if t <= 45300: return 144 + (t - 34600) * 0.0088
+    if t <= 60400: return 238 + (t - 45300) * 0.0264
+    if t <= 79300: return 637 + (t - 60400) * 0.0288
+    if t <= 85400: return 1181 + (t - 79300) * 0.0468
+    if t <= 113200: return 1467 + (t - 85400) * 0.0572
+    if t <= 148000: return 3057 + (t - 113200) * 0.0660
+    if t <= 193500: return 5354 + (t - 148000) * 0.0880
+    return 9359 + (t - 193500) * 0.1100
+
+
+def _compute_icc_base(taxable: float, married: bool) -> float:
+    t = max(0, taxable)
+    if married:
+        if t <= 30000: return 0
+        if t <= 60000: return (t - 30000) * 0.03
+        if t <= 120000: return 900 + (t - 60000) * 0.065
+        if t <= 200000: return 4800 + (t - 120000) * 0.095
+        return 12400 + (t - 200000) * 0.115
+    if t <= 17800: return 0
+    if t <= 35000: return (t - 17800) * 0.03
+    if t <= 80000: return 516 + (t - 35000) * 0.07
+    if t <= 140000: return 3666 + (t - 80000) * 0.10
+    return 9666 + (t - 140000) * 0.125
+
+
+@app.post("/api/tax/simulate", response_model=TaxSimulatorResponse)
+async def tax_simulate(req: TaxSimulatorRequest):
+    canton = req.canton.upper()
+    married = req.civil_status in ("married", "partnership")
+    spouse_income = req.spouse_income if married else 0
+    total_income = req.gross_salary + (spouse_income or 0)
+
+    canton_premiums = LAMAL_PREMIUMS_CH.get(canton, LAMAL_PREMIUMS_CH["VD"])
+    franchise = req.lamal_franchise if req.lamal_franchise in canton_premiums else 300
+    lamal_adult = canton_premiums[franchise]
+    lamal_month = lamal_adult * (2 if married else 1) + LAMAL_CHILD[franchise] * req.num_children
+    lamal_annual = lamal_month * 12
+
+    deductions: list[TaxDeduction] = []
+    pro = min(4000, max(2000, req.gross_salary * 0.03))
+    deductions.append(TaxDeduction(label="Frais professionnels (3%, 2'000-4'000)", amount=round(pro, 2), source="AFC"))
+
+    social = req.gross_salary * 0.064
+    deductions.append(TaxDeduction(label="Cotisations sociales (AVS/AI/APG/AC 6.4%)", amount=round(social, 2), source="AVS"))
+
+    lpp = req.gross_salary * 0.07
+    deductions.append(TaxDeduction(label="Cotisations LPP (~7%)", amount=round(lpp, 2), source="LPP"))
+
+    max_3a = 7258
+    pillar_3a = min(req.pillar_3a, max_3a)
+    if pillar_3a > 0:
+        deductions.append(TaxDeduction(label="3ᵉ pilier lié (3a)", amount=pillar_3a, source="AFC"))
+
+    ins_cap = (3600 if married else 1800) + 700 * req.num_children
+    insurance_ded = min(lamal_annual, ins_cap)
+    deductions.append(TaxDeduction(label="Primes d'assurance-maladie (plafonnées)", amount=round(insurance_ded, 2), source="LIFD art.33"))
+
+    if req.num_children > 0:
+        child_ded = 6700 * req.num_children
+        deductions.append(TaxDeduction(label=f"Déduction pour {req.num_children} enfant(s) × 6'700", amount=child_ded, source="AFC"))
+
+    if married:
+        deductions.append(TaxDeduction(label="Déduction couple marié", amount=2800, source="AFC"))
+
+    transport = min(3200, req.transport_costs)
+    if transport > 0:
+        deductions.append(TaxDeduction(label="Frais de transport (max 3'200)", amount=transport, source="AFC"))
+
+    if req.other_deductions > 0:
+        deductions.append(TaxDeduction(label="Autres déductions", amount=req.other_deductions, source="Perso"))
+
+    total_ded = sum(d.amount for d in deductions)
+    taxable = max(0, total_income - total_ded)
+
+    ifd = round(_compute_ifd(taxable, married), 2)
+    icc_base = _compute_icc_base(taxable, married)
+    icc = round(icc_base * ICC_MULTIPLIERS.get(canton, 1.3), 2)
+    total_tax = ifd + icc
+    net_income = total_income - total_tax - lamal_annual
+    effective_rate = (total_tax / total_income * 100) if total_income > 0 else 0
+
+    tips = []
+    if pillar_3a < max_3a:
+        gap = max_3a - pillar_3a
+        save = int(gap * 0.25)
+        tips.append(f"💡 Cotisez CHF {gap:,} de plus au 3ᵉ pilier → économie fiscale ~CHF {save:,}/an".replace(',', "'"))
+    if franchise < 2500 and total_income > 100000:
+        diff = (canton_premiums[franchise] - canton_premiums[2500]) * 12
+        tips.append(f"💡 Franchise LAMal à 2'500 économise ~CHF {int(diff):,}/an (si peu de soins)".replace(',', "'"))
+    if req.num_children > 0:
+        tips.append("💡 Pensez aux frais de garde déductibles (jusqu'à 25'000 CHF/enfant en IFD)")
+    tips.append("💡 Frais de formation continue déductibles jusqu'à CHF 12'000/an")
+
+    return TaxSimulatorResponse(
+        success=True,
+        gross_salary=req.gross_salary,
+        lamal_annual=round(lamal_annual, 2),
+        lamal_monthly=round(lamal_month, 2),
+        deductions=deductions,
+        total_deductions=round(total_ded, 2),
+        taxable_income=round(taxable, 2),
+        ifd=ifd, icc=icc,
+        total_tax=round(total_tax, 2),
+        net_income=round(net_income, 2),
+        effective_rate=round(effective_rate, 2),
+        savings_tips=tips,
+    )
+
+
+# ──────────────────────────────────────────────────
 # AI OPTIMIZER - Smart savings recommendations
 # ──────────────────────────────────────────────────
 class OptimizerRequest(BaseModel):
     monthly_income: float
-    yearly_income: Optional[float] = None
-    currency: str = "CHF"
     canton: str = "VD"
     transactions: list[dict] = []        # [{title, amount, category, date}]
     recurring_expenses: list[dict] = []  # [{title, amount, category, frequency}]

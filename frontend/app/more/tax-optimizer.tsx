@@ -1,644 +1,450 @@
 /**
- * GUARDIAN MONEY CHF - Swiss Tax Optimizer
- * Calculate IFD + ICC for 15 main cantons with 3rd pillar optimization
+ * BUDGY - Swiss Tax Optimizer (Premium)
+ * Family-aware questionnaire → auto-computes deductions, LAMal premium, IFD + ICC.
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import {
-  View,
-  Text,
-  ScrollView,
-  StyleSheet,
-  TouchableOpacity,
+  View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput,
+  ActivityIndicator, Alert, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import Slider from '@react-native-community/slider';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
-import { Card, ProgressBar, Badge } from '../../src/components/ui';
-import { CANTONS, PILLAR_3A_LIMITS, type CantonCode } from '../../src/data/swiss-data';
-import {
-  calculateIFD,
-  calculateICC,
-  calculateTaxableIncome,
-  calculatePillar3aSavings,
-  formatNumber,
-} from '../../src/utils/calculations';
+import { Card, Button } from '../../src/components/ui';
+import { useStore } from '../../src/stores/useStore';
 
-const MAIN_CANTONS: CantonCode[] = ['ZH', 'BE', 'VD', 'GE', 'ZG', 'LU', 'BS', 'AG', 'FR', 'TI', 'VS', 'NE', 'GR', 'SG', 'SZ'];
+const API = process.env.EXPO_PUBLIC_BACKEND_URL || '';
+
+const CANTONS = ['GE','VD','ZH','BE','FR','NE','VS','JU','TI','BS','LU','SG','AG','SO','GR','SH','ZG','SZ'];
+const FRANCHISES = [300, 500, 1000, 1500, 2000, 2500];
+
+const fmt = (n: number) => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, "'");
+
+interface Result {
+  success: boolean;
+  gross_salary: number;
+  lamal_annual: number;
+  lamal_monthly: number;
+  deductions: { label: string; amount: number; source: string }[];
+  total_deductions: number;
+  taxable_income: number;
+  ifd: number;
+  icc: number;
+  total_tax: number;
+  net_income: number;
+  effective_rate: number;
+  savings_tips: string[];
+}
 
 export default function TaxOptimizerScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { preferences } = useStore();
 
-  const [grossIncome, setGrossIncome] = useState(85000);
-  const [pillar3a, setPillar3a] = useState(0);
-  const [canton, setCanton] = useState<CantonCode>('VD');
-  const [married, setMarried] = useState(false);
-  const [showCantonRanking, setShowCantonRanking] = useState(false);
+  const [step, setStep] = useState<'form' | 'result'>('form');
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<Result | null>(null);
 
-  const maxPillar3a = PILLAR_3A_LIMITS.employee;
+  const [form, setForm] = useState({
+    gross_salary: '85000',
+    canton: (preferences as any).canton || 'VD',
+    civil_status: 'single' as 'single' | 'married' | 'partnership',
+    spouse_income: '',
+    num_children: 0,
+    age: '35',
+    lamal_franchise: 300,
+    pillar_3a: '',
+    transport_costs: '',
+  });
 
-  // Calculate taxes
-  const taxableIncome = useMemo(() => {
-    return calculateTaxableIncome(grossIncome, pillar3a, married);
-  }, [grossIncome, pillar3a, married]);
-
-  const ifd = useMemo(() => {
-    return calculateIFD(taxableIncome, married);
-  }, [taxableIncome, married]);
-
-  const icc = useMemo(() => {
-    return calculateICC(taxableIncome, canton);
-  }, [taxableIncome, canton]);
-
-  const totalTax = ifd + icc;
-
-  const pillar3aSavings = useMemo(() => {
-    return calculatePillar3aSavings(grossIncome, pillar3a, canton, married);
-  }, [grossIncome, pillar3a, canton, married]);
-
-  // Canton ranking by tax rate
-  const cantonRanking = useMemo(() => {
-    return MAIN_CANTONS.map(code => {
-      const taxable = calculateTaxableIncome(grossIncome, pillar3a, married);
-      const tax = calculateIFD(taxable, married) + calculateICC(taxable, code);
-      return {
-        code,
-        name: CANTONS[code].name,
-        taxRate: CANTONS[code].taxRate,
-        totalTax: tax,
-        lamalPremium: CANTONS[code].lamalPremium,
+  const run = async () => {
+    setLoading(true);
+    try {
+      const body = {
+        gross_salary: parseFloat(form.gross_salary) || 0,
+        canton: form.canton,
+        civil_status: form.civil_status,
+        spouse_income: parseFloat(form.spouse_income) || 0,
+        num_children: form.num_children,
+        age: parseInt(form.age) || 35,
+        lamal_franchise: form.lamal_franchise,
+        pillar_3a: parseFloat(form.pillar_3a) || 0,
+        transport_costs: parseFloat(form.transport_costs) || 0,
       };
-    }).sort((a, b) => a.totalTax - b.totalTax);
-  }, [grossIncome, pillar3a, married]);
-
-  const effectiveTaxRate = grossIncome > 0 ? (totalTax / grossIncome) * 100 : 0;
+      const r = await fetch(`${API}/api/tax/simulate`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+      setResult(data);
+      setStep('result');
+    } catch (e: any) {
+      Alert.alert('Erreur', e?.message || 'Impossible de calculer');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={Colors.text} />
+        <TouchableOpacity onPress={() => step === 'result' ? setStep('form') : router.back()} style={styles.iconBtn}>
+          <Ionicons name="chevron-back" size={26} color={Colors.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>Swiss Tax Optimizer</Text>
+        <Text style={styles.title}>Optimiseur d'impôts</Text>
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Canton Selection */}
-        <Card style={styles.cantonCard}>
-          <Text style={styles.sectionLabel}>Canton de résidence</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View style={styles.cantonGrid}>
-              {MAIN_CANTONS.map((code) => (
-                <TouchableOpacity
-                  key={code}
-                  style={[
-                    styles.cantonChip,
-                    canton === code && styles.cantonChipSelected,
-                  ]}
-                  onPress={() => setCanton(code)}
-                >
-                  <Text style={[
-                    styles.cantonChipText,
-                    canton === code && styles.cantonChipTextSelected,
-                  ]}>
-                    {code}
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          {step === 'form' && (
+            <>
+              <Animated.View entering={FadeInDown.duration(500)}>
+                <LinearGradient colors={['#7C3AED', '#6366F1']} style={styles.hero}>
+                  <Text style={styles.heroEmoji}>🇨🇭</Text>
+                  <Text style={styles.heroTitle}>Simulateur fiscal suisse</Text>
+                  <Text style={styles.heroSub}>
+                    Impôts (IFD + ICC), déductions automatiques et prime LAMal selon votre situation familiale
                   </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </ScrollView>
-          <View style={styles.cantonInfo}>
-            <Text style={styles.cantonName}>{CANTONS[canton].name}</Text>
-            <Text style={styles.cantonRate}>Taux ICC: {CANTONS[canton].taxRate}%</Text>
-          </View>
-        </Card>
+                </LinearGradient>
+              </Animated.View>
 
-        {/* Income Slider */}
-        <Card style={styles.sliderCard}>
-          <View style={styles.sliderHeader}>
-            <Text style={styles.sliderLabel}>Revenu brut annuel</Text>
-            <Text style={styles.sliderValue}>CHF {formatNumber(grossIncome)}</Text>
-          </View>
-          <Slider
-            style={styles.slider}
-            minimumValue={30000}
-            maximumValue={300000}
-            step={1000}
-            value={grossIncome}
-            onValueChange={setGrossIncome}
-            minimumTrackTintColor={Colors.primary}
-            maximumTrackTintColor={Colors.cardBorder}
-            thumbTintColor={Colors.primary}
-          />
-          <View style={styles.sliderRange}>
-            <Text style={styles.sliderRangeText}>CHF 30'000</Text>
-            <Text style={styles.sliderRangeText}>CHF 300'000</Text>
-          </View>
-        </Card>
+              {/* Salary */}
+              <Text style={styles.sectionTitle}>1. Salaire brut annuel</Text>
+              <TextInput
+                style={styles.inputBig}
+                value={form.gross_salary}
+                onChangeText={(t) => setForm((p) => ({ ...p, gross_salary: t }))}
+                placeholder="85000"
+                placeholderTextColor={Colors.textTertiary}
+                keyboardType="numeric"
+              />
 
-        {/* 3rd Pillar Slider */}
-        <Card style={styles.sliderCard}>
-          <View style={styles.sliderHeader}>
-            <Text style={styles.sliderLabel}>3ème pilier (3a)</Text>
-            <Text style={styles.sliderValue}>CHF {formatNumber(pillar3a)}</Text>
-          </View>
-          <Slider
-            style={styles.slider}
-            minimumValue={0}
-            maximumValue={maxPillar3a}
-            step={100}
-            value={pillar3a}
-            onValueChange={setPillar3a}
-            minimumTrackTintColor={Colors.success}
-            maximumTrackTintColor={Colors.cardBorder}
-            thumbTintColor={Colors.success}
-          />
-          <View style={styles.sliderRange}>
-            <Text style={styles.sliderRangeText}>CHF 0</Text>
-            <Text style={styles.sliderRangeText}>Max CHF {formatNumber(maxPillar3a)}</Text>
-          </View>
-          {pillar3a > 0 && (
-            <View style={styles.savingsHighlight}>
-              <Ionicons name="trending-down" size={18} color={Colors.success} />
-              <Text style={styles.savingsText}>
-                Économie fiscale: CHF {formatNumber(pillar3aSavings)}/an
+              {/* Canton */}
+              <Text style={styles.sectionTitle}>2. Canton</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                {CANTONS.map((c) => (
+                  <TouchableOpacity
+                    key={c}
+                    style={[styles.chip, form.canton === c && styles.chipActive]}
+                    onPress={() => setForm((p) => ({ ...p, canton: c }))}
+                  >
+                    <Text style={[styles.chipTxt, form.canton === c && styles.chipTxtActive]}>{c}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              {/* Family status */}
+              <Text style={styles.sectionTitle}>3. Situation familiale</Text>
+              <View style={styles.segmentRow}>
+                {[
+                  { k: 'single', lbl: '👤 Célibataire' },
+                  { k: 'married', lbl: '💍 Marié(e)' },
+                  { k: 'partnership', lbl: '🏳️‍🌈 Pacsé(e)' },
+                ].map((s) => (
+                  <TouchableOpacity
+                    key={s.k}
+                    style={[styles.segment, form.civil_status === s.k && styles.segmentActive]}
+                    onPress={() => setForm((p) => ({ ...p, civil_status: s.k as any }))}
+                  >
+                    <Text style={[styles.segmentLbl, form.civil_status === s.k && styles.segmentLblActive]}>
+                      {s.lbl}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Spouse income if married */}
+              {(form.civil_status === 'married' || form.civil_status === 'partnership') && (
+                <>
+                  <Text style={styles.sectionTitle}>4. Salaire annuel du conjoint (optionnel)</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={form.spouse_income}
+                    onChangeText={(t) => setForm((p) => ({ ...p, spouse_income: t }))}
+                    placeholder="0"
+                    placeholderTextColor={Colors.textTertiary}
+                    keyboardType="numeric"
+                  />
+                </>
+              )}
+
+              {/* Children */}
+              <Text style={styles.sectionTitle}>
+                {(form.civil_status === 'married' || form.civil_status === 'partnership') ? '5' : '4'}. Nombre d'enfants à charge
               </Text>
-            </View>
-          )}
-        </Card>
-
-        {/* Marital Status */}
-        <Card style={styles.statusCard}>
-          <Text style={styles.sectionLabel}>Situation familiale</Text>
-          <View style={styles.statusButtons}>
-            {[{ value: false, label: 'Célibataire' }, { value: true, label: 'Marié(e)' }].map((opt) => (
-              <TouchableOpacity
-                key={opt.label}
-                style={[
-                  styles.statusButton,
-                  married === opt.value && styles.statusButtonSelected,
-                ]}
-                onPress={() => setMarried(opt.value)}
-              >
-                <Text style={[
-                  styles.statusButtonText,
-                  married === opt.value && styles.statusButtonTextSelected,
-                ]}>
-                  {opt.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </Card>
-
-        {/* Results */}
-        <Card style={styles.resultsCard}>
-          <Text style={styles.resultsTitle}>🇨🇭 Calcul impôts 2025</Text>
-          
-          <View style={styles.resultRow}>
-            <Text style={styles.resultLabel}>Revenu brut</Text>
-            <Text style={styles.resultValue}>CHF {formatNumber(grossIncome)}</Text>
-          </View>
-          
-          <View style={styles.resultRow}>
-            <Text style={styles.resultLabel}>Déductions (AVS, LPP, frais)</Text>
-            <Text style={[styles.resultValue, { color: Colors.success }]}>
-              -CHF {formatNumber(grossIncome - taxableIncome)}
-            </Text>
-          </View>
-          
-          <View style={[styles.resultRow, styles.resultRowHighlight]}>
-            <Text style={styles.resultLabelBold}>Revenu imposable</Text>
-            <Text style={styles.resultValueBold}>CHF {formatNumber(taxableIncome)}</Text>
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.resultRow}>
-            <Text style={styles.resultLabel}>IFD (Impôt fédéral direct)</Text>
-            <Text style={[styles.resultValue, { color: Colors.error }]}>
-              CHF {formatNumber(ifd)}
-            </Text>
-          </View>
-          
-          <View style={styles.resultRow}>
-            <Text style={styles.resultLabel}>ICC ({CANTONS[canton].name})</Text>
-            <Text style={[styles.resultValue, { color: Colors.error }]}>
-              CHF {formatNumber(icc)}
-            </Text>
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={[styles.resultRow, styles.totalRow]}>
-            <Text style={styles.totalLabel}>Total impôts</Text>
-            <Text style={styles.totalValue}>CHF {formatNumber(totalTax)}</Text>
-          </View>
-          
-          <View style={styles.effectiveRate}>
-            <Text style={styles.effectiveRateLabel}>Taux effectif</Text>
-            <Text style={styles.effectiveRateValue}>{effectiveTaxRate.toFixed(1)}%</Text>
-          </View>
-        </Card>
-
-        {/* Canton Ranking Toggle */}
-        <TouchableOpacity
-          style={styles.rankingToggle}
-          onPress={() => setShowCantonRanking(!showCantonRanking)}
-        >
-          <Ionicons name="podium" size={20} color={Colors.primary} />
-          <Text style={styles.rankingToggleText}>
-            {showCantonRanking ? 'Masquer' : 'Voir'} le classement des cantons
-          </Text>
-          <Ionicons
-            name={showCantonRanking ? 'chevron-up' : 'chevron-down'}
-            size={20}
-            color={Colors.primary}
-          />
-        </TouchableOpacity>
-
-        {/* Canton Ranking */}
-        {showCantonRanking && (
-          <Card style={styles.rankingCard}>
-            <Text style={styles.rankingTitle}>🏆 Classement par impôts (moins cher en haut)</Text>
-            {cantonRanking.map((c, idx) => (
-              <TouchableOpacity
-                key={c.code}
-                style={[
-                  styles.rankingItem,
-                  canton === c.code && styles.rankingItemSelected,
-                ]}
-                onPress={() => setCanton(c.code)}
-              >
-                <View style={styles.rankingPosition}>
-                  <Text style={[
-                    styles.rankingNumber,
-                    idx < 3 && { color: idx === 0 ? '#FFD700' : idx === 1 ? '#C0C0C0' : '#CD7F32' },
-                  ]}>
-                    #{idx + 1}
+              <View style={styles.counterRow}>
+                <TouchableOpacity
+                  style={styles.counterBtn}
+                  onPress={() => setForm((p) => ({ ...p, num_children: Math.max(0, p.num_children - 1) }))}
+                >
+                  <Ionicons name="remove" size={24} color={Colors.text} />
+                </TouchableOpacity>
+                <View style={styles.counterDisplay}>
+                  <Text style={styles.counterValue}>{form.num_children}</Text>
+                  <Text style={styles.counterSub}>
+                    {form.num_children === 0 ? 'aucun' : form.num_children === 1 ? 'enfant' : 'enfants'}
                   </Text>
                 </View>
-                <View style={styles.rankingInfo}>
-                  <Text style={styles.rankingName}>{c.name} ({c.code})</Text>
-                  <Text style={styles.rankingRate}>Taux: {c.taxRate}%</Text>
-                </View>
-                <View style={styles.rankingTax}>
-                  <Text style={styles.rankingTaxValue}>CHF {formatNumber(c.totalTax)}</Text>
-                  <Text style={styles.rankingLamal}>LAMal: {c.lamalPremium}/m</Text>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </Card>
-        )}
+                <TouchableOpacity
+                  style={styles.counterBtn}
+                  onPress={() => setForm((p) => ({ ...p, num_children: Math.min(10, p.num_children + 1) }))}
+                >
+                  <Ionicons name="add" size={24} color={Colors.text} />
+                </TouchableOpacity>
+              </View>
 
-        {/* Tips */}
-        <Card style={styles.tipsCard}>
-          <Text style={styles.tipsTitle}>💡 Conseils d'optimisation</Text>
-          <View style={styles.tipItem}>
-            <Ionicons name="checkmark-circle" size={18} color={Colors.success} />
-            <Text style={styles.tipText}>
-              Cotisez au maximum au 3ème pilier (CHF {formatNumber(maxPillar3a)}) pour réduire vos impôts
-            </Text>
-          </View>
-          <View style={styles.tipItem}>
-            <Ionicons name="checkmark-circle" size={18} color={Colors.success} />
-            <Text style={styles.tipText}>
-              Comparez les primes LAMal - elles varient fortement entre cantons
-            </Text>
-          </View>
-          <View style={styles.tipItem}>
-            <Ionicons name="checkmark-circle" size={18} color={Colors.success} />
-            <Text style={styles.tipText}>
-              Zoug et Schwytz offrent les taux d'imposition les plus bas de Suisse
-            </Text>
-          </View>
-        </Card>
+              {/* LAMal franchise */}
+              <Text style={styles.sectionTitle}>Franchise LAMal</Text>
+              <Text style={styles.help}>Plus la franchise est élevée, plus la prime est basse.</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                {FRANCHISES.map((f) => (
+                  <TouchableOpacity
+                    key={f}
+                    style={[styles.chip, form.lamal_franchise === f && styles.chipActive]}
+                    onPress={() => setForm((p) => ({ ...p, lamal_franchise: f }))}
+                  >
+                    <Text style={[styles.chipTxt, form.lamal_franchise === f && styles.chipTxtActive]}>
+                      CHF {fmt(f)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
 
-        <View style={{ height: 40 }} />
-      </ScrollView>
+              {/* 3a */}
+              <Text style={styles.sectionTitle}>3ᵉ pilier lié (3a) versé cette année</Text>
+              <Text style={styles.help}>Max 2025 : CHF 7'258/an pour salariés</Text>
+              <TextInput
+                style={styles.input}
+                value={form.pillar_3a}
+                onChangeText={(t) => setForm((p) => ({ ...p, pillar_3a: t }))}
+                placeholder="0"
+                placeholderTextColor={Colors.textTertiary}
+                keyboardType="numeric"
+              />
+
+              {/* Transport */}
+              <Text style={styles.sectionTitle}>Frais de transport annuels (optionnel)</Text>
+              <TextInput
+                style={styles.input}
+                value={form.transport_costs}
+                onChangeText={(t) => setForm((p) => ({ ...p, transport_costs: t }))}
+                placeholder="0 (max CHF 3'200)"
+                placeholderTextColor={Colors.textTertiary}
+                keyboardType="numeric"
+              />
+
+              <Button
+                title="Calculer mes impôts →"
+                onPress={run}
+                fullWidth size="lg"
+                loading={loading}
+                style={{ marginTop: Spacing.xl, marginBottom: 40 }}
+              />
+            </>
+          )}
+
+          {step === 'result' && result && (
+            <>
+              <Animated.View entering={FadeInDown.duration(500)}>
+                <LinearGradient colors={['#06D6A0', '#0891B2']} style={styles.resultHero}>
+                  <Text style={styles.heroLabel}>IMPÔTS ESTIMÉS</Text>
+                  <Text style={styles.resultBig}>CHF {fmt(result.total_tax)}</Text>
+                  <Text style={styles.resultSub}>soit {result.effective_rate.toFixed(2)}% de votre revenu brut</Text>
+
+                  <View style={styles.resultSplit}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.splitLbl}>IFD (fédéral)</Text>
+                      <Text style={styles.splitVal}>CHF {fmt(result.ifd)}</Text>
+                    </View>
+                    <View style={styles.splitSep} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.splitLbl}>ICC ({form.canton})</Text>
+                      <Text style={styles.splitVal}>CHF {fmt(result.icc)}</Text>
+                    </View>
+                  </View>
+                </LinearGradient>
+              </Animated.View>
+
+              {/* LAMal summary */}
+              <Animated.View entering={FadeInDown.duration(500).delay(100)}>
+                <Card style={styles.lamalCard}>
+                  <View style={styles.lamalRow}>
+                    <View>
+                      <Text style={styles.lamalLbl}>🏥 Prime LAMal</Text>
+                      <Text style={styles.lamalBig}>CHF {fmt(result.lamal_monthly)}/mois</Text>
+                      <Text style={styles.lamalSub}>CHF {fmt(result.lamal_annual)}/an · Franchise {form.lamal_franchise}</Text>
+                    </View>
+                    <TouchableOpacity style={styles.lamalCta} onPress={() => router.push('/more/lamal-comparator' as any)}>
+                      <Text style={styles.lamalCtaTxt}>Comparer →</Text>
+                    </TouchableOpacity>
+                  </View>
+                </Card>
+              </Animated.View>
+
+              {/* Deductions breakdown */}
+              <Animated.View entering={FadeInDown.duration(500).delay(200)}>
+                <Card style={styles.dedCard}>
+                  <View style={styles.dedHeader}>
+                    <Text style={styles.dedTitle}>Déductions fiscales</Text>
+                    <Text style={styles.dedTotal}>CHF {fmt(result.total_deductions)}</Text>
+                  </View>
+                  {result.deductions.map((d, i) => (
+                    <View key={i} style={[styles.dedRow, i < result.deductions.length - 1 && styles.dedRowBorder]}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.dedLabel}>{d.label}</Text>
+                        <Text style={styles.dedSource}>{d.source}</Text>
+                      </View>
+                      <Text style={styles.dedAmount}>− CHF {fmt(d.amount)}</Text>
+                    </View>
+                  ))}
+                  <View style={styles.taxableBox}>
+                    <Text style={styles.taxableLbl}>Revenu imposable</Text>
+                    <Text style={styles.taxableVal}>CHF {fmt(result.taxable_income)}</Text>
+                  </View>
+                </Card>
+              </Animated.View>
+
+              {/* Tips */}
+              {result.savings_tips.length > 0 && (
+                <Animated.View entering={FadeInDown.duration(500).delay(300)}>
+                  <Card style={styles.tipsCard}>
+                    <Text style={styles.tipsTitle}>💡 Conseils d'économies</Text>
+                    {result.savings_tips.map((t, i) => (
+                      <View key={i} style={styles.tipRow}>
+                        <Text style={styles.tipTxt}>{t}</Text>
+                      </View>
+                    ))}
+                  </Card>
+                </Animated.View>
+              )}
+
+              <Button
+                title="Modifier ma situation"
+                onPress={() => setStep('form')}
+                fullWidth size="lg" variant="secondary"
+                style={{ marginTop: Spacing.lg }}
+              />
+              <View style={{ height: 40 }} />
+            </>
+          )}
+        </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
+  container: { flex: 1, backgroundColor: Colors.background },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md,
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
+  iconBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  title: { color: Colors.text, fontSize: FontSizes.xl, fontWeight: FontWeights.bold },
+  content: { padding: Spacing.lg },
+
+  hero: { borderRadius: BorderRadius.xxl, padding: Spacing.xl, marginBottom: Spacing.lg, alignItems: 'center' },
+  heroEmoji: { fontSize: 44, marginBottom: Spacing.sm },
+  heroTitle: { color: '#FFF', fontSize: FontSizes.xl, fontWeight: FontWeights.black, textAlign: 'center' },
+  heroSub: { color: 'rgba(255,255,255,0.9)', fontSize: FontSizes.sm, textAlign: 'center', marginTop: Spacing.xs, lineHeight: 20 },
+
+  sectionTitle: {
+    color: Colors.text, fontSize: FontSizes.sm, fontWeight: FontWeights.bold,
+    marginTop: Spacing.lg, marginBottom: Spacing.xs,
   },
-  title: {
-    color: Colors.text,
-    fontSize: FontSizes.xl,
-    fontWeight: FontWeights.bold,
+  help: { color: Colors.textTertiary, fontSize: FontSizes.xs, marginBottom: Spacing.xs, fontStyle: 'italic' },
+  input: {
+    backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder,
+    borderRadius: BorderRadius.lg, padding: Spacing.md,
+    color: Colors.text, fontSize: FontSizes.md,
   },
-  scroll: {
-    flex: 1,
+  inputBig: {
+    backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder,
+    borderRadius: BorderRadius.lg, padding: Spacing.lg,
+    color: Colors.text, fontSize: 28, fontWeight: FontWeights.black, textAlign: 'center',
   },
-  content: {
-    padding: Spacing.lg,
+  chip: {
+    paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
+    borderRadius: 999, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder,
+    marginRight: Spacing.sm,
   },
-  cantonCard: {
+  chipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  chipTxt: { color: Colors.textSecondary, fontSize: FontSizes.sm, fontWeight: FontWeights.semibold },
+  chipTxtActive: { color: '#FFF' },
+
+  segmentRow: { flexDirection: 'row', gap: 6, backgroundColor: Colors.card, padding: 4, borderRadius: BorderRadius.lg },
+  segment: { flex: 1, paddingVertical: Spacing.sm, borderRadius: BorderRadius.md, alignItems: 'center' },
+  segmentActive: { backgroundColor: Colors.primary },
+  segmentLbl: { color: Colors.textSecondary, fontSize: 12, fontWeight: FontWeights.semibold },
+  segmentLblActive: { color: '#FFF' },
+
+  counterRow: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.md,
+    backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder,
+    borderRadius: BorderRadius.lg, padding: Spacing.md,
+  },
+  counterBtn: {
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: Colors.backgroundSecondary, alignItems: 'center', justifyContent: 'center',
+  },
+  counterDisplay: { flex: 1, alignItems: 'center' },
+  counterValue: { color: Colors.text, fontSize: 32, fontWeight: FontWeights.black },
+  counterSub: { color: Colors.textSecondary, fontSize: FontSizes.xs },
+
+  // Result
+  resultHero: { borderRadius: BorderRadius.xxl, padding: Spacing.xl, marginBottom: Spacing.lg, alignItems: 'center' },
+  heroLabel: {
+    color: 'rgba(255,255,255,0.85)', fontSize: 11, fontWeight: FontWeights.bold,
+    letterSpacing: 1.3, textTransform: 'uppercase',
+  },
+  resultBig: { color: '#FFF', fontSize: 48, fontWeight: FontWeights.black, letterSpacing: -1.5, marginTop: Spacing.sm },
+  resultSub: { color: 'rgba(255,255,255,0.9)', fontSize: FontSizes.sm, fontWeight: FontWeights.semibold, marginTop: 4 },
+  resultSplit: {
+    flexDirection: 'row', marginTop: Spacing.lg, width: '100%', alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: BorderRadius.lg, padding: Spacing.md,
+  },
+  splitLbl: { color: 'rgba(255,255,255,0.85)', fontSize: FontSizes.xs, fontWeight: FontWeights.semibold },
+  splitVal: { color: '#FFF', fontSize: FontSizes.lg, fontWeight: FontWeights.bold, marginTop: 2 },
+  splitSep: { width: 1, height: 36, backgroundColor: 'rgba(255,255,255,0.3)', marginHorizontal: Spacing.md },
+
+  lamalCard: { padding: Spacing.lg, marginBottom: Spacing.md },
+  lamalRow: { flexDirection: 'row', alignItems: 'center' },
+  lamalLbl: { color: Colors.textSecondary, fontSize: FontSizes.xs, fontWeight: FontWeights.semibold, textTransform: 'uppercase' },
+  lamalBig: { color: Colors.text, fontSize: FontSizes.xl, fontWeight: FontWeights.black, marginTop: 4 },
+  lamalSub: { color: Colors.textTertiary, fontSize: FontSizes.xs, marginTop: 2 },
+  lamalCta: {
+    backgroundColor: `${Colors.success}25`, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
+    borderRadius: 999,
+  },
+  lamalCtaTxt: { color: Colors.success, fontSize: FontSizes.sm, fontWeight: FontWeights.bold },
+
+  dedCard: { padding: Spacing.lg, marginBottom: Spacing.md },
+  dedHeader: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline',
     marginBottom: Spacing.md,
   },
-  sectionLabel: {
-    color: Colors.textSecondary,
-    fontSize: FontSizes.sm,
-    fontWeight: FontWeights.semibold,
-    marginBottom: Spacing.sm,
+  dedTitle: { color: Colors.text, fontSize: FontSizes.md, fontWeight: FontWeights.bold },
+  dedTotal: { color: Colors.success, fontSize: FontSizes.md, fontWeight: FontWeights.black },
+  dedRow: { flexDirection: 'row', paddingVertical: Spacing.sm, alignItems: 'center' },
+  dedRowBorder: { borderBottomWidth: 1, borderBottomColor: Colors.cardBorder },
+  dedLabel: { color: Colors.text, fontSize: FontSizes.sm, fontWeight: FontWeights.semibold },
+  dedSource: { color: Colors.textTertiary, fontSize: 10, marginTop: 2 },
+  dedAmount: { color: Colors.textSecondary, fontSize: FontSizes.sm, fontWeight: FontWeights.semibold },
+  taxableBox: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline',
+    marginTop: Spacing.md, paddingTop: Spacing.md,
+    borderTopWidth: 2, borderTopColor: Colors.primaryLight,
   },
-  cantonGrid: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-  },
-  cantonChip: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.md,
-    backgroundColor: Colors.card,
-    borderWidth: 1,
-    borderColor: Colors.cardBorder,
-  },
-  cantonChipSelected: {
-    backgroundColor: `${Colors.primary}20`,
-    borderColor: Colors.primary,
-  },
-  cantonChipText: {
-    color: Colors.textSecondary,
-    fontSize: FontSizes.sm,
-    fontWeight: FontWeights.bold,
-  },
-  cantonChipTextSelected: {
-    color: Colors.primary,
-  },
-  cantonInfo: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: Spacing.md,
-  },
-  cantonName: {
-    color: Colors.text,
-    fontSize: FontSizes.md,
-    fontWeight: FontWeights.semibold,
-  },
-  cantonRate: {
-    color: Colors.textSecondary,
-    fontSize: FontSizes.sm,
-  },
-  sliderCard: {
-    marginBottom: Spacing.md,
-  },
-  sliderHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.sm,
-  },
-  sliderLabel: {
-    color: Colors.textSecondary,
-    fontSize: FontSizes.sm,
-  },
-  sliderValue: {
-    color: Colors.text,
-    fontSize: FontSizes.lg,
-    fontWeight: FontWeights.bold,
-  },
-  slider: {
-    width: '100%',
-    height: 40,
-  },
-  sliderRange: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  sliderRangeText: {
-    color: Colors.textTertiary,
-    fontSize: FontSizes.xs,
-  },
-  savingsHighlight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    marginTop: Spacing.md,
-    backgroundColor: `${Colors.success}15`,
-    padding: Spacing.sm,
-    borderRadius: BorderRadius.sm,
-  },
-  savingsText: {
-    color: Colors.success,
-    fontSize: FontSizes.sm,
-    fontWeight: FontWeights.semibold,
-  },
-  statusCard: {
-    marginBottom: Spacing.md,
-  },
-  statusButtons: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-  },
-  statusButton: {
-    flex: 1,
-    paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.md,
-    backgroundColor: Colors.card,
-    borderWidth: 1,
-    borderColor: Colors.cardBorder,
-    alignItems: 'center',
-  },
-  statusButtonSelected: {
-    backgroundColor: `${Colors.primary}20`,
-    borderColor: Colors.primary,
-  },
-  statusButtonText: {
-    color: Colors.textSecondary,
-    fontSize: FontSizes.sm,
-    fontWeight: FontWeights.semibold,
-  },
-  statusButtonTextSelected: {
-    color: Colors.primary,
-  },
-  resultsCard: {
-    marginBottom: Spacing.md,
-  },
-  resultsTitle: {
-    color: Colors.text,
-    fontSize: FontSizes.lg,
-    fontWeight: FontWeights.bold,
-    marginBottom: Spacing.md,
-  },
-  resultRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: Spacing.sm,
-  },
-  resultRowHighlight: {
-    backgroundColor: Colors.card,
-    marginHorizontal: -Spacing.md,
-    paddingHorizontal: Spacing.md,
-    borderRadius: BorderRadius.sm,
-  },
-  resultLabel: {
-    color: Colors.textSecondary,
-    fontSize: FontSizes.sm,
-  },
-  resultLabelBold: {
-    color: Colors.text,
-    fontSize: FontSizes.sm,
-    fontWeight: FontWeights.semibold,
-  },
-  resultValue: {
-    color: Colors.text,
-    fontSize: FontSizes.sm,
-    fontWeight: FontWeights.semibold,
-  },
-  resultValueBold: {
-    color: Colors.text,
-    fontSize: FontSizes.md,
-    fontWeight: FontWeights.bold,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: Colors.cardBorder,
-    marginVertical: Spacing.sm,
-  },
-  totalRow: {
-    paddingVertical: Spacing.md,
-  },
-  totalLabel: {
-    color: Colors.text,
-    fontSize: FontSizes.lg,
-    fontWeight: FontWeights.bold,
-  },
-  totalValue: {
-    color: Colors.error,
-    fontSize: FontSizes.xl,
-    fontWeight: FontWeights.black,
-  },
-  effectiveRate: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: `${Colors.primary}15`,
-    padding: Spacing.md,
-    borderRadius: BorderRadius.md,
-    marginTop: Spacing.sm,
-  },
-  effectiveRateLabel: {
-    color: Colors.primary,
-    fontSize: FontSizes.sm,
-    fontWeight: FontWeights.semibold,
-  },
-  effectiveRateValue: {
-    color: Colors.primary,
-    fontSize: FontSizes.xl,
-    fontWeight: FontWeights.black,
-  },
-  rankingToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.sm,
-    paddingVertical: Spacing.md,
-    marginBottom: Spacing.md,
-  },
-  rankingToggleText: {
-    color: Colors.primary,
-    fontSize: FontSizes.sm,
-    fontWeight: FontWeights.semibold,
-  },
-  rankingCard: {
-    marginBottom: Spacing.md,
-  },
-  rankingTitle: {
-    color: Colors.text,
-    fontSize: FontSizes.md,
-    fontWeight: FontWeights.bold,
-    marginBottom: Spacing.md,
-  },
-  rankingItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: Spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.cardBorder,
-  },
-  rankingItemSelected: {
-    backgroundColor: `${Colors.primary}10`,
-    marginHorizontal: -Spacing.md,
-    paddingHorizontal: Spacing.md,
-    borderRadius: BorderRadius.sm,
-  },
-  rankingPosition: {
-    width: 40,
-  },
-  rankingNumber: {
-    color: Colors.textSecondary,
-    fontSize: FontSizes.sm,
-    fontWeight: FontWeights.bold,
-  },
-  rankingInfo: {
-    flex: 1,
-  },
-  rankingName: {
-    color: Colors.text,
-    fontSize: FontSizes.sm,
-    fontWeight: FontWeights.semibold,
-  },
-  rankingRate: {
-    color: Colors.textTertiary,
-    fontSize: FontSizes.xs,
-  },
-  rankingTax: {
-    alignItems: 'flex-end',
-  },
-  rankingTaxValue: {
-    color: Colors.text,
-    fontSize: FontSizes.sm,
-    fontWeight: FontWeights.bold,
-  },
-  rankingLamal: {
-    color: Colors.textTertiary,
-    fontSize: FontSizes.xs,
-  },
-  tipsCard: {
-    marginBottom: Spacing.md,
-  },
-  tipsTitle: {
-    color: Colors.text,
-    fontSize: FontSizes.md,
-    fontWeight: FontWeights.bold,
-    marginBottom: Spacing.md,
-  },
-  tipItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Spacing.sm,
-    marginBottom: Spacing.sm,
-  },
-  tipText: {
-    flex: 1,
-    color: Colors.textSecondary,
-    fontSize: FontSizes.sm,
-    lineHeight: 20,
-  },
+  taxableLbl: { color: Colors.text, fontSize: FontSizes.md, fontWeight: FontWeights.bold },
+  taxableVal: { color: Colors.primaryLight, fontSize: FontSizes.lg, fontWeight: FontWeights.black },
+
+  tipsCard: { padding: Spacing.lg },
+  tipsTitle: { color: Colors.text, fontSize: FontSizes.md, fontWeight: FontWeights.bold, marginBottom: Spacing.sm },
+  tipRow: { marginBottom: Spacing.sm },
+  tipTxt: { color: Colors.textSecondary, fontSize: FontSizes.sm, lineHeight: 20 },
 });

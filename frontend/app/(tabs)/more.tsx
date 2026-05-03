@@ -170,6 +170,8 @@ export default function MoreScreen() {
             </View>
           </Animated.View>
         )}
+
+        {sections.map((section, idx) => (
           <Animated.View
             key={section.title}
             entering={FadeInDown.duration(400).delay(100 + idx * 60)}

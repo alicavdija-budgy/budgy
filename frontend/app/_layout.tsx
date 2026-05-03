@@ -8,6 +8,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Platform, View, Text, StyleSheet, AppState, AppStateStatus } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Colors, FontSizes, FontWeights, Spacing } from '../src/constants/theme';
 import {
   requestNotificationPermissions,
@@ -120,10 +121,11 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <SafeAreaProvider>
-      <StatusBar style="light" />
-      <OfflineBadge />
-      <LockGate>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <StatusBar style="light" />
+        <OfflineBadge />
+        <LockGate>
         <Stack
           screenOptions={{
             headerShown: false,
@@ -148,6 +150,7 @@ export default function RootLayout() {
         </Stack>
       </LockGate>
     </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
 

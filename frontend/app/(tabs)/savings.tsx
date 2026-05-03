@@ -124,6 +124,26 @@ export default function SavingsScreen() {
 
   const COLORS = ['#6366F1', '#10B981', '#F59E0B', '#EC4899', '#EF4444', '#0EA5E9', '#8B5CF6', '#F97316'];
 
+  // Detect newly-completed goals outside of render (prevents render-phase setState)
+  useEffect(() => {
+    const newlyCompleted = savingsGoals.filter(
+      (g) => pct(g.saved, g.target) >= 100 && !celebratedIds.has(g.id)
+    );
+    if (newlyCompleted.length > 0) {
+      setCelebratedIds((prev) => {
+        const next = new Set(prev);
+        newlyCompleted.forEach((g) => next.add(g.id));
+        return next;
+      });
+      setConfetti(true);
+      if (Platform.OS !== 'web') {
+        try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
+      }
+      const timer = setTimeout(() => setConfetti(false), 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [savingsGoals]);
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Confetti overlay */}
@@ -191,17 +211,7 @@ export default function SavingsScreen() {
               return d.toLocaleDateString('fr-CH', { day: 'numeric', month: 'long', year: 'numeric' });
             })();
 
-            // Trigger confetti on newly-completed goal
-            if (isComplete && !celebratedIds.has(goal.id)) {
-              setTimeout(() => {
-                setCelebratedIds((prev) => new Set(prev).add(goal.id));
-                setConfetti(true);
-                if (Platform.OS !== 'web') {
-                  try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
-                }
-                setTimeout(() => setConfetti(false), 2500);
-              }, 200);
-            }
+            // Trigger is handled by the useEffect above to avoid render-phase setState
 
             return (
               <Card

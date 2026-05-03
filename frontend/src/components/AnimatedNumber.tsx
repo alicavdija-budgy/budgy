@@ -1,26 +1,19 @@
 /**
- * BUDGY - AnimatedNumber (count-up effect)
- * Smooth count-up animation for hero balance.
- * Uses react-native-reanimated for 60fps native driver.
+ * BUDGY - AnimatedNumber (robust count-up, no infinite loop)
+ * Uses JS setInterval with requestAnimationFrame for 60fps count-up.
+ * Safe for all platforms including iOS Expo Go.
  */
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Text, TextStyle, StyleProp } from 'react-native';
-import Animated, {
-  useSharedValue,
-  useDerivedValue,
-  withTiming,
-  Easing,
-  runOnJS,
-} from 'react-native-reanimated';
 
 interface Props {
   value: number;
-  duration?: number;           // ms
-  decimals?: number;           // number of decimals
-  prefix?: string;             // e.g. 'CHF '
+  duration?: number;
+  decimals?: number;
+  prefix?: string;
   style?: StyleProp<TextStyle>;
-  useSwissFormat?: boolean;    // 1'234.56 style
+  useSwissFormat?: boolean;
 }
 
 function formatCH(n: number, decimals: number): string {
@@ -38,27 +31,52 @@ export const AnimatedNumber: React.FC<Props> = ({
   style,
   useSwissFormat = true,
 }) => {
-  const [display, setDisplay] = React.useState<string>(
-    useSwissFormat ? formatCH(value, decimals) : value.toFixed(decimals)
-  );
-  const progress = useSharedValue(0);
-  const startRef = React.useRef(0);
-  const endRef = React.useRef(value);
+  const [display, setDisplay] = useState<number>(value);
+  const rafRef = useRef<number | null>(null);
+  const startValue = useRef<number>(value);
+  const startTime = useRef<number>(0);
+  const targetValue = useRef<number>(value);
 
   useEffect(() => {
-    startRef.current = parseFloat(display.replace(/[^0-9.-]/g, '')) || 0;
-    endRef.current = value;
-    progress.value = 0;
-    progress.value = withTiming(1, { duration, easing: Easing.out(Easing.cubic) });
-  }, [value]);
+    // Cancel any ongoing animation
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
 
-  useDerivedValue(() => {
-    const cur = startRef.current + (endRef.current - startRef.current) * progress.value;
-    const formatted = useSwissFormat ? formatCH(cur, decimals) : cur.toFixed(decimals);
-    runOnJS(setDisplay)(formatted);
-  });
+    startValue.current = display;
+    targetValue.current = value;
+    startTime.current = performance.now();
 
-  return <Text style={style}>{prefix}{display}</Text>;
+    const tick = (now: number) => {
+      const elapsed = now - startTime.current;
+      const progress = Math.min(1, elapsed / duration);
+      // ease-out cubic
+      const eased = 1 - Math.pow(1 - progress, 3);
+      const current = startValue.current + (targetValue.current - startValue.current) * eased;
+      setDisplay(current);
+
+      if (progress < 1) {
+        rafRef.current = requestAnimationFrame(tick);
+      } else {
+        setDisplay(targetValue.current);
+        rafRef.current = null;
+      }
+    };
+
+    rafRef.current = requestAnimationFrame(tick);
+
+    return () => {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+    };
+  }, [value, duration]);
+
+  const formatted = useSwissFormat ? formatCH(display, decimals) : display.toFixed(decimals);
+
+  return <Text style={style}>{prefix}{formatted}</Text>;
 };
 
 export default AnimatedNumber;

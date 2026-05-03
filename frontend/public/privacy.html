@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Politique de confidentialité — Budgy</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+    background: #0A0A14; color: #F7F7FB; line-height: 1.7;
+  }
+  .hero {
+    background: linear-gradient(135deg, #7C3AED, #6366F1, #22D3EE);
+    padding: 60px 20px; text-align: center;
+  }
+  .hero h1 { margin: 0; font-size: 36px; font-weight: 900; letter-spacing: -1px; }
+  .hero p { margin: 8px 0 0; opacity: 0.9; font-size: 14px; }
+  .container {
+    max-width: 760px; margin: 0 auto; padding: 40px 24px 80px;
+  }
+  h2 {
+    color: #FFF; font-size: 22px; font-weight: 800; margin-top: 40px; margin-bottom: 12px;
+    border-left: 4px solid #7C3AED; padding-left: 12px;
+  }
+  p, li { color: #9CA3AF; font-size: 15px; }
+  strong { color: #FFF; }
+  a { color: #A78BFA; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  ul { padding-left: 20px; }
+  .meta { color: #6B7280; font-size: 13px; margin-bottom: 30px; }
+  .footer {
+    border-top: 1px solid rgba(255,255,255,0.08);
+    padding: 30px 0; margin-top: 60px; text-align: center; color: #6B7280; font-size: 13px;
+  }
+</style>
+</head>
+<body>
+  <div class="hero">
+    <h1>Politique de confidentialité</h1>
+    <p>Budgy — Application suisse de gestion budgétaire</p>
+  </div>
+
+  <div class="container">
+    <p class="meta">Dernière mise à jour : <span id="date"></span></p>
+
+    <p>
+      La présente politique décrit comment <strong>Budgy</strong> (« l’application ») collecte, utilise et protège vos données personnelles.
+      Elle est conforme à la <strong>Loi fédérale suisse sur la protection des données (nLPD)</strong> en vigueur depuis le 1ᵉʳ septembre 2023,
+      ainsi qu’au <strong>Règlement général européen sur la protection des données (RGPD)</strong>.
+    </p>
+
+    <h2>1. Éditeur</h2>
+    <p>
+      L’application est éditée par un particulier domicilié en Suisse, à titre de projet personnel non commercial. Aucun revenu publicitaire
+      n’est perçu. Les abonnements « Budgy Pro » couvrent uniquement les frais d’infrastructure (hébergement, API d’intelligence artificielle, stores).
+    </p>
+
+    <h2>2. Données collectées</h2>
+    <p>L’application est conçue selon le principe <strong>privacy-by-design</strong>. Les données traitées incluent :</p>
+    <ul>
+      <li><strong>Compte utilisateur</strong> : e-mail, nom, mot de passe chiffré (hash).</li>
+      <li><strong>Données financières saisies manuellement</strong> : transactions, budgets, objectifs, revenus, dettes.</li>
+      <li><strong>Préférences</strong> : canton, devise, langue, thème, notifications.</li>
+      <li><strong>Contenus scannés</strong> : images de tickets/reçus (stockées localement + optionnellement cloud).</li>
+      <li><strong>Identifiants biométriques</strong> : aucun — nous utilisons uniquement l’API système Apple/Google qui garde ces données localement sur votre appareil.</li>
+    </ul>
+
+    <h2>3. Finalités du traitement</h2>
+    <ul>
+      <li>Fournir les fonctionnalités de gestion budgétaire demandées par l’utilisateur.</li>
+      <li>Synchroniser vos données entre vos appareils (si vous activez la synchronisation cloud).</li>
+      <li>Exécuter les analyses d’IA que vous déclenchez (Coach, Scanner OCR, Économiseur, etc.).</li>
+      <li>Vous envoyer des notifications locales (rappels mensuels).</li>
+    </ul>
+
+    <h2>4. Stockage et localisation</h2>
+    <p>
+      Les données sont stockées principalement sur votre appareil (AsyncStorage chiffré par le système iOS/Android). Si vous activez la synchronisation
+      cloud, elles sont répliquées vers une instance <strong>Supabase auto-hébergée dans l’Union européenne (Allemagne)</strong>, protégée par Row Level Security (RLS) :
+      vous seul pouvez lire/modifier vos lignes grâce à votre identifiant utilisateur.
+    </p>
+
+    <h2>5. Analyses par intelligence artificielle</h2>
+    <p>
+      Lorsque vous utilisez une fonctionnalité d’IA, un résumé anonymisé de vos données est transmis à l’API d’Emergent (passerelle vers OpenAI / Google).
+      Aucune donnée d’identification directe (nom, e-mail) n’est envoyée. Les transmissions sont chiffrées en TLS. L’éditeur ne conserve aucune trace persistante.
+    </p>
+
+    <h2>6. Partage de données</h2>
+    <p>Aucune donnée personnelle n’est vendue, louée ou partagée à des fins publicitaires. Transferts possibles :</p>
+    <ul>
+      <li>Supabase (hébergement de la base de données, UE).</li>
+      <li>Emergent / OpenAI / Google (API d’IA, ponctuellement).</li>
+      <li>Apple / Google (paiements in-app via RevenueCat, conformément aux CGV des stores).</li>
+    </ul>
+
+    <h2>7. Durée de conservation</h2>
+    <p>
+      Vos données sont conservées tant que votre compte est actif. En cas de suppression, toutes les données associées sont effacées de manière
+      irréversible dans un délai de 30 jours, sauf obligation légale contraire.
+    </p>
+
+    <h2>8. Vos droits</h2>
+    <p>
+      Conformément à la nLPD et au RGPD, vous disposez des droits d’accès, de rectification, de suppression, de limitation, de portabilité et d’opposition.
+      Ces droits peuvent être exercés depuis l’application (Paramètres → Supprimer mes données) ou par e-mail à <a href="mailto:support@budgy.ch">support@budgy.ch</a>.
+    </p>
+
+    <h2>9. Sécurité</h2>
+    <p>
+      Mesures techniques : chiffrement TLS, verrou d’application PIN/Face ID, hash SHA-256 des codes sensibles, stockage dans le keychain iOS / Keystore Android.
+      Vous êtes également responsable de la sécurité de votre appareil (verrouillage, mise à jour système).
+    </p>
+
+    <h2>10. Mineurs</h2>
+    <p>
+      L’application n’est pas destinée aux personnes de moins de 16 ans. Aucune donnée n’est sciemment collectée auprès de mineurs.
+    </p>
+
+    <h2>11. Modifications</h2>
+    <p>
+      Cette politique peut être mise à jour. La version la plus récente sera toujours disponible depuis le menu « Informations légales » de l’application.
+    </p>
+
+    <h2>12. Contact</h2>
+    <p>
+      Pour toute question concernant vos données personnelles :<br>
+      <strong><a href="mailto:support@budgy.ch">support@budgy.ch</a></strong>
+    </p>
+
+    <div class="footer">
+      © <span id="year"></span> Budgy — Édité en Suisse 🇨🇭
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('year').textContent = new Date().getFullYear();
+    document.getElementById('date').textContent = new Date().toLocaleDateString('fr-CH');
+  </script>
+</body>
+</html>

@@ -245,6 +245,30 @@ frontend:
         agent: "main"
         comment: "NEW endpoint using emergentintegrations (gpt-4o-mini) analyzing user's financial snapshot (income, transactions, recurring expenses, contracts, debts) and returning structured JSON with: summary, monthly_potential, yearly_potential, proposals[{title, category, current_monthly, potential_saving_monthly/yearly, effort, action, explanation}], tips[]. Includes heuristic fallback when LLM fails. Tested: VD/7500/month with Netflix/Spotify/LAMal Swica/car insurance + high-rate debt → CHF 238/mo = CHF 2856/yr savings across 4 proposals (LAMal comparison, Netflix cancel, debt consolidation, Spotify reduction). All schema fields populated correctly. Verified via curl."
 
+  - task: "CRITICAL FIX - iPhone auto-close crash (GestureHandlerRootView + AnimatedNumber + confetti trigger)"
+    implemented: true
+    working: "NA"
+    file: "app/frontend/app/_layout.tsx, app/frontend/src/components/AnimatedNumber.tsx, app/frontend/app/(tabs)/savings.tsx"
+    stuck_count: 0
+    priority: "critical"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "CRASH FIX: User reported iPhone auto-close. Root causes: (1) Missing GestureHandlerRootView wrapper causing native crash on iOS via Swipeable. (2) AnimatedNumber used useDerivedValue+runOnJS, rewritten with RAF+ease-out. (3) Confetti trigger moved from .map() to useEffect. Bundle 1607 modules, all routes HTTP 200."
+
+  - task: "PHASE 3 - App Store readiness (Splash screen + Privacy HTML + ASO copy)"
+    implemented: true
+    working: true
+    file: "app/frontend/app/splash.tsx, app/frontend/public/privacy.html, app/frontend/app-store-assets/APP_STORE_TEXTS.md"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "PHASE 3: Splash animé violet→cyan, privacy.html hébergé-ready (RGPD+nLPD 12 sections), APP_STORE_TEXTS.md complet (nom/sous-titre/description/mots-clés/5 screenshots headlines/config Apple)."
+
   - task: "PHASE 2 - Premium screens: Invoices swipe-to-pay, Recurring % revenue, Budgets animated bars, Savings confetti + projection"
     implemented: true
     working: "NA"

@@ -898,12 +898,14 @@ async def tax_simulate(req: TaxSimulatorRequest):
 # ──────────────────────────────────────────────────
 class OptimizerRequest(BaseModel):
     monthly_income: float
+    yearly_income: float | None = None
     canton: str = "VD"
     transactions: list[dict] = []        # [{title, amount, category, date}]
     recurring_expenses: list[dict] = []  # [{title, amount, category, frequency}]
     contracts: list[dict] = []           # [{name, type, monthlyCost}]
     debts: list[dict] = []               # [{name, balance, rate, monthlyPayment}]
     goals: list[dict] = []               # [{title, target, saved, deadline}]
+    currency: str = "CHF"
 
 
 class SavingProposal(BaseModel):

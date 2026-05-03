@@ -54,10 +54,10 @@ export default function MoreScreen() {
       items: [
         { id: 'incomes', title: 'Mes revenus', subtitle: 'Salaire · 13ème · Bonus · Locations', icon: 'cash', color: C.success, route: '/more/incomes' },
         { id: 'budgets', title: 'Budgets', subtitle: 'Enveloppes mensuelles', icon: 'wallet', color: C.warning, route: '/more/budgets' },
-        { id: 'recurring', title: 'Charges récurrentes', icon: 'refresh', color: C.purple, route: '/more/recurring' },
+        { id: 'recurring', title: 'Charges récurrentes', subtitle: 'Frais & abonnements', icon: 'refresh', color: C.purple, route: '/more/recurring', pro: true },
         { id: 'investments', title: 'Investissements', icon: 'trending-up', color: C.success, route: '/more/investments', pro: true },
         { id: 'debts', title: 'Dettes', icon: 'card', color: C.error, route: '/more/debts' },
-        { id: 'invoices', title: 'Factures', icon: 'receipt', color: C.orange, route: '/more/invoices' },
+        { id: 'invoices', title: 'Factures', subtitle: 'QR-bills · paiements', icon: 'receipt', color: C.orange, route: '/more/invoices', pro: true },
         { id: 'lamal', title: 'LAMal & Subsides', subtitle: '26 cantons · 15 assureurs', icon: 'shield-checkmark', color: C.cyan, route: '/more/lamal-comparator' },
       ],
     },
@@ -195,6 +195,8 @@ export default function MoreScreen() {
                         'tax': 'feature_tax',
                         'export': 'feature_export',
                         'investments': 'feature_analytics',
+                        'invoices': 'feature_export',
+                        'recurring': 'feature_analytics',
                       };
                       const trigger = triggerMap[item.id] || 'manual';
                       paywall.open(trigger as any);

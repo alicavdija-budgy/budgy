@@ -6,7 +6,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, ScrollView, Alert,
+  KeyboardAvoidingView, Platform, ScrollView, Alert, Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -192,11 +192,13 @@ export default function AuthScreen() {
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           {/* Logo */}
           <View style={styles.logoContainer}>
-            <LinearGradient colors={Colors.gradientPrimary as [string, string]} style={styles.logoGradient}>
-              <Ionicons name="flash" size={40} color={Colors.text} />
-            </LinearGradient>
-            <Text style={styles.logoText}>GUARDIAN</Text>
-            <Text style={styles.tagline}>Gérez votre argent intelligemment</Text>
+            <Image
+              source={require('../assets/images/icon.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
+            <Text style={styles.logoText}>Budgy</Text>
+            <Text style={styles.tagline}>Vos finances, en toute sérénité 🇨🇭</Text>
           </View>
 
           {/* Mode Toggle */}
@@ -287,6 +289,7 @@ const styles = StyleSheet.create({
   scroll: { flexGrow: 1, padding: Spacing.xl, justifyContent: 'center' },
   logoContainer: { alignItems: 'center', marginBottom: Spacing.xxxl },
   logoGradient: { width: 80, height: 80, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.lg },
+  logoImage: { width: 96, height: 96, borderRadius: 24, marginBottom: Spacing.lg },
   logoText: { color: Colors.text, fontSize: FontSizes.xxl, fontWeight: FontWeights.black, letterSpacing: 2 },
   tagline: { color: Colors.textSecondary, fontSize: FontSizes.md, marginTop: Spacing.sm },
   modeToggle: { flexDirection: 'row', backgroundColor: Colors.card, borderRadius: BorderRadius.lg, padding: 4, marginBottom: Spacing.xxl },

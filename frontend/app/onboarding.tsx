@@ -253,12 +253,12 @@ export default function OnboardingScreen() {
       <View style={[styles.container, { paddingTop: insets.top + 20 }]}>
         <View style={styles.topLogo}>
           <LinearGradient
-            colors={Colors.gradientPrimary as [string, string]}
+            colors={['#34D399', '#22D3EE']}
             style={styles.smallLogo}
           >
-            <Ionicons name="flash" size={16} color={Colors.text} />
+            <Ionicons name="trending-up" size={16} color="#0E1530" />
           </LinearGradient>
-          <Text style={styles.smallLogoText}>GUARDIAN</Text>
+          <Text style={styles.smallLogoText}>Budgy</Text>
         </View>
 
         <FlatList

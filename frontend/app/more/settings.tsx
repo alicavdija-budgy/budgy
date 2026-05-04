@@ -21,6 +21,7 @@ import { LANGUAGES } from '../../src/i18n/translations';
 import { SUPPORTED_CURRENCIES } from '../../src/utils/currency';
 import { useTranslation } from '../../src/hooks/useTranslation';
 import { useMoney } from '../../src/hooks/useMoney';
+import Constants from 'expo-constants';
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
@@ -28,26 +29,27 @@ export default function SettingsScreen() {
   const { preferences, setPreferences, logout, clearAllData } = useStore();
   const { t } = useTranslation();
   const m = useMoney();
+  const appVersion = '3.7.0';
 
   const handleLogout = () => {
     Alert.alert(
-      'Déconnexion',
-      'Êtes-vous sûr de vouloir vous déconnecter ?',
+      t('settings.logoutConfirmTitle'),
+      t('settings.logoutConfirm'),
       [
-        { text: 'Annuler', style: 'cancel' },
-        { text: 'Déconnecter', onPress: logout },
+        { text: t('common.cancel'), style: 'cancel' },
+        { text: t('settings.logout'), onPress: logout },
       ]
     );
   };
 
   const handleClearData = () => {
     Alert.alert(
-      'Supprimer les données',
-      'Cette action est irréversible. Toutes vos données seront supprimées.',
+      t('settings.clearConfirmTitle'),
+      t('settings.clearConfirm'),
       [
-        { text: 'Annuler', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Supprimer',
+          text: t('common.delete'),
           style: 'destructive',
           onPress: clearAllData,
         },
@@ -120,7 +122,7 @@ export default function SettingsScreen() {
             ))}
           </View>
           <Text style={{ color: Colors.textSecondary, fontSize: 11, marginTop: 10, textAlign: 'center' }}>
-            {t('settings.currencyConverted', { c: m.code })} · ex : {m.format(1000)}
+            {t('settings.currencyConverted', { c: m.code })} · {t('settings.example')} : {m.format(1000)}
           </Text>
         </Card>
 
@@ -154,17 +156,17 @@ export default function SettingsScreen() {
             })}
           </View>
           <Text style={styles.themeHint}>
-            "Auto" suit automatiquement le thème de votre appareil.
+            {t('settings.themeHint')}
           </Text>
         </Card>
 
         {/* Data Info */}
         <Card style={styles.card}>
-          <Text style={styles.sectionTitle}>Données</Text>
+          <Text style={styles.sectionTitle}>{t('settings.dataSection')}</Text>
           {[
-            { label: 'Sauvegarde', value: 'Temps réel · local' },
-            { label: 'Serveurs', value: 'Aucun · 100% privé' },
-            { label: 'Version', value: '3.0.0 · App Store Ready' },
+            { label: t('settings.backup'), value: t('settings.backupValue') },
+            { label: t('settings.servers'), value: t('settings.serversValue') },
+            { label: t('settings.version'), value: `${appVersion} · ${t('settings.appStoreReady')}` },
           ].map((item, idx) => (
             <View key={idx} style={styles.infoRow}>
               <Text style={styles.infoLabel}>{item.label}</Text>
@@ -176,17 +178,17 @@ export default function SettingsScreen() {
         {/* Actions */}
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <Ionicons name="log-out-outline" size={20} color={Colors.warning} />
-          <Text style={styles.logoutText}>Déconnexion</Text>
+          <Text style={styles.logoutText}>{t('settings.logout')}</Text>
         </TouchableOpacity>
 
         <Card style={[styles.card, styles.dangerCard]}>
-          <Text style={styles.dangerTitle}>⚠️ Zone dangereuse</Text>
+          <Text style={styles.dangerTitle}>{t('settings.dangerZone')}</Text>
           <Text style={styles.dangerText}>
-            Supprime toutes vos données localement. Irréversible.
+            {t('settings.dangerText')}
           </Text>
           <TouchableOpacity style={styles.deleteButton} onPress={handleClearData}>
             <Ionicons name="trash-outline" size={18} color={Colors.error} />
-            <Text style={styles.deleteText}>Supprimer mes données</Text>
+            <Text style={styles.deleteText}>{t('settings.clearData')}</Text>
           </TouchableOpacity>
         </Card>
 

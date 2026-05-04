@@ -5,7 +5,7 @@
 
 import React, { useState, useMemo } from 'react';
 import {
-  View, Text, ScrollView, StyleSheet, TouchableOpacity,
+  View, Text, ScrollView, StyleSheet, TouchableOpacity, Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -205,9 +205,19 @@ export default function LamalComparatorScreen() {
             <Card style={styles.noteCard}>
               <Ionicons name="information-circle" size={18} color={Colors.info} />
               <Text style={styles.noteTxt}>
-                Primes indicatives basées sur les données Priminfo OFSP 2026. Pour des offres personnalisées, consultez priminfo.admin.ch ou contactez directement les assureurs.
+                Estimations basées sur les indices Priminfo 2026. Le classement réel des assureurs varie selon votre région et âge précis. Consultez le simulateur officiel pour des montants exacts.
               </Text>
             </Card>
+
+            <TouchableOpacity
+              style={styles.priminfoBtn}
+              onPress={() => Linking.openURL('https://www.priminfo.admin.ch/fr/praemien')}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="open-outline" size={18} color={Colors.primary} />
+              <Text style={styles.priminfoBtnTxt}>Voir le classement officiel sur Priminfo.admin.ch</Text>
+              <Ionicons name="chevron-forward" size={16} color={Colors.primary} />
+            </TouchableOpacity>
           </>
         )}
 
@@ -375,6 +385,16 @@ const styles = StyleSheet.create({
   insurerAnnual: { color: Colors.textTertiary, fontSize: FontSizes.xs },
   noteCard: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, marginTop: Spacing.md },
   noteTxt: { flex: 1, color: Colors.textSecondary, fontSize: FontSizes.sm, lineHeight: 20 },
+  priminfoBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: Spacing.sm,
+    backgroundColor: 'rgba(52,211,153,0.1)',
+    borderWidth: 1, borderColor: Colors.primary,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+    marginTop: Spacing.md,
+  },
+  priminfoBtnTxt: { color: Colors.primary, fontSize: FontSizes.sm, fontWeight: FontWeights.bold, flex: 1, textAlign: 'center' },
   optCard: { marginBottom: Spacing.md },
   optRow: { flexDirection: 'row', gap: Spacing.md },
   optBox: { flex: 1, alignItems: 'center', padding: Spacing.md, borderRadius: BorderRadius.md, borderWidth: 2, backgroundColor: Colors.card },

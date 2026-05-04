@@ -16,6 +16,7 @@ import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../src/co
 import { useStore } from '../src/stores/useStore';
 import { Button } from '../src/components/ui';
 import { supabase, isSupabaseConfigured } from '../src/lib/supabase';
+import { useTranslation } from '../src/hooks/useTranslation';
 import { pullAllFromCloud, pushAllToCloud } from '../src/services/cloudSync';
 
 // Hardcoded Pro accounts (for users whose Supabase can't send confirmation emails)
@@ -25,6 +26,7 @@ const PRO_ACCOUNTS: Record<string, { password: string; name: string }> = {
 
 export default function AuthScreen() {
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   const router = useRouter();
   const { setUser, setPro, loadSeedData, setPreferences } = useStore();
 
@@ -39,7 +41,7 @@ export default function AuthScreen() {
 
   const validate = (): boolean => {
     const errs: Record<string, string> = {};
-    if (!email.includes('@')) errs.email = 'Email invalide';
+    if (!email.includes('@')) errs.email = t('auth.errEmail');
     if (password.length < 6) errs.password = 'Minimum 6 caractères';
     if (mode === 'register') {
       if (!name.trim()) errs.name = 'Nom requis';
@@ -198,7 +200,7 @@ export default function AuthScreen() {
               resizeMode="contain"
             />
             <Text style={styles.logoText}>Budgy</Text>
-            <Text style={styles.tagline}>Vos finances, en toute sérénité 🇨🇭</Text>
+            <Text style={styles.tagline}>{t('auth.tagline')}</Text>
           </View>
 
           {/* Mode Toggle */}
@@ -206,7 +208,7 @@ export default function AuthScreen() {
             {(['login', 'register'] as const).map((m) => (
               <TouchableOpacity key={m} testID={`auth-mode-${m}`} style={[styles.modeButton, mode === m && styles.modeButtonActive]} onPress={() => { setMode(m); setErrors({}); }}>
                 <Text style={[styles.modeButtonText, mode === m && styles.modeButtonTextActive]}>
-                  {m === 'login' ? 'Connexion' : 'Créer un compte'}
+                  {m === 'login' ? t('auth.login') : t('auth.signup')}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -226,16 +228,16 @@ export default function AuthScreen() {
             )}
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Email</Text>
+              <Text style={styles.label}>{t('auth.email')}</Text>
               <View style={[styles.inputContainer, errors.email && styles.inputError]}>
                 <Ionicons name="mail-outline" size={20} color={Colors.textTertiary} />
-                <TextInput testID="auth-email-input" style={styles.input} value={email} onChangeText={setEmail} placeholder="email@exemple.ch" placeholderTextColor={Colors.textTertiary} keyboardType="email-address" autoCapitalize="none" autoCorrect={false} />
+                <TextInput testID="auth-email-input" style={styles.input} value={email} onChangeText={setEmail} placeholder={t("auth.emailPlaceholder")} placeholderTextColor={Colors.textTertiary} keyboardType="email-address" autoCapitalize="none" autoCorrect={false} />
               </View>
               {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Mot de passe</Text>
+              <Text style={styles.label}>{t('auth.password')}</Text>
               <View style={[styles.inputContainer, errors.password && styles.inputError]}>
                 <Ionicons name="lock-closed-outline" size={20} color={Colors.textTertiary} />
                 <TextInput testID="auth-password-input" style={styles.input} value={password} onChangeText={setPassword} placeholder="••••••••" placeholderTextColor={Colors.textTertiary} secureTextEntry={!showPassword} />
@@ -257,7 +259,7 @@ export default function AuthScreen() {
               </View>
             )}
 
-            <Button title={mode === 'login' ? 'Se connecter' : 'Créer mon compte'} onPress={handleSubmit} loading={loading} fullWidth size="lg" style={{ marginTop: Spacing.lg }} />
+            <Button title={mode === 'login' ? t('auth.loginCta') : t('auth.signupCta')} onPress={handleSubmit} loading={loading} fullWidth size="lg" style={{ marginTop: Spacing.lg }} />
           </View>
 
           {/* Cloud indicator */}
@@ -271,7 +273,7 @@ export default function AuthScreen() {
           {/* Demo Mode */}
           <TouchableOpacity testID="demo-mode-button" style={styles.demoButton} onPress={handleDemoMode} disabled={loading}>
             <Ionicons name="flash" size={16} color={Colors.primary} />
-            <Text style={styles.demoButtonText}>Essayer en mode démo (Pro activé)</Text>
+            <Text style={styles.demoButtonText}>{t('auth.demoMode')}</Text>
           </TouchableOpacity>
 
           <Text style={styles.privacyNote}>

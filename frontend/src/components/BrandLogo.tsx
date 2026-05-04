@@ -1,13 +1,16 @@
 /**
- * BUDGY - BrandLogo (with real images via Clearbit Logo API)
- * Loads real brand logo via https://logo.clearbit.com/{domain}
- * Falls back gracefully to a colored initials tile if:
- *  - no domain in brand DB
- *  - image fails to load
- *  - no brand detected (generic tile with initials + category color)
+ * BUDGY - BrandLogo
+ * Loads real brand logos via reliable favicon CDNs.
+ *
+ * Source chain (with auto-fallback on error):
+ *   1. https://icons.duckduckgo.com/ip3/{domain}.ico    (HQ, returns 200)
+ *   2. https://www.google.com/s2/favicons?domain={domain}&sz=128 (always works)
+ *   3. Colored initials tile (offline fallback)
+ *
+ * (Note: Clearbit Logo API was shut down by HubSpot in 2024, hence this migration.)
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, Image, ViewStyle } from 'react-native';
 import { findBrand, initialsFromText, Brand } from '../data/swiss-brands';
 import { Colors } from '../constants/theme';
@@ -24,6 +27,12 @@ interface Props {
 const SIZES = { xs: 32, sm: 40, md: 48, lg: 56 };
 const FONT_SIZES = { xs: 12, sm: 14, md: 16, lg: 20 };
 
+const buildSources = (domain: string) => [
+  `https://icons.duckduckgo.com/ip3/${domain}.ico`,
+  `https://www.google.com/s2/favicons?domain=${domain}&sz=128`,
+  `https://${domain}/favicon.ico`,
+];
+
 export const BrandLogo: React.FC<Props> = ({
   merchant,
   fallbackColor,
@@ -33,29 +42,41 @@ export const BrandLogo: React.FC<Props> = ({
   style,
 }) => {
   const brand: Brand | null = findBrand(merchant);
-  const [imgError, setImgError] = useState(false);
+  const [sourceIdx, setSourceIdx] = useState(0);
+
+  const sources = useMemo(
+    () => (brand?.domain ? buildSources(brand.domain) : []),
+    [brand?.domain]
+  );
 
   const diameter = SIZES[size];
   const fontSize = FONT_SIZES[size];
 
-  const logoUrl = brand?.domain && !imgError
-    ? `https://logo.clearbit.com/${brand.domain}?size=128`
-    : null;
+  const logoUrl = sources[sourceIdx] || null;
+  const exhausted = sourceIdx >= sources.length;
 
   const bg = brand ? brand.color : (fallbackColor || `${Colors.primary}30`);
   const textColor = brand?.textColor || '#FFFFFF';
   const initials = brand?.initials || initialsFromText(merchant);
   const emoji = brand?.emoji || fallbackEmoji || '';
 
+  const handleError = () => {
+    if (sourceIdx < sources.length - 1) {
+      setSourceIdx(sourceIdx + 1);
+    } else {
+      setSourceIdx(sources.length); // mark exhausted
+    }
+  };
+
   return (
     <View style={[styles.wrap, { width: diameter, height: diameter }, style]}>
-      {logoUrl ? (
+      {logoUrl && !exhausted ? (
         <View style={[styles.imgWrap, { width: diameter, height: diameter, borderRadius: diameter / 2, backgroundColor: '#FFF' }]}>
           <Image
             source={{ uri: logoUrl }}
-            style={{ width: diameter - 6, height: diameter - 6, borderRadius: (diameter - 6) / 2 }}
+            style={{ width: diameter - 8, height: diameter - 8, borderRadius: (diameter - 8) / 2 }}
             resizeMode="contain"
-            onError={() => setImgError(true)}
+            onError={handleError}
           />
         </View>
       ) : (

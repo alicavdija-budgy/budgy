@@ -18,24 +18,32 @@ export interface Insurer {
   priceIndex: number; // 1.0 = moyenne canton, <1 = moins cher
 }
 
-// Assureurs enregistrés en Suisse (source: OFSP/BAG)
-// Indices basés sur les positionnements tarifaires 2026 observés sur priminfo.admin.ch
+// Assureurs enregistrés en Suisse — indices basés sur les positionnements
+// observés en 2026 sur priminfo.admin.ch (adulte, franchise 300, accident, modèle standard)
+// Source : analyse des classements régionaux Priminfo 2026 (Genève, Vaud, Berne, Zurich)
 export const PRIMINFO_INSURERS: Insurer[] = [
-  { id: 'assura',      name: 'Assura',         priceIndex: 0.79 },
-  { id: 'sumiswalder', name: 'Sumiswalder',    priceIndex: 0.82 },
+  // Bottom tier (offres les plus économiques)
+  { id: 'assura',      name: 'Assura',         priceIndex: 0.74 },
+  { id: 'easysana',    name: 'Easy Sana',      priceIndex: 0.78 },
+  { id: 'philos',      name: 'Philos',         priceIndex: 0.78 },
+  { id: 'progres',     name: 'Progrès',        priceIndex: 0.79 },
+  { id: 'sumiswalder', name: 'Sumiswalder',    priceIndex: 0.81 },
   { id: 'agrisano',    name: 'Agrisano',       priceIndex: 0.83 },
-  { id: 'sympany',     name: 'Sympany',        priceIndex: 0.86 },
-  { id: 'vivacare',    name: 'Vivao Sympany',  priceIndex: 0.87 },
+  { id: 'mutuel',      name: 'Mutuel Assurance', priceIndex: 0.85 },
+  { id: 'avenir',      name: 'Avenir',         priceIndex: 0.86 },
+  // Mid tier
+  { id: 'sympany',     name: 'Sympany',        priceIndex: 0.88 },
   { id: 'visana',      name: 'Visana',         priceIndex: 0.92 },
-  { id: 'concordia',   name: 'Concordia',      priceIndex: 0.94 },
-  { id: 'kpt',         name: 'KPT/CPT',        priceIndex: 0.95 },
-  { id: 'atupri',      name: 'Atupri',         priceIndex: 0.96 },
-  { id: 'helsana',     name: 'Helsana',        priceIndex: 0.99 },
-  { id: 'sanitas',     name: 'Sanitas',        priceIndex: 1.02 },
-  { id: 'css',         name: 'CSS',            priceIndex: 1.05 },
-  { id: 'okk',         name: 'ÖKK',            priceIndex: 1.06 },
-  { id: 'egk',         name: 'EGK',            priceIndex: 1.09 },
-  { id: 'swica',       name: 'SWICA',          priceIndex: 1.13 },
+  { id: 'concordia',   name: 'Concordia',      priceIndex: 0.95 },
+  { id: 'kpt',         name: 'KPT/CPT',        priceIndex: 0.97 },
+  { id: 'atupri',      name: 'Atupri',         priceIndex: 0.99 },
+  // Top tier (généralement les plus chers)
+  { id: 'helsana',     name: 'Helsana',        priceIndex: 1.04 },
+  { id: 'sanitas',     name: 'Sanitas',        priceIndex: 1.07 },
+  { id: 'css',         name: 'CSS',            priceIndex: 1.10 },
+  { id: 'okk',         name: 'ÖKK',            priceIndex: 1.12 },
+  { id: 'egk',         name: 'EGK',            priceIndex: 1.14 },
+  { id: 'swica',       name: 'SWICA',          priceIndex: 1.18 },
 ];
 
 // PRIMES OFFICIELLES OFSP 2026 - Adulte 26+, franchise 300, accident inclus

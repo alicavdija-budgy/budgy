@@ -31,6 +31,7 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import { usePremiumStore, type Plan } from '../src/stores/usePremiumStore';
+import { useTranslation } from '../src/hooks/useTranslation';
 
 const PRICE_MONTHLY = 4.90;
 const PRICE_ANNUAL = 39.90;
@@ -121,6 +122,7 @@ export default function PaywallScreen() {
   const [selected, setSelected] = useState<Plan>('annual');
   const [processing, setProcessing] = useState(false);
 
+  const { t } = useTranslation();
   const startTrial = usePremiumStore((s) => s.startTrial);
   const purchase = usePremiumStore((s) => s.purchase);
   const markDismissed = usePremiumStore((s) => s.markPaywallDismissed);
@@ -199,7 +201,7 @@ export default function PaywallScreen() {
           }}
           hitSlop={14}
         >
-          <Text style={styles.restoreLink}>Restaurer</Text>
+          <Text style={styles.restoreLink}>{t('paywall.restore')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -286,7 +288,7 @@ export default function PaywallScreen() {
                 end={{ x: 1, y: 0 }}
                 style={styles.recommendBadge}
               >
-                <Text style={styles.recommendText}>⭐ MEILLEURE OFFRE · -{DISCOUNT}%</Text>
+                <Text style={styles.recommendText}>⭐ {t('paywall.bestOffer')} · -{DISCOUNT}%</Text>
               </LinearGradient>
             )}
             <View style={styles.planRow}>
@@ -294,7 +296,7 @@ export default function PaywallScreen() {
                 {selected === 'annual' && <View style={styles.planRadioDot} />}
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.planTitle}>Annuel</Text>
+                <Text style={styles.planTitle}>{t('paywall.annual')}</Text>
                 <Text style={styles.planSub}>
                   CHF {(PRICE_ANNUAL / 12).toFixed(2)}/mois · facturé CHF {PRICE_ANNUAL.toFixed(2)}/an
                 </Text>
@@ -320,7 +322,7 @@ export default function PaywallScreen() {
                 {selected === 'monthly' && <View style={styles.planRadioDot} />}
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.planTitle}>Mensuel</Text>
+                <Text style={styles.planTitle}>{t('paywall.monthly')}</Text>
                 <Text style={styles.planSub}>Flexibilité totale, annulable chaque mois.</Text>
               </View>
               <View style={{ alignItems: 'flex-end' }}>
@@ -335,15 +337,15 @@ export default function PaywallScreen() {
         <View style={styles.reassureRow}>
           <View style={styles.reassureItem}>
             <Ionicons name="shield-checkmark" size={16} color="#34D399" />
-            <Text style={styles.reassureText}>Sans engagement</Text>
+            <Text style={styles.reassureText}>{t('paywall.noCommit')}</Text>
           </View>
           <View style={styles.reassureItem}>
             <Ionicons name="refresh-circle" size={16} color="#22D3EE" />
-            <Text style={styles.reassureText}>Annulation à tout moment</Text>
+            <Text style={styles.reassureText}>{t('paywall.cancelAny')}</Text>
           </View>
           <View style={styles.reassureItem}>
             <Ionicons name="lock-closed" size={16} color="#8B5CF6" />
-            <Text style={styles.reassureText}>Paiement sécurisé</Text>
+            <Text style={styles.reassureText}>{t('paywall.securePay')}</Text>
           </View>
         </View>
 
@@ -373,7 +375,7 @@ export default function PaywallScreen() {
           >
             <Ionicons name="rocket" size={18} color="#0E1530" />
             <Text style={styles.ctaText}>
-              {processing ? 'Activation…' : 'Essayer gratuitement 7 jours'}
+              {processing ? '...' : t('paywall.tryFree')}
             </Text>
           </LinearGradient>
         </TouchableOpacity>

@@ -5,7 +5,7 @@
 
 import React, { useState, useMemo } from 'react';
 import {
-  View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, ActivityIndicator,
+  View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Switch,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,48 +19,86 @@ import { formatNumber } from '../../src/utils/calculations';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 
+const periodLabel = (p: 'month' | 'quarter' | 'year' | 'all') => {
+  const m = new Date().toLocaleDateString('fr-CH', { month: 'long', year: 'numeric' });
+  if (p === 'month') return m;
+  if (p === 'quarter') return '3 derniers mois';
+  if (p === 'year') return new Date().getFullYear().toString();
+  return 'Tout l\'historique';
+};
+
+type Source = 'pro' | 'all' | 'tickets' | 'documents';
+type Period = 'month' | 'quarter' | 'year' | 'all';
+
 export default function ExportPDFScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user, preferences, proExpenses, transactions } = useStore();
+  const { user, preferences, proExpenses, transactions, documents } = useStore();
 
   const [mode, setMode] = useState<'employee' | 'independent'>('employee');
-  const [source, setSource] = useState<'pro' | 'all'>('pro');
+  const [source, setSource] = useState<Source>('pro');
+  const [period, setPeriod] = useState<Period>('month');
+  const [includeReceipts, setIncludeReceipts] = useState(true);
   const [loading, setLoading] = useState(false);
   const [pdfReady, setPdfReady] = useState(false);
 
+  // Period filter
+  const filterByPeriod = (date: string | number) => {
+    const d = typeof date === 'string' ? new Date(date).getTime() : date;
+    if (!d || isNaN(d)) return true;
+    const now = Date.now();
+    const day = 86400000;
+    if (period === 'month') return now - d < 31 * day;
+    if (period === 'quarter') return now - d < 92 * day;
+    if (period === 'year') return now - d < 366 * day;
+    return true;
+  };
+
+  const allTransactions = useMemo(() => transactions.filter(t => filterByPeriod(t.date)), [transactions, period]);
+  const allProExpenses = useMemo(() => proExpenses.filter(e => filterByPeriod(e.date)), [proExpenses, period]);
+  const allDocuments = useMemo(() => documents.filter(d => filterByPeriod(d.createdAt)), [documents, period]);
+  const allTickets = useMemo(() => {
+    // Tickets = transactions/proExpenses qui ont un receipt photo
+    const txWithReceipt = allTransactions.filter((t: any) => t.receipt);
+    const proWithReceipt = allProExpenses.filter((p: any) => p.receipt);
+    return [...txWithReceipt, ...proWithReceipt];
+  }, [allTransactions, allProExpenses]);
+
   const selectedExpenses = useMemo(() => {
-    if (source === 'pro') {
-      return proExpenses.map(e => ({
-        date: e.date,
-        title: e.title,
-        amount: e.amount,
-        category: e.category,
-        justification: e.justification || '-',
-      }));
-    }
-    return transactions.map(t => ({
-      date: t.date,
-      title: t.title,
-      amount: t.amount,
-      category: t.category,
-      justification: '-',
+    const list = source === 'pro' ? allProExpenses
+              : source === 'all' ? allTransactions
+              : source === 'tickets' ? allTickets
+              : []; // documents handled separately
+    return list.map((e: any) => ({
+      date: e.date,
+      title: e.title,
+      amount: e.amount,
+      category: e.category,
+      justification: e.justification || '-',
+      receipt: e.receipt || undefined,
     }));
-  }, [source, proExpenses, transactions]);
+  }, [source, allProExpenses, allTransactions, allTickets]);
+
+  const selectedDocuments = source === 'documents' ? allDocuments : [];
 
   const totalHT = selectedExpenses.reduce((sum, e) => sum + e.amount, 0);
   const totalTVA = Math.round(totalHT * 8.1) / 100;
   const totalTTC = totalHT + totalTVA;
 
   const handleExport = async () => {
-    if (selectedExpenses.length === 0) {
-      Alert.alert('Aucune dépense', 'Ajoutez des dépenses avant d\'exporter.');
+    if (selectedExpenses.length === 0 && selectedDocuments.length === 0) {
+      Alert.alert('Rien à exporter', 'Aucune donnée pour les filtres choisis.');
       return;
     }
 
     setLoading(true);
     try {
-      // Call backend to generate HTML
+      const titleOverride =
+        source === 'tickets' ? `Tickets & reçus — ${periodLabel(period)}` :
+        source === 'documents' ? `Documents scannés — ${periodLabel(period)}` :
+        source === 'all' ? `Toutes les dépenses — ${periodLabel(period)}` :
+        `Note de frais — ${periodLabel(period)}`;
+
       const response = await fetch(`${BACKEND_URL}/api/export/pdf`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -70,24 +108,27 @@ export default function ExportPDFScreen() {
           expenses: selectedExpenses,
           mode,
           canton: preferences.canton,
-          period: new Date().toLocaleDateString('fr-CH', { month: 'long', year: 'numeric' }),
+          period: periodLabel(period),
+          include_receipts: includeReceipts,
+          documents: selectedDocuments.map((d: any) => ({
+            title: d.title,
+            category: d.category,
+            imageBase64: d.imageBase64,
+            pages: d.pages || [d.imageBase64],
+          })),
+          title_override: titleOverride,
         }),
       });
 
       if (!response.ok) throw new Error('Erreur serveur');
       const data = await response.json();
 
-      // Generate PDF from HTML
-      const { uri } = await Print.printToFileAsync({
-        html: data.html,
-        base64: false,
-      });
+      const { uri } = await Print.printToFileAsync({ html: data.html, base64: false });
 
-      // Share the PDF
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(uri, {
           mimeType: 'application/pdf',
-          dialogTitle: 'Note de frais Budgy',
+          dialogTitle: titleOverride,
           UTI: 'com.adobe.pdf',
         });
       } else {
@@ -147,47 +188,100 @@ export default function ExportPDFScreen() {
         </View>
 
         {/* Source Selection */}
-        <Text style={styles.sectionTitle}>Dépenses à inclure</Text>
-        <View style={styles.sourceRow}>
-          <TouchableOpacity
-            style={[styles.sourceBtn, source === 'pro' && styles.sourceBtnOn]}
-            onPress={() => setSource('pro')}
-          >
-            <Ionicons name="briefcase" size={18} color={source === 'pro' ? Colors.text : Colors.textTertiary} />
-            <Text style={[styles.sourceTxt, source === 'pro' && { color: Colors.text }]}>
-              Frais pro ({proExpenses.length})
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.sourceBtn, source === 'all' && styles.sourceBtnOn]}
-            onPress={() => setSource('all')}
-          >
-            <Ionicons name="list" size={18} color={source === 'all' ? Colors.text : Colors.textTertiary} />
-            <Text style={[styles.sourceTxt, source === 'all' && { color: Colors.text }]}>
-              Toutes ({transactions.length})
-            </Text>
-          </TouchableOpacity>
+        <Text style={styles.sectionTitle}>Que souhaitez-vous exporter ?</Text>
+        <View style={styles.sourceGrid}>
+          {[
+            { id: 'pro', label: 'Frais pro', icon: 'briefcase', count: allProExpenses.length, desc: 'Note de frais' },
+            { id: 'all', label: 'Toutes dépenses', icon: 'list', count: allTransactions.length, desc: 'Toutes transactions' },
+            { id: 'tickets', label: 'Tickets / reçus', icon: 'receipt', count: allTickets.length, desc: 'Avec photos' },
+            { id: 'documents', label: 'Documents', icon: 'folder', count: allDocuments.length, desc: 'Classeur scanné' },
+          ].map((s) => (
+            <TouchableOpacity
+              key={s.id}
+              style={[styles.sourceCard, source === s.id && styles.sourceCardOn]}
+              onPress={() => setSource(s.id as Source)}
+            >
+              <Ionicons name={s.icon as any} size={20} color={source === s.id ? Colors.primary : Colors.textTertiary} />
+              <Text style={[styles.sourceCardLabel, source === s.id && { color: Colors.primary }]}>{s.label}</Text>
+              <Text style={styles.sourceCardCount}>{s.count} {s.count === 1 ? 'élément' : 'éléments'}</Text>
+              <Text style={styles.sourceCardDesc}>{s.desc}</Text>
+            </TouchableOpacity>
+          ))}
         </View>
+
+        {/* Period filter */}
+        <Text style={styles.sectionTitle}>Période</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <View style={styles.periodRow}>
+            {([
+              { id: 'month', label: 'Ce mois' },
+              { id: 'quarter', label: '3 mois' },
+              { id: 'year', label: 'Année' },
+              { id: 'all', label: 'Tout' },
+            ] as const).map((p) => (
+              <TouchableOpacity
+                key={p.id}
+                style={[styles.periodChip, period === p.id && styles.periodChipOn]}
+                onPress={() => setPeriod(p.id)}
+              >
+                <Text style={[styles.periodTxt, period === p.id && { color: Colors.primary }]}>{p.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </ScrollView>
+
+        {/* Include receipts toggle (only relevant for expense sources) */}
+        {(source === 'pro' || source === 'all' || source === 'tickets') && (
+          <View style={styles.toggleRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.toggleLabel}>📎 Joindre les photos / scans</Text>
+              <Text style={styles.toggleDesc}>Annexe avec tous les tickets en pleine page</Text>
+            </View>
+            <Switch
+              value={includeReceipts}
+              onValueChange={setIncludeReceipts}
+              trackColor={{ false: '#374151', true: Colors.primary }}
+              thumbColor="#FFF"
+            />
+          </View>
+        )}
 
         {/* Summary */}
         <Card style={styles.summaryCard}>
           <Text style={styles.summaryTitle}>Récapitulatif</Text>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Dépenses</Text>
-            <Text style={styles.summaryValue}>{selectedExpenses.length} lignes</Text>
-          </View>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Total HT</Text>
-            <Text style={styles.summaryValue}>CHF {formatNumber(totalHT, 2)}</Text>
-          </View>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>TVA 8.1%</Text>
-            <Text style={styles.summaryValue}>CHF {formatNumber(totalTVA, 2)}</Text>
-          </View>
-          <View style={[styles.summaryRow, styles.summaryTotal]}>
-            <Text style={styles.totalLabel}>Total TTC</Text>
-            <Text style={styles.totalValue}>CHF {formatNumber(totalTTC, 2)}</Text>
-          </View>
+          {source === 'documents' ? (
+            <>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Documents scannés</Text>
+                <Text style={styles.summaryValue}>{selectedDocuments.length} fichier(s)</Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Pages totales</Text>
+                <Text style={styles.summaryValue}>
+                  {selectedDocuments.reduce((acc: number, d: any) => acc + (d.pages?.length || 1), 0)}
+                </Text>
+              </View>
+            </>
+          ) : (
+            <>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Dépenses</Text>
+                <Text style={styles.summaryValue}>{selectedExpenses.length} lignes</Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Total HT</Text>
+                <Text style={styles.summaryValue}>CHF {formatNumber(totalHT, 2)}</Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>TVA 8.1%</Text>
+                <Text style={styles.summaryValue}>CHF {formatNumber(totalTVA, 2)}</Text>
+              </View>
+              <View style={[styles.summaryRow, styles.summaryTotal]}>
+                <Text style={styles.totalLabel}>Total TTC</Text>
+                <Text style={styles.totalValue}>CHF {formatNumber(totalTTC, 2)}</Text>
+              </View>
+            </>
+          )}
         </Card>
 
         {/* Export Actions */}
@@ -243,6 +337,19 @@ const styles = StyleSheet.create({
   modeDesc: { color: Colors.textTertiary, fontSize: FontSizes.xs, textAlign: 'center', marginTop: 4 },
   sourceRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.lg },
   sourceBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, paddingVertical: Spacing.md, borderRadius: BorderRadius.md, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder },
+  sourceGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm, marginBottom: Spacing.lg },
+  sourceCard: { width: '48%', padding: Spacing.md, borderRadius: BorderRadius.lg, backgroundColor: Colors.card, borderWidth: 1.5, borderColor: Colors.cardBorder, gap: 4 },
+  sourceCardOn: { borderColor: Colors.primary, backgroundColor: 'rgba(52,211,153,0.08)' },
+  sourceCardLabel: { color: Colors.text, fontSize: 14, fontWeight: '700', marginTop: 2 },
+  sourceCardCount: { color: Colors.primary, fontSize: 11, fontWeight: '700' },
+  sourceCardDesc: { color: Colors.textTertiary, fontSize: 10 },
+  periodRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.lg },
+  periodChip: { paddingHorizontal: Spacing.md, paddingVertical: 8, borderRadius: 999, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder },
+  periodChipOn: { backgroundColor: 'rgba(52,211,153,0.12)', borderColor: Colors.primary },
+  periodTxt: { color: Colors.textSecondary, fontSize: 13, fontWeight: '600' },
+  toggleRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, padding: Spacing.md, borderRadius: BorderRadius.lg, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, marginBottom: Spacing.md },
+  toggleLabel: { color: Colors.text, fontSize: 13, fontWeight: '700' },
+  toggleDesc: { color: Colors.textSecondary, fontSize: 11, marginTop: 2 },
   sourceBtnOn: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   sourceTxt: { color: Colors.textTertiary, fontSize: FontSizes.sm, fontWeight: FontWeights.semibold },
   summaryCard: { marginBottom: Spacing.lg },

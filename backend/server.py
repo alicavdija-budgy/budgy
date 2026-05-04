@@ -123,11 +123,14 @@ class PDFExportRequest(BaseModel):
     mode: str = "employee"  # employee | independent
     canton: str = "VD"
     period: str = ""
+    include_receipts: bool = False     # Joindre photos/scans en annexe
+    documents: list[dict] = []          # Documents scannés (tickets) du classeur
+    title_override: Optional[str] = None # Titre custom (Tickets, Note de frais...)
 
 
 @app.post("/api/export/pdf")
 async def export_pdf(req: PDFExportRequest):
-    """Generate expense report HTML (can be converted to PDF on client)"""
+    """Generate expense report HTML (Budgy green, with optional receipt/document appendix)"""
     total_ht = sum(e.get("amount", 0) for e in req.expenses)
     tva_rate = 8.1
     total_tva = round(total_ht * tva_rate / 100, 2)
@@ -136,6 +139,11 @@ async def export_pdf(req: PDFExportRequest):
     rows_html = ""
     for i, exp in enumerate(req.expenses, 1):
         tva_amount = round(exp.get("amount", 0) * tva_rate / 100, 2)
+        receipt_cell = ""
+        if req.include_receipts and exp.get("receipt"):
+            receipt_cell = f'<a href="#receipt-{i}" style="color:#10B981">📎 voir</a>'
+        elif req.include_receipts:
+            receipt_cell = '<span style="color:#9CA3AF">—</span>'
         rows_html += f"""
         <tr>
             <td>{i}</td>
@@ -145,48 +153,106 @@ async def export_pdf(req: PDFExportRequest):
             <td>{exp.get('justification', '-')}</td>
             <td style="text-align:right">CHF {exp.get('amount', 0):.2f}</td>
             <td style="text-align:right">CHF {tva_amount:.2f}</td>
+            {f'<td style="text-align:center">{receipt_cell}</td>' if req.include_receipts else ''}
         </tr>"""
+
+    receipts_extra_th = '<th style="text-align:center">Reçu</th>' if req.include_receipts else ''
+
+    # Build receipts appendix
+    receipts_appendix = ""
+    if req.include_receipts:
+        attached = [(i, e) for i, e in enumerate(req.expenses, 1) if e.get("receipt")]
+        if attached:
+            blocks = []
+            for i, exp in attached:
+                src = exp.get("receipt", "")
+                if src and not src.startswith("data:"):
+                    src = f"data:image/jpeg;base64,{src}"
+                blocks.append(f"""
+                <div class="receipt-page">
+                    <div class="receipt-header">
+                        <span class="receipt-num">#{i}</span>
+                        <span class="receipt-title">{exp.get('title', '')}</span>
+                        <span class="receipt-amount">CHF {exp.get('amount', 0):.2f}</span>
+                    </div>
+                    <img id="receipt-{i}" class="receipt-img" src="{src}" />
+                </div>""")
+            receipts_appendix = f"""
+            <div class="page-break"></div>
+            <h2 class="appendix-title">📎 Annexe : Tickets et reçus</h2>
+            {''.join(blocks)}"""
+
+    # Build documents appendix (scanned PDFs from classeur)
+    documents_appendix = ""
+    if req.documents:
+        doc_blocks = []
+        for j, doc in enumerate(req.documents, 1):
+            pages = doc.get("pages") or [doc.get("imageBase64", "")]
+            page_imgs = "".join(f'<img class="receipt-img" src="{p}" />' for p in pages if p)
+            doc_blocks.append(f"""
+            <div class="receipt-page">
+                <div class="receipt-header">
+                    <span class="receipt-num">DOC-{j}</span>
+                    <span class="receipt-title">{doc.get('title', '')}</span>
+                    <span class="receipt-amount">{doc.get('category', '')}</span>
+                </div>
+                {page_imgs}
+            </div>""")
+        documents_appendix = f"""
+        <div class="page-break"></div>
+        <h2 class="appendix-title">📁 Annexe : Documents scannés</h2>
+        {''.join(doc_blocks)}"""
+
+    main_title = req.title_override or f"Note de frais — {req.period or datetime.now().strftime('%B %Y')}"
 
     html = f"""<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
 <style>
-  @page {{ size: A4; margin: 20mm; }}
-  body {{ font-family: 'Helvetica Neue', Arial, sans-serif; color: #1a1a2e; font-size: 11px; }}
-  .header {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #6366F1; padding-bottom: 12px; margin-bottom: 20px; }}
-  .logo {{ font-size: 22px; font-weight: 900; color: #6366F1; letter-spacing: 2px; }}
+  @page {{ size: A4; margin: 18mm; }}
+  body {{ font-family: 'Helvetica Neue', Arial, sans-serif; color: #0E1530; font-size: 11px; }}
+  .header {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #34D399; padding-bottom: 12px; margin-bottom: 20px; }}
+  .logo {{ font-size: 22px; font-weight: 900; color: #10B981; letter-spacing: 2px; }}
   .logo-sub {{ font-size: 10px; color: #6B7280; }}
   .info {{ text-align: right; font-size: 10px; color: #4B5563; }}
-  .title {{ font-size: 18px; font-weight: 700; color: #07070F; margin: 16px 0 8px; }}
-  .meta {{ display: flex; gap: 40px; margin-bottom: 16px; font-size: 10px; color: #6B7280; }}
-  .meta b {{ color: #1a1a2e; }}
+  .title {{ font-size: 18px; font-weight: 700; color: #0E1530; margin: 16px 0 8px; }}
+  .meta {{ display: flex; gap: 32px; margin-bottom: 16px; font-size: 10px; color: #6B7280; flex-wrap: wrap; }}
+  .meta b {{ color: #0E1530; }}
   table {{ width: 100%; border-collapse: collapse; margin-top: 12px; }}
-  th {{ background: #6366F1; color: white; padding: 8px; text-align: left; font-size: 10px; }}
+  th {{ background: linear-gradient(90deg, #34D399, #22D3EE); color: white; padding: 8px; text-align: left; font-size: 10px; }}
   td {{ padding: 7px 8px; border-bottom: 1px solid #E5E7EB; font-size: 10px; }}
-  tr:nth-child(even) {{ background: #F9FAFB; }}
+  tr:nth-child(even) {{ background: #F0FDF4; }}
   .totals {{ margin-top: 16px; text-align: right; }}
-  .totals table {{ width: 250px; margin-left: auto; }}
+  .totals table {{ width: 280px; margin-left: auto; }}
   .totals td {{ border: none; padding: 4px 8px; }}
-  .totals .grand {{ font-size: 14px; font-weight: 700; color: #6366F1; border-top: 2px solid #6366F1; }}
-  .footer {{ margin-top: 40px; padding-top: 12px; border-top: 1px solid #E5E7EB; display: flex; justify-content: space-between; font-size: 9px; color: #9CA3AF; }}
-  .signature {{ margin-top: 40px; }}
-  .signature-line {{ border-bottom: 1px solid #1a1a2e; width: 200px; margin-top: 30px; }}
+  .totals .grand {{ font-size: 14px; font-weight: 700; color: #10B981; border-top: 2px solid #34D399; }}
+  .footer {{ margin-top: 30px; padding-top: 12px; border-top: 1px solid #E5E7EB; display: flex; justify-content: space-between; font-size: 9px; color: #9CA3AF; }}
+  .signature {{ margin-top: 30px; }}
+  .signature-line {{ border-bottom: 1px solid #0E1530; width: 200px; margin-top: 30px; }}
+  .page-break {{ page-break-before: always; }}
+  .appendix-title {{ font-size: 16px; font-weight: 700; color: #10B981; border-bottom: 2px solid #34D399; padding-bottom: 6px; margin-bottom: 16px; }}
+  .receipt-page {{ page-break-inside: avoid; margin-bottom: 24px; padding: 12px; background: #F0FDF4; border-radius: 8px; border: 1px solid #D1FAE5; }}
+  .receipt-header {{ display: flex; justify-content: space-between; gap: 8px; padding: 6px 0 10px; font-size: 11px; border-bottom: 1px solid #D1FAE5; margin-bottom: 10px; }}
+  .receipt-num {{ font-weight: 800; color: #10B981; min-width: 40px; }}
+  .receipt-title {{ flex: 1; color: #0E1530; }}
+  .receipt-amount {{ font-weight: 700; color: #DC2626; }}
+  .receipt-img {{ max-width: 100%; max-height: 700px; display: block; margin: 6px auto; border-radius: 6px; }}
 </style>
 </head>
 <body>
   <div class="header">
     <div>
       <div class="logo">⚡ BUDGY</div>
-      <div class="logo-sub">Note de frais professionnels</div>
+      <div class="logo-sub">{req.title_override or 'Note de frais professionnels'}</div>
     </div>
     <div class="info">
       Date: {datetime.now().strftime('%d.%m.%Y')}<br>
-      Réf: GRD-{datetime.now().strftime('%Y%m%d')}-{random.randint(100,999)}
+      Réf: BDG-{datetime.now().strftime('%Y%m%d')}-{random.randint(100,999)}
     </div>
   </div>
 
-  <div class="title">Note de frais — {req.period or datetime.now().strftime('%B %Y')}</div>
+  <div class="title">{main_title}</div>
 
   <div class="meta">
     <div><b>Collaborateur:</b> {req.user_name}</div>
@@ -205,6 +271,7 @@ async def export_pdf(req: PDFExportRequest):
         <th>Justification</th>
         <th style="text-align:right">Montant HT</th>
         <th style="text-align:right">TVA {tva_rate}%</th>
+        {receipts_extra_th}
       </tr>
     </thead>
     <tbody>
@@ -227,9 +294,12 @@ async def export_pdf(req: PDFExportRequest):
   </div>
 
   <div class="footer">
-    <div>Budgy v3.4 — Document généré automatiquement</div>
+    <div>Budgy — Document généré automatiquement 🇨🇭</div>
     <div>TVA {tva_rate}% · Taux suisse 2026</div>
   </div>
+
+  {receipts_appendix}
+  {documents_appendix}
 </body>
 </html>"""
 

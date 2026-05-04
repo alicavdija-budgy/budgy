@@ -223,7 +223,10 @@ export interface PersonalDocument {
   id: string;
   title: string;
   category: DocumentCategory;
-  imageBase64: string;        // data URL
+  imageBase64: string;        // data URL — first page (preview thumbnail)
+  pages?: string[];           // optional: all page images as data URLs (multi-page scan)
+  pdfBase64?: string;         // optional: rendered PDF data URL (data:application/pdf;base64,...)
+  pdfUri?: string;            // optional: local file URI for PDF
   tags: string[];
   note?: string;
   expiresAt?: string;          // YYYY-MM-DD optional expiration

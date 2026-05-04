@@ -15,10 +15,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors, FontSizes, FontWeights } from '../../src/constants/theme';
+import { useTranslation } from '../../src/hooks/useTranslation';
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { t } = useTranslation();
 
   const openScanner = () => {
     try {
@@ -52,7 +54,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Accueil',
+          title: t('tabs.home'),
           tabBarIcon: ({ color, focused }) => (
             <Ionicons name={focused ? 'home' : 'home-outline'} size={24} color={color} />
           ),
@@ -61,7 +63,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="expenses"
         options={{
-          title: 'Dépenses',
+          title: t('tabs.expenses'),
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? 'arrow-down-circle' : 'arrow-down-circle-outline'}
@@ -99,7 +101,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="savings"
         options={{
-          title: 'Épargne',
+          title: t('tabs.savings'),
           tabBarIcon: ({ color, focused }) => (
             <Ionicons name={focused ? 'flag' : 'flag-outline'} size={24} color={color} />
           ),
@@ -108,7 +110,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="more"
         options={{
-          title: 'Plus',
+          title: t('tabs.more'),
           tabBarIcon: ({ color, focused }) => (
             <Ionicons name={focused ? 'grid' : 'grid-outline'} size={24} color={color} />
           ),

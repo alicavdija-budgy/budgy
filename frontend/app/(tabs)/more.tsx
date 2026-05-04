@@ -15,6 +15,8 @@ import { useTheme } from '../../src/hooks/useTheme';
 import { useStore } from '../../src/stores/useStore';
 import { usePremiumStore } from '../../src/stores/usePremiumStore';
 import { usePaywall } from '../../src/hooks/usePaywall';
+import { useTranslation } from '../../src/hooks/useTranslation';
+import { useMoney } from '../../src/hooks/useMoney';
 import PressScale from '../../src/components/PressScale';
 
 interface MenuItem {
@@ -38,6 +40,7 @@ export default function MoreScreen() {
   const isTrial = usePremiumStore((s) => s.trialEndsAt !== null && s.trialEndsAt > Date.now() && !s.plan);
   const trialEndsAt = usePremiumStore((s) => s.trialEndsAt);
   const paywall = usePaywall();
+  const { t } = useTranslation();
 
   const sections: { title: string; emoji: string; items: MenuItem[] }[] = [
     {
@@ -144,9 +147,9 @@ export default function MoreScreen() {
                   <Ionicons name="sparkles" size={22} color="#0E1530" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.upgradeTitle}>Passez à Budgy Pro</Text>
+                  <Text style={styles.upgradeTitle}>{t('more.upgrade')}</Text>
                   <Text style={styles.upgradeSub}>
-                    IA illimitée · Tax · Export · Cloud — 7 jours gratuits
+                    {t('more.upgradeSub')}
                   </Text>
                 </View>
                 <View style={styles.upgradeArrow}>
@@ -163,10 +166,10 @@ export default function MoreScreen() {
             <View style={styles.trialBanner}>
               <Ionicons name="time" size={18} color="#34D399" />
               <Text style={styles.trialText}>
-                Essai gratuit actif · {Math.max(0, Math.ceil((trialEndsAt - Date.now()) / (24 * 3600 * 1000)))} jours restants
+                {t('more.trialActive', { n: Math.max(0, Math.ceil((trialEndsAt - Date.now()) / (24 * 3600 * 1000))) })}
               </Text>
               <TouchableOpacity onPress={() => paywall.open('manual')}>
-                <Text style={styles.trialCta}>S'abonner</Text>
+                <Text style={styles.trialCta}>{t('more.subscribe')}</Text>
               </TouchableOpacity>
             </View>
           </Animated.View>

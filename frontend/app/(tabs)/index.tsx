@@ -29,6 +29,8 @@ import { BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constan
 import { useTheme } from '../../src/hooks/useTheme';
 import { useStore } from '../../src/stores/useStore';
 import { useOrganicPaywall } from '../../src/hooks/usePaywall';
+import { useTranslation } from '../../src/hooks/useTranslation';
+import { useMoney } from '../../src/hooks/useMoney';
 import { CategoryIcon, getCategoryName, getCategoryColor } from '../../src/components/CategoryIcon';
 import AnimatedNumber from '../../src/components/AnimatedNumber';
 import PressScale from '../../src/components/PressScale';
@@ -45,6 +47,8 @@ export default function HomeScreen() {
   const router = useRouter();
   const C = useTheme();
   useOrganicPaywall();
+  const { t } = useTranslation();
+  const m = useMoney();
   const {
     user,
     preferences,
@@ -112,12 +116,7 @@ export default function HomeScreen() {
 
   const unreadNotifs = notifications.filter((n) => !n.read).length;
 
-  const greeting = useMemo(() => {
-    const h = new Date().getHours();
-    if (h < 12) return 'Bonjour';
-    if (h < 18) return 'Bon après-midi';
-    return 'Bonsoir';
-  }, []);
+  const greeting = useMemo(() => t('home.hello'), [t]);
   const firstName = user?.name?.split(' ')[0] || '';
 
   // Savings preview
@@ -209,9 +208,9 @@ export default function HomeScreen() {
             </View>
 
             <View style={styles.heroAmountRow}>
-              <Text style={styles.heroCurrency}>{CUR}</Text>
+              <Text style={styles.heroCurrency}>{m.code}</Text>
               <AnimatedNumber
-                value={available}
+                value={m.convert(available)}
                 duration={1400}
                 style={styles.heroAmount}
               />
@@ -230,7 +229,7 @@ export default function HomeScreen() {
                 <View style={styles.heroStatDot} />
                 <View>
                   <Text style={styles.heroStatLabel}>Revenus</Text>
-                  <Text style={styles.heroStatValue}>{CUR} {fmt(monthlyIncome)}</Text>
+                  <Text style={styles.heroStatValue}>{m.format(monthlyIncome)}</Text>
                 </View>
               </View>
               <View style={styles.heroStatSep} />
@@ -238,7 +237,7 @@ export default function HomeScreen() {
                 <View style={[styles.heroStatDot, { backgroundColor: '#FCA5A5' }]} />
                 <View>
                   <Text style={styles.heroStatLabel}>Dépenses</Text>
-                  <Text style={styles.heroStatValue}>{CUR} {fmt(monthExpenses + monthlyRecurring)}</Text>
+                  <Text style={styles.heroStatValue}>{m.format(monthExpenses + monthlyRecurring)}</Text>
                 </View>
               </View>
             </View>
@@ -253,7 +252,7 @@ export default function HomeScreen() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.quickStatLabel}>Aujourd'hui</Text>
-              <Text style={styles.quickStatValue}>{CUR} {fmt(todayExpenses)}</Text>
+              <Text style={styles.quickStatValue}>{m.format(todayExpenses)}</Text>
             </View>
           </View>
           <View style={styles.quickStatCard}>
@@ -262,7 +261,7 @@ export default function HomeScreen() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.quickStatLabel}>Cette semaine</Text>
-              <Text style={styles.quickStatValue}>{CUR} {fmt(weekExpenses)}</Text>
+              <Text style={styles.quickStatValue}>{m.format(weekExpenses)}</Text>
             </View>
           </View>
         </Animated.View>
@@ -301,12 +300,12 @@ export default function HomeScreen() {
             <View style={styles.savingsCard}>
               <View style={styles.savingsTop}>
                 <AnimatedNumber
-                  value={totalSaved}
-                  prefix={`${CUR} `}
+                  value={m.convert(totalSaved)}
+                  prefix={`${m.code} `}
                   duration={1200}
                   style={styles.savingsAmount}
                 />
-                <Text style={styles.savingsTarget}>sur {CUR} {fmt(totalTarget)}</Text>
+                <Text style={styles.savingsTarget}>sur {m.format(totalTarget)}</Text>
               </View>
               <View style={styles.savingsProgressBg}>
                 <LinearGradient

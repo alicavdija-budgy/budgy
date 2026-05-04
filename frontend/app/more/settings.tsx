@@ -17,12 +17,17 @@ import { useRouter } from 'expo-router';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
 import { useStore } from '../../src/stores/useStore';
 import { Card } from '../../src/components/ui';
-import { LANGUAGES, CURRENCIES } from '../../src/data/swiss-data';
+import { LANGUAGES } from '../../src/i18n/translations';
+import { SUPPORTED_CURRENCIES } from '../../src/utils/currency';
+import { useTranslation } from '../../src/hooks/useTranslation';
+import { useMoney } from '../../src/hooks/useMoney';
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { preferences, setPreferences, logout, clearAllData } = useStore();
+  const { t } = useTranslation();
+  const m = useMoney();
 
   const handleLogout = () => {
     Alert.alert(
@@ -57,7 +62,7 @@ export default function SettingsScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={Colors.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>Paramètres</Text>
+        <Text style={styles.title}>{t('settings.title')}</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -68,7 +73,7 @@ export default function SettingsScreen() {
       >
         {/* Language */}
         <Card style={styles.card}>
-          <Text style={styles.sectionTitle}>Langue</Text>
+          <Text style={styles.sectionTitle}>{t('settings.language')}</Text>
           <View style={styles.optionsGrid}>
             {LANGUAGES.map((lang) => (
               <TouchableOpacity
@@ -84,7 +89,7 @@ export default function SettingsScreen() {
                   styles.optionLabel,
                   preferences.language === lang.code && styles.optionLabelSelected,
                 ]}>
-                  {lang.name}
+                  {lang.label}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -93,9 +98,9 @@ export default function SettingsScreen() {
 
         {/* Currency */}
         <Card style={styles.card}>
-          <Text style={styles.sectionTitle}>Devise</Text>
+          <Text style={styles.sectionTitle}>{t('settings.currency')}</Text>
           <View style={styles.currencyGrid}>
-            {CURRENCIES.map((cur) => (
+            {SUPPORTED_CURRENCIES.map((cur) => (
               <TouchableOpacity
                 key={cur.code}
                 style={[
@@ -114,16 +119,19 @@ export default function SettingsScreen() {
               </TouchableOpacity>
             ))}
           </View>
+          <Text style={{ color: Colors.textSecondary, fontSize: 11, marginTop: 10, textAlign: 'center' }}>
+            {t('settings.currencyConverted', { c: m.code })} · ex : {m.format(1000)}
+          </Text>
         </Card>
 
         {/* Theme mode */}
         <Card style={styles.card}>
-          <Text style={styles.sectionTitle}>Apparence</Text>
+          <Text style={styles.sectionTitle}>{t('settings.appearance')}</Text>
           <View style={styles.themeRow}>
             {([
-              { key: 'dark', label: 'Sombre', icon: 'moon' },
-              { key: 'light', label: 'Clair', icon: 'sunny' },
-              { key: 'system', label: 'Auto', icon: 'phone-portrait' },
+              { key: 'dark', label: t('settings.dark'), icon: 'moon' },
+              { key: 'light', label: t('settings.light'), icon: 'sunny' },
+              { key: 'system', label: t('settings.auto'), icon: 'phone-portrait' },
             ] as const).map((opt) => {
               const current = (preferences as any).themeMode || 'dark';
               const active = current === opt.key;

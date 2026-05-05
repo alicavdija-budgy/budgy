@@ -38,11 +38,14 @@ export default function ExpensesScreen() {
     deleteTransaction,
     addProExpense,
     deleteProExpense,
+    addContract,
+    deleteContract,
     isPro,
   } = useStore();
 
   const [activeTab, setActiveTab] = useState<Tab>('daily');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showContractModal, setShowContractModal] = useState(false);
   const { t } = useTranslation();
   const [newExpense, setNewExpense] = useState({
     title: '',
@@ -50,6 +53,13 @@ export default function ExpensesScreen() {
     category: 'courses',
     justification: '',
     paymentMethod: 'card',
+  });
+  const [newContract, setNewContract] = useState({
+    title: '',
+    amount: '',
+    expirationDate: '',
+    category: 'abonnements',
+    urgent: false,
   });
 
   const CUR = preferences.currency;
@@ -95,6 +105,24 @@ export default function ExpensesScreen() {
     setShowAddModal(false);
   };
 
+  const handleAddContract = () => {
+    if (!newContract.title.trim() || !newContract.amount) {
+      Alert.alert(t('common.error'), t('common.requiredFields'));
+      return;
+    }
+    addContract({
+      id: `ct_${Date.now()}`,
+      title: newContract.title.trim(),
+      amount: parseFloat(newContract.amount.replace(',', '.')) || 0,
+      expirationDate: newContract.expirationDate || '—',
+      urgent: newContract.urgent,
+      category: newContract.category,
+      createdAt: Date.now(),
+    });
+    setNewContract({ title: '', amount: '', expirationDate: '', category: 'abonnements', urgent: false });
+    setShowContractModal(false);
+  };
+
   const handleDelete = (id: string) => {
     Alert.alert(
       t('expenses.deleteTitle'),
@@ -129,7 +157,7 @@ export default function ExpensesScreen() {
         <Text style={styles.title}>{t('expenses.title')}</Text>
         <TouchableOpacity
           style={styles.addButton}
-          onPress={() => setShowAddModal(true)}
+          onPress={() => activeTab === 'contracts' ? setShowContractModal(true) : setShowAddModal(true)}
         >
           <Ionicons name="add" size={24} color={Colors.text} />
         </TouchableOpacity>
@@ -273,6 +301,7 @@ export default function ExpensesScreen() {
                 icon="document-text-outline"
                 title={t('expenses.noContracts')}
                 subtitle={t('expenses.addContractsSub')}
+                action={{ label: t('common.add'), onPress: () => setShowContractModal(true) }}
               />
             ) : (
               contracts.map((contract) => (
@@ -295,6 +324,19 @@ export default function ExpensesScreen() {
                     <Text style={styles.contractAmount}>
                       {CUR} {formatNumber(contract.amount)}/mois
                     </Text>
+                    <TouchableOpacity
+                      onPress={() => Alert.alert(
+                        t('expenses.deleteTitle'),
+                        t('expenses.deleteMsg'),
+                        [
+                          { text: t('common.cancel'), style: 'cancel' },
+                          { text: t('common.delete'), style: 'destructive', onPress: () => deleteContract(contract.id) },
+                        ],
+                      )}
+                      style={styles.contractDelBtn}
+                    >
+                      <Ionicons name="trash-outline" size={16} color={Colors.textTertiary} />
+                    </TouchableOpacity>
                   </View>
                 </Card>
               ))
@@ -410,6 +452,104 @@ export default function ExpensesScreen() {
               size="lg"
               style={{ marginTop: Spacing.lg }}
             />
+          </View>
+        </View>
+      </Modal>
+
+      {/* Add Contract Modal */}
+      <Modal
+        visible={showContractModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowContractModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Nouveau contrat</Text>
+              <TouchableOpacity onPress={() => setShowContractModal(false)}>
+                <Ionicons name="close" size={24} color={Colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ maxHeight: 480 }} keyboardShouldPersistTaps="handled">
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>{t('common.title')}</Text>
+                <TextInput
+                  style={styles.input}
+                  value={newContract.title}
+                  onChangeText={(t) => setNewContract((p) => ({ ...p, title: t }))}
+                  placeholder="ex: Sunrise mobile, Salt Internet, Helsana..."
+                  placeholderTextColor={Colors.textTertiary}
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Montant mensuel ({CUR})</Text>
+                <TextInput
+                  style={styles.input}
+                  value={newContract.amount}
+                  onChangeText={(t) => setNewContract((p) => ({ ...p, amount: t }))}
+                  placeholder="49.90"
+                  placeholderTextColor={Colors.textTertiary}
+                  keyboardType="decimal-pad"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Date d'expiration</Text>
+                <TextInput
+                  style={styles.input}
+                  value={newContract.expirationDate}
+                  onChangeText={(t) => setNewContract((p) => ({ ...p, expirationDate: t }))}
+                  placeholder="31.12.2026"
+                  placeholderTextColor={Colors.textTertiary}
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>{t('common.category')}</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 4 }}>
+                  <View style={styles.categoryGrid}>
+                    {EXPENSE_CATEGORIES.map((cat) => (
+                      <TouchableOpacity
+                        key={cat.id}
+                        style={[
+                          styles.categoryItem,
+                          newContract.category === cat.id && styles.categoryItemSelected,
+                        ]}
+                        onPress={() => setNewContract((p) => ({ ...p, category: cat.id }))}
+                      >
+                        <CategoryIcon category={cat.id} size="sm" />
+                        <Text style={styles.categoryLabel}>{cat.name}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </ScrollView>
+              </View>
+
+              <TouchableOpacity
+                style={[styles.urgentToggle, newContract.urgent && styles.urgentToggleActive]}
+                onPress={() => setNewContract((p) => ({ ...p, urgent: !p.urgent }))}
+              >
+                <Ionicons
+                  name={newContract.urgent ? 'alert-circle' : 'alert-circle-outline'}
+                  size={20}
+                  color={newContract.urgent ? Colors.error : Colors.textTertiary}
+                />
+                <Text style={[styles.urgentToggleTxt, newContract.urgent && { color: Colors.error }]}>
+                  {newContract.urgent ? '⚠️ Marqué comme urgent' : 'Marquer comme urgent'}
+                </Text>
+              </TouchableOpacity>
+
+              <Button
+                title="Ajouter le contrat"
+                onPress={handleAddContract}
+                fullWidth
+                size="lg"
+                style={{ marginTop: Spacing.lg }}
+              />
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -641,5 +781,30 @@ const styles = StyleSheet.create({
   paymentBadgeText: {
     color: Colors.textSecondary,
     fontSize: 10,
+  },
+  contractDelBtn: {
+    padding: 8,
+    marginLeft: 4,
+  },
+  urgentToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
+    marginTop: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1.5,
+    borderColor: Colors.cardBorder,
+    backgroundColor: Colors.card,
+  },
+  urgentToggleActive: {
+    borderColor: Colors.error,
+    backgroundColor: `${Colors.error}10`,
+  },
+  urgentToggleTxt: {
+    color: Colors.textSecondary,
+    fontSize: FontSizes.sm,
+    fontWeight: FontWeights.semibold,
   },
 });

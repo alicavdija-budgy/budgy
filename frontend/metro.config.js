@@ -22,4 +22,9 @@ config.cacheStores = [
 // Reduce the number of workers to decrease resource usage
 config.maxWorkers = 2;
 
+// Avoid resolving ESM-only entrypoints from packages like zustand v5 that emit
+// raw `import.meta.env` (which fails on web because the bundle is loaded as a
+// classic script, not as type="module").
+config.resolver.unstable_enablePackageExports = false;
+
 module.exports = config;

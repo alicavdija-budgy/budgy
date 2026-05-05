@@ -44,12 +44,12 @@ export default function MoreScreen() {
 
   const sections: { title: string; emoji: string; items: MenuItem[] }[] = [
     {
-      title: 'IA',
+      title: t('more.sectionAI'),
       emoji: '🧠',
       items: [
-        { id: 'ai-optimizer', title: 'Économiseur IA', subtitle: 'Trouve des économies concrètes', icon: 'sparkles', color: C.pink, route: '/more/ai-optimizer', badge: 'NEW', pro: true, feature: 'ai' },
-        { id: 'predict', title: 'Coach Predict', subtitle: 'Prédictions & conseils GPT', icon: 'analytics', color: C.secondary, route: '/more/predict', pro: true, feature: 'predict' },
-        { id: 'tax', title: 'Optimiseur d\'impôts', subtitle: 'IFD + ICC', icon: 'calculator', color: C.primaryLight, route: '/more/tax-optimizer', pro: true, feature: 'tax' },
+        { id: 'ai-optimizer', title: t('more.aiOptimizer'), subtitle: t('more.aiOptimizerSub'), icon: 'sparkles', color: C.pink, route: '/more/ai-optimizer', badge: 'NEW', pro: true, feature: 'ai' },
+        { id: 'predict', title: t('more.predict'), subtitle: t('more.predictSub'), icon: 'analytics', color: C.secondary, route: '/more/predict', pro: true, feature: 'predict' },
+        { id: 'tax', title: t('more.taxOpt'), subtitle: t('more.taxOptSub'), icon: 'calculator', color: C.primaryLight, route: '/more/tax-optimizer', pro: true, feature: 'tax' },
       ],
     },
     {
@@ -66,38 +66,38 @@ export default function MoreScreen() {
       ],
     },
     {
-      title: 'Documents',
+      title: t('more.sectionDocuments'),
       emoji: '📎',
       items: [
-        { id: 'receipts', title: 'Tickets & reçus', icon: 'images', color: C.purple, route: '/more/receipts' },
-        { id: 'documents', title: 'Mon classeur', icon: 'folder-open', color: C.primaryLight, route: '/more/documents' },
-        { id: 'email-import', title: 'Import email IA', icon: 'mail-open', color: C.cyan, route: '/more/email-import' },
-        { id: 'export', title: 'Export PDF', icon: 'document-text', color: C.teal, route: '/more/export-pdf', pro: true, feature: 'export' },
+        { id: 'receipts', title: t('more.receipts'), icon: 'images', color: C.purple, route: '/more/receipts' },
+        { id: 'documents', title: t('more.documents'), icon: 'folder-open', color: C.primaryLight, route: '/more/documents' },
+        { id: 'email-import', title: t('more.emailImportSub'), icon: 'mail-open', color: C.cyan, route: '/more/email-import' },
+        { id: 'export', title: t('more.exportPdf'), icon: 'document-text', color: C.teal, route: '/more/export-pdf', pro: true, feature: 'export' },
       ],
     },
     {
-      title: 'Partage',
+      title: t('more.sectionShare'),
       emoji: '👥',
       items: [
-        { id: 'groups', title: 'Groupes & amis', subtitle: 'Dépenses partagées', icon: 'people', color: C.cyan, route: '/more/groups' },
-        { id: 'family', title: 'Mode famille', icon: 'home', color: C.pink, route: '/more/family' },
+        { id: 'groups', title: t('more.groups'), subtitle: t('more.groupsSub'), icon: 'people', color: C.cyan, route: '/more/groups' },
+        { id: 'family', title: t('more.family'), icon: 'home', color: C.pink, route: '/more/family' },
       ],
     },
     {
-      title: 'Sécurité',
+      title: t('more.sectionSecurity'),
       emoji: '🛡️',
       items: [
-        { id: 'security', title: 'Verrou & biométrie', subtitle: 'PIN · Face ID · panique', icon: 'shield-checkmark', color: C.success, route: '/more/security' },
-        { id: 'cloud-sync', title: 'Sync Cloud', subtitle: 'Supabase · auto multi-appareils', icon: 'cloud-done', color: C.info, route: '/more/cloud-sync' },
+        { id: 'security', title: t('more.security'), subtitle: t('more.securitySub'), icon: 'shield-checkmark', color: C.success, route: '/more/security' },
+        { id: 'cloud-sync', title: t('more.cloudSync'), subtitle: t('more.cloudSyncSub'), icon: 'cloud-done', color: C.info, route: '/more/cloud-sync' },
       ],
     },
     {
-      title: 'Paramètres',
+      title: t('more.sectionSettings'),
       emoji: '⚙️',
       items: [
-        { id: 'subscription', title: 'Budgy Pro', subtitle: isPro ? (isTrial ? `Essai · fin ${new Date(trialEndsAt!).toLocaleDateString('fr-CH')}` : 'Actif · merci !') : 'CHF 4.90/mois · 7j d\'essai gratuit', icon: 'flash', color: C.secondary, route: '/paywall', badge: isPro ? 'PRO' : undefined },
-        { id: 'settings', title: 'Préférences', subtitle: 'Langue · devise · thème', icon: 'settings', color: C.textSecondary, route: '/more/settings' },
-        { id: 'legal', title: 'Informations légales', subtitle: 'Confidentialité · CGU · Sources', icon: 'shield-half', color: C.info, route: '/more/legal' },
+        { id: 'subscription', title: t('more.subscription'), subtitle: isPro ? (isTrial ? t('more.subscriptionTrial', { d: new Date(trialEndsAt!).toLocaleDateString() }) : t('more.subscriptionActive')) : t('more.subscriptionFree'), icon: 'flash', color: C.secondary, route: '/paywall', badge: isPro ? 'PRO' : undefined },
+        { id: 'settings', title: t('more.preferences'), subtitle: t('more.preferencesSub'), icon: 'settings', color: C.textSecondary, route: '/more/settings' },
+        { id: 'legal', title: t('more.legal'), subtitle: t('more.legalSub'), icon: 'shield-half', color: C.info, route: '/more/legal' },
       ],
     },
   ];
@@ -235,7 +235,7 @@ export default function MoreScreen() {
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>Budgy v3.7</Text>
-          <Text style={styles.footerSub}>Données chiffrées · Sync privée 🇨🇭</Text>
+          <Text style={styles.footerSub}>{t('more.dataPrivate')}</Text>
         </View>
 
         <View style={{ height: 100 }} />

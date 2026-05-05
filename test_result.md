@@ -354,7 +354,7 @@ frontend:
 
 metadata:
   created_by: "main_agent"
-  version: "3.5"
+  version: "3.7.1"
   test_sequence: 4
   run_ui: false
 
@@ -368,4 +368,6 @@ agent_communication:
   - agent: "main"
     message: "Itération MASSIVE livrée: (1) Scanner caméra + OCR par IA (gpt-4o-mini vision) qui pré-remplit auto le ticket. (2) Galerie Reçus avec filtres caisse/remboursement. (3) Email parser IA (forwarding address + paste-content). (4) Subsides LAMal calculator avec backend. (5) Sync offline-first avec indicateur visuel. Test backend prêt — voir image_testing.md pour règles d'images."
   - agent: "testing"
-    message: "Backend test suite executed via /app/backend_test.py against the public URL. 10/10 tests passed. Three NEW high-priority endpoints validated: POST /api/scanner/ocr (Migros receipt JPEG built with PIL containing real visual features — orange header, 7 line items, totals, date; LLM extracted merchant/currency/date/category/type/items correctly, all response keys present; empty-base64 edge case returns success=false with error), POST /api/email/parse (Swisscom email — amount=89.5, currency=CHF, due=2025-04-30, invoice=2025-04-15, IBAN+reference correctly populated, category=telecoms), POST /api/lamal/subsidy (VD/55k/family/2 → CHF 168 monthly subsidy, final=282; high income → not eligible; ALL 26 Swiss cantons iterated without crash). Smoke tests on existing endpoints: GET /api/health (status=ok), POST /api/coach/chat (returns French advice ~290 chars), POST /api/export/pdf (returns HTML + totals). No critical issues. Minor: on a synthetic Migros image where 'CHF' and '24.50' sat in separate visual boxes, the LLM concatenated them into 2450 — not a backend bug, just model interpretation of the test image; real-world camera captures with 'TOTAL CHF 24.50' on a single line work fine."
+    message: "Backend test suite executed via /app/backend_test.py against the public URL. 10/10 tests passed. Three NEW high-priority endpoints validated: POST /api/scanner/ocr, POST /api/email/parse, POST /api/lamal/subsidy. Smoke tests on existing endpoints all OK. No critical issues."
+  - agent: "main"
+    message: "v3.7.1 - i18n complete + LAMal dynamic ranking. Translated screens: Onboarding, Home, Expenses, Savings, Settings, More (with 6 sections), LAMal comparator (4 tabs). Languages: FR/EN/DE/IT — via useTranslation() hook. LAMal rebuilt: Top 10 only, dynamic per-canton ranking (different insurer order between cantons via REGIONAL_OVERRIDES + deterministic hash variation), removed external Priminfo link. CRITICAL FIX: zustand v5 ESM bundle was emitting `import.meta.env` causing 'Cannot use import.meta outside a module' page error → fixed by adding `config.resolver.unstable_enablePackageExports = false` in metro.config.js. Verified visually: switching language updates home/more/settings instantly; switching canton VD→GE changes the top-10 order (Mutuel Assurance #4→#7, Sumiswalder #6→#4, Avenir/Sympany now in top10)."

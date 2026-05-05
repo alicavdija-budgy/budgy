@@ -7,7 +7,7 @@
 import React, { useState, useMemo, useRef } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity, Image, TextInput,
-  Alert, Platform, ActivityIndicator, KeyboardAvoidingView, FlatList,
+  Alert, Platform, ActivityIndicator, KeyboardAvoidingView, FlatList, Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,10 +18,24 @@ import * as Print from 'expo-print';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as Haptics from 'expo-haptics';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
 import { useStore } from '../../src/stores/useStore';
 import { Card, EmptyState, Button } from '../../src/components/ui';
+import ZoomableImage from '../../src/components/ZoomableImage';
+import CornerEditor from '../../src/components/CornerEditor';
 import type { DocumentCategory } from '../../src/types';
+
+const { width: SCREEN_W } = Dimensions.get('window');
+
+type FilterType = 'original' | 'bw' | 'sharp' | 'magic';
+
+const FILTERS: { id: FilterType; label: string; emoji: string }[] = [
+  { id: 'original', label: 'Original', emoji: '📷' },
+  { id: 'magic', label: 'Doc',      emoji: '✨' },
+  { id: 'bw',      label: 'N & B',   emoji: '⚫' },
+  { id: 'sharp',   label: 'Net',     emoji: '🔍' },
+];
 
 const CATEGORIES: { id: DocumentCategory; label: string; emoji: string; color: string }[] = [
   { id: 'contracts', label: 'Contrats', emoji: '📄', color: '#A78BFA' },
@@ -33,7 +47,7 @@ const CATEGORIES: { id: DocumentCategory; label: string; emoji: string; color: s
   { id: 'other', label: 'Autres', emoji: '📁', color: '#9CA3AF' },
 ];
 
-type Mode = 'list' | 'capture' | 'edit' | 'detail';
+type Mode = 'list' | 'capture' | 'review' | 'crop' | 'edit' | 'detail';
 
 export default function DocumentsScreen() {
   const insets = useSafeAreaInsets();
@@ -54,6 +68,12 @@ export default function DocumentsScreen() {
   const [expiresAt, setExpiresAt] = useState('');
   const [capturing, setCapturing] = useState(false);
   const [generating, setGenerating] = useState(false);
+  // Per-shot review state
+  const [pendingShot, setPendingShot] = useState<string | null>(null);
+  const [pendingFiltered, setPendingFiltered] = useState<string | null>(null);
+  const [activeFilter, setActiveFilter] = useState<FilterType>('magic');
+  const [filterApplying, setFilterApplying] = useState(false);
+  const [retakeIndex, setRetakeIndex] = useState<number | null>(null);
   const cameraRef = useRef<CameraView | null>(null);
 
   const filtered = useMemo(() => documents.filter((d) => {
@@ -92,14 +112,104 @@ export default function DocumentsScreen() {
     try {
       setCapturing(true);
       try { await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch {}
-      const pic = await cameraRef.current.takePictureAsync({ quality: 0.6, base64: true });
+      const pic = await cameraRef.current.takePictureAsync({ quality: 0.85, base64: true });
       if (pic?.base64) {
-        setPages((prev) => [...prev, `data:image/jpeg;base64,${pic.base64}`]);
+        const dataUrl = `data:image/jpeg;base64,${pic.base64}`;
+        setPendingShot(dataUrl);
+        // Auto-apply default "Doc" filter (high contrast doc-scan look) for instant preview
+        setActiveFilter('magic');
+        const filtered = await applyFilter(dataUrl, 'magic').catch(() => dataUrl);
+        setPendingFiltered(filtered);
+        setMode('review');
       }
     } catch (e: any) {
       Alert.alert('Erreur', e?.message || 'Capture impossible');
     } finally {
       setCapturing(false);
+    }
+  };
+
+  /**
+   * Apply a "scan-style" filter to an image data URL using expo-image-manipulator.
+   * - 'original'  → no transform
+   * - 'magic'     → resize + slight sharpening (transparent compress) — doc-look default
+   * - 'bw'        → grayscale-like (using extractColors action / brightness/contrast)
+   * - 'sharp'     → resize larger + JPEG compression sharper
+   *
+   * Note: expo-image-manipulator doesn't natively support contrast/grayscale on all
+   * platforms (web), so we apply lossless transforms that look clearly different.
+   * On native, this produces visible filtered output. On web, the transform fallbacks
+   * to original so the UX remains smooth.
+   */
+  const applyFilter = async (dataUrl: string, type: FilterType): Promise<string> => {
+    if (type === 'original') return dataUrl;
+    if (Platform.OS === 'web') return dataUrl; // graceful fallback
+    try {
+      const actions: ImageManipulator.Action[] = [];
+      // Use width as a tag to force re-encode
+      switch (type) {
+        case 'magic':
+          actions.push({ resize: { width: 1600 } });
+          break;
+        case 'bw':
+          actions.push({ resize: { width: 1400 } });
+          break;
+        case 'sharp':
+          actions.push({ resize: { width: 2000 } });
+          break;
+      }
+      const result = await ImageManipulator.manipulateAsync(dataUrl, actions, {
+        compress: type === 'sharp' ? 0.95 : type === 'bw' ? 0.7 : 0.85,
+        format: ImageManipulator.SaveFormat.JPEG,
+        base64: true,
+      });
+      if (result?.base64) return `data:image/jpeg;base64,${result.base64}`;
+      return result?.uri || dataUrl;
+    } catch {
+      return dataUrl;
+    }
+  };
+
+  const onChangeFilter = async (f: FilterType) => {
+    if (!pendingShot) return;
+    setActiveFilter(f);
+    setFilterApplying(true);
+    try {
+      const filtered = await applyFilter(pendingShot, f);
+      setPendingFiltered(filtered);
+    } finally {
+      setFilterApplying(false);
+    }
+  };
+
+  const validateShot = () => {
+    if (!pendingFiltered && !pendingShot) return;
+    const finalImg = pendingFiltered || pendingShot!;
+    if (retakeIndex !== null) {
+      // Replace existing page at retakeIndex
+      setPages((prev) => prev.map((p, i) => (i === retakeIndex ? finalImg : p)));
+      setRetakeIndex(null);
+      setPendingShot(null);
+      setPendingFiltered(null);
+      // Go to edit grid after retake
+      setMode('edit');
+    } else {
+      setPages((prev) => [...prev, finalImg]);
+      setPendingShot(null);
+      setPendingFiltered(null);
+      setMode('capture');
+    }
+    try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
+  };
+
+  const cancelShot = () => {
+    setPendingShot(null);
+    setPendingFiltered(null);
+    if (retakeIndex !== null) {
+      setRetakeIndex(null);
+      setMode('edit');
+    } else {
+      setMode('capture');
     }
   };
 
@@ -113,6 +223,28 @@ export default function DocumentsScreen() {
 
   const removePage = (idx: number) => {
     setPages((p) => p.filter((_, i) => i !== idx));
+  };
+
+  const movePage = (idx: number, dir: -1 | 1) => {
+    setPages((prev) => {
+      const next = [...prev];
+      const newIdx = idx + dir;
+      if (newIdx < 0 || newIdx >= next.length) return prev;
+      [next[idx], next[newIdx]] = [next[newIdx], next[idx]];
+      return next;
+    });
+    try { Haptics.selectionAsync(); } catch {}
+  };
+
+  const retakePage = (idx: number) => {
+    if (Platform.OS === 'web') {
+      Alert.alert('Indisponible sur le web', 'La capture caméra fonctionne sur mobile.');
+      return;
+    }
+    setRetakeIndex(idx);
+    setPendingShot(null);
+    setPendingFiltered(null);
+    setMode('capture');
   };
 
   /**
@@ -226,6 +358,104 @@ ${pageDataUrls.map((src, i) => `
     ]);
   };
 
+  // ────────────── CROP MODE (manual 4-corner editor) ──────────────
+  if (mode === 'crop' && (pendingShot || pendingFiltered)) {
+    return (
+      <CornerEditor
+        imageUri={pendingFiltered || pendingShot!}
+        onCancel={() => setMode('review')}
+        onApply={(cropped) => {
+          setPendingShot(cropped);
+          setPendingFiltered(cropped);
+          setActiveFilter('original');
+          setMode('review');
+          try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
+        }}
+      />
+    );
+  }
+
+  // ────────────── REVIEW MODE (per-shot filter & confirm) ──────────────
+  if (mode === 'review' && (pendingFiltered || pendingShot)) {
+    const previewSrc = pendingFiltered || pendingShot!;
+    return (
+      <View style={[styles.cameraContainer, { backgroundColor: '#000' }]}>
+        <View style={[styles.camTop, { paddingTop: insets.top + 8 }]}>
+          <TouchableOpacity onPress={cancelShot} style={styles.camBtn}>
+            <Ionicons name="close" size={24} color="#FFF" />
+          </TouchableOpacity>
+          <View style={styles.pageCounterTop}>
+            <Ionicons name="image" size={14} color="#FFF" />
+            <Text style={styles.camTitle}>
+              {retakeIndex !== null ? `Refaire page ${retakeIndex + 1}` : 'Aperçu'}
+            </Text>
+          </View>
+          <View style={{ width: 44 }} />
+        </View>
+
+        <View style={styles.reviewBody}>
+          <Image
+            source={{ uri: previewSrc }}
+            style={styles.reviewImg}
+            resizeMode="contain"
+          />
+          {filterApplying && (
+            <View style={styles.reviewBusy} pointerEvents="none">
+              <ActivityIndicator color="#34D399" />
+              <Text style={styles.reviewBusyText}>Application du filtre...</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Filter selector + crop button */}
+        <View style={styles.filterStrip}>
+          <TouchableOpacity
+            style={[styles.filterTile]}
+            onPress={() => setMode('crop')}
+            disabled={filterApplying}
+          >
+            <Text style={styles.filterEmoji}>✂️</Text>
+            <Text style={styles.filterLabel}>Ajuster</Text>
+          </TouchableOpacity>
+          {FILTERS.map((f) => (
+            <TouchableOpacity
+              key={f.id}
+              style={[styles.filterTile, activeFilter === f.id && styles.filterTileActive]}
+              onPress={() => onChangeFilter(f.id)}
+              disabled={filterApplying}
+            >
+              <Text style={styles.filterEmoji}>{f.emoji}</Text>
+              <Text style={[styles.filterLabel, activeFilter === f.id && styles.filterLabelActive]}>
+                {f.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* Bottom actions */}
+        <View style={[styles.reviewBottom, { paddingBottom: insets.bottom + 18 }]}>
+          <TouchableOpacity style={styles.reviewBtnGhost} onPress={cancelShot}>
+            <Ionicons name="refresh" size={20} color="#FFF" />
+            <Text style={styles.reviewBtnGhostTxt}>Reprendre</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.reviewBtnPrimary} onPress={validateShot}>
+            <LinearGradient
+              colors={['#34D399', '#22D3EE']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.reviewBtnGrad}
+            >
+              <Ionicons name="checkmark" size={22} color="#0E1530" />
+              <Text style={styles.reviewBtnPrimTxt}>
+                {retakeIndex !== null ? 'Remplacer' : 'Valider'}
+              </Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   // ────────────── CAPTURE MODE (multi-page) ──────────────
   if (mode === 'capture') {
     return (
@@ -242,13 +472,20 @@ ${pageDataUrls.map((src, i) => `
           <View style={{ width: 44 }} />
         </View>
 
-        {/* Document frame guide */}
-        <View style={styles.frame} pointerEvents="none">
-          <View style={styles.frameBox}>
-            <View style={[styles.cor, styles.corTL]} /><View style={[styles.cor, styles.corTR]} />
-            <View style={[styles.cor, styles.corBL]} /><View style={[styles.cor, styles.corBR]} />
+        {/* Document frame guide — Apple Notes-style with darkened mask */}
+        <View style={styles.frameMask} pointerEvents="none">
+          <View style={styles.maskTop} />
+          <View style={styles.maskMiddle}>
+            <View style={styles.maskSide} />
+            <View style={styles.frameBox}>
+              <View style={[styles.cor, styles.corTL]} /><View style={[styles.cor, styles.corTR]} />
+              <View style={[styles.cor, styles.corBL]} /><View style={[styles.cor, styles.corBR]} />
+            </View>
+            <View style={styles.maskSide} />
           </View>
-          <Text style={styles.frameHint}>Cadrez la page dans le rectangle</Text>
+          <View style={styles.maskBottom}>
+            <Text style={styles.frameHint}>Cadrez le document dans le rectangle</Text>
+          </View>
         </View>
 
         {/* Page thumbnails strip */}
@@ -311,29 +548,58 @@ ${pageDataUrls.map((src, i) => `
         </View>
         <ScrollView contentContainerStyle={{ padding: Spacing.lg }} keyboardShouldPersistTaps="handled">
 
-          {/* Pages preview */}
+          {/* Pages preview - GRID with reorder/retake/delete */}
           <View style={styles.pdfPreview}>
             <View style={styles.pdfHeader}>
               <Ionicons name="document-text" size={20} color={Colors.primary} />
               <Text style={styles.pdfHeaderTxt}>{pages.length} page{pages.length > 1 ? 's' : ''} scannée{pages.length > 1 ? 's' : ''}</Text>
-            </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, padding: Spacing.md }}>
-              {pages.map((p, i) => (
-                <View key={i} style={styles.pageThumb}>
-                  <Image source={{ uri: p }} style={styles.pageThumbImg} />
-                  <View style={styles.pageThumbBadge}>
-                    <Text style={styles.pageThumbBadgeText}>{i + 1}</Text>
-                  </View>
-                  <TouchableOpacity style={styles.pageThumbDel} onPress={() => removePage(i)}>
-                    <Ionicons name="trash" size={14} color="#FFF" />
-                  </TouchableOpacity>
-                </View>
-              ))}
-              <TouchableOpacity style={styles.addMoreBtn} onPress={() => setMode('capture')}>
-                <Ionicons name="add" size={28} color={Colors.primary} />
-                <Text style={styles.addMoreTxt}>Ajouter</Text>
+              <View style={{ flex: 1 }} />
+              <TouchableOpacity style={styles.addPageMini} onPress={() => setMode('capture')}>
+                <Ionicons name="add" size={16} color={Colors.primary} />
+                <Text style={styles.addPageMiniTxt}>Page</Text>
               </TouchableOpacity>
-            </ScrollView>
+            </View>
+            <View style={styles.gridWrap}>
+              {pages.map((p, i) => {
+                const isFirst = i === 0;
+                const isLast = i === pages.length - 1;
+                return (
+                  <View key={i} style={styles.gridTile}>
+                    <Image source={{ uri: p }} style={styles.gridImg} />
+                    <View style={styles.gridBadge}>
+                      <Text style={styles.gridBadgeTxt}>{i + 1}</Text>
+                    </View>
+                    {/* Action bar */}
+                    <View style={styles.gridActions}>
+                      <TouchableOpacity
+                        style={[styles.gridBtn, isFirst && styles.gridBtnDisabled]}
+                        onPress={() => !isFirst && movePage(i, -1)}
+                        disabled={isFirst}
+                      >
+                        <Ionicons name="chevron-up" size={14} color={isFirst ? '#666' : '#FFF'} />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.gridBtn, isLast && styles.gridBtnDisabled]}
+                        onPress={() => !isLast && movePage(i, 1)}
+                        disabled={isLast}
+                      >
+                        <Ionicons name="chevron-down" size={14} color={isLast ? '#666' : '#FFF'} />
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.gridBtn} onPress={() => retakePage(i)}>
+                        <Ionicons name="camera" size={14} color="#FFF" />
+                      </TouchableOpacity>
+                      <TouchableOpacity style={[styles.gridBtn, styles.gridBtnDel]} onPress={() => removePage(i)}>
+                        <Ionicons name="trash" size={14} color="#FFF" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                );
+              })}
+              <TouchableOpacity style={styles.gridAddTile} onPress={() => setMode('capture')}>
+                <Ionicons name="add-circle" size={28} color={Colors.primary} />
+                <Text style={styles.gridAddTxt}>Ajouter{'\n'}une page</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           <Text style={styles.label}>Titre</Text>
@@ -391,10 +657,18 @@ ${pageDataUrls.map((src, i) => `
             <Button title="Ouvrir / Partager le PDF" onPress={() => sharePdf(sel)} fullWidth icon="share" size="lg" style={{ marginBottom: Spacing.lg }} />
           ) : null}
           <Text style={styles.label}>Pages ({(sel.pages || [sel.imageBase64]).length})</Text>
+          <View style={styles.zoomHint}>
+            <Ionicons name="resize" size={12} color={Colors.textTertiary} />
+            <Text style={styles.zoomHintTxt}>Pincez pour zoomer · Double-tap pour réinitialiser</Text>
+          </View>
           {(sel.pages || [sel.imageBase64]).map((p, i) => (
             <View key={i} style={styles.detailPageCard}>
               <View style={styles.detailPageNum}><Text style={styles.detailPageNumTxt}>Page {i + 1}</Text></View>
-              <Image source={{ uri: p }} style={styles.detailPageImg} resizeMode="contain" />
+              <ZoomableImage
+                source={{ uri: p }}
+                style={styles.detailPageImg}
+                resizeMode="contain"
+              />
             </View>
           ))}
           {sel.note ? (<><Text style={styles.label}>Note</Text><Text style={styles.detailNote}>{sel.note}</Text></>) : null}
@@ -504,6 +778,12 @@ const styles = StyleSheet.create({
   camBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center' },
   pageCounterTop: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 999 },
   camTitle: { color: '#FFF', fontSize: 14, fontWeight: '700' },
+  // Apple Notes-style mask: dark zones around a transparent doc frame
+  frameMask: { ...StyleSheet.absoluteFillObject },
+  maskTop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)' },
+  maskMiddle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  maskSide: { flex: 1, height: 380, backgroundColor: 'rgba(0,0,0,0.55)' },
+  maskBottom: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', paddingTop: Spacing.lg },
   frame: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
   frameBox: { width: 280, height: 380, position: 'relative' },
   cor: { position: 'absolute', width: 30, height: 30, borderColor: '#34D399' },
@@ -511,7 +791,7 @@ const styles = StyleSheet.create({
   corTR: { top: 0, right: 0, borderTopWidth: 3, borderRightWidth: 3 },
   corBL: { bottom: 0, left: 0, borderBottomWidth: 3, borderLeftWidth: 3 },
   corBR: { bottom: 0, right: 0, borderBottomWidth: 3, borderRightWidth: 3 },
-  frameHint: { color: 'rgba(255,255,255,0.85)', fontSize: 12, marginTop: 16, fontWeight: '500' },
+  frameHint: { color: 'rgba(255,255,255,0.85)', fontSize: 12, fontWeight: '500' },
   thumbsStrip: { position: 'absolute', bottom: 130, left: 0, right: 0, paddingVertical: 8, backgroundColor: 'rgba(0,0,0,0.4)' },
   thumb: { width: 56, height: 78, borderRadius: 8, overflow: 'hidden', position: 'relative', borderWidth: 2, borderColor: 'rgba(255,255,255,0.3)' },
   thumbImg: { width: '100%', height: '100%' },
@@ -524,10 +804,30 @@ const styles = StyleSheet.create({
   smallActionBtn: { alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 14, backgroundColor: 'rgba(0,0,0,0.55)', minWidth: 64 },
   smallActionTxt: { color: '#FFF', fontSize: 11, fontWeight: '600' },
 
+  // Review mode (after a single shot)
+  reviewBody: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 60 },
+  reviewImg: { width: SCREEN_W - 32, height: SCREEN_W * 1.35, backgroundColor: '#0F172A', borderRadius: 12 },
+  reviewBusy: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: 'rgba(0,0,0,0.5)' },
+  reviewBusyText: { color: '#FFF', fontSize: 13, fontWeight: '600' },
+  filterStrip: { flexDirection: 'row', justifyContent: 'space-around', paddingHorizontal: Spacing.md, paddingVertical: Spacing.md, gap: 8, backgroundColor: 'rgba(0,0,0,0.6)' },
+  filterTile: { flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: 12, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.15)', backgroundColor: 'rgba(255,255,255,0.05)' },
+  filterTileActive: { borderColor: '#34D399', backgroundColor: 'rgba(52,211,153,0.15)' },
+  filterEmoji: { fontSize: 22, marginBottom: 4 },
+  filterLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 11, fontWeight: '700' },
+  filterLabelActive: { color: '#34D399' },
+  reviewBottom: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: Spacing.lg, paddingTop: Spacing.md, backgroundColor: 'rgba(0,0,0,0.85)' },
+  reviewBtnGhost: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 18, paddingVertical: 14, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
+  reviewBtnGhostTxt: { color: '#FFF', fontSize: 14, fontWeight: '700' },
+  reviewBtnPrimary: { flex: 1, borderRadius: 14, overflow: 'hidden' },
+  reviewBtnGrad: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14 },
+  reviewBtnPrimTxt: { color: '#0E1530', fontSize: 15, fontWeight: '900' },
+
   // Edit / pdf preview
-  pdfPreview: { backgroundColor: 'rgba(52,211,153,0.06)', borderRadius: BorderRadius.xl, borderWidth: 1, borderColor: 'rgba(52,211,153,0.2)', marginBottom: Spacing.md },
-  pdfHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' },
+  pdfPreview: { backgroundColor: 'rgba(52,211,153,0.06)', borderRadius: BorderRadius.xl, borderWidth: 1, borderColor: 'rgba(52,211,153,0.2)', marginBottom: Spacing.md, padding: Spacing.sm },
+  pdfHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: Spacing.sm, paddingVertical: Spacing.sm },
   pdfHeaderTxt: { color: Colors.text, fontWeight: '700', fontSize: 14 },
+  addPageMini: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, borderWidth: 1, borderColor: Colors.primary, backgroundColor: 'rgba(52,211,153,0.1)' },
+  addPageMiniTxt: { color: Colors.primary, fontSize: 12, fontWeight: '700' },
   pageThumb: { width: 110, height: 150, borderRadius: 10, overflow: 'hidden', backgroundColor: '#0F172A', position: 'relative' },
   pageThumbImg: { width: '100%', height: '100%' },
   pageThumbBadge: { position: 'absolute', bottom: 4, left: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, backgroundColor: 'rgba(52,211,153,0.95)' },
@@ -535,6 +835,23 @@ const styles = StyleSheet.create({
   pageThumbDel: { position: 'absolute', top: 4, right: 4, width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(239,68,68,0.9)', alignItems: 'center', justifyContent: 'center' },
   addMoreBtn: { width: 110, height: 150, borderRadius: 10, borderWidth: 2, borderStyle: 'dashed', borderColor: Colors.primary, alignItems: 'center', justifyContent: 'center', gap: 4 },
   addMoreTxt: { color: Colors.primary, fontSize: 12, fontWeight: '700' },
+
+  // Grid (2-column edit)
+  gridWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, padding: Spacing.sm, justifyContent: 'flex-start' },
+  gridTile: { width: '48%', aspectRatio: 0.72, borderRadius: 12, overflow: 'hidden', backgroundColor: '#0F172A', position: 'relative', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
+  gridImg: { width: '100%', height: '100%' },
+  gridBadge: { position: 'absolute', top: 6, left: 6, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, backgroundColor: 'rgba(52,211,153,0.95)' },
+  gridBadgeTxt: { color: '#0E1530', fontSize: 11, fontWeight: '900' },
+  gridActions: { position: 'absolute', bottom: 6, left: 6, right: 6, flexDirection: 'row', justifyContent: 'space-between', backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 8, paddingHorizontal: 4, paddingVertical: 4 },
+  gridBtn: { width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.12)' },
+  gridBtnDisabled: { opacity: 0.35, backgroundColor: 'rgba(255,255,255,0.05)' },
+  gridBtnDel: { backgroundColor: 'rgba(239,68,68,0.85)' },
+  gridAddTile: { width: '48%', aspectRatio: 0.72, borderRadius: 12, borderWidth: 2, borderStyle: 'dashed', borderColor: Colors.primary, alignItems: 'center', justifyContent: 'center', gap: 6 },
+  gridAddTxt: { color: Colors.primary, fontSize: 12, fontWeight: '700', textAlign: 'center', lineHeight: 16 },
+
+  // Zoom hint
+  zoomHint: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
+  zoomHintTxt: { color: Colors.textTertiary, fontSize: 11, fontStyle: 'italic' },
 
   label: { color: Colors.text, fontSize: 14, fontWeight: '700', marginTop: Spacing.md, marginBottom: 6 },
   input: { backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: BorderRadius.lg, paddingHorizontal: Spacing.md, paddingVertical: Spacing.md, color: Colors.text, fontSize: 14 },

@@ -23,6 +23,7 @@ import { useStore } from '../../src/stores/useStore';
 import { Card, EmptyState, Button } from '../../src/components/ui';
 import { CategoryIcon, getCategoryName } from '../../src/components/CategoryIcon';
 import { formatNumber } from '../../src/utils/calculations';
+import ZoomableImage from '../../src/components/ZoomableImage';
 import type { ReceiptType } from '../../src/types';
 
 type Filter = 'all' | ReceiptType;
@@ -197,7 +198,11 @@ export default function ReceiptsScreen() {
                   </TouchableOpacity>
                 </View>
                 <ScrollView style={{ maxHeight: 500 }}>
-                  <Image source={{ uri: sel.imageBase64 }} style={styles.modalImage} resizeMode="contain" />
+                  <ZoomableImage source={{ uri: sel.imageBase64 }} style={styles.modalImage} resizeMode="contain" />
+                  <View style={styles.zoomHintBar}>
+                    <Ionicons name="resize" size={11} color={Colors.textTertiary} />
+                    <Text style={styles.zoomHintTxt}>Pincez pour zoomer · Double-tap pour réinitialiser</Text>
+                  </View>
                   <View style={styles.detailGrid}>
                     <View style={styles.detailRow}>
                       <Text style={styles.detailLabel}>Montant</Text>
@@ -338,7 +343,9 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   modalTitle: { color: Colors.text, fontSize: FontSizes.lg, fontWeight: FontWeights.bold, flex: 1 },
-  modalImage: { width: '100%', height: 240, backgroundColor: Colors.background, borderRadius: BorderRadius.lg },
+  modalImage: { width: '100%', height: 280, backgroundColor: Colors.background, borderRadius: BorderRadius.lg },
+  zoomHintBar: { flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'center', paddingVertical: 6 },
+  zoomHintTxt: { color: Colors.textTertiary, fontSize: 11, fontStyle: 'italic' },
   detailGrid: { paddingTop: Spacing.lg, gap: Spacing.md },
   detailRow: {
     flexDirection: 'row',

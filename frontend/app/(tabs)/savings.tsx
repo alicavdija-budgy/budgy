@@ -25,6 +25,8 @@ import { formatNumber, pct } from '../../src/utils/calculations';
 import { SAVINGS_TEMPLATES } from '../../src/data/swiss-data';
 import AnimatedProgressBar from '../../src/components/AnimatedProgressBar';
 import ConfettiBurst from '../../src/components/ConfettiBurst';
+import { useTranslation } from '../../src/hooks/useTranslation';
+import { DATE_LOCALES } from '../../src/i18n/translations';
 
 export default function SavingsScreen() {
   const insets = useSafeAreaInsets();
@@ -38,6 +40,8 @@ export default function SavingsScreen() {
     deleteSavingsGoal,
     depositToGoal,
   } = useStore();
+  const { t, lang } = useTranslation();
+  const dateLocale = DATE_LOCALES[lang] || 'fr-CH';
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState<string | null>(null);
@@ -82,7 +86,7 @@ export default function SavingsScreen() {
 
   const handleAddGoal = () => {
     if (!newGoal.title || !newGoal.target) {
-      Alert.alert('Erreur', 'Veuillez remplir le titre et l\'objectif');
+      Alert.alert(t('common.error'), t('savings.errMissing'));
       return;
     }
 
@@ -113,11 +117,11 @@ export default function SavingsScreen() {
 
   const handleDelete = (id: string) => {
     Alert.alert(
-      'Supprimer',
-      'Êtes-vous sûr de vouloir supprimer cet objectif ?',
+      t('common.delete'),
+      t('common.deleteConfirm'),
       [
-        { text: 'Annuler', style: 'cancel' },
-        { text: 'Supprimer', style: 'destructive', onPress: () => deleteSavingsGoal(id) },
+        { text: t('common.cancel'), style: 'cancel' },
+        { text: t('common.delete'), style: 'destructive', onPress: () => deleteSavingsGoal(id) },
       ]
     );
   };
@@ -151,7 +155,7 @@ export default function SavingsScreen() {
 
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>🎯 Épargne</Text>
+        <Text style={styles.title}>🎯 {t('savings.title')}</Text>
         <TouchableOpacity
           style={styles.addButton}
           onPress={() => setShowAddModal(true)}
@@ -167,14 +171,14 @@ export default function SavingsScreen() {
       >
         {/* Summary Card */}
         <Card style={styles.summaryCard}>
-          <Text style={styles.summaryLabel}>Capital épargné</Text>
+          <Text style={styles.summaryLabel}>{t('savings.total')}</Text>
           <View style={styles.summaryRow}>
             <Text style={styles.summaryAmount}>{CUR} {formatNumber(totalSaved)}</Text>
             <View style={styles.percentContainer}>
               <Text style={styles.percentValue}>{pct(totalSaved, totalTarget)}%</Text>
             </View>
           </View>
-          <Text style={styles.summaryTarget}>sur {formatNumber(totalTarget)} visés</Text>
+          <Text style={styles.summaryTarget}>{t('savings.target', { n: formatNumber(totalTarget) })}</Text>
           <ProgressBar
             value={pct(totalSaved, totalTarget)}
             color={Colors.primary}
@@ -183,7 +187,7 @@ export default function SavingsScreen() {
           <View style={styles.autoSaveRow}>
             <Ionicons name="sync" size={16} color={Colors.success} />
             <Text style={styles.autoSaveText}>
-              Virements auto: {CUR} {formatNumber(monthlyAutoSave)}/mois
+              {t('savings.autoSave', { c: CUR, n: formatNumber(monthlyAutoSave) })}
             </Text>
           </View>
         </Card>
@@ -192,9 +196,9 @@ export default function SavingsScreen() {
         {savingsGoals.length === 0 ? (
           <EmptyState
             icon="flag-outline"
-            title="Aucun objectif"
-            subtitle="Créez votre premier objectif d'épargne"
-            action={{ label: 'Créer', onPress: () => setShowAddModal(true) }}
+            title={t('savings.noGoals')}
+            subtitle={t('savings.startNow')}
+            action={{ label: t('common.create'), onPress: () => setShowAddModal(true) }}
           />
         ) : (
           savingsGoals.map((goal) => {
@@ -208,7 +212,7 @@ export default function SavingsScreen() {
               if (!monthsLeft || isComplete) return null;
               const d = new Date();
               d.setMonth(d.getMonth() + monthsLeft);
-              return d.toLocaleDateString('fr-CH', { day: 'numeric', month: 'long', year: 'numeric' });
+              return d.toLocaleDateString(dateLocale, { day: 'numeric', month: 'long', year: 'numeric' });
             })();
 
             // Trigger is handled by the useEffect above to avoid render-phase setState
@@ -223,7 +227,7 @@ export default function SavingsScreen() {
                   <View style={[styles.completeBadge, { backgroundColor: `${goal.color}20` }]}>
                     <Ionicons name="trophy" size={14} color={goal.color} />
                     <Text style={[styles.completeBadgeText, { color: goal.color }]}>
-                      🎉 Objectif atteint !
+                      {t('savings.goalCompleted')}
                     </Text>
                   </View>
                 )}
@@ -234,7 +238,7 @@ export default function SavingsScreen() {
                     <Text style={styles.goalTitle}>{goal.title}</Text>
                     {goal.autoSave > 0 && (
                       <Text style={styles.goalAuto}>
-                        💰 {CUR} {formatNumber(goal.autoSave)}/mois auto
+                        💰 {t('savings.autoMonthly', { c: CUR, n: formatNumber(goal.autoSave) })}
                       </Text>
                     )}
                   </View>
@@ -253,8 +257,8 @@ export default function SavingsScreen() {
                 <View style={styles.goalMeta}>
                   <Text style={styles.goalMetaText}>
                     {isComplete
-                      ? `✨ Bravo ! Vous avez économisé ${CUR} ${formatNumber(goal.saved)}`
-                      : `${formatNumber(remaining)} ${CUR} manque · ${Math.round(progress)}% atteint`}
+                      ? t('savings.achieved', { c: CUR, n: formatNumber(goal.saved) })
+                      : t('savings.remaining', { n: `${formatNumber(remaining)} ${CUR}`, p: Math.round(progress) })}
                   </Text>
                 </View>
 
@@ -263,10 +267,10 @@ export default function SavingsScreen() {
                   <View style={[styles.projectionBox, { backgroundColor: `${goal.color}15`, borderColor: `${goal.color}30` }]}>
                     <Ionicons name="sparkles" size={14} color={goal.color} />
                     <Text style={[styles.projectionText, { color: goal.color }]}>
-                      Atteint le {projectedDate}
+                      {t('savings.reachedOn', { d: projectedDate })}
                     </Text>
                     <Text style={[styles.projectionSub, { color: Colors.textSecondary }]}>
-                      dans {monthsLeft} mois
+                      {t('savings.monthsLeft', { n: monthsLeft })}
                     </Text>
                   </View>
                 )}
@@ -284,7 +288,7 @@ export default function SavingsScreen() {
                     onPress={() => setShowDepositModal(goal.id)}
                   >
                     <Ionicons name="add" size={18} color={goal.color} />
-                    <Text style={[styles.actionButtonText, { color: goal.color }]}>Verser</Text>
+                    <Text style={[styles.actionButtonText, { color: goal.color }]}>{t('savings.deposit')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.deleteButton}
@@ -315,7 +319,7 @@ export default function SavingsScreen() {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
-                {step === 'templates' ? 'Choisir un modèle' : 'Nouveau projet'}
+                {step === 'templates' ? t('savings.chooseTemplate') : t('savings.newProject')}
               </Text>
               <TouchableOpacity onPress={() => { setShowAddModal(false); setStep('templates'); }}>
                 <Ionicons name="close" size={24} color={Colors.text} />
@@ -342,7 +346,7 @@ export default function SavingsScreen() {
                   onPress={() => setStep('custom')}
                 >
                   <Ionicons name="create" size={18} color={Colors.primary} />
-                  <Text style={styles.customButtonText}>Projet personnalisé</Text>
+                  <Text style={styles.customButtonText}>{t('savings.customProject')}</Text>
                 </TouchableOpacity>
               </ScrollView>
             ) : (
@@ -359,7 +363,7 @@ export default function SavingsScreen() {
                       style={styles.input}
                       value={newGoal.title}
                       onChangeText={(t) => setNewGoal((p) => ({ ...p, title: t }))}
-                      placeholder="Mon projet"
+                      placeholder={t('savings.myProject')}
                       placeholderTextColor={Colors.textTertiary}
                     />
                   </View>
@@ -367,7 +371,7 @@ export default function SavingsScreen() {
 
                 <View style={styles.inputRow}>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.inputLabel}>Objectif ({CUR})</Text>
+                    <Text style={styles.inputLabel}>{t('savings.objective')} ({CUR})</Text>
                     <TextInput
                       style={styles.input}
                       value={newGoal.target}
@@ -378,7 +382,7 @@ export default function SavingsScreen() {
                     />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.inputLabel}>Déjà épargné</Text>
+                    <Text style={styles.inputLabel}>{t('savings.alreadySaved')}</Text>
                     <TextInput
                       style={styles.input}
                       value={newGoal.saved}
@@ -392,7 +396,7 @@ export default function SavingsScreen() {
 
                 <View style={styles.inputRow}>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.inputLabel}>Virement auto/mois</Text>
+                    <Text style={styles.inputLabel}>{t('savings.autoMonth')}</Text>
                     <TextInput
                       style={styles.input}
                       value={newGoal.autoSave}
@@ -403,7 +407,7 @@ export default function SavingsScreen() {
                     />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.inputLabel}>Échéance</Text>
+                    <Text style={styles.inputLabel}>{t('savings.deadline')}</Text>
                     <TextInput
                       style={styles.input}
                       value={newGoal.deadline}
@@ -414,7 +418,7 @@ export default function SavingsScreen() {
                   </View>
                 </View>
 
-                <Text style={styles.inputLabel}>Couleur</Text>
+                <Text style={styles.inputLabel}>{t('savings.color')}</Text>
                 <View style={styles.colorRow}>
                   {COLORS.map((c) => (
                     <TouchableOpacity
@@ -430,7 +434,7 @@ export default function SavingsScreen() {
                 </View>
 
                 <Button
-                  title="Créer le projet"
+                  title={t('savings.createProject')}
                   onPress={handleAddGoal}
                   fullWidth
                   size="lg"
@@ -452,13 +456,13 @@ export default function SavingsScreen() {
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { maxHeight: 300 }]}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Ajouter un versement</Text>
+              <Text style={styles.modalTitle}>{t('savings.addDeposit')}</Text>
               <TouchableOpacity onPress={() => setShowDepositModal(null)}>
                 <Ionicons name="close" size={24} color={Colors.text} />
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.inputLabel}>Montant ({CUR})</Text>
+            <Text style={styles.inputLabel}>{t('common.amount')} ({CUR})</Text>
             <TextInput
               style={styles.input}
               value={depositAmount}
@@ -470,7 +474,7 @@ export default function SavingsScreen() {
             />
 
             <Button
-              title="Confirmer"
+              title={t('common.confirm')}
               onPress={handleDeposit}
               fullWidth
               size="lg"

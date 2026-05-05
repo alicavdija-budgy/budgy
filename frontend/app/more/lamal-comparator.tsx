@@ -5,7 +5,7 @@
 
 import React, { useState, useMemo } from 'react';
 import {
-  View, Text, ScrollView, StyleSheet, TouchableOpacity, Linking,
+  View, Text, ScrollView, StyleSheet, TouchableOpacity,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,10 +15,13 @@ import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src
 import { Card, Badge, ProgressBar } from '../../src/components/ui';
 import { CANTONS, FRANCHISES, INSURANCE_MODELS, type CantonCode } from '../../src/data/swiss-data';
 import { formatNumber } from '../../src/utils/calculations';
+import { useTranslation } from '../../src/hooks/useTranslation';
 import {
   PRIMINFO_PREMIUMS_2026, SWISS_AVG_PREMIUM_2026,
-  calculatePriminfoPremium, getInsurerPremiums, getCantonRanking,
+  calculatePriminfoPremium, getTopInsurers, getCantonRanking,
 } from '../../src/data/priminfo-2026';
+
+const TOP_N = 10;
 
 type Tab = 'compare' | 'optimize' | 'subsidy' | 'ranking';
 
@@ -42,8 +45,9 @@ export default function LamalComparatorScreen() {
   const [activeTab, setActiveTab] = useState<Tab>('compare');
 
   const premiums = useMemo(() => calculatePriminfoPremium(canton, franchise, model, age), [canton, franchise, model, age]);
-  const insurerList = useMemo(() => getInsurerPremiums(canton, franchise, model, age), [canton, franchise, model, age]);
+  const insurerList = useMemo(() => getTopInsurers(canton, franchise, model, age, TOP_N), [canton, franchise, model, age]);
   const cantonRanking = useMemo(() => getCantonRanking(franchise, model, age), [franchise, model, age]);
+  const { t } = useTranslation();
 
   const subsidy = useMemo(() => {
     const cd = CANTONS[canton];
@@ -65,10 +69,10 @@ export default function LamalComparatorScreen() {
   const cheapest = insurerList[0];
 
   const tabs: { key: Tab; label: string; icon: string }[] = [
-    { key: 'compare', label: 'Assureurs', icon: 'list' },
-    { key: 'optimize', label: 'Optimiser', icon: 'flash' },
-    { key: 'subsidy', label: 'Subsides', icon: 'heart' },
-    { key: 'ranking', label: '26 cantons', icon: 'map' },
+    { key: 'compare', label: t('lamal.insurers'), icon: 'list' },
+    { key: 'optimize', label: t('lamal.optimize'), icon: 'flash' },
+    { key: 'subsidy', label: t('lamal.subsidy'), icon: 'heart' },
+    { key: 'ranking', label: t('lamal.ranking'), icon: 'map' },
   ];
 
   return (
@@ -78,8 +82,8 @@ export default function LamalComparatorScreen() {
           <Ionicons name="arrow-back" size={24} color={Colors.text} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
-          <Text style={styles.title}>Comparateur LAMal</Text>
-          <Text style={styles.subtitle}>Priminfo 2026 · OFSP/BAG</Text>
+          <Text style={styles.title}>{t('lamal.title')}</Text>
+          <Text style={styles.subtitle}>{t('lamal.subtitle')}</Text>
         </View>
         <View style={{ width: 40 }} />
       </View>
@@ -97,13 +101,13 @@ export default function LamalComparatorScreen() {
           </View>
 
           <View style={styles.sliderRow}>
-            <Text style={styles.label}>Âge</Text>
-            <Text style={styles.sliderVal}>{age < 19 ? 'Enfant' : age < 26 ? `Jeune (${age})` : `${age} ans`}</Text>
+            <Text style={styles.label}>{t('lamal.age')}</Text>
+            <Text style={styles.sliderVal}>{age < 19 ? t('lamal.child') : age < 26 ? t('lamal.young', { n: age }) : t('lamal.adultYears', { n: age })}</Text>
           </View>
           <Slider style={styles.slider} minimumValue={0} maximumValue={70} step={1} value={age} onValueChange={setAge}
             minimumTrackTintColor={Colors.primary} maximumTrackTintColor={Colors.cardBorder} thumbTintColor={Colors.primary} />
 
-          <Text style={styles.label}>Franchise</Text>
+          <Text style={styles.label}>{t('lamal.franchise')}</Text>
           <View style={styles.franchiseRow}>
             {FRANCHISES.map(f => (
               <TouchableOpacity key={f.value} style={[styles.fChip, franchise === f.value && styles.fChipOn]} onPress={() => setFranchise(f.value)}>
@@ -112,7 +116,7 @@ export default function LamalComparatorScreen() {
             ))}
           </View>
 
-          <Text style={styles.label}>Modèle</Text>
+          <Text style={styles.label}>{t('lamal.model')}</Text>
           {INSURANCE_MODELS.map(m => (
             <TouchableOpacity key={m.value} style={[styles.modelChip, model === m.value && styles.modelOn]} onPress={() => setModel(m.value as any)}>
               <Text style={[styles.modelTxt, model === m.value && styles.modelTxtOn]}>
@@ -126,32 +130,32 @@ export default function LamalComparatorScreen() {
         <Card style={styles.heroCard}>
           <View style={styles.srcRow}>
             <Ionicons name="shield-checkmark" size={14} color={Colors.success} />
-            <Text style={styles.srcTxt}>Données officielles Priminfo 2026</Text>
+            <Text style={styles.srcTxt}>{t('lamal.dataSource')}</Text>
           </View>
-          <Text style={styles.heroLabel}>Meilleure offre · {CANTONS[canton]?.name}</Text>
+          <Text style={styles.heroLabel}>{t('lamal.bestOffer', { c: CANTONS[canton]?.name })}</Text>
           <View style={styles.heroAmtRow}>
             <Text style={styles.heroAmt}>{cheapest ? formatNumber(cheapest.premium) : '—'}</Text>
             <View>
               <Text style={styles.heroInsurer}>{cheapest?.insurer.name}</Text>
-              <Text style={styles.heroUnit}>CHF/mois</Text>
+              <Text style={styles.heroUnit}>{t('lamal.perMonth')}</Text>
             </View>
           </View>
           <View style={styles.heroStats}>
-            <View style={styles.heroStat}><Text style={styles.hsl}>Min</Text><Text style={[styles.hsv, { color: Colors.success }]}>{formatNumber(premiums.min)}</Text></View>
-            <View style={styles.heroStat}><Text style={styles.hsl}>Moyenne</Text><Text style={styles.hsv}>{formatNumber(premiums.avg)}</Text></View>
-            <View style={styles.heroStat}><Text style={styles.hsl}>Max</Text><Text style={[styles.hsv, { color: Colors.error }]}>{formatNumber(premiums.max)}</Text></View>
+            <View style={styles.heroStat}><Text style={styles.hsl}>{t('lamal.min')}</Text><Text style={[styles.hsv, { color: Colors.success }]}>{formatNumber(premiums.min)}</Text></View>
+            <View style={styles.heroStat}><Text style={styles.hsl}>{t('lamal.avg')}</Text><Text style={styles.hsv}>{formatNumber(premiums.avg)}</Text></View>
+            <View style={styles.heroStat}><Text style={styles.hsl}>{t('lamal.max')}</Text><Text style={[styles.hsv, { color: Colors.error }]}>{formatNumber(premiums.max)}</Text></View>
           </View>
           <View style={styles.changeRow}>
             <Ionicons name={cantonChange > 0 ? 'trending-up' : 'trending-down'} size={14} color={cantonChange > 4.4 ? Colors.error : Colors.warning} />
             <Text style={[styles.changeTxt, { color: cantonChange > 4.4 ? Colors.error : Colors.warning }]}>
-              {cantonChange > 0 ? '+' : ''}{cantonChange}% vs 2025
+              {cantonChange > 0 ? '+' : ''}{t('lamal.vsLast', { p: cantonChange })}
             </Text>
-            <Text style={styles.changeAvg}>CH: {formatNumber(Math.round(SWISS_AVG_PREMIUM_2026))}/mois</Text>
+            <Text style={styles.changeAvg}>{t('lamal.avgCh', { n: formatNumber(Math.round(SWISS_AVG_PREMIUM_2026)) })}</Text>
           </View>
           {subsidy > 0 && (
             <View style={styles.subsidyBadge}>
               <Ionicons name="heart" size={14} color={Colors.success} />
-              <Text style={styles.subsidyBadgeTxt}>Subside: -{formatNumber(subsidy)} CHF/mois</Text>
+              <Text style={styles.subsidyBadgeTxt}>{t('lamal.subsidyBadge', { n: formatNumber(subsidy) })}</Text>
             </View>
           )}
         </Card>
@@ -171,8 +175,8 @@ export default function LamalComparatorScreen() {
         {/* Assureurs Tab */}
         {activeTab === 'compare' && (
           <>
-            <Text style={styles.secTitle}>{insurerList.length} assureurs · {CANTONS[canton]?.name}</Text>
-            <Text style={styles.secSub}>Franchise CHF {formatNumber(franchise)} · {INSURANCE_MODELS.find(m => m.value === model)?.label}</Text>
+            <Text style={styles.secTitle}>{t('lamal.topInsurers', { n: TOP_N, c: CANTONS[canton]?.name })}</Text>
+            <Text style={styles.secSub}>{t('lamal.franchiseLabel', { n: formatNumber(franchise), m: INSURANCE_MODELS.find(m => m.value === model)?.label })}</Text>
 
             {insurerList.map((item, idx) => {
               const isFirst = idx === 0;
@@ -186,14 +190,14 @@ export default function LamalComparatorScreen() {
                       <Text style={styles.insurerName}>{item.insurer.name}</Text>
                       {item.savingsVsAvg > 0 && (
                         <Text style={styles.savingsTxt}>
-                          Économie: CHF {formatNumber(item.savingsVsAvg)}/an vs moyenne
+                          {t('lamal.savingsVs', { n: formatNumber(item.savingsVsAvg) })}
                         </Text>
                       )}
                     </View>
                     <View style={styles.insurerPrice}>
                       <Text style={[styles.insurerAmt, isFirst && { color: Colors.success }]}>{formatNumber(item.premium)}</Text>
-                      <Text style={styles.insurerUnit}>CHF/mois</Text>
-                      <Text style={styles.insurerAnnual}>{formatNumber(item.annual)}/an</Text>
+                      <Text style={styles.insurerUnit}>{t('lamal.perMonth')}</Text>
+                      <Text style={styles.insurerAnnual}>{t('lamal.annualPerYear', { n: formatNumber(item.annual) })}</Text>
                     </View>
                   </View>
                   <ProgressBar value={100 - ((item.premium - premiums.min) / Math.max(premiums.max - premiums.min, 1) * 100)}
@@ -204,49 +208,37 @@ export default function LamalComparatorScreen() {
 
             <Card style={styles.noteCard}>
               <Ionicons name="information-circle" size={18} color={Colors.info} />
-              <Text style={styles.noteTxt}>
-                Estimations basées sur les indices Priminfo 2026. Le classement réel des assureurs varie selon votre région et âge précis. Consultez le simulateur officiel pour des montants exacts.
-              </Text>
+              <Text style={styles.noteTxt}>{t('lamal.noteText')}</Text>
             </Card>
-
-            <TouchableOpacity
-              style={styles.priminfoBtn}
-              onPress={() => Linking.openURL('https://www.priminfo.admin.ch/fr/praemien')}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="open-outline" size={18} color={Colors.primary} />
-              <Text style={styles.priminfoBtnTxt}>Voir le classement officiel sur Priminfo.admin.ch</Text>
-              <Ionicons name="chevron-forward" size={16} color={Colors.primary} />
-            </TouchableOpacity>
           </>
         )}
 
         {/* Optimize Tab */}
         {activeTab === 'optimize' && (
           <>
-            <Text style={styles.secTitle}>Optimisation franchise</Text>
+            <Text style={styles.secTitle}>{t('lamal.optimizeFranchise')}</Text>
             <Card style={styles.optCard}>
               <View style={styles.optRow}>
                 <View style={[styles.optBox, { borderColor: Colors.success }]}>
                   <Ionicons name="fitness" size={28} color={Colors.success} />
-                  <Text style={styles.optLabel}>Bonne santé</Text>
+                  <Text style={styles.optLabel}>{t('lamal.goodHealth')}</Text>
                   <Text style={[styles.optVal, { color: Colors.success }]}>CHF 2'500</Text>
-                  <Text style={styles.optHint}>Économie: ~{formatNumber(savingsHighFranchise)}/an</Text>
+                  <Text style={styles.optHint}>{t('lamal.savingPerYear', { n: formatNumber(savingsHighFranchise) })}</Text>
                 </View>
                 <View style={[styles.optBox, { borderColor: Colors.error }]}>
                   <Ionicons name="medkit" size={28} color={Colors.error} />
-                  <Text style={styles.optLabel}>Maladie chronique</Text>
+                  <Text style={styles.optLabel}>{t('lamal.chronic')}</Text>
                   <Text style={[styles.optVal, { color: Colors.error }]}>CHF 300</Text>
-                  <Text style={styles.optHint}>Couverture maximale</Text>
+                  <Text style={styles.optHint}>{t('lamal.maxCoverage')}</Text>
                 </View>
               </View>
             </Card>
             <Card style={styles.tipCard}>
-              <Text style={styles.tipTitle}>Dates importantes</Text>
-              <View style={styles.tipItem}><Ionicons name="calendar" size={16} color={Colors.warning} /><Text style={styles.tipItemTxt}>30 novembre: dernier délai de résiliation</Text></View>
-              <View style={styles.tipItem}><Ionicons name="mail" size={16} color={Colors.warning} /><Text style={styles.tipItemTxt}>Résiliation par lettre recommandée</Text></View>
-              <View style={styles.tipItem}><Ionicons name="swap-horizontal" size={16} color={Colors.info} /><Text style={styles.tipItemTxt}>Changement gratuit et sans justification</Text></View>
-              <View style={styles.tipItem}><Ionicons name="shield-checkmark" size={16} color={Colors.success} /><Text style={styles.tipItemTxt}>Aucune différence de prestations (assurance de base)</Text></View>
+              <Text style={styles.tipTitle}>{t('lamal.importantDates')}</Text>
+              <View style={styles.tipItem}><Ionicons name="calendar" size={16} color={Colors.warning} /><Text style={styles.tipItemTxt}>{t('lamal.date1')}</Text></View>
+              <View style={styles.tipItem}><Ionicons name="mail" size={16} color={Colors.warning} /><Text style={styles.tipItemTxt}>{t('lamal.date2')}</Text></View>
+              <View style={styles.tipItem}><Ionicons name="swap-horizontal" size={16} color={Colors.info} /><Text style={styles.tipItemTxt}>{t('lamal.date3')}</Text></View>
+              <View style={styles.tipItem}><Ionicons name="shield-checkmark" size={16} color={Colors.success} /><Text style={styles.tipItemTxt}>{t('lamal.date4')}</Text></View>
             </Card>
           </>
         )}
@@ -254,22 +246,22 @@ export default function LamalComparatorScreen() {
         {/* Subsidy Tab */}
         {activeTab === 'subsidy' && (
           <>
-            <Text style={styles.secTitle}>Réduction de primes</Text>
+            <Text style={styles.secTitle}>{t('lamal.subsidyTitle')}</Text>
             <Card style={styles.subsidyInput}>
               <View style={styles.sliderRow}>
-                <Text style={styles.label}>Revenu annuel</Text>
+                <Text style={styles.label}>{t('lamal.annualIncome')}</Text>
                 <Text style={styles.sliderVal}>CHF {formatNumber(income)}</Text>
               </View>
               <Slider style={styles.slider} minimumValue={20000} maximumValue={150000} step={1000} value={income} onValueChange={setIncome}
                 minimumTrackTintColor={Colors.success} maximumTrackTintColor={Colors.cardBorder} thumbTintColor={Colors.success} />
               <View style={styles.statusRow}>
-                {[{ v: false, l: 'Célibataire' }, { v: true, l: 'Marié(e)' }].map(o => (
+                {[{ v: false, l: t('lamal.single') }, { v: true, l: t('lamal.married') }].map(o => (
                   <TouchableOpacity key={o.l} style={[styles.statusBtn, married === o.v && styles.statusBtnOn]} onPress={() => setMarried(o.v)}>
                     <Text style={[styles.statusTxt, married === o.v && styles.statusTxtOn]}>{o.l}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
-              <Text style={styles.label}>Enfants</Text>
+              <Text style={styles.label}>{t('lamal.childrenLabel')}</Text>
               <View style={styles.childRow}>
                 {[0, 1, 2, 3].map(n => (
                   <TouchableOpacity key={n} style={[styles.childChip, children === n && styles.childOn]} onPress={() => setChildren(n)}>
@@ -281,12 +273,12 @@ export default function LamalComparatorScreen() {
             <Card style={[styles.subsidyResult, { borderColor: subsidy > 0 ? Colors.success : Colors.cardBorder }]}>
               <Ionicons name={subsidy > 0 ? 'checkmark-circle' : 'close-circle'} size={32} color={subsidy > 0 ? Colors.success : Colors.error} />
               <Text style={[styles.subsidySt, { color: subsidy > 0 ? Colors.success : Colors.error }]}>
-                {subsidy > 0 ? 'Éligible aux subsides' : 'Non éligible'}
+                {subsidy > 0 ? t('lamal.eligible') : t('lamal.notEligible')}
               </Text>
               {subsidy > 0 && (
                 <>
-                  <Text style={styles.subsidyAmt}>-CHF {formatNumber(subsidy)}/mois</Text>
-                  <Text style={styles.subsidyAnn}>Économie: CHF {formatNumber(subsidy * 12)}/an</Text>
+                  <Text style={styles.subsidyAmt}>{t('lamal.subsidyMonth', { n: formatNumber(subsidy) })}</Text>
+                  <Text style={styles.subsidyAnn}>{t('lamal.subsidyYear', { n: formatNumber(subsidy * 12) })}</Text>
                 </>
               )}
             </Card>
@@ -296,7 +288,7 @@ export default function LamalComparatorScreen() {
         {/* Ranking Tab */}
         {activeTab === 'ranking' && (
           <>
-            <Text style={styles.secTitle}>26 cantons · Prime moyenne 2026</Text>
+            <Text style={styles.secTitle}>{t('lamal.cantonsTitle')}</Text>
             {cantonRanking.map((c, idx) => (
               <TouchableOpacity key={c.code} style={[styles.rkItem, canton === c.code && styles.rkItemOn]} onPress={() => setCanton(c.code)}>
                 <Text style={[styles.rkPos, idx < 3 && { color: idx === 0 ? '#FFD700' : idx === 1 ? '#C0C0C0' : '#CD7F32' }]}>#{idx + 1}</Text>

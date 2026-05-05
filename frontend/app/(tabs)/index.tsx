@@ -31,6 +31,7 @@ import { useStore } from '../../src/stores/useStore';
 import { useOrganicPaywall } from '../../src/hooks/usePaywall';
 import { useTranslation } from '../../src/hooks/useTranslation';
 import { useMoney } from '../../src/hooks/useMoney';
+import { DATE_LOCALES } from '../../src/i18n/translations';
 import { CategoryIcon, getCategoryName, getCategoryColor } from '../../src/components/CategoryIcon';
 import AnimatedNumber from '../../src/components/AnimatedNumber';
 import PressScale from '../../src/components/PressScale';
@@ -47,7 +48,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const C = useTheme();
   useOrganicPaywall();
-  const { t } = useTranslation();
+  const { t, lang } = useTranslation();
   const m = useMoney();
   const {
     user,
@@ -118,6 +119,7 @@ export default function HomeScreen() {
 
   const greeting = useMemo(() => t('home.hello'), [t]);
   const firstName = user?.name?.split(' ')[0] || '';
+  const dateLocale = DATE_LOCALES[lang] || 'fr-CH';
 
   // Savings preview
   const totalSaved = savingsGoals.reduce((s, g) => s + g.saved, 0);
@@ -143,10 +145,10 @@ export default function HomeScreen() {
   const styles = makeStyles(C);
 
   const quickActions = [
-    { icon: 'scan' as const, label: 'Scanner', color: C.purple, route: '/scanner-modal' },
-    { icon: 'cash' as const, label: 'Revenu', color: C.success, route: '/more/incomes' },
-    { icon: 'remove-circle' as const, label: 'Dépense', color: C.error, route: '/(tabs)/expenses' },
-    { icon: 'sparkles' as const, label: 'Économiser', color: C.secondary, route: '/more/ai-optimizer', isNew: true },
+    { icon: 'scan' as const, label: t('home.scanReceipt'), color: C.purple, route: '/scanner-modal' },
+    { icon: 'cash' as const, label: t('home.addIncome'), color: C.success, route: '/more/incomes' },
+    { icon: 'remove-circle' as const, label: t('home.addExpense'), color: C.error, route: '/(tabs)/expenses' },
+    { icon: 'sparkles' as const, label: t('home.save'), color: C.secondary, route: '/more/ai-optimizer', isNew: true },
   ];
 
   return (
@@ -164,7 +166,7 @@ export default function HomeScreen() {
               {greeting}{firstName ? `, ${firstName}` : ''} 👋
             </Text>
             <Text style={styles.date}>
-              {new Date().toLocaleDateString('fr-CH', { weekday: 'long', day: 'numeric', month: 'long' })}
+              {new Date().toLocaleDateString(dateLocale, { weekday: 'long', day: 'numeric', month: 'long' })}
             </Text>
           </View>
           <PressScale onPress={() => router.push('/more/notifications' as any)} style={styles.headerBtn}>
@@ -198,11 +200,11 @@ export default function HomeScreen() {
             style={styles.hero}
           >
             <View style={styles.heroTop}>
-              <Text style={styles.heroLabel}>DISPONIBLE CE MOIS</Text>
+              <Text style={styles.heroLabel}>{t('home.available')}</Text>
               <View style={[styles.proPill, { backgroundColor: isPro ? 'rgba(251, 191, 36, 0.95)' : 'rgba(255,255,255,0.22)' }]}>
                 <Ionicons name="flash" size={10} color={isPro ? '#1C1917' : '#FFF'} />
                 <Text style={[styles.proPillText, { color: isPro ? '#1C1917' : '#FFF' }]}>
-                  {isPro ? 'PRO' : 'Free'}
+                  {isPro ? t('home.proLabel') : t('home.freeLabel')}
                 </Text>
               </View>
             </View>
@@ -228,7 +230,7 @@ export default function HomeScreen() {
               <View style={styles.heroStat}>
                 <View style={styles.heroStatDot} />
                 <View>
-                  <Text style={styles.heroStatLabel}>Revenus</Text>
+                  <Text style={styles.heroStatLabel}>{t('home.incomesShort')}</Text>
                   <Text style={styles.heroStatValue}>{m.format(monthlyIncome)}</Text>
                 </View>
               </View>
@@ -236,7 +238,7 @@ export default function HomeScreen() {
               <View style={styles.heroStat}>
                 <View style={[styles.heroStatDot, { backgroundColor: '#FCA5A5' }]} />
                 <View>
-                  <Text style={styles.heroStatLabel}>Dépenses</Text>
+                  <Text style={styles.heroStatLabel}>{t('home.expensesShort')}</Text>
                   <Text style={styles.heroStatValue}>{m.format(monthExpenses + monthlyRecurring)}</Text>
                 </View>
               </View>
@@ -251,7 +253,7 @@ export default function HomeScreen() {
               <Ionicons name="today" size={18} color={C.error} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.quickStatLabel}>Aujourd'hui</Text>
+              <Text style={styles.quickStatLabel}>{t('home.today')}</Text>
               <Text style={styles.quickStatValue}>{m.format(todayExpenses)}</Text>
             </View>
           </View>
@@ -260,7 +262,7 @@ export default function HomeScreen() {
               <Ionicons name="calendar" size={18} color={C.warning} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.quickStatLabel}>Cette semaine</Text>
+              <Text style={styles.quickStatLabel}>{t('home.thisWeek')}</Text>
               <Text style={styles.quickStatValue}>{m.format(weekExpenses)}</Text>
             </View>
           </View>
@@ -292,9 +294,9 @@ export default function HomeScreen() {
         {savingsGoals.length > 0 && (
           <Animated.View entering={FadeInDown.duration(500).delay(400)}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>🎯 Objectifs</Text>
+              <Text style={styles.sectionTitle}>{t('home.goalsTitle')}</Text>
               <PressScale haptic="selection" onPress={() => router.push('/(tabs)/savings' as any)}>
-                <Text style={styles.seeAll}>Voir tout</Text>
+                <Text style={styles.seeAll}>{t('home.viewAll')}</Text>
               </PressScale>
             </View>
             <View style={styles.savingsCard}>
@@ -305,7 +307,7 @@ export default function HomeScreen() {
                   duration={1200}
                   style={styles.savingsAmount}
                 />
-                <Text style={styles.savingsTarget}>sur {m.format(totalTarget)}</Text>
+                <Text style={styles.savingsTarget}>{t('home.savingsTargetLabel', { n: m.format(totalTarget) })}</Text>
               </View>
               <View style={styles.savingsProgressBg}>
                 <LinearGradient
@@ -315,7 +317,7 @@ export default function HomeScreen() {
                   style={[styles.savingsProgressFill, { width: `${Math.min(100, savingsPct)}%` }]}
                 />
               </View>
-              <Text style={styles.savingsPct}>{Math.round(savingsPct)}% atteint</Text>
+              <Text style={styles.savingsPct}>{Math.round(savingsPct)}% {t('home.percentReached')}</Text>
             </View>
           </Animated.View>
         )}
@@ -334,8 +336,8 @@ export default function HomeScreen() {
                   <Ionicons name="sparkles" size={28} color="#FFF" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.aiTitle}>Trouvez des économies</Text>
-                  <Text style={styles.aiSub}>L'IA analyse vos dépenses et propose des pistes concrètes</Text>
+                  <Text style={styles.aiTitle}>{t('home.aiTitle')}</Text>
+                  <Text style={styles.aiSub}>{t('home.aiSub')}</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={22} color="#FFF" />
               </LinearGradient>
@@ -349,13 +351,13 @@ export default function HomeScreen() {
             <LinearGradient colors={C.gradientPrimary as [string, string]} style={styles.emptyIcon}>
               <Ionicons name="rocket" size={32} color="#FFF" />
             </LinearGradient>
-            <Text style={styles.emptyTitle}>Bienvenue sur Budgy 🇨🇭</Text>
+            <Text style={styles.emptyTitle}>{t('home.emptyTitle')}</Text>
             <Text style={styles.emptySub}>
-              Commencez par ajouter votre revenu mensuel pour voir votre budget en temps réel.
+              {t('home.emptySub')}
             </Text>
             <PressScale haptic="medium" onPress={() => router.push('/more/incomes' as any)}>
               <LinearGradient colors={C.gradientPrimary as [string, string]} style={styles.emptyBtn}>
-                <Text style={styles.emptyBtnText}>+ Ajouter mon salaire →</Text>
+                <Text style={styles.emptyBtnText}>{t('home.emptyBtn')}</Text>
               </LinearGradient>
             </PressScale>
           </Animated.View>

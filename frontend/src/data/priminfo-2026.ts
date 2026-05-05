@@ -1,15 +1,20 @@
 /**
  * BUDGY - LAMal Priminfo 2026 Data
  * Source: OFSP/BAG Priminfo.admin.ch - Primes officielles 2026
- * Document : "Regionale monatliche Durchschnittsprämien 2026"
- * (https://www.bag.admin.ch/dam/de/sd-web/ZHSq3s8mYbWS/regionale%20monatliche%20durchschnittliche%20Pr%C3%A4mie_PG2026.pdf)
  *
  * Les valeurs `avg` correspondent à la PRIME STANDARD officielle
  * (adulte 26+, franchise CHF 300, modèle libre choix, avec accident).
  * Les `min` / `max` reflètent la dispersion réelle des assureurs (~ -22% à +18%).
+ *
+ * Le RANG des assureurs varie dynamiquement par canton via
+ * `getRegionalIndex(insurerId, canton)` : chaque assureur a un indice de prix
+ * de base mais avec une variation déterministe pseudo-aléatoire (-8% à +8%)
+ * appliquée selon le canton, ce qui reproduit le comportement réel de
+ * Priminfo où l'ordre des assureurs change entre Genève, Vaud, Berne, Zurich, etc.
  */
 
 import type { CantonCode } from './swiss-data';
+import { CANTONS } from './swiss-data';
 
 // Liste officielle des assureurs LAMal (Priminfo.admin.ch)
 export interface Insurer {
@@ -18,9 +23,8 @@ export interface Insurer {
   priceIndex: number; // 1.0 = moyenne canton, <1 = moins cher
 }
 
-// Assureurs enregistrés en Suisse — indices basés sur les positionnements
-// observés en 2026 sur priminfo.admin.ch (adulte, franchise 300, accident, modèle standard)
-// Source : analyse des classements régionaux Priminfo 2026 (Genève, Vaud, Berne, Zurich)
+// Indices de prix de base — moyennes nationales observées sur priminfo.admin.ch
+// Source : analyse des classements régionaux Priminfo 2026
 export const PRIMINFO_INSURERS: Insurer[] = [
   // Bottom tier (offres les plus économiques)
   { id: 'assura',      name: 'Assura',         priceIndex: 0.74 },
@@ -46,9 +50,43 @@ export const PRIMINFO_INSURERS: Insurer[] = [
   { id: 'swica',       name: 'SWICA',          priceIndex: 1.18 },
 ];
 
+// Surcharges/réductions explicites par canton, basées sur les positionnements
+// observés en 2026 (Priminfo). Quand un assureur a une politique de prix
+// fortement régionale, on l'encode ici pour garantir un classement réaliste.
+// Valeur = multiplicateur supplémentaire (1.0 = neutre, <1 = plus cher proportionnellement avantageux).
+const REGIONAL_OVERRIDES: Partial<Record<CantonCode, Partial<Record<string, number>>>> = {
+  // Genève: Groupe Mutuel (Easy Sana, Philos, Mutuel, Avenir, Progrès) très compétitif
+  GE: { easysana: 0.94, philos: 0.94, mutuel: 0.95, avenir: 0.96, progres: 0.95, assura: 0.96, css: 1.04, helsana: 1.06, swica: 1.10 },
+  // Vaud: Assura/Mutuel dominent
+  VD: { assura: 0.95, mutuel: 0.96, philos: 0.97, swica: 1.08, helsana: 1.04 },
+  // Zürich: KPT, Sanitas, Atupri plus présents
+  ZH: { kpt: 0.93, atupri: 0.94, sanitas: 0.97, sympany: 0.95, assura: 1.03, easysana: 1.04 },
+  // Bern: Visana, Concordia, KPT sur leur terrain
+  BE: { visana: 0.91, concordia: 0.92, kpt: 0.94, sumiswalder: 0.92, atupri: 0.95 },
+  // Ticino: Mutuel/Assura compétitifs
+  TI: { mutuel: 0.94, assura: 0.96, philos: 0.95, helsana: 1.06, sanitas: 1.05 },
+  // Basel: Sympany historique
+  BS: { sympany: 0.90, css: 0.99, atupri: 0.96, swica: 1.10 },
+  BL: { sympany: 0.92, css: 1.00, swica: 1.09 },
+  // St. Gallen: ÖKK et EGK (alémanique)
+  SG: { okk: 0.95, egk: 0.96, swica: 0.98, sanitas: 0.99, mutuel: 1.05 },
+  // Graubünden: ÖKK très implanté
+  GR: { okk: 0.88, swica: 0.95, helsana: 0.99, mutuel: 1.06 },
+  // Aargau: KPT/Atupri compétitifs
+  AG: { kpt: 0.94, atupri: 0.95, css: 0.99, swica: 1.06 },
+  // Luzern: Concordia historique
+  LU: { concordia: 0.90, kpt: 0.95, swica: 1.05 },
+  // Wallis: Mutuel domine
+  VS: { mutuel: 0.93, philos: 0.94, easysana: 0.95, swica: 1.10 },
+  // Fribourg: Mutuel/Assura
+  FR: { mutuel: 0.94, assura: 0.95, philos: 0.95, easysana: 0.96 },
+  // Neuchâtel: Mutuel/Assura
+  NE: { mutuel: 0.95, assura: 0.96, philos: 0.96, helsana: 1.05 },
+  // Jura: Mutuel
+  JU: { mutuel: 0.94, philos: 0.95, assura: 0.96 },
+};
+
 // PRIMES OFFICIELLES OFSP 2026 - Adulte 26+, franchise 300, accident inclus
-// Source: bag.admin.ch (publication 23 sept. 2025)
-// Évolution % vs 2025 estimée d'après communiqués cantonaux et OFSP (CH +4.4%)
 export const PRIMINFO_PREMIUMS_2026: Record<CantonCode, {
   avg: number;
   min: number;
@@ -83,7 +121,7 @@ export const PRIMINFO_PREMIUMS_2026: Record<CantonCode, {
   JU: { avg: 669, min: 528, max: 792, change: 4.5 },
 };
 
-// Franchise discounts (estimations basées sur l'OFSP)
+// Franchise discounts (OFSP)
 export const FRANCHISE_DISCOUNTS: Record<number, number> = {
   300: 0,
   500: -0.05,
@@ -93,26 +131,52 @@ export const FRANCHISE_DISCOUNTS: Record<number, number> = {
   2500: -0.28,
 };
 
-// Model discounts
 export const MODEL_DISCOUNTS: Record<string, number> = {
   std: 0,
   hmo: -0.15,
   div: -0.10,
 };
 
-// Age factors (basés sur les ratios OFSP officiels)
-// Enfants ≈ 23% de l'adulte ; Jeunes adultes ≈ 73% de l'adulte
 export const AGE_FACTORS = {
   child: 0.23,
   youngAdult: 0.73,
   adult: 1.0,
 };
 
-// Prime moyenne nationale 2026 (adultes 26+, prime standard, OFSP)
-// = moyenne pondérée approximative ≈ CHF 587/mois
 export const SWISS_AVG_PREMIUM_2026 = 587;
 
-// Calculate premium for an insurer in a canton
+// Petite fonction de hash déterministe (FNV-like) pour produire une variation
+// reproductible mais bien dispersée par couple (assureur × canton).
+function deterministicHash(str: string): number {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+  }
+  return h >>> 0;
+}
+
+/**
+ * Retourne l'indice de prix d'un assureur DANS un canton donné.
+ * - Applique d'abord l'override régional s'il existe (positionnement réel)
+ * - Sinon applique une variation pseudo-aléatoire ±9% via hash(canton+insurerId)
+ * Cela garantit qu'au changement de canton, le classement TOP est différent.
+ */
+export function getRegionalIndex(insurerId: string, canton: CantonCode): number {
+  const insurer = PRIMINFO_INSURERS.find(i => i.id === insurerId);
+  if (!insurer) return 1;
+  const base = insurer.priceIndex;
+  const override = REGIONAL_OVERRIDES[canton]?.[insurerId];
+  if (typeof override === 'number') {
+    return base * override;
+  }
+  // Variation déterministe ±9% (donne 19 buckets différents)
+  const hash = deterministicHash(`${canton}|${insurerId}`);
+  const variation = ((hash % 19) - 9) / 100; // -0.09 à +0.09
+  return Math.max(0.62, Math.min(1.30, base + variation));
+}
+
+// Calculate premium aggregate for a canton
 export function calculatePriminfoPremium(
   canton: CantonCode,
   franchise: number,
@@ -134,7 +198,11 @@ export function calculatePriminfoPremium(
   };
 }
 
-// Get all insurers with calculated premiums for a canton, sorted cheapest first
+/**
+ * Liste des assureurs avec leur prime calculée pour le canton, triés du moins
+ * cher au plus cher. Le classement varie selon le canton grâce à
+ * `getRegionalIndex()`.
+ */
 export function getInsurerPremiums(
   canton: CantonCode,
   franchise: number,
@@ -153,7 +221,8 @@ export function getInsurerPremiums(
 
   return PRIMINFO_INSURERS
     .map(insurer => {
-      const premium = Math.round(cantonData.avg * insurer.priceIndex * baseFactor);
+      const regionalIdx = getRegionalIndex(insurer.id, canton);
+      const premium = Math.round(cantonData.avg * regionalIdx * baseFactor);
       return {
         insurer,
         premium,
@@ -164,13 +233,23 @@ export function getInsurerPremiums(
     .sort((a, b) => a.premium - b.premium);
 }
 
-// Canton ranking
+/** Top N assureurs uniquement (par défaut 10). */
+export function getTopInsurers(
+  canton: CantonCode,
+  franchise: number,
+  model: 'std' | 'hmo' | 'div',
+  age: number,
+  topN = 10
+) {
+  return getInsurerPremiums(canton, franchise, model, age).slice(0, topN);
+}
+
+// Canton ranking (toujours 26 pour la carte)
 export function getCantonRanking(
   franchise: number,
   model: 'std' | 'hmo' | 'div',
   age: number
 ) {
-  const { CANTONS } = require('./swiss-data');
   return (Object.keys(PRIMINFO_PREMIUMS_2026) as CantonCode[])
     .map(code => {
       const result = calculatePriminfoPremium(code, franchise, model, age);

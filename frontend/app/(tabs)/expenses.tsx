@@ -23,6 +23,7 @@ import { CategoryIcon, getCategoryName, getCategoryColor } from '../../src/compo
 import BrandLogo from '../../src/components/BrandLogo';
 import { formatNumber } from '../../src/utils/calculations';
 import { EXPENSE_CATEGORIES, PAYMENT_METHODS } from '../../src/data/swiss-data';
+import { useTranslation } from '../../src/hooks/useTranslation';
 
 type Tab = 'daily' | 'pro' | 'contracts';
 
@@ -42,6 +43,7 @@ export default function ExpensesScreen() {
 
   const [activeTab, setActiveTab] = useState<Tab>('daily');
   const [showAddModal, setShowAddModal] = useState(false);
+  const { t } = useTranslation();
   const [newExpense, setNewExpense] = useState({
     title: '',
     amount: '',
@@ -62,7 +64,7 @@ export default function ExpensesScreen() {
 
   const handleAddExpense = () => {
     if (!newExpense.title || !newExpense.amount) {
-      Alert.alert('Erreur', 'Veuillez remplir tous les champs');
+      Alert.alert(t('common.error'), t('common.requiredFields'));
       return;
     }
 
@@ -95,12 +97,12 @@ export default function ExpensesScreen() {
 
   const handleDelete = (id: string) => {
     Alert.alert(
-      'Supprimer',
-      'Êtes-vous sûr de vouloir supprimer cette dépense ?',
+      t('expenses.deleteTitle'),
+      t('expenses.deleteMsg'),
       [
-        { text: 'Annuler', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Supprimer',
+          text: t('common.delete'),
           style: 'destructive',
           onPress: () => {
             if (activeTab === 'pro') {
@@ -115,16 +117,16 @@ export default function ExpensesScreen() {
   };
 
   const tabs: { key: Tab; label: string; icon: string }[] = [
-    { key: 'daily', label: 'Quotidien', icon: 'cart' },
-    { key: 'pro', label: 'Pro', icon: 'briefcase' },
-    { key: 'contracts', label: 'Contrats', icon: 'document-text' },
+    { key: 'daily', label: t('expenses.daily'), icon: 'cart' },
+    { key: 'pro', label: t('expenses.pro'), icon: 'briefcase' },
+    { key: 'contracts', label: t('expenses.contracts'), icon: 'document-text' },
   ];
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Dépenses</Text>
+        <Text style={styles.title}>{t('expenses.title')}</Text>
         <TouchableOpacity
           style={styles.addButton}
           onPress={() => setShowAddModal(true)}
@@ -169,13 +171,13 @@ export default function ExpensesScreen() {
         {/* Summary */}
         <Card style={styles.summaryCard}>
           <Text style={styles.summaryLabel}>
-            {activeTab === 'daily' ? 'Total dépenses' : activeTab === 'pro' ? 'Frais professionnels' : 'Contrats actifs'}
+            {activeTab === 'daily' ? t('expenses.summaryDaily') : activeTab === 'pro' ? t('expenses.summaryPro') : t('expenses.summaryContracts')}
           </Text>
           <Text style={styles.summaryAmount}>
             {CUR} {formatNumber(activeTab === 'daily' ? totalDaily : activeTab === 'pro' ? totalPro : contracts.reduce((s, c) => s + c.amount, 0))}
           </Text>
           <Text style={styles.summaryCount}>
-            {activeTab === 'daily' ? transactions.length : activeTab === 'pro' ? proExpenses.length : contracts.length} éléments
+            {activeTab === 'daily' ? transactions.length : activeTab === 'pro' ? proExpenses.length : contracts.length} {t('common.items')}
           </Text>
         </Card>
 
@@ -185,9 +187,9 @@ export default function ExpensesScreen() {
             {transactions.length === 0 ? (
               <EmptyState
                 icon="receipt-outline"
-                title="Aucune dépense"
-                subtitle="Commencez par ajouter vos dépenses quotidiennes"
-                action={{ label: 'Ajouter', onPress: () => setShowAddModal(true) }}
+                title={t('expenses.noTx')}
+                subtitle={t('expenses.addDailySub')}
+                action={{ label: t('common.add'), onPress: () => setShowAddModal(true) }}
               />
             ) : (
               transactions.map((tx) => (
@@ -229,18 +231,18 @@ export default function ExpensesScreen() {
             {!isPro && (
               <Card style={styles.proLockedCard}>
                 <Ionicons name="lock-closed" size={32} color={Colors.primary} />
-                <Text style={styles.proLockedTitle}>Fonctionnalité Pro</Text>
+                <Text style={styles.proLockedTitle}>{t('expenses.proLockedTitle')}</Text>
                 <Text style={styles.proLockedText}>
-                  Passez à Budgy Pro pour gérer vos frais professionnels et exporter des notes de frais PDF.
+                  {t('expenses.proLockedText')}
                 </Text>
               </Card>
             )}
             {isPro && proExpenses.length === 0 ? (
               <EmptyState
                 icon="briefcase-outline"
-                title="Aucun frais pro"
-                subtitle="Ajoutez vos frais professionnels pour les exporter en PDF"
-                action={{ label: 'Ajouter', onPress: () => setShowAddModal(true) }}
+                title={t('expenses.noPro')}
+                subtitle={t('expenses.addProSub')}
+                action={{ label: t('common.add'), onPress: () => setShowAddModal(true) }}
               />
             ) : (
               isPro && proExpenses.map((exp) => (
@@ -269,8 +271,8 @@ export default function ExpensesScreen() {
             {contracts.length === 0 ? (
               <EmptyState
                 icon="document-text-outline"
-                title="Aucun contrat"
-                subtitle="Ajoutez vos contrats pour suivre les renouvellements"
+                title={t('expenses.noContracts')}
+                subtitle={t('expenses.addContractsSub')}
               />
             ) : (
               contracts.map((contract) => (
@@ -314,7 +316,7 @@ export default function ExpensesScreen() {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
-                {activeTab === 'pro' ? 'Nouveau frais pro' : 'Nouvelle dépense'}
+                {activeTab === 'pro' ? t('expenses.newProExpense') : t('expenses.newExpense')}
               </Text>
               <TouchableOpacity onPress={() => setShowAddModal(false)}>
                 <Ionicons name="close" size={24} color={Colors.text} />
@@ -322,18 +324,18 @@ export default function ExpensesScreen() {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Titre</Text>
+              <Text style={styles.inputLabel}>{t('common.title')}</Text>
               <TextInput
                 style={styles.input}
                 value={newExpense.title}
                 onChangeText={(t) => setNewExpense((p) => ({ ...p, title: t }))}
-                placeholder="ex: Migros"
+                placeholder={t('expenses.exTitle')}
                 placeholderTextColor={Colors.textTertiary}
               />
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Montant ({CUR})</Text>
+              <Text style={styles.inputLabel}>{t('common.amount')} ({CUR})</Text>
               <TextInput
                 style={styles.input}
                 value={newExpense.amount}
@@ -345,7 +347,7 @@ export default function ExpensesScreen() {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Catégorie</Text>
+              <Text style={styles.inputLabel}>{t('common.category')}</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 <View style={styles.categoryGrid}>
                   {EXPENSE_CATEGORIES.slice(0, 8).map((cat) => (
@@ -367,12 +369,12 @@ export default function ExpensesScreen() {
 
             {activeTab === 'pro' && (
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Justification</Text>
+                <Text style={styles.inputLabel}>{t('expenses.justification')}</Text>
                 <TextInput
                   style={styles.input}
                   value={newExpense.justification}
                   onChangeText={(t) => setNewExpense((p) => ({ ...p, justification: t }))}
-                  placeholder="ex: Réunion client"
+                  placeholder={t('expenses.exJustif')}
                   placeholderTextColor={Colors.textTertiary}
                 />
               </View>
@@ -380,7 +382,7 @@ export default function ExpensesScreen() {
 
             {/* Payment Method Selector */}
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Mode de paiement</Text>
+              <Text style={styles.inputLabel}>{t('common.payment')}</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 <View style={styles.categoryGrid}>
                   {PAYMENT_METHODS.map((pm) => (
@@ -402,7 +404,7 @@ export default function ExpensesScreen() {
             </View>
 
             <Button
-              title="Ajouter"
+              title={t('common.add')}
               onPress={handleAddExpense}
               fullWidth
               size="lg"

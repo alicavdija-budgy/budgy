@@ -1,10 +1,9 @@
 /**
- * GUARDIAN MONEY CHF - Onboarding Screen
+ * BUDGY - Onboarding Screen (i18n)
  * Multi-step questionnaire to personalize the experience
- * Steps: Intro slides -> Canton -> Currency -> Employment -> Income -> Household -> Goals -> Done
  */
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -25,62 +24,10 @@ import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../src/co
 import { useStore } from '../src/stores/useStore';
 import { CANTONS, CURRENCIES, type CantonCode } from '../src/data/swiss-data';
 import { Button } from '../src/components/ui';
+import { useTranslation } from '../src/hooks/useTranslation';
 import type { HouseholdType } from '../src/types';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-const SLIDES = [
-  {
-    emoji: '⚡',
-    title: 'Votre argent, enfin maîtrisé',
-    description: 'Budgy centralise revenus, dépenses, épargne et patrimoine en un seul endroit.',
-    color: Colors.primary,
-  },
-  {
-    emoji: '🇨🇭',
-    title: 'Pensé pour la Suisse',
-    description: 'LAMal, impôts cantonaux, 3ème pilier : tout est calibré pour les 26 cantons.',
-    color: Colors.success,
-  },
-  {
-    emoji: '🤖',
-    title: 'IA & prévisions',
-    description: 'Conseils personnalisés, prévisions de dépenses et optimisations fiscales intelligentes.',
-    color: Colors.warning,
-  },
-  {
-    emoji: '🚀',
-    title: 'Prêt à commencer !',
-    description: 'Répondez à quelques questions pour une expérience sur mesure.',
-    color: Colors.purple,
-  },
-];
-
-const GOALS = [
-  { id: 'house', emoji: '🏠', label: 'Acheter un bien' },
-  { id: 'fire', emoji: '🔥', label: 'Retraite anticipée' },
-  { id: 'travel', emoji: '✈️', label: 'Voyager plus' },
-  { id: 'debt', emoji: '💳', label: 'Liquider mes dettes' },
-  { id: 'invest', emoji: '📈', label: 'Investir' },
-  { id: 'save', emoji: '💰', label: 'Épargner plus' },
-  { id: 'taxes', emoji: '📑', label: 'Optimiser mes impôts' },
-  { id: 'lamal', emoji: '🏥', label: 'Réduire ma prime LAMal' },
-];
-
-const HOUSEHOLDS: { id: HouseholdType; emoji: string; label: string; description: string }[] = [
-  { id: 'single', emoji: '👤', label: 'Célibataire', description: 'Je vis seul(e)' },
-  { id: 'couple', emoji: '👫', label: 'En couple', description: 'Sans enfants' },
-  { id: 'family', emoji: '👨‍👩‍👧', label: 'Famille', description: 'Couple avec enfants' },
-  { id: 'single_parent', emoji: '👩‍👦', label: 'Parent solo', description: 'Seul(e) avec enfants' },
-];
-
-const EMPLOYMENT_TYPES = [
-  { id: 'employee' as const, emoji: '💼', label: 'Salarié(e)' },
-  { id: 'self_employed' as const, emoji: '🛠️', label: 'Indépendant(e)' },
-  { id: 'student' as const, emoji: '🎓', label: 'Étudiant(e)' },
-  { id: 'retired' as const, emoji: '🏖️', label: 'Retraité(e)' },
-  { id: 'other' as const, emoji: '✨', label: 'Autre' },
-];
 
 // All 26 cantons sorted alphabetically
 const ALL_CANTONS: CantonCode[] = Object.keys(CANTONS).sort() as CantonCode[];
@@ -108,6 +55,7 @@ export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { setPreferences, addIncome } = useStore();
+  const { t } = useTranslation();
 
   const [step, setStep] = useState<Step>('slides');
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -123,6 +71,40 @@ export default function OnboardingScreen() {
 
   const flatListRef = useRef<FlatList>(null);
 
+  // Localized data
+  const SLIDES = useMemo(() => [
+    { emoji: '⚡', title: t('onboarding.slide1Title'), description: t('onboarding.slide1Desc'), color: Colors.primary },
+    { emoji: '🇨🇭', title: t('onboarding.slide2Title'), description: t('onboarding.slide2Desc'), color: Colors.success },
+    { emoji: '🤖', title: t('onboarding.slide3Title'), description: t('onboarding.slide3Desc'), color: Colors.warning },
+    { emoji: '🚀', title: t('onboarding.slide4Title'), description: t('onboarding.slide4Desc'), color: Colors.purple },
+  ], [t]);
+
+  const GOALS = useMemo(() => [
+    { id: 'house', emoji: '🏠', label: t('onboarding.goalHouse') },
+    { id: 'fire', emoji: '🔥', label: t('onboarding.goalFire') },
+    { id: 'travel', emoji: '✈️', label: t('onboarding.goalTravel') },
+    { id: 'debt', emoji: '💳', label: t('onboarding.goalDebt') },
+    { id: 'invest', emoji: '📈', label: t('onboarding.goalInvest') },
+    { id: 'save', emoji: '💰', label: t('onboarding.goalSave') },
+    { id: 'taxes', emoji: '📑', label: t('onboarding.goalTaxes') },
+    { id: 'lamal', emoji: '🏥', label: t('onboarding.goalLamal') },
+  ], [t]);
+
+  const HOUSEHOLDS: { id: HouseholdType; emoji: string; label: string; description: string }[] = useMemo(() => [
+    { id: 'single', emoji: '👤', label: t('onboarding.hSingle'), description: t('onboarding.hSingleDesc') },
+    { id: 'couple', emoji: '👫', label: t('onboarding.hCouple'), description: t('onboarding.hCoupleDesc') },
+    { id: 'family', emoji: '👨‍👩‍👧', label: t('onboarding.hFamily'), description: t('onboarding.hFamilyDesc') },
+    { id: 'single_parent', emoji: '👩‍👦', label: t('onboarding.hSingleParent'), description: t('onboarding.hSingleParentDesc') },
+  ], [t]);
+
+  const EMPLOYMENT_TYPES = useMemo(() => [
+    { id: 'employee' as const, emoji: '💼', label: t('onboarding.empSalaried') },
+    { id: 'self_employed' as const, emoji: '🛠️', label: t('onboarding.empSelf') },
+    { id: 'student' as const, emoji: '🎓', label: t('onboarding.empStudent') },
+    { id: 'retired' as const, emoji: '🏖️', label: t('onboarding.empRetired') },
+    { id: 'other' as const, emoji: '✨', label: t('onboarding.empOther') },
+  ], [t]);
+
   const toggleGoal = (id: string) => {
     setGoals((prev) =>
       prev.includes(id) ? prev.filter((g) => g !== id) : [...prev, id]
@@ -130,7 +112,7 @@ export default function OnboardingScreen() {
   };
 
   const currentIndex = STEP_ORDER.indexOf(step);
-  const totalConfigSteps = STEP_ORDER.length - 1; // exclude slides from progress
+  const totalConfigSteps = STEP_ORDER.length - 1;
 
   const handleNext = () => {
     if (step === 'slides') {
@@ -173,7 +155,6 @@ export default function OnboardingScreen() {
   const handleFinish = () => {
     const incomeNum = parseFloat(monthlyIncome.replace(',', '.')) || 0;
 
-    // Save preferences
     setPreferences({
       onboarded: true,
       canton,
@@ -185,11 +166,10 @@ export default function OnboardingScreen() {
       employmentType,
     });
 
-    // Create an initial income entry so dashboard looks right immediately
     if (incomeNum > 0) {
       addIncome({
         id: `income_${Date.now()}`,
-        title: employmentType === 'self_employed' ? 'Revenu indépendant' : 'Salaire',
+        title: employmentType === 'self_employed' ? t('onboarding.incomeFreelance') : t('onboarding.incomeRecurring'),
         amount: incomeNum,
         type: 'recurring',
         frequency: 'monthly',
@@ -200,7 +180,6 @@ export default function OnboardingScreen() {
       });
     }
 
-    // Navigate to main app
     setTimeout(() => {
       try {
         router.replace('/(tabs)');
@@ -298,14 +277,14 @@ export default function OnboardingScreen() {
 
         <View style={[styles.buttons, { paddingBottom: insets.bottom + 20 }]}>
           <Button
-            title={currentSlide < SLIDES.length - 1 ? 'Suivant →' : 'Commencer →'}
+            title={currentSlide < SLIDES.length - 1 ? `${t('common.next')} →` : `${t('common.start')} →`}
             onPress={handleNext}
             fullWidth
             size="lg"
           />
           {currentSlide < SLIDES.length - 1 && (
             <TouchableOpacity style={styles.skipButton} onPress={handleSkipSlides}>
-              <Text style={styles.skipText}>Passer l'intro</Text>
+              <Text style={styles.skipText}>{t('onboarding.skipIntro')}</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -331,10 +310,8 @@ export default function OnboardingScreen() {
         {step === 'canton' && (
           <>
             <Text style={styles.stepEmoji}>📍</Text>
-            <Text style={styles.stepTitle}>Votre canton de résidence</Text>
-            <Text style={styles.stepSubtitle}>
-              Pour calculer correctement vos impôts, primes LAMal et subsides.
-            </Text>
+            <Text style={styles.stepTitle}>{t('onboarding.cantonTitle')}</Text>
+            <Text style={styles.stepSubtitle}>{t('onboarding.cantonSub')}</Text>
             <View style={styles.cantonGrid}>
               {ALL_CANTONS.map((code) => (
                 <TouchableOpacity
@@ -363,10 +340,8 @@ export default function OnboardingScreen() {
         {step === 'currency' && (
           <>
             <Text style={styles.stepEmoji}>💱</Text>
-            <Text style={styles.stepTitle}>Devise principale</Text>
-            <Text style={styles.stepSubtitle}>
-              La devise utilisée dans toute l'application. Vous pourrez en changer plus tard.
-            </Text>
+            <Text style={styles.stepTitle}>{t('onboarding.currencyTitle')}</Text>
+            <Text style={styles.stepSubtitle}>{t('onboarding.currencySub')}</Text>
             <View style={styles.currencyGrid}>
               {CURRENCIES.slice(0, 4).map((cur) => (
                 <TouchableOpacity
@@ -397,10 +372,8 @@ export default function OnboardingScreen() {
         {step === 'employment' && (
           <>
             <Text style={styles.stepEmoji}>💼</Text>
-            <Text style={styles.stepTitle}>Votre situation professionnelle</Text>
-            <Text style={styles.stepSubtitle}>
-              Pour adapter les suggestions fiscales (3ème pilier, TVA, etc.).
-            </Text>
+            <Text style={styles.stepTitle}>{t('onboarding.employmentTitle')}</Text>
+            <Text style={styles.stepSubtitle}>{t('onboarding.employmentSub')}</Text>
             <View style={styles.goalsGrid}>
               {EMPLOYMENT_TYPES.map((emp) => (
                 <TouchableOpacity
@@ -438,11 +411,8 @@ export default function OnboardingScreen() {
         {step === 'income' && (
           <>
             <Text style={styles.stepEmoji}>💰</Text>
-            <Text style={styles.stepTitle}>Revenu mensuel net</Text>
-            <Text style={styles.stepSubtitle}>
-              En {currency}, approximatif. Utilisé pour calculer vos subsides LAMal, budgets et
-              capacité d'épargne. Vous pouvez passer cette étape.
-            </Text>
+            <Text style={styles.stepTitle}>{t('onboarding.incomeTitle')}</Text>
+            <Text style={styles.stepSubtitle}>{t('onboarding.incomeSub', { c: currency })}</Text>
             <View style={styles.incomeBox}>
               <Text style={styles.incomeCurrency}>{currency}</Text>
               <TextInput
@@ -454,7 +424,7 @@ export default function OnboardingScreen() {
                 keyboardType="decimal-pad"
                 maxLength={8}
               />
-              <Text style={styles.incomeSuffix}>/ mois</Text>
+              <Text style={styles.incomeSuffix}>{t('onboarding.incomeMonth')}</Text>
             </View>
 
             <View style={styles.quickAmounts}>
@@ -481,9 +451,7 @@ export default function OnboardingScreen() {
 
             <View style={styles.infoCard}>
               <Ionicons name="shield-checkmark" size={18} color={Colors.success} />
-              <Text style={styles.infoCardText}>
-                Vos données restent privées. Aucun partage avec des tiers.
-              </Text>
+              <Text style={styles.infoCardText}>{t('onboarding.privacy')}</Text>
             </View>
           </>
         )}
@@ -492,10 +460,8 @@ export default function OnboardingScreen() {
         {step === 'household' && (
           <>
             <Text style={styles.stepEmoji}>🏠</Text>
-            <Text style={styles.stepTitle}>Votre situation familiale</Text>
-            <Text style={styles.stepSubtitle}>
-              Détermine le modèle fiscal applicable et l'éligibilité aux subsides.
-            </Text>
+            <Text style={styles.stepTitle}>{t('onboarding.householdTitle')}</Text>
+            <Text style={styles.stepSubtitle}>{t('onboarding.householdSub')}</Text>
             <View style={styles.goalsGrid}>
               {HOUSEHOLDS.map((h) => (
                 <TouchableOpacity
@@ -524,7 +490,7 @@ export default function OnboardingScreen() {
 
             {(household === 'family' || household === 'single_parent') && (
               <View style={styles.childrenBox}>
-                <Text style={styles.childrenLabel}>Nombre d'enfants à charge</Text>
+                <Text style={styles.childrenLabel}>{t('onboarding.childrenLabel')}</Text>
                 <View style={styles.counterRow}>
                   <TouchableOpacity
                     style={styles.counterBtn}
@@ -549,10 +515,8 @@ export default function OnboardingScreen() {
         {step === 'goals' && (
           <>
             <Text style={styles.stepEmoji}>🎯</Text>
-            <Text style={styles.stepTitle}>Vos objectifs principaux</Text>
-            <Text style={styles.stepSubtitle}>
-              Sélectionnez ce qui compte pour vous. L'app s'adaptera à vos priorités.
-            </Text>
+            <Text style={styles.stepTitle}>{t('onboarding.goalsTitle')}</Text>
+            <Text style={styles.stepSubtitle}>{t('onboarding.goalsSub')}</Text>
             <View style={styles.goalsGrid}>
               {GOALS.map((goal) => (
                 <TouchableOpacity
@@ -588,7 +552,7 @@ export default function OnboardingScreen() {
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
         <Button
-          title={step === 'goals' ? 'Terminer ✓' : 'Continuer →'}
+          title={step === 'goals' ? `${t('common.finish')} ✓` : `${t('common.continue')} →`}
           onPress={handleNext}
           fullWidth
           size="lg"
@@ -741,7 +705,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
   },
 
-  // Canton grid
   cantonGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -779,7 +742,6 @@ const styles = StyleSheet.create({
     color: Colors.primaryLight,
   },
 
-  // Currency
   currencyGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -817,7 +779,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-  // Income
   incomeBox: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -886,7 +847,6 @@ const styles = StyleSheet.create({
     fontSize: FontSizes.xs,
   },
 
-  // Goals / Household
   goalsGrid: {
     gap: Spacing.sm,
   },
@@ -925,7 +885,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-  // Children counter
   childrenBox: {
     backgroundColor: Colors.card,
     borderWidth: 1,
@@ -965,7 +924,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  // Footer button
   footer: {
     paddingHorizontal: Spacing.xl,
     paddingTop: Spacing.md,

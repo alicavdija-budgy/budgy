@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="description" content="Conditions Générales d'Utilisation de l'application Budgy — Coach financier suisse premium." />
+<meta name="theme-color" content="#0E1530" />
+<title>Conditions Générales d'Utilisation — Budgy 🇨🇭</title>
+<link rel="icon" type="image/png" href="./icons/favicon.png" />
+<style>
+  :root {
+    --bg: #0E1530;
+    --bg-alt: #111B3A;
+    --card: rgba(255,255,255,0.04);
+    --border: rgba(255,255,255,0.08);
+    --text: #F8FAFC;
+    --text-soft: #CBD5E1;
+    --text-mute: #94A3B8;
+    --primary: #34D399;
+    --primary-2: #22D3EE;
+    --accent: #FBBF24;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; line-height: 1.65; -webkit-font-smoothing: antialiased; }
+  a { color: var(--primary-2); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .header {
+    position: sticky; top: 0; z-index: 10;
+    background: rgba(14, 21, 48, 0.85);
+    backdrop-filter: saturate(180%) blur(14px);
+    -webkit-backdrop-filter: saturate(180%) blur(14px);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 24px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 18px; color: var(--text); }
+  .brand-logo {
+    width: 36px; height: 36px; border-radius: 12px;
+    background: linear-gradient(135deg, var(--primary), var(--primary-2));
+    display: flex; align-items: center; justify-content: center; font-size: 18px;
+  }
+  .nav { margin-left: auto; display: flex; gap: 18px; font-size: 14px; }
+  .nav a { color: var(--text-soft); }
+
+  .hero {
+    max-width: 880px; margin: 0 auto; padding: 72px 24px 48px; text-align: left;
+    background: radial-gradient(circle at 20% 0%, rgba(52, 211, 153, 0.12) 0%, transparent 60%),
+                radial-gradient(circle at 80% 30%, rgba(34, 211, 238, 0.10) 0%, transparent 60%);
+  }
+  .hero .eyebrow {
+    display: inline-block; padding: 6px 12px; border-radius: 999px;
+    background: rgba(52, 211, 153, 0.12); color: var(--primary);
+    font-size: 12px; font-weight: 700; letter-spacing: 0.5px;
+    border: 1px solid rgba(52, 211, 153, 0.3);
+    margin-bottom: 14px;
+  }
+  .hero h1 { font-size: 38px; font-weight: 900; letter-spacing: -0.5px; line-height: 1.15; }
+  .hero .lead { color: var(--text-soft); font-size: 16px; margin-top: 12px; max-width: 620px; }
+  .meta { color: var(--text-mute); font-size: 13px; margin-top: 18px; }
+
+  main {
+    max-width: 880px; margin: 0 auto; padding: 0 24px 80px;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 28px;
+    margin-top: 28px;
+  }
+  h2 {
+    font-size: 22px; font-weight: 800; margin-bottom: 14px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  h2 .num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 30px; height: 30px; border-radius: 10px;
+    background: linear-gradient(135deg, var(--primary), var(--primary-2));
+    color: #0E1530; font-size: 14px; font-weight: 900;
+    flex: 0 0 auto;
+  }
+  h3 { font-size: 16px; font-weight: 700; margin: 18px 0 8px; color: var(--text); }
+  p { color: var(--text-soft); margin-bottom: 12px; }
+  ul, ol { color: var(--text-soft); margin: 8px 0 12px 22px; }
+  li { margin-bottom: 6px; }
+  strong { color: var(--text); font-weight: 700; }
+  code { background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 4px; font-size: 0.92em; color: var(--accent); }
+  .callout {
+    background: rgba(251, 191, 36, 0.08);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 12px 12px 0;
+    padding: 14px 18px;
+    margin: 14px 0;
+    color: var(--text-soft);
+    font-size: 14px;
+  }
+  .callout strong { color: var(--accent); }
+  .toc {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px 22px;
+    margin-top: 28px;
+  }
+  .toc strong { color: var(--text); display: block; margin-bottom: 8px; font-size: 13px; letter-spacing: 0.5px; }
+  .toc ol { margin: 0; padding-left: 22px; }
+  .toc li { font-size: 14px; margin-bottom: 4px; }
+  .toc a { color: var(--text-soft); }
+
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 36px 24px;
+    text-align: center;
+    color: var(--text-mute);
+    font-size: 13px;
+    background: var(--bg-alt);
+  }
+  footer a { color: var(--text-soft); }
+
+  @media (max-width: 600px) {
+    .hero { padding: 48px 20px 32px; }
+    .hero h1 { font-size: 28px; }
+    .nav { display: none; }
+    .card { padding: 22px 18px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <a class="brand" href="/">
+    <span class="brand-logo">📈</span>
+    <span>Budgy</span>
+  </a>
+  <nav class="nav">
+    <a href="/">Accueil</a>
+    <a href="/privacy.html">Confidentialité</a>
+    <a href="/terms.html">CGU</a>
+  </nav>
+</header>
+
+<section class="hero">
+  <span class="eyebrow">DOCUMENT JURIDIQUE 🇨🇭</span>
+  <h1>Conditions Générales d'Utilisation</h1>
+  <p class="lead">
+    Bienvenue sur Budgy. Les présentes CGU régissent votre utilisation de
+    l'application mobile Budgy et des services associés. Merci de les lire
+    attentivement avant d'utiliser l'application.
+  </p>
+  <p class="meta">
+    Version 3.7 · En vigueur depuis le 1<sup>er</sup> juin 2025 · Conformes au droit suisse et au RGPD
+  </p>
+</section>
+
+<main>
+
+  <div class="toc">
+    <strong>Sommaire</strong>
+    <ol>
+      <li><a href="#sec1">Présentation de Budgy</a></li>
+      <li><a href="#sec2">Acceptation des conditions</a></li>
+      <li><a href="#sec3">Compte et accès au service</a></li>
+      <li><a href="#sec4">Description des services</a></li>
+      <li><a href="#sec5">Abonnement Budgy Pro</a></li>
+      <li><a href="#sec6">Propriété intellectuelle</a></li>
+      <li><a href="#sec7">Données personnelles</a></li>
+      <li><a href="#sec8">Limitation de responsabilité</a></li>
+      <li><a href="#sec9">Avis financier — clause importante</a></li>
+      <li><a href="#sec10">Disponibilité du service</a></li>
+      <li><a href="#sec11">Modification des CGU</a></li>
+      <li><a href="#sec12">Résiliation</a></li>
+      <li><a href="#sec13">Droit applicable & juridiction</a></li>
+      <li><a href="#sec14">Contact</a></li>
+    </ol>
+  </div>
+
+  <div class="card" id="sec1">
+    <h2><span class="num">1</span> Présentation de Budgy</h2>
+    <p>
+      <strong>Budgy</strong> est une application mobile de gestion budgétaire
+      premium conçue spécifiquement pour la Suisse 🇨🇭. Elle permet aux
+      utilisateurs de gérer leurs revenus, dépenses, épargnes, dettes,
+      d'optimiser leurs impôts cantonaux, de comparer les primes LAMal et
+      d'utiliser un coach financier basé sur l'intelligence artificielle.
+    </p>
+    <p>
+      L'application est éditée par <strong>Budgy</strong> (« nous »), dont le siège
+      est en Suisse, et accessible via les boutiques officielles
+      <strong>Apple App Store</strong> et <strong>Google Play Store</strong>, ainsi
+      que sur le site <a href="https://budgy.ch">budgy.ch</a>.
+    </p>
+  </div>
+
+  <div class="card" id="sec2">
+    <h2><span class="num">2</span> Acceptation des conditions</h2>
+    <p>
+      L'installation et l'utilisation de Budgy impliquent l'acceptation pleine et
+      entière des présentes CGU ainsi que de la
+      <a href="/privacy.html">Politique de confidentialité</a>. Si vous n'acceptez
+      pas ces conditions, vous devez désinstaller l'application et cesser
+      toute utilisation.
+    </p>
+    <p>
+      Vous déclarez avoir au moins <strong>16 ans</strong> et la capacité
+      juridique pour conclure le présent contrat. Pour les mineurs, le
+      consentement d'un représentant légal est requis.
+    </p>
+  </div>
+
+  <div class="card" id="sec3">
+    <h2><span class="num">3</span> Compte et accès au service</h2>
+    <h3>3.1 Création de compte</h3>
+    <p>
+      L'utilisation complète de Budgy nécessite la création d'un compte avec
+      une adresse e-mail valide et un mot de passe robuste. Vous êtes
+      seul responsable de la confidentialité de vos identifiants et de
+      toute activité réalisée depuis votre compte.
+    </p>
+    <h3>3.2 Mode local</h3>
+    <p>
+      Budgy peut également fonctionner en mode <strong>100% local</strong>,
+      sans création de compte. Dans ce mode, vos données sont stockées
+      uniquement sur votre appareil et ne sont jamais transmises à nos
+      serveurs.
+    </p>
+    <h3>3.3 Sécurité</h3>
+    <p>
+      Vous vous engagez à informer immédiatement notre support en cas de
+      compromission présumée de votre compte. Nous recommandons l'activation
+      de l'authentification biométrique (Face ID / empreinte digitale) et
+      d'un PIN.
+    </p>
+  </div>
+
+  <div class="card" id="sec4">
+    <h2><span class="num">4</span> Description des services</h2>
+    <p>Budgy propose les fonctionnalités suivantes :</p>
+    <ul>
+      <li><strong>Gestion budgétaire</strong> : suivi des revenus, dépenses, épargne, patrimoine et dettes</li>
+      <li><strong>Scanner de tickets</strong> avec OCR par intelligence artificielle</li>
+      <li><strong>Comparateur LAMal</strong> basé sur les données officielles Priminfo (OFSP/BAG)</li>
+      <li><strong>Optimiseur d'impôts</strong> couvrant l'IFD et les ICC des 26 cantons</li>
+      <li><strong>Coach Predict IA</strong> : prédictions, conseils et chat intelligent</li>
+      <li><strong>Gestion de contrats, abonnements et factures QR-bills</strong></li>
+      <li><strong>Synchronisation cloud chiffrée</strong> (optionnelle, via Supabase)</li>
+      <li><strong>Export PDF</strong> de notes de frais, archives et rapports</li>
+      <li><strong>Multi-langues</strong> : français, allemand, italien, anglais</li>
+      <li><strong>Multi-devises</strong> : CHF, EUR, USD avec conversion en temps réel</li>
+    </ul>
+  </div>
+
+  <div class="card" id="sec5">
+    <h2><span class="num">5</span> Abonnement Budgy Pro</h2>
+    <h3>5.1 Modèle freemium</h3>
+    <p>
+      Budgy fonctionne selon un modèle <strong>freemium</strong>. Les
+      fonctionnalités essentielles sont gratuites. Les fonctionnalités
+      avancées (IA illimitée, comparateur LAMal complet, optimiseur d'impôts,
+      export PDF, sync cloud, scanner illimité) nécessitent un abonnement
+      <strong>Budgy Pro</strong>.
+    </p>
+    <h3>5.2 Tarifs</h3>
+    <ul>
+      <li><strong>Mensuel</strong> : CHF 4.90 / mois</li>
+      <li><strong>Annuel</strong> : CHF 39.90 / an (économie ~32%)</li>
+      <li><strong>Essai gratuit</strong> : 7 jours sans engagement</li>
+    </ul>
+    <p>
+      Les prix peuvent varier selon les promotions et les régions. Le prix
+      affiché lors de la souscription fait foi.
+    </p>
+    <h3>5.3 Paiement et renouvellement</h3>
+    <p>
+      Les paiements sont traités par Apple App Store ou Google Play Store
+      via leurs systèmes de paiement sécurisés (RevenueCat). L'abonnement
+      se renouvelle automatiquement sauf annulation au moins 24h avant la
+      fin de la période en cours, conformément aux règles de la boutique
+      d'application.
+    </p>
+    <h3>5.4 Annulation et remboursement</h3>
+    <p>
+      Vous pouvez annuler votre abonnement à tout moment depuis les
+      paramètres de votre compte App Store ou Google Play. La
+      <strong>politique de remboursement</strong> est régie par les
+      conditions des boutiques (Apple ou Google).
+    </p>
+    <div class="callout">
+      <strong>Bon à savoir :</strong> En cas d'annulation pendant l'essai
+      gratuit (avant le 7<sup>e</sup> jour), aucun montant n'est facturé.
+    </div>
+  </div>
+
+  <div class="card" id="sec6">
+    <h2><span class="num">6</span> Propriété intellectuelle</h2>
+    <p>
+      L'ensemble du contenu de Budgy (logos, textes, design, code source,
+      algorithmes, marques) est la propriété exclusive de Budgy et est
+      protégé par les lois suisses et internationales sur la propriété
+      intellectuelle.
+    </p>
+    <p>
+      Toute reproduction, copie, modification, distribution ou exploitation
+      commerciale non autorisée est strictement interdite et expose son
+      auteur à des poursuites judiciaires.
+    </p>
+    <p>
+      Nous accordons une licence personnelle, non-exclusive, non-cessible
+      et révocable d'utilisation de l'application pour votre usage privé
+      conformément à ces CGU.
+    </p>
+  </div>
+
+  <div class="card" id="sec7">
+    <h2><span class="num">7</span> Données personnelles</h2>
+    <p>
+      Le traitement de vos données personnelles est régi par notre
+      <a href="/privacy.html"><strong>Politique de confidentialité</strong></a>,
+      qui fait partie intégrante des présentes CGU. En résumé :
+    </p>
+    <ul>
+      <li>Vos données financières sont <strong>chiffrées</strong> et stockées en Suisse 🇨🇭 ou sur des serveurs Supabase (UE)</li>
+      <li>Aucune donnée n'est vendue ni partagée à des tiers à des fins commerciales</li>
+      <li>L'IA utilise vos données de façon <strong>anonymisée</strong> et stateless (aucun stockage côté LLM)</li>
+      <li>Vous disposez de tous les droits du <strong>RGPD</strong> et de la <strong>nLPD</strong> (loi suisse) : accès, rectification, effacement, portabilité</li>
+    </ul>
+  </div>
+
+  <div class="card" id="sec8">
+    <h2><span class="num">8</span> Limitation de responsabilité</h2>
+    <p>
+      Budgy est fourni « <strong>en l'état</strong> ». Nous nous efforçons
+      d'assurer la fiabilité, la sécurité et l'exactitude des données et
+      calculs, mais ne pouvons garantir :
+    </p>
+    <ul>
+      <li>L'absence totale d'erreur ou d'interruption</li>
+      <li>L'exactitude absolue des estimations fiscales et primes LAMal (données indicatives basées sur les sources officielles)</li>
+      <li>La compatibilité avec tous les appareils et systèmes</li>
+    </ul>
+    <p>
+      Notre responsabilité est <strong>limitée</strong> aux montants payés
+      au cours des 12 mois précédant la survenance du dommage, sauf en cas
+      de faute grave ou de dol.
+    </p>
+  </div>
+
+  <div class="card" id="sec9">
+    <h2><span class="num">9</span> Avis financier — clause importante</h2>
+    <div class="callout">
+      <strong>⚠️ Important :</strong> Budgy est un outil d'aide à la décision
+      budgétaire et financière. Les conseils, estimations et suggestions de
+      l'IA <strong>ne constituent pas des conseils financiers, fiscaux ou
+      juridiques professionnels</strong>.
+    </div>
+    <p>
+      Pour toute décision importante (placement, planification fiscale,
+      changement d'assurance, prêt hypothécaire, retraite), nous vous
+      recommandons vivement de consulter un <strong>conseiller financier
+      agréé</strong>, un <strong>fiduciaire</strong> ou un
+      <strong>avocat fiscaliste</strong> qualifié en Suisse.
+    </p>
+    <p>
+      Budgy décline toute responsabilité quant aux conséquences financières
+      directes ou indirectes résultant de décisions prises sur la base des
+      informations fournies par l'application.
+    </p>
+  </div>
+
+  <div class="card" id="sec10">
+    <h2><span class="num">10</span> Disponibilité du service</h2>
+    <p>
+      Nous nous efforçons de maintenir l'application disponible 24h/24,
+      7j/7. Toutefois, des interruptions temporaires peuvent survenir
+      pour des opérations de maintenance, mises à jour, ou en cas de
+      force majeure (panne tiers, attaque informatique, etc.).
+    </p>
+    <p>
+      Aucune garantie de disponibilité n'est due, et aucune indemnité ne
+      sera accordée en cas d'interruption.
+    </p>
+  </div>
+
+  <div class="card" id="sec11">
+    <h2><span class="num">11</span> Modification des CGU</h2>
+    <p>
+      Nous nous réservons le droit de modifier les présentes CGU à tout
+      moment pour refléter des évolutions légales, techniques ou
+      commerciales. Toute modification substantielle vous sera notifiée
+      par e-mail ou via une notification dans l'application au moins
+      <strong>30 jours avant son entrée en vigueur</strong>.
+    </p>
+    <p>
+      L'utilisation continue de Budgy après cette période vaut acceptation
+      des nouvelles conditions.
+    </p>
+  </div>
+
+  <div class="card" id="sec12">
+    <h2><span class="num">12</span> Résiliation</h2>
+    <p>
+      Vous pouvez résilier votre compte à tout moment depuis les
+      paramètres de l'application (<em>Plus → Paramètres → Supprimer mes
+      données</em>). Toutes vos données seront supprimées définitivement
+      sous 30 jours, sauf obligations légales contraires.
+    </p>
+    <p>
+      Nous nous réservons le droit de suspendre ou de résilier votre
+      compte en cas de violation grave des présentes CGU, sans préjudice
+      des dommages-intérêts éventuels.
+    </p>
+  </div>
+
+  <div class="card" id="sec13">
+    <h2><span class="num">13</span> Droit applicable et juridiction</h2>
+    <p>
+      Les présentes CGU sont régies par le <strong>droit suisse</strong>.
+      Tout litige relatif à leur interprétation, leur exécution ou leur
+      résiliation sera soumis à la compétence exclusive des tribunaux
+      du canton de <strong>Vaud</strong>, sous réserve des dispositions
+      impératives applicables aux consommateurs.
+    </p>
+    <p>
+      Pour les utilisateurs domiciliés dans l'Union Européenne, les
+      dispositions impératives du règlement Rome I s'appliquent.
+    </p>
+  </div>
+
+  <div class="card" id="sec14">
+    <h2><span class="num">14</span> Contact</h2>
+    <p>Pour toute question, réclamation ou exercice de vos droits :</p>
+    <ul>
+      <li><strong>E-mail support</strong> : <a href="mailto:support@budgy.ch">support@budgy.ch</a></li>
+      <li><strong>E-mail confidentialité</strong> : <a href="mailto:privacy@budgy.ch">privacy@budgy.ch</a></li>
+      <li><strong>Site web</strong> : <a href="https://budgy.ch">budgy.ch</a></li>
+    </ul>
+    <p>
+      Nous nous engageons à répondre dans un délai maximal de <strong>30 jours</strong>.
+    </p>
+  </div>
+
+</main>
+
+<footer>
+  <p>© 2025 Budgy · Tous droits réservés · Made with 💚 in Switzerland 🇨🇭</p>
+  <p style="margin-top: 8px;">
+    <a href="/">Accueil</a> ·
+    <a href="/privacy.html">Confidentialité</a> ·
+    <a href="/terms.html">CGU</a>
+  </p>
+</footer>
+
+</body>
+</html>

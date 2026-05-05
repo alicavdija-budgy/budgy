@@ -2,18 +2,46 @@
   "expo": {
     "name": "Budgy",
     "slug": "budgy",
-    "version": "3.7.0",
+    "version": "3.7.4",
+    "description": "Budgy — Votre coach financier suisse premium. Budgets, LAMal, impôts, IA et épargne pour les 26 cantons. 🇨🇭",
+    "primaryColor": "#34D399",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "guardian-money",
+    "scheme": "budgy",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
+    "owner": "budgy",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "fallbackToCacheTimeout": 0,
+      "url": "https://u.expo.dev/00000000-0000-0000-0000-000000000000"
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "ch.budgy.app",
+      "buildNumber": "20",
+      "associatedDomains": [
+        "applinks:budgy.ch",
+        "applinks:www.budgy.ch"
+      ],
+      "config": {
+        "usesNonExemptEncryption": false
+      },
       "infoPlist": {
-        "NSCameraUsageDescription": "Scanner vos tickets de caisse",
-        "NSPhotoLibraryUsageDescription": "Importer des photos de reçus"
+        "ITSAppUsesNonExemptEncryption": false,
+        "LSApplicationCategoryType": "public.app-category.finance",
+        "CFBundleLocalizations": ["fr", "en", "de", "it"],
+        "CFBundleDevelopmentRegion": "fr",
+        "NSCameraUsageDescription": "Scanner vos reçus et documents",
+        "NSPhotoLibraryUsageDescription": "Importer photos de reçus et documents",
+        "NSPhotoLibraryAddUsageDescription": "Enregistrer reçus PDF dans votre galerie",
+        "NSFaceIDUsageDescription": "Verrouiller l'app avec Face ID",
+        "NSUserTrackingUsageDescription": "Améliorer les conseils financiers personnalisés",
+        "NSContactsUsageDescription": "Partager des dépenses avec vos amis",
+        "UIBackgroundModes": ["fetch"],
+        "UIRequiresFullScreen": false
       }
     },
     "android": {
@@ -23,8 +51,27 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "ch.budgy.app",
+      "versionCode": 20,
       "permissions": [
-        "android.permission.CAMERA"
+        "android.permission.CAMERA",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT",
+        "android.permission.VIBRATE",
+        "android.permission.INTERNET"
+      ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            { "scheme": "https", "host": "budgy.ch" },
+            { "scheme": "https", "host": "www.budgy.ch" }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
       ]
     },
     "web": {
@@ -47,19 +94,32 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Scanner vos tickets de caisse"
+          "cameraPermission": "Scanner vos reçus et documents",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Verrouiller l'app avec Face ID"
         }
       ],
       [
         "expo-notifications",
         {
           "icon": "./assets/images/icon.png",
-          "color": "#6366F1",
+          "color": "#34D399",
           "sounds": []
         }
       ],
       "expo-web-browser"
     ],
+    "extra": {
+      "eas": {
+        "projectId": "00000000-0000-0000-0000-000000000000"
+      }
+    },
     "experiments": {
       "typedRoutes": true
     }

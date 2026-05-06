@@ -696,6 +696,22 @@ ${pageDataUrls.map((src, i) => `
       </View>
 
       <ScrollView contentContainerStyle={{ padding: Spacing.lg, paddingBottom: insets.bottom + 80 }}>
+        {/* Import IA Banner */}
+        <TouchableOpacity
+          style={styles.importBanner}
+          onPress={() => router.push('/more/email-import')}
+          activeOpacity={0.85}
+        >
+          <View style={styles.importBannerIcon}>
+            <Ionicons name="sparkles" size={22} color={Colors.primary} />
+          </View>
+          <View style={styles.importBannerContent}>
+            <Text style={styles.importBannerTitle}>Import IA</Text>
+            <Text style={styles.importBannerSub}>Photo · Fichier · Partage email</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={Colors.textTertiary} />
+        </TouchableOpacity>
+
         <TextInput
           style={styles.search}
           value={search}
@@ -861,6 +877,12 @@ const styles = StyleSheet.create({
 
   // List
   search: { backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: BorderRadius.lg, paddingHorizontal: Spacing.md, paddingVertical: Spacing.md, color: Colors.text, fontSize: 14, marginBottom: Spacing.md },
+
+  importBanner: { flexDirection: 'row', alignItems: 'center', backgroundColor: `${Colors.primary}10`, borderWidth: 1, borderColor: `${Colors.primary}30`, borderRadius: BorderRadius.xl, padding: Spacing.md, marginBottom: Spacing.md },
+  importBannerIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: `${Colors.primary}20`, alignItems: 'center', justifyContent: 'center', marginRight: Spacing.md },
+  importBannerContent: { flex: 1 },
+  importBannerTitle: { color: Colors.text, fontSize: FontSizes.md, fontWeight: FontWeights.bold },
+  importBannerSub: { color: Colors.textSecondary, fontSize: FontSizes.xs, marginTop: 2 },
   filterRow: { flexDirection: 'row', gap: 8 },
   filterChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999, borderWidth: 1, borderColor: Colors.cardBorder, backgroundColor: Colors.card },
   filterChipActive: { backgroundColor: 'rgba(52,211,153,0.18)', borderColor: Colors.primary },

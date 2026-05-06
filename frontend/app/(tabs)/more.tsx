@@ -71,7 +71,6 @@ export default function MoreScreen() {
       items: [
         { id: 'receipts', title: t('more.receipts'), icon: 'images', color: C.purple, route: '/more/receipts' },
         { id: 'documents', title: t('more.documents'), icon: 'folder-open', color: C.primaryLight, route: '/more/documents' },
-        { id: 'email-import', title: t('more.emailImportSub'), subtitle: 'Mail · Fichier · Photo', icon: 'mail-open', color: C.cyan, route: '/more/email-import' },
         { id: 'export', title: t('more.exportPdf'), icon: 'document-text', color: C.teal, route: '/more/export-pdf', pro: true, feature: 'export' },
       ],
     },

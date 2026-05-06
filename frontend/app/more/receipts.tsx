@@ -110,6 +110,22 @@ export default function ReceiptsScreen() {
           </Card>
         </View>
 
+        {/* Import IA Banner */}
+        <TouchableOpacity
+          style={styles.importBanner}
+          onPress={() => router.push('/more/email-import')}
+          activeOpacity={0.85}
+        >
+          <View style={styles.importBannerIcon}>
+            <Ionicons name="sparkles" size={22} color={Colors.primary} />
+          </View>
+          <View style={styles.importBannerContent}>
+            <Text style={styles.importBannerTitle}>Import IA</Text>
+            <Text style={styles.importBannerSub}>Photo · Fichier · Partage email</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={Colors.textTertiary} />
+        </TouchableOpacity>
+
         {/* Search */}
         <View style={styles.searchBox}>
           <Ionicons name="search" size={18} color={Colors.textTertiary} />
@@ -268,6 +284,29 @@ const styles = StyleSheet.create({
   statEmoji: { fontSize: 28, marginBottom: Spacing.xs },
   statLabel: { color: Colors.textTertiary, fontSize: FontSizes.xs, marginBottom: 4 },
   statValue: { color: Colors.text, fontSize: FontSizes.lg, fontWeight: FontWeights.bold },
+
+  importBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: `${Colors.primary}10`,
+    borderWidth: 1,
+    borderColor: `${Colors.primary}30`,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  importBannerIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: `${Colors.primary}20`,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Spacing.md,
+  },
+  importBannerContent: { flex: 1 },
+  importBannerTitle: { color: Colors.text, fontSize: FontSizes.md, fontWeight: FontWeights.bold },
+  importBannerSub: { color: Colors.textSecondary, fontSize: FontSizes.xs, marginTop: 2 },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',

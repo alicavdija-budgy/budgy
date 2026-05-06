@@ -63,7 +63,6 @@ export default function InvoicesScreen() {
   const [invoices, setInvoices] = useState<Invoice[]>(DEMO_INVOICES);
   const [activeTab, setActiveTab] = useState<Tab>('all');
   const [showAdd, setShowAdd] = useState(false);
-  const [showEmailSetup, setShowEmailSetup] = useState(false);
   const [newInvoice, setNewInvoice] = useState({
     title: '', sender: '', amount: '', dueDate: '', category: 'autre', recurring: false,
   });
@@ -162,7 +161,7 @@ export default function InvoicesScreen() {
         </Card>
 
         {/* Email Sync Banner */}
-        <TouchableOpacity style={styles.emailBanner} onPress={() => setShowEmailSetup(true)}>
+        <TouchableOpacity style={styles.emailBanner} onPress={() => router.push('/more/email-import')}>
           <View style={styles.emailBannerIcon}>
             <Ionicons name="mail" size={24} color={Colors.primary} />
           </View>
@@ -360,54 +359,7 @@ export default function InvoicesScreen() {
         </View>
       </Modal>
 
-      {/* Email Setup Modal */}
-      <Modal visible={showEmailSetup} animationType="slide" transparent onRequestClose={() => setShowEmailSetup(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Import depuis email</Text>
-              <TouchableOpacity onPress={() => setShowEmailSetup(false)}><Ionicons name="close" size={24} color={Colors.text} /></TouchableOpacity>
-            </View>
-
-            <View style={styles.emailSetup}>
-              <View style={styles.emailIcon}><Ionicons name="mail" size={48} color={Colors.primary} /></View>
-              <Text style={styles.emailTitle}>Centralisez vos factures</Text>
-              <Text style={styles.emailDesc}>
-                Transférez vos factures reçues par email à l'adresse ci-dessous. Elles seront automatiquement ajoutées à votre liste.
-              </Text>
-
-              <Card style={styles.emailAddressCard}>
-                <Text style={styles.emailAddressLabel}>Votre adresse Budgy</Text>
-                <Text style={styles.emailAddress}>factures@guardian-money.ch</Text>
-                <Text style={styles.emailHint}>Transférez vos factures à cette adresse</Text>
-              </Card>
-
-              <Text style={styles.stepsTitle}>Comment ça marche</Text>
-              {[
-                { step: '1', title: 'Recevez une facture par email', icon: 'mail-open' },
-                { step: '2', title: 'Transférez-la à factures@guardian-money.ch', icon: 'arrow-redo' },
-                { step: '3', title: 'Budgy extrait le montant et l\'échéance', icon: 'scan' },
-                { step: '4', title: 'Recevez un rappel avant la date limite', icon: 'notifications' },
-              ].map((s, i) => (
-                <View key={i} style={styles.stepRow}>
-                  <View style={styles.stepCircle}><Text style={styles.stepNum}>{s.step}</Text></View>
-                  <Ionicons name={s.icon as any} size={18} color={Colors.primary} style={{ marginHorizontal: Spacing.sm }} />
-                  <Text style={styles.stepTxt}>{s.title}</Text>
-                </View>
-              ))}
-
-              <Button title="Configurer maintenant" onPress={() => {
-                setShowEmailSetup(false);
-                Alert.alert('Bientôt disponible', 'La synchronisation email sera disponible dans la prochaine mise à jour. En attendant, ajoutez vos factures manuellement.');
-              }} fullWidth size="lg" variant="primary" style={{ marginTop: Spacing.xl }} />
-
-              <TouchableOpacity style={styles.manualBtn} onPress={() => { setShowEmailSetup(false); setShowAdd(true); }}>
-                <Text style={styles.manualTxt}>Ajouter manuellement</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      {/* Email Setup Modal — REMOVED: replaced by /more/email-import (3-methods screen) */}
     </View>
   );
 }

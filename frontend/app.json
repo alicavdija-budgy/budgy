@@ -20,7 +20,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "ch.budgy.app",
+      "bundleIdentifier": "com.budgy.ch.budgy",
       "buildNumber": "20",
       "associatedDomains": [
         "applinks:budgy.ch",
@@ -50,7 +50,7 @@
         "backgroundColor": "#0E1530"
       },
       "edgeToEdgeEnabled": true,
-      "package": "ch.budgy.app",
+      "package": "com.budgy.ch.budgy",
       "versionCode": 20,
       "permissions": [
         "android.permission.CAMERA",

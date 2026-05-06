@@ -12,8 +12,8 @@
 import { Platform } from 'react-native';
 
 export const IAP_PRODUCT_IDS = {
-  monthly: 'ch.budgy.pro.monthly',
-  annual: 'ch.budgy.pro.annual',
+  monthly: 'com.budgy.ch.budgy.monthly',
+  annual: 'com.budgy.ch.budgy.annual',
 } as const;
 
 export type IapPlan = 'monthly' | 'annual';

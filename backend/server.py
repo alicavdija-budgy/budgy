@@ -1194,8 +1194,8 @@ import httpx as _httpx
 APPLE_PROD_URL = "https://buy.itunes.apple.com/verifyReceipt"
 APPLE_SANDBOX_URL = "https://sandbox.itunes.apple.com/verifyReceipt"
 APPLE_SHARED_SECRET = os.getenv("APPLE_SHARED_SECRET", "")
-APPLE_BUNDLE_ID = os.getenv("APPLE_BUNDLE_ID", "ch.budgy.app")
-ALLOWED_PRODUCT_IDS = {"ch.budgy.pro.monthly", "ch.budgy.pro.annual"}
+APPLE_BUNDLE_ID = os.getenv("APPLE_BUNDLE_ID", "com.budgy.ch.budgy")
+ALLOWED_PRODUCT_IDS = {"com.budgy.ch.budgy.monthly", "com.budgy.ch.budgy.annual"}
 
 
 class IapValidateRequest(BaseModel):

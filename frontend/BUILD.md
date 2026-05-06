@@ -61,7 +61,7 @@ eas submit --profile production --platform android
 ## 🔧 Configuration files
 
 - **`app.json`** — Expo / app metadata (bundle ID, permissions, plugins, version). Already configured for Budgy with:
-  - Bundle ID: `ch.budgy.app`
+  - Bundle ID: `com.budgy.ch.budgy`
   - iOS infoPlist permissions (camera, photos, Face ID, contacts)
   - Android permissions (camera, biometric, storage)
   - Universal links / app links for `budgy.ch`

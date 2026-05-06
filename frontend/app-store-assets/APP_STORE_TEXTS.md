@@ -150,7 +150,7 @@ Texte accroche en haut (police bold 90pt blanc), mockup du téléphone au centre
 
 ## 🔑 APPLE DEVELOPER INFO (pour App Store Connect)
 
-- **Bundle ID** : `ch.budgy.app`
+- **Bundle ID** : `com.budgy.ch.budgy`
 - **Primary Language** : French (France) ou French (Switzerland)
 - **Category** : Finance (Primary) / Productivity (Secondary)
 - **Age Rating** : 4+

@@ -29,8 +29,8 @@
 
 | Plan      | Product ID                 | Suggested Price |
 |-----------|----------------------------|-----------------|
-| Monthly   | `ch.budgy.pro.monthly`     | CHF 4.90        |
-| Annual    | `ch.budgy.pro.annual`      | CHF 39.00       |
+| Monthly   | `com.budgy.ch.budgy.monthly`     | CHF 4.90        |
+| Annual    | `com.budgy.ch.budgy.annual`      | CHF 39.00       |
 
 Both belong to subscription group **Budgy Premium**.
 
@@ -40,7 +40,7 @@ Add to `/app/backend/.env`:
 
 ```
 APPLE_SHARED_SECRET=<32-hex-chars from App Store Connect → Users and Access → Shared Secret>
-APPLE_BUNDLE_ID=ch.budgy.app
+APPLE_BUNDLE_ID=com.budgy.ch.budgy
 ```
 
 ## Testing on device

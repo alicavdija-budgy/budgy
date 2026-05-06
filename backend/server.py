@@ -1184,3 +1184,100 @@ RÈGLES :
     except Exception as e:
         print(f"[optimizer] LLM failed, using fallback: {e}")
         return _fallback_optimizer(req)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# IN-APP PURCHASE — Apple StoreKit receipt validation
+# ═══════════════════════════════════════════════════════════════════════════
+import httpx as _httpx
+
+APPLE_PROD_URL = "https://buy.itunes.apple.com/verifyReceipt"
+APPLE_SANDBOX_URL = "https://sandbox.itunes.apple.com/verifyReceipt"
+APPLE_SHARED_SECRET = os.getenv("APPLE_SHARED_SECRET", "")
+APPLE_BUNDLE_ID = os.getenv("APPLE_BUNDLE_ID", "ch.budgy.app")
+ALLOWED_PRODUCT_IDS = {"ch.budgy.pro.monthly", "ch.budgy.pro.annual"}
+
+
+class IapValidateRequest(BaseModel):
+    platform: str                     # "ios" | "android"
+    product_id: str
+    transaction_id: Optional[str] = None
+    receipt_data: str                 # base64 (iOS) or purchaseToken (Android)
+
+
+class IapValidateResponse(BaseModel):
+    valid: bool
+    product_id: Optional[str] = None
+    expires_at: Optional[int] = None   # unix ms
+    original_transaction_id: Optional[str] = None
+    environment: Optional[str] = None  # "Sandbox" | "Production"
+    error: Optional[str] = None
+
+
+async def _apple_verify(receipt_data: str, url: str) -> dict:
+    payload = {
+        "receipt-data": receipt_data,
+        "password": APPLE_SHARED_SECRET,
+        "exclude-old-transactions": True,
+    }
+    async with _httpx.AsyncClient(timeout=30.0) as c:
+        r = await c.post(url, json=payload)
+        return r.json()
+
+
+@app.post("/api/iap/validate", response_model=IapValidateResponse)
+async def validate_iap_receipt(req: IapValidateRequest):
+    """Validate an Apple App Store receipt. Android not implemented yet."""
+    if req.platform != "ios":
+        return IapValidateResponse(valid=False, error="Only iOS supported for now")
+
+    if req.product_id not in ALLOWED_PRODUCT_IDS:
+        return IapValidateResponse(valid=False, error=f"Unknown product {req.product_id}")
+
+    if not APPLE_SHARED_SECRET:
+        print("[IAP] Missing APPLE_SHARED_SECRET — cannot validate")
+        return IapValidateResponse(valid=False, error="Server not configured")
+
+    try:
+        # 1) Try production first
+        data = await _apple_verify(req.receipt_data, APPLE_PROD_URL)
+        # 21007 → receipt is from sandbox, retry on sandbox URL
+        if data.get("status") == 21007:
+            data = await _apple_verify(req.receipt_data, APPLE_SANDBOX_URL)
+
+        if data.get("status") != 0:
+            return IapValidateResponse(
+                valid=False,
+                error=f"Apple status {data.get('status')}",
+                environment=data.get("environment"),
+            )
+
+        # 2) Verify bundle id matches
+        bundle_id = (data.get("receipt") or {}).get("bundle_id")
+        if bundle_id and bundle_id != APPLE_BUNDLE_ID:
+            return IapValidateResponse(valid=False, error=f"Bundle id mismatch: {bundle_id}")
+
+        # 3) Find latest transaction matching product
+        latest = data.get("latest_receipt_info") or []
+        candidates = [t for t in latest if t.get("product_id") == req.product_id]
+        txn = candidates[-1] if candidates else (latest[-1] if latest else None)
+
+        if not txn:
+            return IapValidateResponse(valid=False, error="No transactions found")
+
+        # 4) Check expiry (auto-renewable subscription)
+        expires_ms = int(txn.get("expires_date_ms") or 0)
+        now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+        is_active = expires_ms > now_ms
+
+        return IapValidateResponse(
+            valid=is_active,
+            product_id=txn.get("product_id") or req.product_id,
+            expires_at=expires_ms or None,
+            original_transaction_id=txn.get("original_transaction_id"),
+            environment=data.get("environment", "Production"),
+            error=None if is_active else "Subscription expired",
+        )
+    except Exception as e:
+        print(f"[IAP] validate error: {e}")
+        return IapValidateResponse(valid=False, error=str(e))

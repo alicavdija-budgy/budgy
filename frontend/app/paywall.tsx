@@ -32,6 +32,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { usePremiumStore, type Plan } from '../src/stores/usePremiumStore';
 import { useTranslation } from '../src/hooks/useTranslation';
+import { useIAP } from '../src/hooks/useIAP';
 
 const PRICE_MONTHLY = 4.90;
 const PRICE_ANNUAL = 39.90;
@@ -127,6 +128,9 @@ export default function PaywallScreen() {
   const purchase = usePremiumStore((s) => s.purchase);
   const markDismissed = usePremiumStore((s) => s.markPaywallDismissed);
 
+  // Real StoreKit IAP (falls back to mocked prices on web/Expo Go)
+  const iap = useIAP();
+
   const copy = getTriggerCopy(params.trigger);
 
   // Pulsing glow behind hero icon
@@ -168,18 +172,53 @@ export default function PaywallScreen() {
         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       }
     } catch {}
-    // MOCKED purchase
+
+    // Real StoreKit purchase (with backend receipt validation)
+    if (iap.available) {
+      const res = await iap.purchase(selected);
+      setProcessing(false);
+      if (res.success) {
+        Alert.alert(
+          '✨ Bienvenue sur Budgy Pro',
+          selected === 'annual'
+            ? 'Votre abonnement annuel est actif. Merci pour votre confiance !'
+            : 'Votre abonnement mensuel est actif. Merci !',
+          [{ text: 'Commencer', onPress: () => router.back() }]
+        );
+      } else if (res.error && res.error !== 'cancelled') {
+        Alert.alert('Achat échoué', res.error);
+      }
+      return;
+    }
+
+    // Fallback (web preview / Expo Go): mocked unlock for dev convenience only
     purchase(selected);
     setTimeout(() => {
       setProcessing(false);
       Alert.alert(
-        '✨ Bienvenue sur Budgy Pro',
-        selected === 'annual'
-          ? 'Votre abonnement annuel est actif. Merci pour votre confiance !'
-          : 'Votre abonnement mensuel est actif. Merci !',
-        [{ text: 'Commencer', onPress: () => router.back() }]
+        '✨ Bienvenue sur Budgy Pro (Aperçu)',
+        'Mode aperçu — pas de vrai paiement. Testez depuis un build natif iOS pour déclencher StoreKit.',
+        [{ text: 'OK', onPress: () => router.back() }]
       );
-    }, 500);
+    }, 300);
+  };
+
+  const handleRestore = async () => {
+    if (processing) return;
+    if (!iap.available) {
+      Alert.alert('Restauration', 'Disponible uniquement dans l\'app iOS native.');
+      return;
+    }
+    setProcessing(true);
+    const res = await iap.restore();
+    setProcessing(false);
+    if (res.success) {
+      Alert.alert('✓ Abonnement restauré', `${res.restored} abonnement(s) réactivé(s).`, [
+        { text: 'OK', onPress: () => router.back() },
+      ]);
+    } else {
+      Alert.alert('Restauration', 'Aucun abonnement actif trouvé sur ce compte Apple.');
+    }
   };
 
   const handleClose = () => {
@@ -195,11 +234,9 @@ export default function PaywallScreen() {
           <Ionicons name="close" size={22} color="rgba(255,255,255,0.6)" />
         </TouchableOpacity>
         <TouchableOpacity
-          onPress={() => {
-            usePremiumStore.getState().restore();
-            Alert.alert('Restauration', 'Aucun achat à restaurer pour le moment.');
-          }}
+          onPress={handleRestore}
           hitSlop={14}
+          disabled={processing}
         >
           <Text style={styles.restoreLink}>{t('paywall.restore')}</Text>
         </TouchableOpacity>

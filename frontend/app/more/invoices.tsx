@@ -167,7 +167,7 @@ export default function InvoicesScreen() {
             <Ionicons name="mail" size={24} color={Colors.primary} />
           </View>
           <View style={styles.emailBannerContent}>
-            <Text style={styles.emailBannerTitle}>Import depuis votre email</Text>
+            <Text style={styles.emailBannerTitle}>Import email IA</Text>
             <Text style={styles.emailBannerSub}>Retrouvez toutes vos factures au même endroit</Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color={Colors.textTertiary} />

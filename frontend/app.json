@@ -16,13 +16,15 @@
     },
     "updates": {
       "fallbackToCacheTimeout": 0,
-      "url": "https://u.expo.dev/00000000-0000-0000-0000-000000000000"
+      "url": "https://u.expo.dev/cf75668b-71ba-4bfb-9169-8ad2f572e982"
     },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.budgy.ch.budgy",
       "buildNumber": "20",
       "associatedDomains": [
+        "applinks:budgy.ch",
+        "applinks:www.budgy.ch",
         "applinks:budgy.ch",
         "applinks:www.budgy.ch"
       ],
@@ -36,6 +38,10 @@
           "fr",
           "en",
           "de",
+          "it",
+          "fr",
+          "en",
+          "de",
           "it"
         ],
         "CFBundleDevelopmentRegion": "fr",
@@ -46,6 +52,7 @@
         "NSUserTrackingUsageDescription": "Améliorer les conseils financiers personnalisés",
         "NSContactsUsageDescription": "Partager des dépenses avec vos amis",
         "UIBackgroundModes": [
+          "fetch",
           "fetch"
         ],
         "UIRequiresFullScreen": false
@@ -68,9 +75,36 @@
         "android.permission.USE_FINGERPRINT",
         "android.permission.VIBRATE",
         "android.permission.INTERNET",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT",
+        "android.permission.VIBRATE",
+        "android.permission.INTERNET",
         "android.permission.RECORD_AUDIO"
       ],
       "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "budgy.ch"
+            },
+            {
+              "scheme": "https",
+              "host": "www.budgy.ch"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        },
         {
           "action": "VIEW",
           "autoVerify": true,

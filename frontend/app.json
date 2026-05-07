@@ -10,7 +10,7 @@
     "scheme": "budgy",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
-    "owner": "budgy",
+    "owner": "avdijaalic",
     "runtimeVersion": {
       "policy": "appVersion"
     },
@@ -32,7 +32,12 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "LSApplicationCategoryType": "public.app-category.finance",
-        "CFBundleLocalizations": ["fr", "en", "de", "it"],
+        "CFBundleLocalizations": [
+          "fr",
+          "en",
+          "de",
+          "it"
+        ],
         "CFBundleDevelopmentRegion": "fr",
         "NSCameraUsageDescription": "Scanner vos reçus et documents",
         "NSPhotoLibraryUsageDescription": "Importer photos de reçus et documents",
@@ -40,7 +45,9 @@
         "NSFaceIDUsageDescription": "Verrouiller l'app avec Face ID",
         "NSUserTrackingUsageDescription": "Améliorer les conseils financiers personnalisés",
         "NSContactsUsageDescription": "Partager des dépenses avec vos amis",
-        "UIBackgroundModes": ["fetch"],
+        "UIBackgroundModes": [
+          "fetch"
+        ],
         "UIRequiresFullScreen": false
       }
     },
@@ -60,17 +67,27 @@
         "android.permission.USE_BIOMETRIC",
         "android.permission.USE_FINGERPRINT",
         "android.permission.VIBRATE",
-        "android.permission.INTERNET"
+        "android.permission.INTERNET",
+        "android.permission.RECORD_AUDIO"
       ],
       "intentFilters": [
         {
           "action": "VIEW",
           "autoVerify": true,
           "data": [
-            { "scheme": "https", "host": "budgy.ch" },
-            { "scheme": "https", "host": "www.budgy.ch" }
+            {
+              "scheme": "https",
+              "host": "budgy.ch"
+            },
+            {
+              "scheme": "https",
+              "host": "www.budgy.ch"
+            }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
@@ -114,7 +131,11 @@
             "NSExtensionActivationSupportsText": true,
             "NSExtensionActivationSupportsWebURLWithMaxCount": 1
           },
-          "androidIntentFilters": ["text/*", "image/*", "application/pdf"]
+          "androidIntentFilters": [
+            "text/*",
+            "image/*",
+            "application/pdf"
+          ]
         }
       ],
       [
@@ -135,8 +156,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "00000000-0000-0000-0000-000000000000"
-      }
+        "projectId": "cf75668b-71ba-4bfb-9169-8ad2f572e982"
+      },
+      "router": {}
     },
     "experiments": {
       "typedRoutes": true

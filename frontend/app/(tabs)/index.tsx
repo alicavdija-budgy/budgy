@@ -65,9 +65,7 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
-    if (user?.isDemo && transactions.length === 0 && incomes.length === 0) {
-      loadSeedData();
-    }
+    // Phase 1: Empty state at first launch — no auto-seeding.
   }, [user]);
 
   const CUR = preferences.currency;

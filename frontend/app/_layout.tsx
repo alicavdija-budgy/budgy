@@ -14,7 +14,7 @@ import {
   requestNotificationPermissions,
   scheduleMonthlyReminder,
 } from '../src/services/notifications';
-import { startSyncMonitor } from '../src/services/sync';
+import { startSyncMonitor, bootstrapSession } from '../src/services/sync';
 import { pullAllFromCloud, pushAllToCloud, isSignedInToSupabase } from '../src/services/cloudSync';
 import { useStore } from '../src/stores/useStore';
 import LockScreen from './lock';
@@ -23,12 +23,12 @@ function OfflineBadge() {
   const isOnline = useStore((s) => s.isOnline);
   const queueLen = useStore((s) => s.syncQueue.length);
   if (isOnline && queueLen === 0) return null;
+  // Hide entirely if just queued items and online (no need to alarm user)
+  if (isOnline) return null;
   return (
-    <View style={styles.offlineBar} pointerEvents="none">
+    <View style={styles.offlineBar}>
       <Text style={styles.offlineText}>
-        {!isOnline
-          ? `🔌 Hors ligne · ${queueLen} actions en file`
-          : `🔄 Synchronisation de ${queueLen} actions...`}
+        🔌 Hors ligne · données en sécurité localement
       </Text>
     </View>
   );
@@ -89,6 +89,19 @@ export default function RootLayout() {
     }
     // Start offline sync monitor
     startSyncMonitor();
+
+    // Restore Supabase session and pull latest data
+    (async () => {
+      try {
+        const hasSession = await bootstrapSession();
+        if (hasSession) {
+          const r = await pullAllFromCloud();
+          if (r.ok) console.log(`[bootstrap-sync] pulled ${r.pulled} items from cloud`);
+        }
+      } catch (e) {
+        console.warn('[bootstrap-sync] failed:', e);
+      }
+    })();
   }, []);
 
   // Auto-sync with cloud on AppState changes:

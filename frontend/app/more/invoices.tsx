@@ -45,14 +45,8 @@ const INVOICE_CATEGORIES = [
   { id: 'autre', name: 'Autre', icon: 'receipt', color: '#6B7280' },
 ];
 
-// Sample invoices for demo
-const DEMO_INVOICES: Invoice[] = [
-  { id: 'inv1', title: 'Loyer avril 2026', sender: 'Régie du Lac SA', amount: 1450, dueDate: '30.04.2026', status: 'pending', category: 'loyer', recurring: true, createdAt: Date.now() },
-  { id: 'inv2', title: 'Facture Swisscom', sender: 'Swisscom SA', amount: 89.90, dueDate: '15.04.2026', status: 'overdue', category: 'telephone', recurring: true, createdAt: Date.now() - 86400000 * 5 },
-  { id: 'inv3', title: 'Prime CSS avril', sender: 'CSS Assurance', amount: 389.50, dueDate: '25.04.2026', status: 'paid', category: 'assurance', recurring: true, createdAt: Date.now() - 86400000 * 3 },
-  { id: 'inv4', title: 'Électricité Q1 2026', sender: 'SIL Lausanne', amount: 245.80, dueDate: '20.04.2026', status: 'pending', category: 'electricite', recurring: false, createdAt: Date.now() - 86400000 * 2 },
-  { id: 'inv5', title: 'Serafe redevance', sender: 'Serafe AG', amount: 335.00, dueDate: '01.05.2026', status: 'pending', category: 'serafe', recurring: false, note: 'Facture annuelle', createdAt: Date.now() - 86400000 },
-];
+// Phase 1: invoices start empty — users add their own
+const DEMO_INVOICES: Invoice[] = [];
 
 type Tab = 'all' | 'pending' | 'overdue' | 'paid';
 

@@ -181,7 +181,7 @@ export default function AuthScreen() {
     try {
       setUser({ id: 'demo_user', email: 'demo@guardian.app', name: 'Marie Dupont', createdAt: Date.now(), isPro: true, isDemo: true });
       setPro(true);
-      loadSeedData();
+      // Phase 1: no seed data — demo mode also starts empty
       setPreferences({ onboarded: true });
       await new Promise(r => setTimeout(r, 300));
       navigateTo('/(tabs)');

@@ -19,10 +19,7 @@ import { supabase, isSupabaseConfigured } from '../src/lib/supabase';
 import { useTranslation } from '../src/hooks/useTranslation';
 import { pullAllFromCloud, pushAllToCloud } from '../src/services/cloudSync';
 
-// Hardcoded Pro accounts (for users whose Supabase can't send confirmation emails)
-const PRO_ACCOUNTS: Record<string, { password: string; name: string }> = {
-  'alic.avdija@gmail.com': { password: 'Avdija1981', name: 'Alic Avdija' },
-};
+// Phase 1: no hardcoded credentials. All auth goes through Supabase.
 
 export default function AuthScreen() {
   const insets = useSafeAreaInsets();
@@ -64,11 +61,7 @@ export default function AuthScreen() {
     }, 200);
   };
 
-  // Check if this is a known Pro account
-  const checkProAccount = (emailAddr: string, pw: string): boolean => {
-    const proAccount = PRO_ACCOUNTS[emailAddr.toLowerCase().trim()];
-    return !!(proAccount && proAccount.password === pw);
-  };
+  // Auth is handled exclusively by Supabase below — no client-side bypass.
 
   const loginAsLocalUser = (userId: string, emailAddr: string, userName: string, isPro: boolean, isNewAccount: boolean) => {
     setUser({
@@ -111,7 +104,6 @@ export default function AuthScreen() {
     setLoading(true);
 
     const emailClean = email.toLowerCase().trim();
-    const isProAccount = checkProAccount(emailClean, password);
 
     try {
       if (isSupabaseConfigured()) {
@@ -124,20 +116,20 @@ export default function AuthScreen() {
 
           if (error) {
             if (error.message.includes('confirmation email') || error.message.includes('sending')) {
-              loginAsLocalUser(`local_${Date.now()}`, emailClean, name.trim(), isProAccount, true);
+              loginAsLocalUser(`local_${Date.now()}`, emailClean, name.trim(), false, true);
               return;
             }
             throw error;
           }
 
           if (data.user && !data.session) {
-            loginAsLocalUser(data.user.id, emailClean, name.trim(), isProAccount, true);
+            loginAsLocalUser(data.user.id, emailClean, name.trim(), false, true);
             // Trigger cloud sync in background (non-blocking)
             triggerCloudSync(true);
             return;
           }
 
-          loginAsLocalUser(data.user?.id || `user_${Date.now()}`, emailClean, name.trim(), isProAccount, true);
+          loginAsLocalUser(data.user?.id || `user_${Date.now()}`, emailClean, name.trim(), false, true);
           triggerCloudSync(true);
         } else {
           // Login
@@ -147,26 +139,19 @@ export default function AuthScreen() {
           });
 
           if (error) {
-            if (isProAccount) {
-              loginAsLocalUser(`pro_${Date.now()}`, emailClean, PRO_ACCOUNTS[emailClean]!.name, true, false);
-              return;
-            }
-            if (error.message.includes('Invalid login') || error.message.includes('credentials')) {
-              loginAsLocalUser(`local_${Date.now()}`, emailClean, emailClean.split('@')[0], false, false);
-              return;
-            }
+            // Surface the real error to the user — no client-side bypass
             throw error;
           }
 
           const userId = data.user?.id || `user_${Date.now()}`;
           const userName = data.user?.user_metadata?.name || emailClean.split('@')[0];
-          loginAsLocalUser(userId, emailClean, userName, isProAccount, false);
+          loginAsLocalUser(userId, emailClean, userName, false, false);
           // Pull cloud data in background to hydrate local store
           triggerCloudSync(false);
         }
       } else {
         await new Promise(r => setTimeout(r, 400));
-        loginAsLocalUser(`local_${Date.now()}`, emailClean, mode === 'register' ? name.trim() : emailClean.split('@')[0], isProAccount, mode === 'register');
+        loginAsLocalUser(`local_${Date.now()}`, emailClean, mode === 'register' ? name.trim() : emailClean.split('@')[0], false, mode === 'register');
       }
     } catch (error: any) {
       const msg = error?.message || 'Une erreur est survenue';

@@ -87,7 +87,10 @@ export default function ExportPDFScreen() {
 
   const handleExport = async () => {
     if (selectedExpenses.length === 0 && selectedDocuments.length === 0) {
-      Alert.alert('Rien à exporter', 'Aucune donnée pour les filtres choisis.');
+      Alert.alert(
+        'Aucune donnée à exporter',
+        'Aucune donnée à exporter pour cette période. Modifiez la période ou ajoutez des dépenses.'
+      );
       return;
     }
 
@@ -120,8 +123,13 @@ export default function ExportPDFScreen() {
         }),
       });
 
-      if (!response.ok) throw new Error('Erreur serveur');
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
       const data = await response.json();
+      if (!data.html || data.html.length < 100) {
+        throw new Error('Le serveur a retourné un PDF vide.');
+      }
 
       const { uri } = await Print.printToFileAsync({ html: data.html, base64: false });
 
@@ -132,12 +140,18 @@ export default function ExportPDFScreen() {
           UTI: 'com.adobe.pdf',
         });
       } else {
-        Alert.alert('PDF généré!', `Fichier sauvegardé: ${uri}`);
+        Alert.alert('PDF généré', `Fichier sauvegardé : ${uri}`);
       }
 
       setPdfReady(true);
     } catch (error: any) {
-      Alert.alert('Erreur', error.message || 'Impossible de générer le PDF');
+      const isNetwork = /Network|fetch|HTTP/i.test(error?.message || '');
+      Alert.alert(
+        'Export impossible',
+        isNetwork
+          ? 'Vérifiez votre connexion Internet et réessayez.'
+          : (error?.message || 'Une erreur est survenue lors de la génération du PDF.')
+      );
     } finally {
       setLoading(false);
     }

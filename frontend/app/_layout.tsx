@@ -18,6 +18,7 @@ import { startSyncMonitor, bootstrapSession } from '../src/services/sync';
 import { pullAllFromCloud, pushAllToCloud, isSignedInToSupabase } from '../src/services/cloudSync';
 import { useStore } from '../src/stores/useStore';
 import LockScreen from './lock';
+import ShareIntentRouter from '../src/components/ShareIntentRouter';
 
 function OfflineBadge() {
   const isOnline = useStore((s) => s.isOnline);
@@ -138,6 +139,7 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <StatusBar style="light" />
         <OfflineBadge />
+        <ShareIntentRouter />
         <LockGate>
         <Stack
           screenOptions={{

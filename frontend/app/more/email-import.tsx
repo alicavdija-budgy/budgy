@@ -113,9 +113,15 @@ export default function ImportInvoiceScreen() {
       });
       const data = await res.json();
       if (data.success) setResult({ ...data, _source: 'email' });
-      else Alert.alert('Échec', data.error || 'Impossible de parser.');
+      else Alert.alert(
+        'Impossible d\'importer cette facture',
+        data.error || 'Veuillez réessayer ou choisir un autre fichier.'
+      );
     } catch (e: any) {
-      Alert.alert('Erreur', e?.message || 'Réseau');
+      Alert.alert(
+        'Connexion impossible',
+        'Vérifiez votre connexion Internet et réessayez.'
+      );
     } finally {
       setBusy(false);
     }

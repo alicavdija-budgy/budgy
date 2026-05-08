@@ -14,6 +14,7 @@ import {
   Modal,
   Alert,
   Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -315,7 +316,10 @@ export default function SavingsScreen() {
           setStep('templates');
         }}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
@@ -443,7 +447,7 @@ export default function SavingsScreen() {
               </ScrollView>
             )}
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Deposit Modal */}
@@ -453,7 +457,10 @@ export default function SavingsScreen() {
         transparent={true}
         onRequestClose={() => setShowDepositModal(null)}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
           <View style={[styles.modalContent, { maxHeight: 300 }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{t('savings.addDeposit')}</Text>
@@ -481,7 +488,7 @@ export default function SavingsScreen() {
               style={{ marginTop: Spacing.lg }}
             />
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );

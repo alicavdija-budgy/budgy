@@ -6,7 +6,7 @@
 import React, { useState, useMemo, useRef } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  TextInput, Modal, Alert, Linking, Platform,
+  TextInput, Modal, Alert, Linking, Platform, KeyboardAvoidingView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -307,7 +307,7 @@ export default function InvoicesScreen() {
 
       {/* Add Invoice Modal */}
       <Modal visible={showAdd} animationType="slide" transparent onRequestClose={() => setShowAdd(false)}>
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Nouvelle facture</Text>
@@ -350,7 +350,7 @@ export default function InvoicesScreen() {
 
             <Button title="Ajouter la facture" onPress={handleAdd} fullWidth size="lg" style={{ marginTop: Spacing.lg }} />
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Email Setup Modal — REMOVED: replaced by /more/email-import (3-methods screen) */}

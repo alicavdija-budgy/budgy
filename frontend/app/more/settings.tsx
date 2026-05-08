@@ -2,7 +2,7 @@
  * GUARDIAN MONEY CHF - Settings Screen
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,6 +23,8 @@ import { SUPPORTED_CURRENCIES } from '../../src/utils/currency';
 import { useTranslation } from '../../src/hooks/useTranslation';
 import { useMoney } from '../../src/hooks/useMoney';
 import Constants from 'expo-constants';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getSupabase, isSupabaseConfigured } from '../../src/lib/supabase';
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
@@ -31,13 +34,59 @@ export default function SettingsScreen() {
   const m = useMoney();
   const appVersion = '3.7.0';
 
+  const [loggingOut, setLoggingOut] = useState(false);
+
   const handleLogout = () => {
     Alert.alert(
       t('settings.logoutConfirmTitle'),
       t('settings.logoutConfirm'),
       [
         { text: t('common.cancel'), style: 'cancel' },
-        { text: t('settings.logout'), onPress: logout },
+        {
+          text: t('settings.logout'),
+          style: 'destructive',
+          onPress: async () => {
+            if (loggingOut) return;
+            setLoggingOut(true);
+            try {
+              // 1. Sign out from Supabase to invalidate the access token server-side
+              if (isSupabaseConfigured()) {
+                try {
+                  const sb = getSupabase();
+                  if (sb) await sb.auth.signOut();
+                } catch (e) {
+                  console.warn('[logout] supabase signOut failed (continuing):', e);
+                }
+              }
+
+              // 2. Wipe local Zustand state (user, transactions, prefs, sync queue, etc.)
+              clearAllData();
+              logout();
+
+              // 3. Purge Supabase auth tokens cached in AsyncStorage
+              try {
+                const allKeys = await AsyncStorage.getAllKeys();
+                const supabaseKeys = allKeys.filter(
+                  (k) => k.startsWith('sb-') || k.includes('supabase') || k === 'supabase.auth.token'
+                );
+                if (supabaseKeys.length) {
+                  await AsyncStorage.multiRemove(supabaseKeys);
+                }
+              } catch (e) {
+                console.warn('[logout] async storage cleanup failed (non-fatal):', e);
+              }
+
+              // 4. Visual confirmation + redirect to login
+              Alert.alert('✓ Déconnexion réussie', '', [
+                { text: 'OK', onPress: () => router.replace('/auth' as any) },
+              ]);
+            } catch (e: any) {
+              Alert.alert('Erreur', e?.message || 'Impossible de se déconnecter. Réessayez.');
+            } finally {
+              setLoggingOut(false);
+            }
+          },
+        },
       ]
     );
   };
@@ -176,9 +225,20 @@ export default function SettingsScreen() {
         </Card>
 
         {/* Actions */}
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Ionicons name="log-out-outline" size={20} color={Colors.warning} />
-          <Text style={styles.logoutText}>{t('settings.logout')}</Text>
+        <TouchableOpacity
+          style={[styles.logoutButton, loggingOut && { opacity: 0.6 }]}
+          onPress={handleLogout}
+          disabled={loggingOut}
+          activeOpacity={0.7}
+        >
+          {loggingOut ? (
+            <ActivityIndicator size="small" color={Colors.warning} />
+          ) : (
+            <Ionicons name="log-out-outline" size={20} color={Colors.warning} />
+          )}
+          <Text style={styles.logoutText}>
+            {loggingOut ? 'Déconnexion...' : t('settings.logout')}
+          </Text>
         </TouchableOpacity>
 
         <Card style={[styles.card, styles.dangerCard]}>

@@ -264,6 +264,20 @@ export default function ReceiptsScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Floating Scan FAB */}
+      <TouchableOpacity
+        style={[styles.fab, { bottom: insets.bottom + 24 }]}
+        onPress={() => router.push('/scanner-modal')}
+        activeOpacity={0.85}
+        accessibilityRole="button"
+        accessibilityLabel="Scanner un ticket"
+        testID="receipts-scan-fab"
+      >
+        <View style={styles.fabInner}>
+          <Ionicons name="scan" size={26} color="#0F1115" />
+        </View>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -307,6 +321,30 @@ const styles = StyleSheet.create({
   importBannerContent: { flex: 1 },
   importBannerTitle: { color: Colors.text, fontSize: FontSizes.md, fontWeight: FontWeights.bold },
   importBannerSub: { color: Colors.textSecondary, fontSize: FontSizes.xs, marginTop: 2 },
+
+  // Floating Scan FAB (Tickets & reçus)
+  fab: {
+    position: 'absolute',
+    right: 20,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  fabInner: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',

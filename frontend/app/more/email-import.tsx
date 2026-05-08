@@ -20,6 +20,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
+import { readAsBase64, readAsText } from '../../src/utils/fsCompat';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
 import { useStore } from '../../src/stores/useStore';
 import { Card, Button } from '../../src/components/ui';
@@ -78,7 +79,7 @@ export default function ImportInvoiceScreen() {
             [{ text: 'Continuer', onPress: () => parseImageFile(f.path) }],
           );
         } else if (f.mimeType?.startsWith('text/')) {
-          const text = await FileSystem.readAsStringAsync(f.path);
+          const text = await readAsText(f.path);
           await parseEmailText(text, f.fileName || '');
         }
       }
@@ -136,10 +137,10 @@ export default function ImportInvoiceScreen() {
       if (uriOrPath.startsWith('data:')) {
         base64 = uriOrPath.split(',')[1] || '';
       } else {
-        base64 = await FileSystem.readAsStringAsync(uriOrPath, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
+        console.log('[email-import] reading file', uriOrPath);
+        base64 = await readAsBase64(uriOrPath);
       }
+      console.log('[email-import] OCR call, b64 length:', base64.length);
       const res = await fetch(`${BACKEND_URL}/api/scanner/ocr`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -147,9 +148,16 @@ export default function ImportInvoiceScreen() {
       });
       const data = await res.json();
       if (data.success) setResult({ ...data, _source: 'photo' });
-      else Alert.alert('Échec OCR', data.error || 'Impossible d\'analyser l\'image.');
+      else Alert.alert(
+        'Échec de l\'analyse',
+        data.error || 'Impossible d\'analyser l\'image. Réessayez avec une autre photo.'
+      );
     } catch (e: any) {
-      Alert.alert('Erreur', e?.message || 'Réseau');
+      console.error('[email-import] parseImageFile error:', e);
+      Alert.alert(
+        'Impossible d\'importer',
+        e?.message || 'Vérifiez votre connexion Internet et réessayez.'
+      );
     } finally {
       setBusy(false);
     }
@@ -165,8 +173,9 @@ export default function ImportInvoiceScreen() {
       });
       if (res.canceled) return;
       const file = res.assets[0];
+      console.log('[email-import] picked file:', file.name, file.mimeType, file.size);
       if (file.mimeType?.startsWith('text/')) {
-        const text = await FileSystem.readAsStringAsync(file.uri);
+        const text = await readAsText(file.uri);
         await parseEmailText(text, file.name);
       } else {
         // image or pdf → OCR (PDF: first page)

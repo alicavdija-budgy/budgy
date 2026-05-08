@@ -18,6 +18,18 @@ import { useStore } from '../../src/stores/useStore';
 import { Card, Button } from '../../src/components/ui';
 
 const API = process.env.EXPO_PUBLIC_BACKEND_URL || '';
+const TAG = '[ai-optimizer]';
+
+// Fetch with timeout helper
+async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs = 30000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 type Effort = 'easy' | 'medium' | 'hard';
 type Category =
@@ -135,18 +147,52 @@ export default function AIOptimizerScreen() {
         })),
       };
 
-      const resp = await fetch(`${API}/api/optimizer/analyze`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      console.log(`${TAG} POST ${API}/api/optimizer/analyze (signals=${(body.transactions||[]).length} txns)`);
+      if (!API) {
+        throw new Error('Configuration manquante : EXPO_PUBLIC_BACKEND_URL n\'est pas définie.');
+      }
+
+      // Up to 2 attempts (1 retry on network failure)
+      let resp: Response | null = null;
+      let lastErr: any = null;
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          resp = await fetchWithTimeout(`${API}/api/optimizer/analyze`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          }, 35000);
+          console.log(`${TAG} attempt ${attempt} → HTTP ${resp.status}`);
+          if (resp.ok) break;
+          // Server returned an error code → don't retry
+          throw new Error(`Le serveur a retourné le code ${resp.status}.`);
+        } catch (err: any) {
+          lastErr = err;
+          const isNet = err?.name === 'AbortError' || /Network|fetch failed/i.test(err?.message || '');
+          console.warn(`${TAG} attempt ${attempt} failed:`, err?.message);
+          if (attempt === 1 && isNet) {
+            await new Promise((r) => setTimeout(r, 1500));
+            continue;
+          }
+          throw err;
+        }
+      }
+      if (!resp) throw lastErr || new Error('Aucune réponse du serveur.');
       const data: OptimizerResult = await resp.json();
+      console.log(`${TAG} parsed result, ${data.proposals?.length || 0} proposals`);
       if (!data.success) throw new Error(data.error || 'Analyse échouée');
       setResult(data);
     } catch (e: any) {
-      setError(e?.message || String(e));
-      Alert.alert('Erreur', e?.message || 'Impossible de lancer l\'analyse');
+      const isAbort = e?.name === 'AbortError';
+      const isNet = isAbort || /Network|fetch failed/i.test(e?.message || '');
+      const msg = isAbort
+        ? 'Le serveur met trop de temps à répondre. Réessayez dans quelques secondes.'
+        : isNet
+          ? 'Connexion impossible. Vérifiez votre Internet et réessayez.'
+          : (e?.message || 'Une erreur est survenue.');
+      console.error(`${TAG} fatal:`, e);
+      setError(msg);
+      Alert.alert('Analyse impossible', msg);
     } finally {
       setLoading(false);
     }

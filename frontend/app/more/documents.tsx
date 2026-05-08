@@ -16,6 +16,7 @@ import { useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Print from 'expo-print';
 import * as FileSystem from 'expo-file-system';
+import { readAsBase64 } from '../../src/utils/fsCompat';
 import * as Sharing from 'expo-sharing';
 import * as Haptics from 'expo-haptics';
 import * as ImageManipulator from 'expo-image-manipulator';
@@ -289,7 +290,7 @@ ${pageDataUrls.map((src, i) => `
     const { uri } = await Print.printToFileAsync({ html, base64: false });
     let base64: string | undefined;
     try {
-      base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+      base64 = await readAsBase64(uri);
     } catch {
       base64 = undefined;
     }

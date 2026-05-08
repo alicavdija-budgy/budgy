@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import { buildPdfHtml } from '../../src/utils/localPdf';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
 import { useStore } from '../../src/stores/useStore';
 import { Card, Button, Badge } from '../../src/components/ui';
@@ -95,6 +96,7 @@ export default function ExportPDFScreen() {
     }
 
     setLoading(true);
+    const TAG = '[export-pdf]';
     try {
       const titleOverride =
         source === 'tickets' ? `Tickets & reçus — ${periodLabel(period)}` :
@@ -102,37 +104,64 @@ export default function ExportPDFScreen() {
         source === 'all' ? `Toutes les dépenses — ${periodLabel(period)}` :
         `Note de frais — ${periodLabel(period)}`;
 
-      const response = await fetch(`${BACKEND_URL}/api/export/pdf`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_name: user?.name || 'Utilisateur',
-          company: mode === 'employee' ? 'Mon Entreprise SA' : user?.name || 'Indépendant',
-          expenses: selectedExpenses,
-          mode,
-          canton: preferences.canton,
-          period: periodLabel(period),
-          include_receipts: includeReceipts,
-          documents: selectedDocuments.map((d: any) => ({
-            title: d.title,
-            category: d.category,
-            imageBase64: d.imageBase64,
-            pages: d.pages || [d.imageBase64],
-          })),
-          title_override: titleOverride,
-        }),
-      });
+      const payload = {
+        user_name: user?.name || 'Utilisateur',
+        company: mode === 'employee' ? 'Mon Entreprise SA' : user?.name || 'Indépendant',
+        expenses: selectedExpenses,
+        mode,
+        canton: preferences.canton,
+        period: periodLabel(period),
+        include_receipts: includeReceipts,
+        documents: selectedDocuments.map((d: any) => ({
+          title: d.title,
+          category: d.category,
+          imageBase64: d.imageBase64,
+          pages: d.pages || [d.imageBase64],
+        })),
+        title_override: titleOverride,
+      };
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      const data = await response.json();
-      if (!data.html || data.html.length < 100) {
-        throw new Error('Le serveur a retourné un PDF vide.');
+      // ── 1. Generate HTML LOCALLY (works offline, fastest path) ──
+      let html: string;
+      try {
+        html = buildPdfHtml(payload as any);
+        console.log(`${TAG} local HTML generated (${html.length} chars)`);
+      } catch (genErr: any) {
+        console.error(`${TAG} local generation failed:`, genErr);
+        throw new Error('Erreur lors de la création du PDF.');
       }
 
-      const { uri } = await Print.printToFileAsync({ html: data.html, base64: false });
+      // ── 2. Try to enrich via backend if available (better template) ──
+      // Non-blocking: if backend fails or is slow, we keep the local HTML.
+      if (BACKEND_URL) {
+        try {
+          const ctrl = new AbortController();
+          const t = setTimeout(() => ctrl.abort(), 6000); // 6s budget
+          const resp = await fetch(`${BACKEND_URL}/api/export/pdf`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+            signal: ctrl.signal,
+          });
+          clearTimeout(t);
+          if (resp.ok) {
+            const data = await resp.json();
+            if (data?.html && data.html.length > 200) {
+              html = data.html;
+              console.log(`${TAG} backend HTML used (${html.length} chars)`);
+            }
+          }
+        } catch (netErr: any) {
+          console.warn(`${TAG} backend unreachable, keeping local HTML:`, netErr?.message);
+        }
+      }
 
+      // ── 3. HTML → PDF (always local, no internet needed) ──
+      console.log(`${TAG} printing to PDF...`);
+      const { uri } = await Print.printToFileAsync({ html, base64: false });
+      console.log(`${TAG} PDF generated at`, uri);
+
+      // ── 4. Native share ──
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(uri, {
           mimeType: 'application/pdf',
@@ -145,12 +174,10 @@ export default function ExportPDFScreen() {
 
       setPdfReady(true);
     } catch (error: any) {
-      const isNetwork = /Network|fetch|HTTP/i.test(error?.message || '');
+      console.error('[export-pdf] FATAL:', error);
       Alert.alert(
         'Export impossible',
-        isNetwork
-          ? 'Vérifiez votre connexion Internet et réessayez.'
-          : (error?.message || 'Une erreur est survenue lors de la génération du PDF.')
+        error?.message || 'Une erreur est survenue lors de la génération du PDF. Réessayez.'
       );
     } finally {
       setLoading(false);

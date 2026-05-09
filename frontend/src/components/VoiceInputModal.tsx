@@ -46,6 +46,8 @@ import {
   abortSpeechRecognition,
   type SttSupport,
 } from '../utils/speech';
+import { useUsageQuota, useIsPremium } from '../services/featureFlags';
+import SoftPaywall from './SoftPaywall';
 
 const ACCENT = '#16E0C6';
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
@@ -97,7 +99,10 @@ export default function VoiceInputModal({ visible, onClose }: Props) {
   const [parsed, setParsed] = useState<ParsedTxn | null>(null);
   const [support, setSupport] = useState<SttSupport>({ available: false, reason: 'init', engine: '—' });
   const [permError, setPermError] = useState<string | null>(null);
+  const [paywallOpen, setPaywallOpen] = useState(false);
   const inputRef = useRef<TextInput>(null);
+  const isPremium = useIsPremium();
+  const quota = useUsageQuota('voice');
   // Latest transcript (avoid stale closure when stop fires)
   const transcriptRef = useRef<string>('');
   // Auto-parse when STT ends naturally
@@ -333,6 +338,12 @@ export default function VoiceInputModal({ visible, onClose }: Props) {
 
   const tryParse = async (input: string) => {
     if (!input.trim()) return;
+    // Free tier: enforce monthly quota
+    const allowed = await quota.consume();
+    if (!allowed) {
+      setPaywallOpen(true);
+      return;
+    }
     setPhase('parsing');
     try {
       const res = await fetch(`${BACKEND_URL}/api/voice/parse`, {
@@ -495,6 +506,18 @@ export default function VoiceInputModal({ visible, onClose }: Props) {
               <View style={[styles.banner, { borderColor: 'rgba(255,122,138,0.3)' }]}>
                 <Ionicons name="alert-circle" size={15} color="#FF7A8A" />
                 <Text style={styles.bannerTxt}>Micro: {permError}</Text>
+              </View>
+            )}
+
+            {/* Free-tier quota counter (only shown for non-premium users) */}
+            {!isPremium && phase === 'idle' && quota.remaining !== Infinity && (
+              <View style={styles.quotaRow}>
+                <Ionicons name="flash" size={11} color="rgba(22,224,198,0.7)" />
+                <Text style={styles.quotaTxt}>
+                  {quota.remaining > 0
+                    ? `${quota.remaining} essai${quota.remaining > 1 ? 's' : ''} Voice gratuits ce mois`
+                    : 'Quota mensuel atteint — passez à Pro pour Voice illimité'}
+                </Text>
               </View>
             )}
 
@@ -683,6 +706,20 @@ export default function VoiceInputModal({ visible, onClose }: Props) {
           </ScrollView>
         </Pressable>
       </KeyboardAvoidingView>
+      <SoftPaywall
+        visible={paywallOpen}
+        onClose={() => setPaywallOpen(false)}
+        title="Voice IA illimité"
+        subtitle="Dictez toutes vos transactions sans limite. Notre IA les comprend instantanément."
+        icon="mic"
+        benefits={[
+          'Voice IA illimité',
+          'Parsing IA avancé des phrases',
+          'Timeline IA complète',
+          'OCR illimité & PDF complets',
+          'Suivi du portefeuille',
+        ]}
+      />
     </Modal>
   );
 }
@@ -812,6 +849,17 @@ const styles = StyleSheet.create({
   },
   bannerTxt: {
     flex: 1, color: 'rgba(255,255,255,0.78)', fontSize: 12, lineHeight: 16,
+  },
+
+  // Quota counter (free tier)
+  quotaRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    marginTop: 2, marginBottom: 2,
+    paddingHorizontal: 4,
+  },
+  quotaTxt: {
+    color: 'rgba(22,224,198,0.75)',
+    fontSize: 11, fontWeight: '600', letterSpacing: 0.2,
   },
 
   // Preview

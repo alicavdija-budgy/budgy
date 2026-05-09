@@ -14,12 +14,14 @@
  * Insight categories
  *   positive · info · warning · alert · tip
  */
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, Platform } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { View, Text, StyleSheet, Platform, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import { useStore } from '../stores/useStore';
+import { useFeatureFlag, FREE_LIMITS } from '../services/featureFlags';
+import SoftPaywall from './SoftPaywall';
 
 type Tone = 'positive' | 'info' | 'warning' | 'alert' | 'tip';
 
@@ -346,14 +348,22 @@ export default function AITimeline() {
   const incomes = useStore((s) => s.incomes);
   const recurring = useStore((s) => s.recurringExpenses);
   const goals = useStore((s) => s.savingsGoals);
+  const advanced = useFeatureFlag('canUseAdvancedTimeline');
+  const [paywallOpen, setPaywallOpen] = useState(false);
 
-  const insights = useMemo(
+  const allInsights = useMemo(
     () => generateInsights({ transactions: transactions || [], incomes: incomes || [], recurring: recurring || [], goals: goals || [] }),
     [transactions, incomes, recurring, goals],
   );
 
-  // Hide entirely when there is truly nothing to say (avoids visual noise on empty state)
-  if (insights.length === 0) return null;
+  // Free tier sees only top-N insights, premium sees everything.
+  const visible = advanced.enabled
+    ? allInsights
+    : allInsights.slice(0, FREE_LIMITS.timelineInsightsCap);
+  const hidden = allInsights.length - visible.length;
+
+  // Hide entirely when there is truly nothing to say
+  if (allInsights.length === 0) return null;
 
   return (
     <View style={styles.wrap}>
@@ -361,9 +371,51 @@ export default function AITimeline() {
         <Text style={styles.eyebrow}>BUDGY · INSIGHTS</Text>
         <View style={styles.liveDot} />
       </Animated.View>
-      {insights.map((ins, i) => (
+      {visible.map((ins, i) => (
         <InsightCard key={ins.id} insight={ins} index={i} />
       ))}
+
+      {/* Soft paywall hint when we capped the list */}
+      {hidden > 0 && (
+        <Animated.View entering={FadeInDown.duration(420).delay(80 + visible.length * 70)}>
+          <Pressable
+            onPress={() => setPaywallOpen(true)}
+            style={({ pressed }) => [styles.lockCard, pressed && { opacity: 0.85 }]}
+          >
+            <LinearGradient
+              colors={['rgba(22,224,198,0.10)', 'rgba(22,224,198,0.02)']}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+              style={StyleSheet.absoluteFill as any}
+            />
+            <View style={styles.lockOrb}>
+              <Ionicons name="sparkles" size={14} color="#16E0C6" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.lockTitle}>
+                {hidden} insight{hidden > 1 ? 's' : ''} supplémentaire{hidden > 1 ? 's' : ''} disponible{hidden > 1 ? 's' : ''}
+              </Text>
+              <Text style={styles.lockSub}>Débloquez la Timeline IA complète avec Pro</Text>
+            </View>
+            <Ionicons name="lock-closed" size={14} color="rgba(22,224,198,0.85)" />
+          </Pressable>
+        </Animated.View>
+      )}
+
+      <SoftPaywall
+        visible={paywallOpen}
+        onClose={() => setPaywallOpen(false)}
+        title="Timeline IA complète"
+        subtitle="Profitez de toutes les analyses proactives et conseils personnalisés."
+        icon="analytics"
+        benefits={[
+          'Toutes les analyses proactives',
+          'Détection avancée d\'anomalies',
+          'Audit complet des abonnements',
+          'Conseils IA contextuels',
+          'Voice IA illimité',
+          'Sync multi-appareils',
+        ]}
+      />
     </View>
   );
 }
@@ -453,4 +505,24 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.2,
   },
+
+  // Soft paywall hint card
+  lockCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingVertical: 12, paddingHorizontal: 14,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.02)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(22,224,198,0.22)',
+    overflow: 'hidden',
+  },
+  lockOrb: {
+    width: 28, height: 28, borderRadius: 9,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(22,224,198,0.14)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(22,224,198,0.32)',
+  },
+  lockTitle: { color: '#fff', fontSize: 13, fontWeight: '600', letterSpacing: -0.1 },
+  lockSub: { color: 'rgba(255,255,255,0.55)', fontSize: 11.5, lineHeight: 15, marginTop: 1 },
 });

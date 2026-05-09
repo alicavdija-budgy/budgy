@@ -18,6 +18,7 @@ import { usePaywall } from '../../src/hooks/usePaywall';
 import { useTranslation } from '../../src/hooks/useTranslation';
 import { useMoney } from '../../src/hooks/useMoney';
 import PressScale from '../../src/components/PressScale';
+import { ProLockCard } from '../../src/components/ProLockCard';
 
 interface MenuItem {
   id: string;
@@ -156,6 +157,15 @@ export default function MoreScreen() {
                 </View>
               </LinearGradient>
             </TouchableOpacity>
+          </Animated.View>
+        )}
+
+        {/* Premium discovery — gentle preview of top Pro features */}
+        {!isPro && (
+          <Animated.View entering={FadeInDown.duration(500).delay(160)} style={{ gap: 10, marginBottom: Spacing.xl }}>
+            <ProLockCard kind="invest" compact />
+            <ProLockCard kind="ai" compact />
+            <ProLockCard kind="tax" compact />
           </Animated.View>
         )}
 

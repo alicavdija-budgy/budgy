@@ -24,22 +24,24 @@ import { Platform } from 'react-native';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
 import { usePremiumStore } from '../../src/stores/usePremiumStore';
 import { useIAP } from '../../src/hooks/useIAP';
+import { useTranslation } from '../../src/hooks/useTranslation';
 import { Card } from '../../src/components/ui';
 
-const PRO_FEATURES = [
-  'Coach IA illimité',
-  'Statistiques avancées & prévisions',
-  'Export PDF illimité',
-  'Cloud sync multi-appareils',
-  'Optimiseur d\'impôts',
-  'Factures & abonnements illimités',
-  'Investissements & FIRE tracker',
-  'Toutes les langues + thèmes',
+const PRO_FEATURE_KEYS = [
+  'softPaywall.benefit1',
+  'softPaywall.benefit2',
+  'softPaywall.benefit3',
+  'softPaywall.benefit4',
+  'softPaywall.benefit5',
+  'softPaywall.benefit6',
+  'softPaywall.benefit7',
+  'softPaywall.benefit8',
 ];
 
 export default function SubscriptionScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { t } = useTranslation();
   const isPro = usePremiumStore((s) => s.isPro || (s.trialEndsAt !== null && s.trialEndsAt > Date.now()));
   const plan = usePremiumStore((s) => s.plan);
   const trialEndsAt = usePremiumStore((s) => s.trialEndsAt);
@@ -55,11 +57,7 @@ export default function SubscriptionScreen() {
   const handleRestore = async () => {
     if (busy) return;
     if (!iap.available) {
-      Alert.alert(
-        'Restauration',
-        'Disponible uniquement dans l\'app iOS native (TestFlight ou App Store).',
-        [{ text: 'OK' }]
-      );
+      Alert.alert(t('iap.restoreTitle'), t('iap.restoreOnlyNative'), [{ text: t('iap.ctaOK') }]);
       return;
     }
     setLocalBusy(true);
@@ -67,26 +65,22 @@ export default function SubscriptionScreen() {
       try { if (Platform.OS !== 'web') await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
       const res = await iap.restore();
       if (res.notConfigured) {
-        Alert.alert(
-          'Serveur non configuré',
-          'La validation des achats Apple n\'est pas encore activée côté serveur. Réessayez bientôt.',
-          [{ text: 'OK' }]
-        );
+        Alert.alert(t('iap.restoreBackendNotConfiguredTitle'), t('iap.restoreBackendNotConfiguredBody'), [
+          { text: t('iap.ctaOK') },
+        ]);
         return;
       }
       if (res.success) {
         try { if (Platform.OS !== 'web') await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
+        const n = res.restored || 0;
         Alert.alert(
-          '✓ Abonnement restauré',
-          `${res.restored} abonnement${(res.restored || 0) > 1 ? 's' : ''} actif${(res.restored || 0) > 1 ? 's' : ''} sur votre compte Apple.`
+          t('iap.restoreDoneTitle'),
+          t(n > 1 ? 'iap.restoreDoneBodyPlural' : 'iap.restoreDoneBody', { n })
         );
       } else if (res.state === 'EXPIRED' || res.state === 'REFUNDED') {
-        Alert.alert(
-          'Abonnement expiré',
-          'Votre dernier abonnement n\'est plus actif. Vous pouvez vous réabonner depuis cet écran.'
-        );
+        Alert.alert(t('iap.restoreExpiredTitle'), t('iap.restoreExpiredBody'));
       } else {
-        Alert.alert('Restauration', 'Aucun abonnement actif trouvé sur ce compte Apple.');
+        Alert.alert(t('iap.restoreNoneTitle'), t('iap.restoreNoneBody'));
       }
     } finally {
       setLocalBusy(false);
@@ -100,8 +94,8 @@ export default function SubscriptionScreen() {
           <View style={styles.statusRow}>
             <Ionicons name="lock-closed" size={22} color={Colors.textTertiary} />
             <View style={{ flex: 1 }}>
-              <Text style={styles.statusTitle}>Plan gratuit</Text>
-              <Text style={styles.statusSub}>Essayez Budgy Pro 7 jours, sans engagement.</Text>
+              <Text style={styles.statusTitle}>{t('more.freePlan') || 'Plan gratuit'}</Text>
+              <Text style={styles.statusSub}>{t('more.tryProSub') || 'Essayez Budgy Pro 7 jours, sans engagement.'}</Text>
             </View>
           </View>
         </Card>
@@ -114,14 +108,16 @@ export default function SubscriptionScreen() {
           <Ionicons name="checkmark-circle" size={22} color={Colors.success} />
           <View style={{ flex: 1 }}>
             <Text style={[styles.statusTitle, { color: Colors.success }]}>
-              {isTrial ? 'Essai gratuit actif' : `Budgy Pro ${plan === 'annual' ? '· Annuel' : plan === 'monthly' ? '· Mensuel' : ''}`}
+              {isTrial
+                ? (t('more.trialActive') || 'Essai gratuit actif')
+                : `Budgy Pro ${plan === 'annual' ? '· ' + (t('more.yearly') || 'Annuel') : plan === 'monthly' ? '· ' + (t('more.monthly') || 'Mensuel') : ''}`}
             </Text>
             <Text style={styles.statusSub}>
               {isTrial && trialEndsAt
-                ? `Se termine le ${new Date(trialEndsAt).toLocaleDateString('fr-CH')}`
+                ? `${t('more.trialEnds') || 'Se termine le'} ${new Date(trialEndsAt).toLocaleDateString()}`
                 : subscriptionStartedAt
-                ? `Depuis le ${new Date(subscriptionStartedAt).toLocaleDateString('fr-CH')}`
-                : 'Merci pour votre confiance !'}
+                ? `${t('more.activeSince') || 'Depuis le'} ${new Date(subscriptionStartedAt).toLocaleDateString()}`
+                : (t('more.thanks') || 'Merci pour votre confiance !')}
             </Text>
           </View>
         </View>
@@ -154,17 +150,17 @@ export default function SubscriptionScreen() {
             <Ionicons name="sparkles" size={44} color="#0E1530" />
           </LinearGradient>
           <Text style={styles.heroTitle}>Budgy Pro</Text>
-          <Text style={styles.heroSubtitle}>Tout débloquer · 4.90 CHF/mois ou 39.90/an</Text>
+          <Text style={styles.heroSubtitle}>{t('more.heroSub') || 'Tout débloquer · 4.90 CHF/mois ou 39.90/an'}</Text>
         </View>
 
         {renderStatus()}
 
         <Card style={styles.featuresCard}>
-          <Text style={styles.featuresTitle}>Ce que Pro inclut</Text>
-          {PRO_FEATURES.map((feature, idx) => (
+          <Text style={styles.featuresTitle}>{t('more.featuresTitle') || 'Ce que Pro inclut'}</Text>
+          {PRO_FEATURE_KEYS.map((k, idx) => (
             <View key={idx} style={styles.featureRow}>
               <Ionicons name="checkmark-circle" size={18} color={Colors.success} />
-              <Text style={styles.featureText}>{feature}</Text>
+              <Text style={styles.featureText}>{t(k)}</Text>
             </View>
           ))}
         </Card>
@@ -178,7 +174,7 @@ export default function SubscriptionScreen() {
               style={styles.subscribeBtn}
             >
               <Ionicons name="rocket" size={18} color="#0E1530" />
-              <Text style={styles.subscribeText}>Découvrir les offres</Text>
+              <Text style={styles.subscribeText}>{t('more.discoverPlans') || 'Découvrir les offres'}</Text>
             </LinearGradient>
           </TouchableOpacity>
         )}
@@ -194,21 +190,18 @@ export default function SubscriptionScreen() {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <ActivityIndicator size="small" color={Colors.text} />
               <Text style={styles.restoreText}>
-                {iap.phase === 'restoring' ? 'Restauration en cours…' : 'Validation…'}
+                {iap.phase === 'restoring' ? t('iap.btnRestoreInProgress') : t('iap.btnValidating')}
               </Text>
             </View>
           ) : (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <Ionicons name="refresh" size={16} color={Colors.text} />
-              <Text style={styles.restoreText}>Restaurer mes achats</Text>
+              <Text style={styles.restoreText}>{t('iap.btnRestore')}</Text>
             </View>
           )}
         </TouchableOpacity>
 
-        <Text style={styles.legalText}>
-          L'abonnement se renouvelle automatiquement sauf annulation 24h avant la fin de la période.
-          Géré par votre compte Apple. Restaurez vos achats si vous changez d'appareil.
-        </Text>
+        <Text style={styles.legalText}>{t('iap.legal')}</Text>
 
         <View style={{ height: 40 }} />
       </ScrollView>

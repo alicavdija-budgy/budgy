@@ -180,24 +180,18 @@ export default function PaywallScreen() {
 
       if (res.cancelled) return; // silent on cancel
       if (res.notConfigured) {
-        Alert.alert(
-          'Validation en attente',
-          'Votre achat a été enregistré chez Apple, mais notre serveur n\'est pas encore configuré pour l\'activer. Réessayez dans quelques minutes via "Restaurer mes achats".',
-          [{ text: 'OK' }]
-        );
+        Alert.alert(t('iap.pendingTitle'), t('iap.pendingBody'), [{ text: t('iap.ctaOK') }]);
         return;
       }
       if (res.success) {
         try { if (Platform.OS !== 'web') await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
         Alert.alert(
-          '✨ Bienvenue sur Budgy Pro',
-          selected === 'annual'
-            ? 'Votre abonnement annuel est actif. Merci pour votre confiance !'
-            : 'Votre abonnement mensuel est actif. Merci !',
-          [{ text: 'Commencer', onPress: () => router.back() }]
+          t('iap.welcomeTitle'),
+          selected === 'annual' ? t('iap.welcomeYearly') : t('iap.welcomeMonthly'),
+          [{ text: t('iap.ctaStart'), onPress: () => router.back() }]
         );
       } else {
-        Alert.alert('Achat échoué', res.error || 'Une erreur est survenue. Veuillez réessayer.');
+        Alert.alert(t('iap.buyFailedTitle'), res.error || t('iap.buyFailedBody'));
       }
       return;
     }
@@ -206,18 +200,16 @@ export default function PaywallScreen() {
     purchase(selected);
     setTimeout(() => {
       setProcessing(false);
-      Alert.alert(
-        '✨ Bienvenue sur Budgy Pro (Aperçu)',
-        'Mode aperçu — pas de vrai paiement. Testez depuis un build natif iOS pour déclencher StoreKit.',
-        [{ text: 'OK', onPress: () => router.back() }]
-      );
+      Alert.alert(t('iap.previewTitle'), t('iap.previewBody'), [
+        { text: t('iap.ctaOK'), onPress: () => router.back() },
+      ]);
     }, 300);
   };
 
   const handleRestore = async () => {
     if (processing) return;
     if (!iap.available) {
-      Alert.alert('Restauration', 'Disponible uniquement dans l\'app iOS native (TestFlight ou App Store).');
+      Alert.alert(t('iap.restoreTitle'), t('iap.restoreOnlyNative'));
       return;
     }
     setProcessing(true);
@@ -225,28 +217,25 @@ export default function PaywallScreen() {
     setProcessing(false);
 
     if (res.notConfigured) {
-      Alert.alert(
-        'Serveur non configuré',
-        'La validation des achats Apple n\'est pas encore activée côté serveur. Réessayez bientôt.',
-        [{ text: 'OK' }]
-      );
+      Alert.alert(t('iap.restoreBackendNotConfiguredTitle'), t('iap.restoreBackendNotConfiguredBody'), [
+        { text: t('iap.ctaOK') },
+      ]);
       return;
     }
     if (res.success) {
       try { if (Platform.OS !== 'web') await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
+      const n = res.restored || 0;
       Alert.alert(
-        '✓ Abonnement restauré',
-        `${res.restored} abonnement${(res.restored || 0) > 1 ? 's' : ''} actif${(res.restored || 0) > 1 ? 's' : ''} sur votre compte Apple.`,
-        [{ text: 'Super', onPress: () => router.back() }]
+        t('iap.restoreDoneTitle'),
+        t(n > 1 ? 'iap.restoreDoneBodyPlural' : 'iap.restoreDoneBody', { n }),
+        [{ text: t('iap.ctaSuper'), onPress: () => router.back() }]
       );
     } else if (res.state === 'EXPIRED' || res.state === 'REFUNDED') {
-      Alert.alert(
-        'Abonnement expiré',
-        'Votre dernier abonnement n\'est plus actif. Vous pouvez vous réabonner ci-dessous.',
-        [{ text: 'OK' }]
-      );
+      Alert.alert(t('iap.restoreExpiredTitle'), t('iap.restoreExpiredBody'), [
+        { text: t('iap.ctaOK') },
+      ]);
     } else {
-      Alert.alert('Restauration', 'Aucun abonnement actif trouvé sur ce compte Apple.');
+      Alert.alert(t('iap.restoreNoneTitle'), t('iap.restoreNoneBody'));
     }
   };
 

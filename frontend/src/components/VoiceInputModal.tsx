@@ -38,6 +38,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useStore } from '../stores/useStore';
 import { playBeep, primeBeeps } from '../utils/beeps';
+import {
+  getSttSupport,
+  requestSttPermissions,
+  startSpeechRecognition,
+  stopSpeechRecognition,
+  abortSpeechRecognition,
+  type SttSupport,
+} from '../utils/speech';
 
 const ACCENT = '#16E0C6';
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
@@ -87,7 +95,13 @@ export default function VoiceInputModal({ visible, onClose }: Props) {
   const [text, setText] = useState('');
   const [phase, setPhase] = useState<Phase>('idle');
   const [parsed, setParsed] = useState<ParsedTxn | null>(null);
+  const [support, setSupport] = useState<SttSupport>({ available: false, reason: 'init', engine: '—' });
+  const [permError, setPermError] = useState<string | null>(null);
   const inputRef = useRef<TextInput>(null);
+  // Latest transcript (avoid stale closure when stop fires)
+  const transcriptRef = useRef<string>('');
+  // Auto-parse when STT ends naturally
+  const shouldAutoParseRef = useRef<boolean>(false);
 
   // Animations
   const breath = useRef(new Animated.Value(0)).current; // idle breathing
@@ -100,14 +114,28 @@ export default function VoiceInputModal({ visible, onClose }: Props) {
   const addIncome = useStore((s) => s.addIncome);
   const addRecurringExpense = useStore((s) => s.addRecurringExpense);
 
+  // Detect STT capability once (and on each open in case env changes)
+  useEffect(() => {
+    if (!visible) return;
+    const s = getSttSupport();
+    setSupport(s);
+    setPermError(null);
+    console.log('[voice] STT support:', s);
+  }, [visible]);
+
   // Reset on open
   useEffect(() => {
     if (visible) {
       setText('');
       setParsed(null);
       setPhase('idle');
+      transcriptRef.current = '';
+      shouldAutoParseRef.current = false;
       // Pre-warm web AudioContext so the very first beep is instant
       void primeBeeps();
+    } else {
+      // Cleanup if dismissed mid-recording
+      void abortSpeechRecognition();
     }
   }, [visible]);
 
@@ -150,8 +178,10 @@ export default function VoiceInputModal({ visible, onClose }: Props) {
       Animated.timing(ringB, { toValue: 1, duration: 1600, delay: 800, easing: Easing.out(Easing.quad), useNativeDriver: true })
     );
 
-    // Random-ish waveform bars
+    // Random-ish waveform bars (only when no real volume metering is wired)
+    const useFakeWave = !support.available || Platform.OS === 'web';
     const waveLoops = wave.map((w, idx) => {
+      if (!useFakeWave) return null; // real volume drives bars in startListening
       const animateOnce = () => {
         const target = 0.35 + Math.random() * 0.65;
         Animated.timing(w, {
@@ -189,23 +219,104 @@ export default function VoiceInputModal({ visible, onClose }: Props) {
   const ringBOpac = ringB.interpolate({ inputRange: [0, 1], outputRange: [0.4, 0] });
 
   // ── Voice control ────────────────────────────────────────
-  const startListening = () => {
+  const startListening = async () => {
     lightHaptic();
     playBeep('start');
+    transcriptRef.current = '';
+    shouldAutoParseRef.current = false;
+    setText('');
+
+    if (!support.available) {
+      // Real mic NOT available — go to listening state (visual) and rely on
+      // the keyboard dictation fallback. We show a clear banner above.
+      setPhase('listening');
+      setTimeout(() => inputRef.current?.focus(), 120);
+      return;
+    }
+
+    // Ask permissions first (no-op on web)
+    const perm = await requestSttPermissions();
+    if (!perm.granted) {
+      setPermError(perm.reason || 'Permission micro refusée');
+      setPhase('idle');
+      Alert.alert(
+        'Permission requise',
+        'Activez le micro et la reconnaissance vocale pour Budgy dans Réglages.',
+      );
+      return;
+    }
+
     setPhase('listening');
-    // Focus the textarea so iOS keyboard / mic key is immediately available
-    setTimeout(() => inputRef.current?.focus(), 120);
+    await startSpeechRecognition(
+      {
+        onState: (p) => {
+          if (p === 'stopped') {
+            // Native engine ended — auto-parse if we have text
+            const captured = (transcriptRef.current || '').trim();
+            if (shouldAutoParseRef.current && captured.length >= 2) {
+              setTimeout(() => tryParse(captured), 80);
+            } else if (phase === 'listening') {
+              setPhase('idle');
+            }
+          }
+          if (p === 'error') {
+            setPhase('idle');
+          }
+        },
+        onPartial: (t) => {
+          transcriptRef.current = t;
+          setText(t);
+        },
+        onFinal: (t) => {
+          transcriptRef.current = t;
+          setText(t);
+        },
+        onError: (msg) => {
+          console.warn('[voice] STT error:', msg);
+          setPermError(msg);
+        },
+        onVolume: (level) => {
+          // Drive the waveform bars with real audio level
+          wave.forEach((w, i) => {
+            // Each bar reacts to a slightly different range for organic motion
+            const offset = 0.1 * Math.sin((Date.now() / 120) + i);
+            const target = Math.max(0.25, Math.min(1, level + offset));
+            Animated.timing(w, {
+              toValue: target,
+              duration: 90,
+              easing: Easing.out(Easing.quad),
+              useNativeDriver: false,
+            }).start();
+          });
+        },
+      },
+      { lang: 'fr-CH', continuous: true, interim: true },
+    );
   };
 
-  const stopListening = () => {
+  const stopListening = async () => {
     lightHaptic();
     playBeep('stop');
-    const captured = text.trim();
-    if (captured.length >= 2) {
-      // auto-analyze
-      setTimeout(() => tryParse(captured), 120);
+    shouldAutoParseRef.current = true;
+    if (support.available) {
+      await stopSpeechRecognition();
+      // onState('stopped') handler above will trigger tryParse
+      // Safety: if no callback fires within 1.2s, parse the textarea
+      setTimeout(() => {
+        if (phase === 'listening') {
+          const captured = (transcriptRef.current || text || '').trim();
+          if (captured.length >= 2) tryParse(captured);
+          else setPhase('idle');
+        }
+      }, 1200);
     } else {
-      setPhase('idle');
+      // Fallback path — no real STT, use whatever the user typed/dictated
+      const captured = text.trim();
+      if (captured.length >= 2) {
+        setTimeout(() => tryParse(captured), 120);
+      } else {
+        setPhase('idle');
+      }
     }
   };
 
@@ -318,14 +429,16 @@ export default function VoiceInputModal({ visible, onClose }: Props) {
     phase === 'preview' ? 'Voici ce que j\'ai entendu' :
     'Appuyer pour parler';
 
-  const subLabel =
-    phase === 'listening'
-      ? Platform.OS === 'ios'
+  const subLabel = (() => {
+    if (phase === 'listening') {
+      if (support.available) return 'Parlez naturellement, je transcris en direct';
+      return Platform.OS === 'ios'
         ? 'Appuyez sur 🎙️ du clavier puis dictez'
-        : 'Dictez votre dépense, revenu ou abonnement'
-      : phase === 'idle'
-        ? 'L\'IA ajoute votre dépense, revenu ou abonnement'
-        : '';
+        : 'Dictez via le clavier de votre téléphone';
+    }
+    if (phase === 'idle') return 'L\'IA ajoute votre dépense, revenu ou abonnement';
+    return '';
+  })();
 
   const orbScale = phase === 'listening' ? pulseScale : breathScale;
   const orbOpacity = phase === 'listening' ? pulseGlow : 1;
@@ -367,6 +480,23 @@ export default function VoiceInputModal({ visible, onClose }: Props) {
                 <Ionicons name="close" size={18} color="rgba(255,255,255,0.7)" />
               </Pressable>
             </View>
+
+            {/* Availability banner — shown when no real STT is wired (Expo Go) */}
+            {!support.available && phase === 'idle' && (
+              <View style={styles.banner}>
+                <Ionicons name="information-circle" size={15} color="#FFCB6B" />
+                <Text style={styles.bannerTxt}>
+                  Reconnaissance vocale réelle disponible en build TestFlight.
+                  {'\n'}Pour l'instant : utilisez la dictée du clavier.
+                </Text>
+              </View>
+            )}
+            {permError && phase === 'idle' && (
+              <View style={[styles.banner, { borderColor: 'rgba(255,122,138,0.3)' }]}>
+                <Ionicons name="alert-circle" size={15} color="#FF7A8A" />
+                <Text style={styles.bannerTxt}>Micro: {permError}</Text>
+              </View>
+            )}
 
             {/* ── BIG MIC BUTTON / ORB ────────────────────────── */}
             <View style={styles.orbStage}>
@@ -669,6 +799,20 @@ const styles = StyleSheet.create({
   },
   chipPressed: { backgroundColor: 'rgba(22,224,198,0.08)', borderColor: 'rgba(22,224,198,0.35)' },
   chipTxt: { color: 'rgba(255,255,255,0.65)', fontSize: 12.5 },
+
+  // Banner (availability / errors)
+  banner: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
+    paddingVertical: 9, paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,203,107,0.06)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,203,107,0.22)',
+    marginTop: 4, marginBottom: 4,
+  },
+  bannerTxt: {
+    flex: 1, color: 'rgba(255,255,255,0.78)', fontSize: 12, lineHeight: 16,
+  },
 
   // Preview
   previewCard: {

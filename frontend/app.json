@@ -51,6 +51,8 @@
         "NSFaceIDUsageDescription": "Verrouiller l'app avec Face ID",
         "NSUserTrackingUsageDescription": "Améliorer les conseils financiers personnalisés",
         "NSContactsUsageDescription": "Partager des dépenses avec vos amis",
+        "NSMicrophoneUsageDescription": "Dicter vos dépenses et revenus à la voix",
+        "NSSpeechRecognitionUsageDescription": "Transcrire votre voix en transactions",
         "UIBackgroundModes": [
           "fetch",
           "fetch"
@@ -148,6 +150,14 @@
           "cameraPermission": "Scanner vos reçus et documents",
           "microphonePermission": false,
           "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Dicter vos dépenses et revenus à la voix",
+          "speechRecognitionPermission": "Transcrire votre voix en transactions",
+          "androidSpeechServicePackages": ["com.google.android.googlequicksearchbox"]
         }
       ],
       [

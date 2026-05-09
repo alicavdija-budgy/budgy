@@ -1,17 +1,17 @@
 /**
- * BUDGY — AI Menu Modal
+ * BUDGY — AI Menu Modal (Premium edition)
  *
- * Bottom-sheet style modal opened by the central Budgy AI button.
- * 5 actions per Session 2 spec:
- *   1. Analyse finances        → /more/ai-optimizer
- *   2. Scanner intelligent     → /scanner-modal
- *   3. Analyse abonnements     → /more/recurring (subscriptions)
- *   4. Conseils économies      → /more/predict   (AI Coach Predict)
- *   5. Analyse factures        → /more/email-import (3-method import)
+ * Inspiration: Apple Intelligence sheet · ChatGPT iOS · Revolut Ultra · Arc.
  *
- * Pure presentational — keeps existing screens untouched.
+ * Visuals:
+ *   - Backdrop dimmed + blurred (BlurView)
+ *   - Bottom sheet with frosted-glass background + soft top stroke
+ *   - Refined header: aurora orb (gradient circle) + title + caption
+ *   - Cards with subtle gradient, no harsh dividers
+ *   - Staggered fade-up entrance per card (200-400ms cascade)
+ *   - Light haptics on press
  */
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -19,13 +19,18 @@ import {
   Modal,
   StyleSheet,
   Platform,
+  Animated,
+  Easing,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 
 const ACCENT = '#16E0C6';
+const ACCENT_SOFT = 'rgba(22, 224, 198, 0.18)';
 
 interface ActionItem {
   id: string;
@@ -33,43 +38,50 @@ interface ActionItem {
   title: string;
   subtitle: string;
   route: string;
+  /** Soft tint for the icon orb */
+  tint?: string;
 }
 
 const ACTIONS: ActionItem[] = [
   {
     id: 'analyse-finances',
-    icon: 'bar-chart',
+    icon: 'analytics-outline',
     title: 'Analyse finances',
     subtitle: 'Vue complète de vos finances',
     route: '/more/ai-optimizer',
+    tint: 'rgba(22, 224, 198, 0.14)',
   },
   {
     id: 'scanner',
-    icon: 'scan',
+    icon: 'scan-outline',
     title: 'Scanner intelligent',
     subtitle: 'Scan IA de factures & reçus',
     route: '/scanner-modal',
+    tint: 'rgba(116, 178, 255, 0.14)',
   },
   {
     id: 'abonnements',
-    icon: 'sync-circle',
+    icon: 'sync-outline',
     title: 'Analyse abonnements',
-    subtitle: 'Détecte vos abonnements',
+    subtitle: 'Détecte vos abonnements récurrents',
     route: '/more/recurring',
+    tint: 'rgba(190, 153, 255, 0.14)',
   },
   {
     id: 'conseils',
-    icon: 'bulb',
+    icon: 'sparkles-outline',
     title: 'Conseils économies',
-    subtitle: 'Recommandations IA',
+    subtitle: 'Recommandations IA personnalisées',
     route: '/more/predict',
+    tint: 'rgba(255, 200, 122, 0.14)',
   },
   {
     id: 'factures',
-    icon: 'document-text',
+    icon: 'document-text-outline',
     title: 'Analyse factures',
     subtitle: 'Extraction & insights IA',
     route: '/more/email-import',
+    tint: 'rgba(255, 130, 184, 0.14)',
   },
 ];
 
@@ -82,6 +94,34 @@ export default function AIMenuModal({ visible, onClose }: Props) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
+  // One Animated.Value per row for staggered entrance
+  const anims = useRef(ACTIONS.map(() => new Animated.Value(0))).current;
+  const headerAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (visible) {
+      headerAnim.setValue(0);
+      anims.forEach((a) => a.setValue(0));
+      Animated.timing(headerAnim, {
+        toValue: 1,
+        duration: 280,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }).start();
+      Animated.stagger(
+        55,
+        anims.map((a) =>
+          Animated.timing(a, {
+            toValue: 1,
+            duration: 360,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          })
+        )
+      ).start();
+    }
+  }, [visible]);
+
   const handleAction = (item: ActionItem) => {
     if (Platform.OS !== 'web') {
       try {
@@ -89,7 +129,6 @@ export default function AIMenuModal({ visible, onClose }: Props) {
       } catch {}
     }
     onClose();
-    // small delay so the sheet animates out before navigation
     setTimeout(() => {
       try {
         router.push(item.route as any);
@@ -100,51 +139,133 @@ export default function AIMenuModal({ visible, onClose }: Props) {
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <Pressable style={styles.overlay} onPress={onClose}>
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent
+      onRequestClose={onClose}
+      statusBarTranslucent
+    >
+      {/* Backdrop with iOS blur */}
+      <BlurView
+        intensity={Platform.OS === 'ios' ? 30 : 0}
+        tint="dark"
+        style={StyleSheet.absoluteFill as any}
+      >
+        <Pressable style={styles.dim} onPress={onClose} />
+      </BlurView>
+
+      <Pressable style={styles.bottomAnchor} onPress={onClose}>
         <Pressable
-          style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 20) + 8 }]}
           onPress={(e) => e.stopPropagation()}
+          style={[styles.sheetWrap, { paddingBottom: Math.max(insets.bottom, 16) + 12 }]}
         >
+          {/* Glass body */}
+          <BlurView
+            intensity={Platform.OS === 'ios' ? 60 : 0}
+            tint="dark"
+            style={StyleSheet.absoluteFill as any}
+          />
+          <LinearGradient
+            colors={['rgba(22, 26, 33, 0.94)', 'rgba(11, 14, 18, 0.98)']}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
+            style={StyleSheet.absoluteFill as any}
+          />
+          {/* Top hairline stroke (very subtle) */}
+          <View style={styles.topStroke} />
+
+          {/* Drag handle */}
           <View style={styles.handle} />
 
-          <View style={styles.header}>
-            <View style={styles.aiBadge}>
-              <Text style={styles.aiBadgeB}>B</Text>
+          {/* Header */}
+          <Animated.View
+            style={[
+              styles.header,
+              {
+                opacity: headerAnim,
+                transform: [
+                  {
+                    translateY: headerAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [8, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            <View style={styles.orbWrap}>
+              <LinearGradient
+                colors={['#7BFCE3', ACCENT, '#0E8C7B']}
+                start={{ x: 0.1, y: 0.1 }}
+                end={{ x: 0.9, y: 0.9 }}
+                style={styles.orbInner}
+              />
+              <View style={styles.orbHighlight} pointerEvents="none" />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.title}>Assistant IA Budgy</Text>
-              <Text style={styles.subtitle}>Choisissez une action intelligente</Text>
+              <Text style={styles.eyebrow}>BUDGY · AI</Text>
+              <Text style={styles.title}>Que souhaitez-vous analyser ?</Text>
             </View>
             <Pressable onPress={onClose} hitSlop={14} style={styles.closeBtn}>
-              <Ionicons name="close" size={22} color="#888" />
+              <Ionicons name="close" size={20} color="rgba(255,255,255,0.7)" />
             </Pressable>
-          </View>
+          </Animated.View>
 
+          {/* Action cards */}
           <View style={styles.list}>
             {ACTIONS.map((item, idx) => (
-              <Pressable
+              <Animated.View
                 key={item.id}
-                onPress={() => handleAction(item)}
-                style={({ pressed }) => [
-                  styles.row,
-                  idx === ACTIONS.length - 1 && { borderBottomWidth: 0 },
-                  pressed && { backgroundColor: 'rgba(22,224,198,0.08)' },
-                ]}
-                accessibilityRole="button"
-                accessibilityLabel={item.title}
+                style={{
+                  opacity: anims[idx],
+                  transform: [
+                    {
+                      translateY: anims[idx].interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [12, 0],
+                      }),
+                    },
+                  ],
+                }}
               >
-                <View style={styles.iconCircle}>
-                  <Ionicons name={item.icon} size={20} color={ACCENT} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.rowTitle}>{item.title}</Text>
-                  <Text style={styles.rowSub}>{item.subtitle}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color="#555" />
-              </Pressable>
+                <Pressable
+                  onPress={() => handleAction(item)}
+                  style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+                  accessibilityRole="button"
+                  accessibilityLabel={item.title}
+                >
+                  <LinearGradient
+                    colors={['rgba(255,255,255,0.045)', 'rgba(255,255,255,0.015)']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={StyleSheet.absoluteFill as any}
+                  />
+                  <View style={[styles.iconOrb, { backgroundColor: item.tint || ACCENT_SOFT }]}>
+                    <Ionicons name={item.icon} size={20} color={ACCENT} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.cardTitle}>{item.title}</Text>
+                    <Text style={styles.cardSubtitle}>{item.subtitle}</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.35)" />
+                </Pressable>
+              </Animated.View>
             ))}
           </View>
+
+          {/* Footnote */}
+          <Animated.Text
+            style={[
+              styles.foot,
+              {
+                opacity: headerAnim,
+              },
+            ]}
+          >
+            Propulsé par Budgy AI · vos données restent privées
+          </Animated.Text>
         </Pressable>
       </Pressable>
     </Modal>
@@ -152,104 +273,138 @@ export default function AIMenuModal({ visible, onClose }: Props) {
 }
 
 const styles = StyleSheet.create({
-  overlay: {
+  dim: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.65)',
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+  },
+  bottomAnchor: {
+    flex: 1,
     justifyContent: 'flex-end',
   },
-  sheet: {
-    backgroundColor: '#0F1115',
+  sheetWrap: {
+    paddingHorizontal: 18,
+    paddingTop: 12,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
-    paddingHorizontal: 18,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(22,224,198,0.18)',
+    overflow: 'hidden',
+  },
+  topStroke: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: 'rgba(22, 224, 198, 0.20)',
   },
   handle: {
     alignSelf: 'center',
-    width: 44,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: '#2a2f3a',
-    marginBottom: 14,
+    width: 38,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    marginBottom: 18,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 4,
-    marginBottom: 18,
+    marginBottom: 22,
   },
-  aiBadge: {
+  // Aurora orb — gradient sphere with a glassy highlight
+  orbWrap: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(22,224,198,0.12)',
-    borderWidth: 1.5,
-    borderColor: ACCENT,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
+    marginRight: 14,
+    overflow: 'hidden',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.18)',
+    shadowColor: ACCENT,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.45,
+    shadowRadius: 12,
   },
-  aiBadgeB: {
-    color: ACCENT,
-    fontSize: 22,
-    fontWeight: '800',
-    fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
-    marginTop: -2,
+  orbInner: {
+    flex: 1,
+  },
+  orbHighlight: {
+    position: 'absolute',
+    top: 4,
+    left: 6,
+    width: 18,
+    height: 12,
+    borderRadius: 9,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    transform: [{ rotate: '-25deg' }],
+  },
+  eyebrow: {
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 1.4,
+    marginBottom: 2,
   },
   title: {
     color: '#fff',
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: '700',
-  },
-  subtitle: {
-    color: '#9aa0aa',
-    fontSize: 12,
-    marginTop: 2,
+    letterSpacing: -0.3,
   },
   closeBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#1a1f2a',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.06)',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.08)',
   },
   list: {
-    backgroundColor: 'rgba(255,255,255,0.02)',
-    borderRadius: 18,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    gap: 10,
   },
-  row: {
+  card: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 14,
     paddingHorizontal: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.07)',
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.02)',
   },
-  iconCircle: {
+  cardPressed: {
+    transform: [{ scale: 0.985 }],
+    borderColor: 'rgba(22, 224, 198, 0.35)',
+  },
+  iconOrb: {
     width: 40,
     height: 40,
-    borderRadius: 12,
-    backgroundColor: 'rgba(22,224,198,0.10)',
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(22,224,198,0.25)',
+    marginRight: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(22, 224, 198, 0.22)',
   },
-  rowTitle: {
+  cardTitle: {
     color: '#fff',
-    fontSize: 15,
+    fontSize: 15.5,
     fontWeight: '600',
+    letterSpacing: -0.1,
   },
-  rowSub: {
-    color: '#7a808a',
-    fontSize: 12,
+  cardSubtitle: {
+    color: 'rgba(255,255,255,0.52)',
+    fontSize: 12.5,
     marginTop: 2,
+    letterSpacing: 0,
+  },
+  foot: {
+    color: 'rgba(255,255,255,0.32)',
+    fontSize: 11,
+    textAlign: 'center',
+    marginTop: 18,
+    letterSpacing: 0.2,
   },
 });

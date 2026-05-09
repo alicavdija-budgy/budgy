@@ -21,6 +21,7 @@ export const getSupabase = () => {
         autoRefreshToken: true,
         persistSession: true,
         detectSessionInUrl: Platform.OS === 'web',
+        flowType: 'pkce',
       },
     });
   }

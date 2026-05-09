@@ -231,6 +231,16 @@ export default function AuthScreen() {
                 </TouchableOpacity>
               </View>
               {errors.password && <Text style={styles.errorText}>{errors.password}</Text>}
+              {mode === 'login' && (
+                <TouchableOpacity
+                  testID="forgot-password-link"
+                  style={styles.forgotLink}
+                  onPress={() => router.push('/forgot-password' as any)}
+                  hitSlop={8}
+                >
+                  <Text style={styles.forgotLinkText}>{t('auth.forgotPwd')}</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             {mode === 'register' && (
@@ -296,4 +306,6 @@ const styles = StyleSheet.create({
   demoButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, paddingVertical: Spacing.md, marginBottom: Spacing.lg },
   demoButtonText: { color: Colors.primary, fontSize: FontSizes.sm, fontWeight: FontWeights.semibold },
   privacyNote: { color: Colors.textTertiary, fontSize: FontSizes.xs, textAlign: 'center' },
+  forgotLink: { alignSelf: 'flex-end', marginTop: Spacing.sm, paddingVertical: 4 },
+  forgotLinkText: { color: '#34D399', fontSize: FontSizes.xs, fontWeight: FontWeights.semibold },
 });

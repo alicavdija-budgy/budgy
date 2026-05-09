@@ -19,6 +19,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
+import { useTheme } from '../../src/hooks/useTheme';
 import { useStore } from '../../src/stores/useStore';
 import { Card, Button, EmptyState, Badge } from '../../src/components/ui';
 import { CategoryIcon, getCategoryName, getCategoryColor } from '../../src/components/CategoryIcon';
@@ -31,6 +32,8 @@ type Tab = 'daily' | 'pro' | 'contracts';
 
 export default function ExpensesScreen() {
   const insets = useSafeAreaInsets();
+  const theme = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const {
     preferences,
     transactions,
@@ -161,7 +164,7 @@ export default function ExpensesScreen() {
           style={styles.addButton}
           onPress={() => activeTab === 'contracts' ? setShowContractModal(true) : setShowAddModal(true)}
         >
-          <Ionicons name="add" size={24} color={Colors.text} />
+          <Ionicons name="add" size={24} color={theme.text} />
         </TouchableOpacity>
       </View>
 
@@ -179,7 +182,7 @@ export default function ExpensesScreen() {
             <Ionicons
               name={tab.icon as any}
               size={16}
-              color={activeTab === tab.key ? Colors.text : Colors.textTertiary}
+              color={activeTab === tab.key ? theme.text : theme.textTertiary}
             />
             <Text
               style={[
@@ -237,7 +240,7 @@ export default function ExpensesScreen() {
                           <Ionicons
                             name={(PAYMENT_METHODS.find(p => p.id === tx.paymentMethod)?.icon || 'card') as any}
                             size={12}
-                            color={PAYMENT_METHODS.find(p => p.id === tx.paymentMethod)?.color || Colors.textTertiary}
+                            color={PAYMENT_METHODS.find(p => p.id === tx.paymentMethod)?.color || theme.textTertiary}
                           />
                           <Text style={styles.paymentBadgeText}>
                             {PAYMENT_METHODS.find(p => p.id === tx.paymentMethod)?.name || tx.paymentMethod}
@@ -245,7 +248,7 @@ export default function ExpensesScreen() {
                         </View>
                       )}
                       <TouchableOpacity onPress={() => handleDelete(tx.id)}>
-                        <Ionicons name="trash-outline" size={18} color={Colors.textTertiary} />
+                        <Ionicons name="trash-outline" size={18} color={theme.textTertiary} />
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -260,7 +263,7 @@ export default function ExpensesScreen() {
           <>
             {!isPro && (
               <Card style={styles.proLockedCard}>
-                <Ionicons name="lock-closed" size={32} color={Colors.primary} />
+                <Ionicons name="lock-closed" size={32} color={theme.primary} />
                 <Text style={styles.proLockedTitle}>{t('expenses.proLockedTitle')}</Text>
                 <Text style={styles.proLockedText}>
                   {t('expenses.proLockedText')}
@@ -286,7 +289,7 @@ export default function ExpensesScreen() {
                     </View>
                     <View style={styles.expenseRight}>
                       <Text style={styles.expenseAmount}>-{formatNumber(exp.amount, 2)}</Text>
-                      <Badge text={`TVA ${exp.tva}%`} color={Colors.info} size="sm" />
+                      <Badge text={`TVA ${exp.tva}%`} color={theme.info} size="sm" />
                     </View>
                   </View>
                 </Card>
@@ -310,13 +313,13 @@ export default function ExpensesScreen() {
                 <Card
                   key={contract.id}
                   style={styles.contractCard}
-                  borderColor={contract.urgent ? Colors.error : undefined}
+                  borderColor={contract.urgent ? theme.error : undefined}
                 >
                   {contract.urgent && (
-                    <Badge text="Urgent" color={Colors.error} />
+                    <Badge text="Urgent" color={theme.error} />
                   )}
                   <View style={styles.contractRow}>
-                    <Ionicons name="document-text" size={24} color={Colors.primary} />
+                    <Ionicons name="document-text" size={24} color={theme.primary} />
                     <View style={styles.contractInfo}>
                       <Text style={styles.contractTitle}>{contract.title}</Text>
                       <Text style={styles.contractExpire}>
@@ -337,7 +340,7 @@ export default function ExpensesScreen() {
                       )}
                       style={styles.contractDelBtn}
                     >
-                      <Ionicons name="trash-outline" size={16} color={Colors.textTertiary} />
+                      <Ionicons name="trash-outline" size={16} color={theme.textTertiary} />
                     </TouchableOpacity>
                   </View>
                 </Card>
@@ -366,7 +369,7 @@ export default function ExpensesScreen() {
                 {activeTab === 'pro' ? t('expenses.newProExpense') : t('expenses.newExpense')}
               </Text>
               <TouchableOpacity onPress={() => setShowAddModal(false)}>
-                <Ionicons name="close" size={24} color={Colors.text} />
+                <Ionicons name="close" size={24} color={theme.text} />
               </TouchableOpacity>
             </View>
 
@@ -377,7 +380,7 @@ export default function ExpensesScreen() {
                 value={newExpense.title}
                 onChangeText={(t) => setNewExpense((p) => ({ ...p, title: t }))}
                 placeholder={t('expenses.exTitle')}
-                placeholderTextColor={Colors.textTertiary}
+                placeholderTextColor={theme.textTertiary}
               />
             </View>
 
@@ -388,7 +391,7 @@ export default function ExpensesScreen() {
                 value={newExpense.amount}
                 onChangeText={(t) => setNewExpense((p) => ({ ...p, amount: t }))}
                 placeholder="0.00"
-                placeholderTextColor={Colors.textTertiary}
+                placeholderTextColor={theme.textTertiary}
                 keyboardType="decimal-pad"
               />
             </View>
@@ -422,7 +425,7 @@ export default function ExpensesScreen() {
                   value={newExpense.justification}
                   onChangeText={(t) => setNewExpense((p) => ({ ...p, justification: t }))}
                   placeholder={t('expenses.exJustif')}
-                  placeholderTextColor={Colors.textTertiary}
+                  placeholderTextColor={theme.textTertiary}
                 />
               </View>
             )}
@@ -476,7 +479,7 @@ export default function ExpensesScreen() {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Nouveau contrat</Text>
               <TouchableOpacity onPress={() => setShowContractModal(false)}>
-                <Ionicons name="close" size={24} color={Colors.text} />
+                <Ionicons name="close" size={24} color={theme.text} />
               </TouchableOpacity>
             </View>
 
@@ -488,7 +491,7 @@ export default function ExpensesScreen() {
                   value={newContract.title}
                   onChangeText={(t) => setNewContract((p) => ({ ...p, title: t }))}
                   placeholder="ex: Sunrise mobile, Salt Internet, Helsana..."
-                  placeholderTextColor={Colors.textTertiary}
+                  placeholderTextColor={theme.textTertiary}
                 />
               </View>
 
@@ -499,7 +502,7 @@ export default function ExpensesScreen() {
                   value={newContract.amount}
                   onChangeText={(t) => setNewContract((p) => ({ ...p, amount: t }))}
                   placeholder="49.90"
-                  placeholderTextColor={Colors.textTertiary}
+                  placeholderTextColor={theme.textTertiary}
                   keyboardType="decimal-pad"
                 />
               </View>
@@ -511,7 +514,7 @@ export default function ExpensesScreen() {
                   value={newContract.expirationDate}
                   onChangeText={(t) => setNewContract((p) => ({ ...p, expirationDate: t }))}
                   placeholder="31.12.2026"
-                  placeholderTextColor={Colors.textTertiary}
+                  placeholderTextColor={theme.textTertiary}
                 />
               </View>
 
@@ -543,9 +546,9 @@ export default function ExpensesScreen() {
                 <Ionicons
                   name={newContract.urgent ? 'alert-circle' : 'alert-circle-outline'}
                   size={20}
-                  color={newContract.urgent ? Colors.error : Colors.textTertiary}
+                  color={newContract.urgent ? theme.error : theme.textTertiary}
                 />
-                <Text style={[styles.urgentToggleTxt, newContract.urgent && { color: Colors.error }]}>
+                <Text style={[styles.urgentToggleTxt, newContract.urgent && { color: theme.error }]}>
                   {newContract.urgent ? '⚠️ Marqué comme urgent' : 'Marquer comme urgent'}
                 </Text>
               </TouchableOpacity>
@@ -565,10 +568,10 @@ export default function ExpensesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (theme: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: theme.background,
   },
   header: {
     flexDirection: 'row',
@@ -578,7 +581,7 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.md,
   },
   title: {
-    color: Colors.text,
+    color: theme.text,
     fontSize: FontSizes.xxl,
     fontWeight: FontWeights.bold,
   },
@@ -586,7 +589,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: Colors.primary,
+    backgroundColor: theme.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -604,18 +607,18 @@ const styles = StyleSheet.create({
     gap: Spacing.xs,
     paddingVertical: Spacing.sm,
     borderRadius: BorderRadius.md,
-    backgroundColor: Colors.card,
+    backgroundColor: theme.card,
   },
   tabActive: {
-    backgroundColor: Colors.primary,
+    backgroundColor: theme.primary,
   },
   tabText: {
-    color: Colors.textTertiary,
+    color: theme.textTertiary,
     fontSize: FontSizes.sm,
     fontWeight: FontWeights.semibold,
   },
   tabTextActive: {
-    color: Colors.text,
+    color: theme.text,
   },
   scroll: {
     flex: 1,
@@ -628,17 +631,17 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.lg,
   },
   summaryLabel: {
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     fontSize: FontSizes.sm,
   },
   summaryAmount: {
-    color: Colors.text,
+    color: theme.text,
     fontSize: FontSizes.xxxl,
     fontWeight: FontWeights.black,
     marginVertical: Spacing.xs,
   },
   summaryCount: {
-    color: Colors.textTertiary,
+    color: theme.textTertiary,
     fontSize: FontSizes.sm,
   },
   expenseCard: {
@@ -653,16 +656,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   expenseTitle: {
-    color: Colors.text,
+    color: theme.text,
     fontSize: FontSizes.md,
     fontWeight: FontWeights.semibold,
   },
   expenseJustif: {
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     fontSize: FontSizes.xs,
   },
   expenseDate: {
-    color: Colors.textTertiary,
+    color: theme.textTertiary,
     fontSize: FontSizes.xs,
   },
   expenseRight: {
@@ -670,7 +673,7 @@ const styles = StyleSheet.create({
     gap: Spacing.xs,
   },
   expenseAmount: {
-    color: Colors.error,
+    color: theme.error,
     fontSize: FontSizes.md,
     fontWeight: FontWeights.bold,
   },
@@ -679,13 +682,13 @@ const styles = StyleSheet.create({
     padding: Spacing.xxl,
   },
   proLockedTitle: {
-    color: Colors.text,
+    color: theme.text,
     fontSize: FontSizes.lg,
     fontWeight: FontWeights.bold,
     marginTop: Spacing.md,
   },
   proLockedText: {
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     fontSize: FontSizes.sm,
     textAlign: 'center',
     marginTop: Spacing.sm,
@@ -703,16 +706,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contractTitle: {
-    color: Colors.text,
+    color: theme.text,
     fontSize: FontSizes.md,
     fontWeight: FontWeights.semibold,
   },
   contractExpire: {
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     fontSize: FontSizes.sm,
   },
   contractAmount: {
-    color: Colors.text,
+    color: theme.text,
     fontSize: FontSizes.md,
     fontWeight: FontWeights.bold,
   },
@@ -722,7 +725,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: Colors.backgroundSecondary,
+    backgroundColor: theme.backgroundSecondary,
     borderTopLeftRadius: BorderRadius.xxl,
     borderTopRightRadius: BorderRadius.xxl,
     padding: Spacing.xl,
@@ -735,7 +738,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xl,
   },
   modalTitle: {
-    color: Colors.text,
+    color: theme.text,
     fontSize: FontSizes.xl,
     fontWeight: FontWeights.bold,
   },
@@ -743,17 +746,17 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.lg,
   },
   inputLabel: {
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     fontSize: FontSizes.sm,
     marginBottom: Spacing.sm,
   },
   input: {
-    backgroundColor: Colors.card,
+    backgroundColor: theme.card,
     borderWidth: 1,
-    borderColor: Colors.cardBorder,
+    borderColor: theme.cardBorder,
     borderRadius: BorderRadius.lg,
     padding: Spacing.md,
-    color: Colors.text,
+    color: theme.text,
     fontSize: FontSizes.md,
   },
   categoryGrid: {
@@ -764,16 +767,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: Spacing.sm,
     borderRadius: BorderRadius.md,
-    backgroundColor: Colors.card,
+    backgroundColor: theme.card,
     minWidth: 70,
   },
   categoryItemSelected: {
-    backgroundColor: `${Colors.primary}30`,
+    backgroundColor: `${theme.primary}30`,
     borderWidth: 1,
-    borderColor: Colors.primary,
+    borderColor: theme.primary,
   },
   categoryLabel: {
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     fontSize: FontSizes.xs,
     marginTop: Spacing.xs,
   },
@@ -781,13 +784,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: Colors.card,
+    backgroundColor: theme.card,
     borderRadius: BorderRadius.sm,
     paddingHorizontal: 6,
     paddingVertical: 2,
   },
   paymentBadgeText: {
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     fontSize: 10,
   },
   contractDelBtn: {
@@ -803,15 +806,15 @@ const styles = StyleSheet.create({
     marginTop: Spacing.md,
     borderRadius: BorderRadius.lg,
     borderWidth: 1.5,
-    borderColor: Colors.cardBorder,
-    backgroundColor: Colors.card,
+    borderColor: theme.cardBorder,
+    backgroundColor: theme.card,
   },
   urgentToggleActive: {
-    borderColor: Colors.error,
-    backgroundColor: `${Colors.error}10`,
+    borderColor: theme.error,
+    backgroundColor: `${theme.error}10`,
   },
   urgentToggleTxt: {
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     fontSize: FontSizes.sm,
     fontWeight: FontWeights.semibold,
   },

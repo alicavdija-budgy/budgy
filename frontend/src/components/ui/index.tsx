@@ -15,6 +15,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../constants/theme';
+import { useTheme } from '../../hooks/useTheme';
 
 // Button Component
 interface ButtonProps {
@@ -133,10 +134,12 @@ interface CardProps {
 }
 
 export function Card({ children, style, onPress, borderColor }: CardProps) {
+  const theme = useTheme();
   const cardContent = (
     <View
       style={[
         styles.card,
+        { backgroundColor: theme.card, borderColor: theme.cardBorder },
         borderColor && { borderColor, borderWidth: 1 },
         style,
       ]}
@@ -306,13 +309,14 @@ interface EmptyStateProps {
 }
 
 export function EmptyState({ icon, title, subtitle, action }: EmptyStateProps) {
+  const theme = useTheme();
   return (
     <View style={styles.emptyState}>
       <View style={styles.emptyIcon}>
-        <Ionicons name={icon} size={48} color={Colors.textTertiary} />
+        <Ionicons name={icon} size={48} color={theme.textTertiary} />
       </View>
-      <Text style={styles.emptyTitle}>{title}</Text>
-      {subtitle && <Text style={styles.emptySubtitle}>{subtitle}</Text>}
+      <Text style={[styles.emptyTitle, { color: theme.text }]}>{title}</Text>
+      {subtitle && <Text style={[styles.emptySubtitle, { color: theme.textSecondary }]}>{subtitle}</Text>}
       {action && (
         <Button
           title={action.label}

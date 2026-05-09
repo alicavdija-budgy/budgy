@@ -15,6 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
+import { useTheme } from '../../src/hooks/useTheme';
 import { useStore } from '../../src/stores/useStore';
 import { Card, Button, EmptyState } from '../../src/components/ui';
 import { formatNumber } from '../../src/utils/calculations';
@@ -38,6 +39,8 @@ const FREQUENCIES = [
 export default function IncomesScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const theme = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const { preferences, incomes, addIncome, deleteIncome } = useStore();
 
   const [showModal, setShowModal] = useState(false);
@@ -102,11 +105,11 @@ export default function IncomesScreen() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
-          <Ionicons name="chevron-back" size={26} color={Colors.text} />
+          <Ionicons name="chevron-back" size={26} color={theme.text} />
         </TouchableOpacity>
         <Text style={styles.title}>Mes revenus</Text>
         <TouchableOpacity onPress={() => setShowModal(true)} style={styles.iconBtn}>
-          <Ionicons name="add" size={26} color={Colors.primaryLight} />
+          <Ionicons name="add" size={26} color={theme.primaryLight} />
         </TouchableOpacity>
       </View>
 
@@ -206,7 +209,7 @@ export default function IncomesScreen() {
                         onPress={() => handleDelete(inc.id, inc.title)}
                         style={styles.delBtn}
                       >
-                        <Ionicons name="trash-outline" size={18} color={Colors.textTertiary} />
+                        <Ionicons name="trash-outline" size={18} color={theme.textTertiary} />
                       </TouchableOpacity>
                     </View>
                   </Card>
@@ -230,7 +233,7 @@ export default function IncomesScreen() {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Nouveau revenu</Text>
               <TouchableOpacity onPress={() => setShowModal(false)}>
-                <Ionicons name="close" size={26} color={Colors.text} />
+                <Ionicons name="close" size={26} color={theme.text} />
               </TouchableOpacity>
             </View>
 
@@ -265,7 +268,7 @@ export default function IncomesScreen() {
                 value={form.title}
                 onChangeText={(t) => setForm((p) => ({ ...p, title: t }))}
                 placeholder="Salaire net"
-                placeholderTextColor={Colors.textTertiary}
+                placeholderTextColor={theme.textTertiary}
               />
 
               {/* Amount */}
@@ -275,7 +278,7 @@ export default function IncomesScreen() {
                 value={form.amount}
                 onChangeText={(t) => setForm((p) => ({ ...p, amount: t }))}
                 placeholder="6500"
-                placeholderTextColor={Colors.textTertiary}
+                placeholderTextColor={theme.textTertiary}
                 keyboardType="decimal-pad"
               />
 
@@ -338,14 +341,14 @@ export default function IncomesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+const makeStyles = (theme: any) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: theme.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md,
   },
   iconBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  title: { color: Colors.text, fontSize: FontSizes.xl, fontWeight: FontWeights.bold },
+  title: { color: theme.text, fontSize: FontSizes.xl, fontWeight: FontWeights.bold },
   content: { padding: Spacing.lg },
 
   hero: {
@@ -363,13 +366,13 @@ const styles = StyleSheet.create({
   heroCount: { color: 'rgba(255,255,255,0.75)', fontSize: FontSizes.xs, marginTop: Spacing.md },
 
   sectionTitle: {
-    color: Colors.textSecondary, fontSize: FontSizes.xs, fontWeight: FontWeights.bold,
+    color: theme.textSecondary, fontSize: FontSizes.xs, fontWeight: FontWeights.bold,
     textTransform: 'uppercase', letterSpacing: 1, marginTop: Spacing.md, marginBottom: Spacing.sm,
   },
   quickGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm, marginBottom: Spacing.lg },
   quickCard: {
     flex: 1, minWidth: '45%',
-    backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder,
+    backgroundColor: theme.card, borderWidth: 1, borderColor: theme.cardBorder,
     borderRadius: BorderRadius.lg, padding: Spacing.md,
     alignItems: 'center', gap: Spacing.xs,
   },
@@ -378,7 +381,7 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   quickEmoji: { fontSize: 22 },
-  quickLabel: { color: Colors.text, fontSize: FontSizes.sm, fontWeight: FontWeights.semibold },
+  quickLabel: { color: theme.text, fontSize: FontSizes.sm, fontWeight: FontWeights.semibold },
 
   incCard: { marginBottom: Spacing.sm },
   incRow: { flexDirection: 'row', alignItems: 'center' },
@@ -387,55 +390,55 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center', marginRight: Spacing.md,
   },
   incEmoji: { fontSize: 22 },
-  incTitle: { color: Colors.text, fontSize: FontSizes.md, fontWeight: FontWeights.bold },
-  incMeta: { color: Colors.textSecondary, fontSize: FontSizes.xs, marginTop: 2 },
+  incTitle: { color: theme.text, fontSize: FontSizes.md, fontWeight: FontWeights.bold },
+  incMeta: { color: theme.textSecondary, fontSize: FontSizes.xs, marginTop: 2 },
   incAmountBox: { alignItems: 'flex-end', marginRight: Spacing.sm },
   incAmount: { fontSize: FontSizes.md, fontWeight: FontWeights.black },
-  incFreq: { color: Colors.textTertiary, fontSize: FontSizes.xs, fontWeight: FontWeights.semibold },
-  incEquiv: { color: Colors.textTertiary, fontSize: 10, marginTop: 2, fontStyle: 'italic' },
+  incFreq: { color: theme.textTertiary, fontSize: FontSizes.xs, fontWeight: FontWeights.semibold },
+  incEquiv: { color: theme.textTertiary, fontSize: 10, marginTop: 2, fontStyle: 'italic' },
   delBtn: { padding: Spacing.sm },
 
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'flex-end' },
   modalContent: {
-    backgroundColor: Colors.backgroundSecondary,
+    backgroundColor: theme.backgroundSecondary,
     borderTopLeftRadius: BorderRadius.xxl, borderTopRightRadius: BorderRadius.xxl,
     padding: Spacing.xl, paddingBottom: 40, maxHeight: '92%',
   },
   modalHandle: {
-    width: 40, height: 4, backgroundColor: Colors.cardBorder, borderRadius: 2,
+    width: 40, height: 4, backgroundColor: theme.cardBorder, borderRadius: 2,
     alignSelf: 'center', marginBottom: Spacing.md,
   },
   modalHeader: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     marginBottom: Spacing.lg,
   },
-  modalTitle: { color: Colors.text, fontSize: FontSizes.xl, fontWeight: FontWeights.bold },
+  modalTitle: { color: theme.text, fontSize: FontSizes.xl, fontWeight: FontWeights.bold },
   label: {
-    color: Colors.textSecondary, fontSize: FontSizes.xs, fontWeight: FontWeights.bold,
+    color: theme.textSecondary, fontSize: FontSizes.xs, fontWeight: FontWeights.bold,
     textTransform: 'uppercase', letterSpacing: 0.8, marginTop: Spacing.md, marginBottom: Spacing.xs,
   },
   typeScroll: { flexDirection: 'row' },
   typeChip: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder,
+    backgroundColor: theme.card, borderWidth: 1, borderColor: theme.cardBorder,
     paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
     borderRadius: 999, marginRight: Spacing.sm,
   },
   typeEmoji: { fontSize: 16 },
-  typeLabel: { color: Colors.textSecondary, fontSize: FontSizes.sm },
+  typeLabel: { color: theme.textSecondary, fontSize: FontSizes.sm },
   input: {
-    backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder,
+    backgroundColor: theme.card, borderWidth: 1, borderColor: theme.cardBorder,
     borderRadius: BorderRadius.lg, padding: Spacing.md,
-    color: Colors.text, fontSize: FontSizes.md,
+    color: theme.text, fontSize: FontSizes.md,
   },
   inputBig: {
-    backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder,
+    backgroundColor: theme.card, borderWidth: 1, borderColor: theme.cardBorder,
     borderRadius: BorderRadius.lg, padding: Spacing.lg,
-    color: Colors.text, fontSize: 28, fontWeight: FontWeights.black, textAlign: 'center',
+    color: theme.text, fontSize: 28, fontWeight: FontWeights.black, textAlign: 'center',
   },
-  segmentRow: { flexDirection: 'row', gap: 6, backgroundColor: Colors.card, padding: 4, borderRadius: BorderRadius.lg },
+  segmentRow: { flexDirection: 'row', gap: 6, backgroundColor: theme.card, padding: 4, borderRadius: BorderRadius.lg },
   segment: { flex: 1, paddingVertical: Spacing.sm, borderRadius: BorderRadius.md, alignItems: 'center' },
-  segmentActive: { backgroundColor: Colors.primary },
-  segmentLabel: { color: Colors.textSecondary, fontSize: FontSizes.sm, fontWeight: FontWeights.semibold },
+  segmentActive: { backgroundColor: theme.primary },
+  segmentLabel: { color: theme.textSecondary, fontSize: FontSizes.sm, fontWeight: FontWeights.semibold },
   segmentLabelActive: { color: '#FFF' },
 });

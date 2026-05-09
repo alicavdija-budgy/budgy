@@ -2,7 +2,7 @@
  * GUARDIAN MONEY CHF - Settings Screen
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
+import { useTheme } from '../../src/hooks/useTheme';
 import { useStore } from '../../src/stores/useStore';
 import { Card } from '../../src/components/ui';
 import { LANGUAGES } from '../../src/i18n/translations';
@@ -29,6 +30,8 @@ import { getSupabase, isSupabaseConfigured } from '../../src/lib/supabase';
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const theme = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const { preferences, setPreferences, logout, clearAllData } = useStore();
   const { t } = useTranslation();
   const m = useMoney();
@@ -111,7 +114,7 @@ export default function SettingsScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={Colors.text} />
+          <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <Text style={styles.title}>{t('settings.title')}</Text>
         <View style={{ width: 40 }} />
@@ -170,7 +173,7 @@ export default function SettingsScreen() {
               </TouchableOpacity>
             ))}
           </View>
-          <Text style={{ color: Colors.textSecondary, fontSize: 11, marginTop: 10, textAlign: 'center' }}>
+          <Text style={{ color: theme.textSecondary, fontSize: 11, marginTop: 10, textAlign: 'center' }}>
             {t('settings.currencyConverted', { c: m.code })} · {t('settings.example')} : {m.format(1000)}
           </Text>
         </Card>
@@ -195,7 +198,7 @@ export default function SettingsScreen() {
                   <Ionicons
                     name={opt.icon as any}
                     size={20}
-                    color={active ? Colors.text : Colors.textSecondary}
+                    color={active ? theme.text : theme.textSecondary}
                   />
                   <Text style={[styles.themeLabel, active && styles.themeLabelActive]}>
                     {opt.label}
@@ -232,9 +235,9 @@ export default function SettingsScreen() {
           activeOpacity={0.7}
         >
           {loggingOut ? (
-            <ActivityIndicator size="small" color={Colors.warning} />
+            <ActivityIndicator size="small" color={theme.warning} />
           ) : (
-            <Ionicons name="log-out-outline" size={20} color={Colors.warning} />
+            <Ionicons name="log-out-outline" size={20} color={theme.warning} />
           )}
           <Text style={styles.logoutText}>
             {loggingOut ? 'Déconnexion...' : t('settings.logout')}
@@ -247,7 +250,7 @@ export default function SettingsScreen() {
             {t('settings.dangerText')}
           </Text>
           <TouchableOpacity style={styles.deleteButton} onPress={handleClearData}>
-            <Ionicons name="trash-outline" size={18} color={Colors.error} />
+            <Ionicons name="trash-outline" size={18} color={theme.error} />
             <Text style={styles.deleteText}>{t('settings.clearData')}</Text>
           </TouchableOpacity>
         </Card>
@@ -258,10 +261,10 @@ export default function SettingsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (theme: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: theme.background,
   },
   header: {
     flexDirection: 'row',
@@ -277,7 +280,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   title: {
-    color: Colors.text,
+    color: theme.text,
     fontSize: FontSizes.xl,
     fontWeight: FontWeights.bold,
   },
@@ -291,7 +294,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.lg,
   },
   sectionTitle: {
-    color: Colors.text,
+    color: theme.text,
     fontSize: FontSizes.md,
     fontWeight: FontWeights.bold,
     marginBottom: Spacing.md,
@@ -308,23 +311,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
     borderRadius: BorderRadius.md,
-    backgroundColor: Colors.card,
+    backgroundColor: theme.card,
     borderWidth: 1,
-    borderColor: Colors.cardBorder,
+    borderColor: theme.cardBorder,
   },
   optionItemSelected: {
-    backgroundColor: `${Colors.primary}20`,
-    borderColor: Colors.primary,
+    backgroundColor: `${theme.primary}20`,
+    borderColor: theme.primary,
   },
   optionFlag: {
     fontSize: 18,
   },
   optionLabel: {
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     fontSize: FontSizes.sm,
   },
   optionLabelSelected: {
-    color: Colors.primary,
+    color: theme.primary,
     fontWeight: FontWeights.semibold,
   },
   currencyGrid: {
@@ -337,52 +340,52 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
     borderRadius: BorderRadius.md,
-    backgroundColor: Colors.card,
+    backgroundColor: theme.card,
     borderWidth: 1,
-    borderColor: Colors.cardBorder,
+    borderColor: theme.cardBorder,
   },
   currencyItemSelected: {
-    backgroundColor: `${Colors.success}20`,
-    borderColor: Colors.success,
+    backgroundColor: `${theme.success}20`,
+    borderColor: theme.success,
   },
   currencyFlag: {
     fontSize: 20,
     marginBottom: 2,
   },
   currencyCode: {
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     fontSize: FontSizes.sm,
     fontWeight: FontWeights.bold,
   },
   currencyCodeSelected: {
-    color: Colors.success,
+    color: theme.success,
   },
   themeRow: { flexDirection: 'row', gap: Spacing.sm },
   themeBtn: {
     flex: 1, flexDirection: 'column', alignItems: 'center', gap: 4,
     paddingVertical: Spacing.md, borderRadius: BorderRadius.lg,
-    backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder,
+    backgroundColor: theme.card, borderWidth: 1, borderColor: theme.cardBorder,
   },
   themeBtnActive: {
-    backgroundColor: `${Colors.primary}20`,
-    borderColor: Colors.primary,
+    backgroundColor: `${theme.primary}20`,
+    borderColor: theme.primary,
   },
-  themeLabel: { color: Colors.textSecondary, fontSize: FontSizes.sm, fontWeight: FontWeights.semibold },
-  themeLabelActive: { color: Colors.text },
-  themeHint: { color: Colors.textTertiary, fontSize: FontSizes.xs, marginTop: Spacing.sm, fontStyle: 'italic' },
+  themeLabel: { color: theme.textSecondary, fontSize: FontSizes.sm, fontWeight: FontWeights.semibold },
+  themeLabelActive: { color: theme.text },
+  themeHint: { color: theme.textTertiary, fontSize: FontSizes.xs, marginTop: Spacing.sm, fontStyle: 'italic' },
   infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingVertical: Spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.cardBorder,
+    borderBottomColor: theme.cardBorder,
   },
   infoLabel: {
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     fontSize: FontSizes.sm,
   },
   infoValue: {
-    color: Colors.text,
+    color: theme.text,
     fontSize: FontSizes.sm,
   },
   logoutButton: {
@@ -391,27 +394,27 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: Spacing.sm,
     paddingVertical: Spacing.md,
-    backgroundColor: `${Colors.warning}15`,
+    backgroundColor: `${theme.warning}15`,
     borderRadius: BorderRadius.lg,
     marginBottom: Spacing.lg,
   },
   logoutText: {
-    color: Colors.warning,
+    color: theme.warning,
     fontSize: FontSizes.md,
     fontWeight: FontWeights.semibold,
   },
   dangerCard: {
-    backgroundColor: `${Colors.error}08`,
-    borderColor: `${Colors.error}30`,
+    backgroundColor: `${theme.error}08`,
+    borderColor: `${theme.error}30`,
   },
   dangerTitle: {
-    color: Colors.error,
+    color: theme.error,
     fontSize: FontSizes.md,
     fontWeight: FontWeights.bold,
     marginBottom: Spacing.sm,
   },
   dangerText: {
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     fontSize: FontSizes.sm,
     marginBottom: Spacing.md,
   },
@@ -421,11 +424,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: Spacing.sm,
     paddingVertical: Spacing.md,
-    backgroundColor: `${Colors.error}15`,
+    backgroundColor: `${theme.error}15`,
     borderRadius: BorderRadius.md,
   },
   deleteText: {
-    color: Colors.error,
+    color: theme.error,
     fontSize: FontSizes.sm,
     fontWeight: FontWeights.semibold,
   },

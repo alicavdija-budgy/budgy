@@ -1423,3 +1423,141 @@ async def voice_parse(req: VoiceParseRequest):
         print(f"[voice] LLM failed, falling back to regex: {e}")
 
     return VoiceParseResponse(**_parse_voice_local(text))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# IAP v2 — App Store Server API (production-ready)
+# Endpoints:
+#   POST /api/iap/validate2        Validate a transactionId after a purchase
+#   POST /api/iap/restore          Restore: pass any known originalTransactionId
+#   POST /api/iap/webhook/apple    App Store Server Notifications V2 webhook
+#   GET  /api/iap/me               Current subscription record from Supabase
+# ─────────────────────────────────────────────────────────────────────────────
+import logging as _logging
+from fastapi import Request as _Request, Header as _Header, Query as _Query
+from apple_iap import (
+    IAPConfig as _IAPConfig,
+    validate_purchase as _validate_purchase,
+    restore_for as _restore_for,
+    parse_webhook_payload as _parse_webhook,
+)
+import supabase_admin as _supabase_admin
+
+_iap_log = _logging.getLogger("iap")
+_iap_log.setLevel(_logging.INFO)
+if not _iap_log.handlers:
+    _h = _logging.StreamHandler()
+    _h.setFormatter(_logging.Formatter("%(asctime)s [%(name)s] %(levelname)s %(message)s"))
+    _iap_log.addHandler(_h)
+
+_iap_cfg = _IAPConfig.from_env()
+print(f"[iap] startup config → {_iap_cfg.fingerprint()}")
+if not _iap_cfg.is_ready():
+    print(f"[iap] WARNING — missing env vars: {_iap_cfg.missing()} (endpoints will return 503)")
+if not _supabase_admin.is_configured():
+    print("[iap] WARNING — Supabase not configured (state will not persist server-side)")
+
+
+class IapValidate2Request(BaseModel):
+    transaction_id: str
+    user_id: Optional[str] = None
+    product_id: Optional[str] = None  # informational
+
+
+class IapRestoreRequest(BaseModel):
+    original_transaction_id: str
+    user_id: Optional[str] = None
+
+
+def _require_iap_ready():
+    if not _iap_cfg.is_ready():
+        raise HTTPException(status_code=503, detail={
+            "error": "iap_not_configured",
+            "missing": _iap_cfg.missing(),
+        })
+
+
+@app.post("/api/iap/validate2")
+async def iap_validate2(req: IapValidate2Request):
+    _require_iap_ready()
+    try:
+        state = await _validate_purchase(_iap_cfg, req.transaction_id)
+    except Exception as e:
+        _iap_log.exception("[iap-validation] unexpected: %s", e)
+        raise HTTPException(status_code=500, detail="validation_error")
+    if req.user_id and state.get("ok"):
+        await _supabase_admin.upsert_subscription(req.user_id, state)
+    return state
+
+
+@app.post("/api/iap/restore")
+async def iap_restore(req: IapRestoreRequest):
+    _require_iap_ready()
+    try:
+        state = await _restore_for(_iap_cfg, req.original_transaction_id)
+    except Exception as e:
+        _iap_log.exception("[iap-restore] unexpected: %s", e)
+        raise HTTPException(status_code=500, detail="restore_error")
+    if req.user_id and state.get("ok"):
+        await _supabase_admin.upsert_subscription(req.user_id, state)
+    return state
+
+
+@app.post("/api/iap/webhook/apple")
+async def iap_webhook_apple(request: _Request, secret: Optional[str] = _Query(None)):
+    """App Store Server Notifications V2 webhook.
+
+    Configure this URL in App Store Connect → My Apps → Budgy → App Store
+    Server Notifications, with `?secret=<IAP_WEBHOOK_SECRET>` appended to
+    authenticate incoming POSTs (V1). V2 will add proper JWS signature
+    verification with Apple's certificate chain.
+    """
+    if _iap_cfg.webhook_secret and secret != _iap_cfg.webhook_secret:
+        _iap_log.warning("[iap-webhook] rejected: bad/missing secret")
+        raise HTTPException(status_code=401, detail="bad_secret")
+
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    signed_payload = (body or {}).get("signedPayload", "")
+    if not signed_payload:
+        _iap_log.warning("[iap-webhook] empty signedPayload")
+        return {"ok": False, "error": "empty_payload"}
+
+    decoded = _parse_webhook(signed_payload)
+    n_type = decoded.get("notificationType")
+    txn = decoded.get("transactionInfo") or {}
+    orig = txn.get("originalTransactionId")
+    _iap_log.info("[iap-webhook] type=%s subtype=%s orig=%s", n_type, decoded.get("subtype"), (orig or "?")[:6] + "…")
+
+    # Re-derive state by calling Apple again — single source of truth.
+    if orig:
+        try:
+            state = await _restore_for(_iap_cfg, orig)
+            if state.get("ok"):
+                await _supabase_admin.upsert_by_original_transaction(orig, state)
+        except Exception as e:
+            _iap_log.exception("[iap-webhook] re-derive failed: %s", e)
+
+    return {"ok": True, "notificationType": n_type}
+
+
+@app.get("/api/iap/me")
+async def iap_me(user_id: str = _Query(...)):
+    rec = await _supabase_admin.fetch_subscription(user_id)
+    if not rec:
+        return {"is_pro": False, "subscription_state": "FREE"}
+    return rec
+
+
+@app.get("/api/iap/health")
+async def iap_health():
+    """Quick diagnostic — never returns secrets."""
+    return {
+        "iap_ready": _iap_cfg.is_ready(),
+        "supabase_ready": _supabase_admin.is_configured(),
+        "missing": _iap_cfg.missing(),
+        "sandbox": _iap_cfg.use_sandbox,
+        "products": [_iap_cfg.product_monthly or None, _iap_cfg.product_yearly or None],
+    }

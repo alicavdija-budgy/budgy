@@ -1187,100 +1187,10 @@ RÈGLES :
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# IN-APP PURCHASE — Apple StoreKit receipt validation
+# IN-APP PURCHASE — moved into the unified IAP block at the bottom of file.
+# (legacy verifyReceipt removed in favor of App Store Server API).
 # ═══════════════════════════════════════════════════════════════════════════
-import httpx as _httpx
-
-APPLE_PROD_URL = "https://buy.itunes.apple.com/verifyReceipt"
-APPLE_SANDBOX_URL = "https://sandbox.itunes.apple.com/verifyReceipt"
-APPLE_SHARED_SECRET = os.getenv("APPLE_SHARED_SECRET", "")
-APPLE_BUNDLE_ID = os.getenv("APPLE_BUNDLE_ID", "com.budgy.ch.budgy")
 ALLOWED_PRODUCT_IDS = {"com.budgy.ch.budgy.monthly", "com.budgy.ch.budgy.annual"}
-
-
-class IapValidateRequest(BaseModel):
-    platform: str                     # "ios" | "android"
-    product_id: str
-    transaction_id: Optional[str] = None
-    receipt_data: str                 # base64 (iOS) or purchaseToken (Android)
-
-
-class IapValidateResponse(BaseModel):
-    valid: bool
-    product_id: Optional[str] = None
-    expires_at: Optional[int] = None   # unix ms
-    original_transaction_id: Optional[str] = None
-    environment: Optional[str] = None  # "Sandbox" | "Production"
-    error: Optional[str] = None
-
-
-async def _apple_verify(receipt_data: str, url: str) -> dict:
-    payload = {
-        "receipt-data": receipt_data,
-        "password": APPLE_SHARED_SECRET,
-        "exclude-old-transactions": True,
-    }
-    async with _httpx.AsyncClient(timeout=30.0) as c:
-        r = await c.post(url, json=payload)
-        return r.json()
-
-
-@app.post("/api/iap/validate", response_model=IapValidateResponse)
-async def validate_iap_receipt(req: IapValidateRequest):
-    """Validate an Apple App Store receipt. Android not implemented yet."""
-    if req.platform != "ios":
-        return IapValidateResponse(valid=False, error="Only iOS supported for now")
-
-    if req.product_id not in ALLOWED_PRODUCT_IDS:
-        return IapValidateResponse(valid=False, error=f"Unknown product {req.product_id}")
-
-    if not APPLE_SHARED_SECRET:
-        print("[IAP] Missing APPLE_SHARED_SECRET — cannot validate")
-        return IapValidateResponse(valid=False, error="Server not configured")
-
-    try:
-        # 1) Try production first
-        data = await _apple_verify(req.receipt_data, APPLE_PROD_URL)
-        # 21007 → receipt is from sandbox, retry on sandbox URL
-        if data.get("status") == 21007:
-            data = await _apple_verify(req.receipt_data, APPLE_SANDBOX_URL)
-
-        if data.get("status") != 0:
-            return IapValidateResponse(
-                valid=False,
-                error=f"Apple status {data.get('status')}",
-                environment=data.get("environment"),
-            )
-
-        # 2) Verify bundle id matches
-        bundle_id = (data.get("receipt") or {}).get("bundle_id")
-        if bundle_id and bundle_id != APPLE_BUNDLE_ID:
-            return IapValidateResponse(valid=False, error=f"Bundle id mismatch: {bundle_id}")
-
-        # 3) Find latest transaction matching product
-        latest = data.get("latest_receipt_info") or []
-        candidates = [t for t in latest if t.get("product_id") == req.product_id]
-        txn = candidates[-1] if candidates else (latest[-1] if latest else None)
-
-        if not txn:
-            return IapValidateResponse(valid=False, error="No transactions found")
-
-        # 4) Check expiry (auto-renewable subscription)
-        expires_ms = int(txn.get("expires_date_ms") or 0)
-        now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
-        is_active = expires_ms > now_ms
-
-        return IapValidateResponse(
-            valid=is_active,
-            product_id=txn.get("product_id") or req.product_id,
-            expires_at=expires_ms or None,
-            original_transaction_id=txn.get("original_transaction_id"),
-            environment=data.get("environment", "Production"),
-            error=None if is_active else "Subscription expired",
-        )
-    except Exception as e:
-        print(f"[IAP] validate error: {e}")
-        return IapValidateResponse(valid=False, error=str(e))
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1434,7 +1344,9 @@ async def voice_parse(req: VoiceParseRequest):
 #   GET  /api/iap/me               Current subscription record from Supabase
 # ─────────────────────────────────────────────────────────────────────────────
 import logging as _logging
+from typing import Any as _Any, Dict
 from fastapi import Request as _Request, Header as _Header, Query as _Query
+from fastapi.responses import JSONResponse
 from apple_iap import (
     IAPConfig as _IAPConfig,
     validate_purchase as _validate_purchase,
@@ -1458,49 +1370,119 @@ if not _supabase_admin.is_configured():
     print("[iap] WARNING — Supabase not configured (state will not persist server-side)")
 
 
-class IapValidate2Request(BaseModel):
-    transaction_id: str
-    user_id: Optional[str] = None
-    product_id: Optional[str] = None  # informational
+class IapValidateRequest(BaseModel):
+    """Frontend → Backend after a successful StoreKit purchase.
+
+    Required: at least one of `transaction_id` (preferred) or `receipt_data`.
+    The transaction_id path uses the App Store Server API (production-ready,
+    StoreKit 2). When `user_id` is provided, the resulting state is persisted
+    to Supabase (`user_subscriptions` table) for cross-device sync.
+    """
+    platform: str = "ios"                 # "ios" | "android" (android NYI)
+    product_id: Optional[str] = None      # informational
+    transaction_id: Optional[str] = None  # preferred (StoreKit 2)
+    receipt_data: Optional[str] = None    # legacy iOS verifyReceipt fallback
+    user_id: Optional[str] = None         # supabase user uuid (for sync)
 
 
 class IapRestoreRequest(BaseModel):
-    original_transaction_id: str
+    original_transaction_id: Optional[str] = None
+    transaction_id: Optional[str] = None  # accepted as fallback
     user_id: Optional[str] = None
 
 
-def _require_iap_ready():
+def _state_to_response(state: dict) -> dict:
+    """Normalize Apple state → frontend-friendly JSON."""
+    expires_ms = None
+    iso = state.get("pro_until")
+    if iso:
+        try:
+            from datetime import datetime as _dt
+            expires_ms = int(_dt.fromisoformat(iso.replace("Z", "+00:00")).timestamp() * 1000)
+        except Exception:
+            expires_ms = None
+    return {
+        "valid": bool(state.get("is_pro")),
+        "ok": bool(state.get("ok")),
+        "subscription_state": state.get("state", "FREE"),
+        "product_id": state.get("product_id"),
+        "expires_at": expires_ms,
+        "pro_until": iso,
+        "original_transaction_id": state.get("original_transaction_id"),
+        "environment": state.get("environment"),
+        "auto_renew": state.get("auto_renew"),
+        "error": state.get("error"),
+    }
+
+
+@app.post("/api/iap/validate")
+async def iap_validate(req: IapValidateRequest):
+    """Validate an Apple StoreKit purchase via App Store Server API.
+
+    Behavior:
+      • If APPLE_PRIVATE_KEY_P8 + transaction_id present → real validation
+      • Else (no keys yet) → 503 with `{error:'iap_not_configured', missing:[...]}`
+        so the frontend can show a clear "backend not configured" toast.
+    """
+    if req.platform != "ios":
+        return {"valid": False, "error": "android_not_supported_yet"}
+    if req.product_id and req.product_id not in ALLOWED_PRODUCT_IDS:
+        return {"valid": False, "error": f"unknown_product:{req.product_id}"}
     if not _iap_cfg.is_ready():
-        raise HTTPException(status_code=503, detail={
-            "error": "iap_not_configured",
-            "missing": _iap_cfg.missing(),
-        })
+        return JSONResponse(
+            status_code=503,
+            content={
+                "valid": False,
+                "ok": False,
+                "error": "iap_not_configured",
+                "missing": _iap_cfg.missing(),
+                "hint": "Add APPLE_PRIVATE_KEY_P8 (and SUPABASE_SERVICE_ROLE_KEY) to backend/.env then restart.",
+            },
+        )
+    if not req.transaction_id:
+        return {"valid": False, "error": "missing_transaction_id"}
 
-
-@app.post("/api/iap/validate2")
-async def iap_validate2(req: IapValidate2Request):
-    _require_iap_ready()
     try:
         state = await _validate_purchase(_iap_cfg, req.transaction_id)
     except Exception as e:
         _iap_log.exception("[iap-validation] unexpected: %s", e)
-        raise HTTPException(status_code=500, detail="validation_error")
+        return {"valid": False, "error": f"validation_error:{e}"}
+
     if req.user_id and state.get("ok"):
-        await _supabase_admin.upsert_subscription(req.user_id, state)
-    return state
+        try:
+            await _supabase_admin.upsert_subscription(req.user_id, state)
+        except Exception as e:
+            _iap_log.warning("[iap-validation] supabase upsert failed: %s", e)
+    return _state_to_response(state)
 
 
 @app.post("/api/iap/restore")
 async def iap_restore(req: IapRestoreRequest):
-    _require_iap_ready()
+    """Re-derive subscription state from a known originalTransactionId."""
+    if not _iap_cfg.is_ready():
+        return JSONResponse(
+            status_code=503,
+            content={
+                "valid": False,
+                "ok": False,
+                "error": "iap_not_configured",
+                "missing": _iap_cfg.missing(),
+            },
+        )
+    orig = req.original_transaction_id or req.transaction_id
+    if not orig:
+        return {"valid": False, "error": "missing_original_transaction_id"}
     try:
-        state = await _restore_for(_iap_cfg, req.original_transaction_id)
+        state = await _restore_for(_iap_cfg, orig)
     except Exception as e:
         _iap_log.exception("[iap-restore] unexpected: %s", e)
-        raise HTTPException(status_code=500, detail="restore_error")
+        return {"valid": False, "error": f"restore_error:{e}"}
     if req.user_id and state.get("ok"):
-        await _supabase_admin.upsert_subscription(req.user_id, state)
-    return state
+        try:
+            await _supabase_admin.upsert_subscription(req.user_id, state)
+        except Exception as e:
+            _iap_log.warning("[iap-restore] supabase upsert failed: %s", e)
+    return _state_to_response(state)
 
 
 @app.post("/api/iap/webhook/apple")

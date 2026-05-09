@@ -1,9 +1,11 @@
 /**
- * GUARDIAN MONEY CHF - Subscription Screen
- * Budgy Pro subscription management
+ * BUDGY — Subscription Screen (More → Settings → Subscription)
+ *
+ * Shows current Pro state + Restore Purchases (real, backend-validated).
+ * Subscribe redirects to the dedicated /paywall screen.
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -11,65 +13,129 @@ import {
   StyleSheet,
   TouchableOpacity,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
+import { Platform } from 'react-native';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
-import { useStore } from '../../src/stores/useStore';
-import { Card, Button } from '../../src/components/ui';
+import { usePremiumStore } from '../../src/stores/usePremiumStore';
+import { useIAP } from '../../src/hooks/useIAP';
+import { Card } from '../../src/components/ui';
 
 const PRO_FEATURES = [
-  'Transactions illimitées',
-  'Export PDF A4 professionnel',
-  'Budgets envelopes',
-  'Transactions récurrentes',
-  'Portefeuille investissements',
-  'Rapports avancés',
-  '8 langues · multi-devises',
-  'Budgy IA conseiller',
-  'Budgy Score™',
-  'Projection 10 ans',
-  '3 piliers CH · FIRE tracker',
-  'Biométrie & sécurité',
+  'Coach IA illimité',
+  'Statistiques avancées & prévisions',
+  'Export PDF illimité',
+  'Cloud sync multi-appareils',
+  'Optimiseur d\'impôts',
+  'Factures & abonnements illimités',
+  'Investissements & FIRE tracker',
+  'Toutes les langues + thèmes',
 ];
 
 export default function SubscriptionScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { isPro, setPro } = useStore();
+  const isPro = usePremiumStore((s) => s.isPro || (s.trialEndsAt !== null && s.trialEndsAt > Date.now()));
+  const plan = usePremiumStore((s) => s.plan);
+  const trialEndsAt = usePremiumStore((s) => s.trialEndsAt);
+  const subscriptionStartedAt = usePremiumStore((s) => s.subscriptionStartedAt);
+  const iap = useIAP();
+  const [localBusy, setLocalBusy] = useState(false);
+  const busy = localBusy || iap.phase === 'restoring' || iap.phase === 'validating';
 
   const handleSubscribe = () => {
-    // In a real app, this would use RevenueCat
-    Alert.alert(
-      'Budgy Pro',
-      'Cette fonctionnalité sera disponible avec RevenueCat. Pour l\'instant, activez le mode Pro gratuitement.',
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Activer Pro',
-          onPress: () => {
-            setPro(true);
-            Alert.alert('⭐ Bienvenue dans Budgy Pro !', 'Toutes les fonctionnalités sont maintenant déverrouillées.');
-          },
-        },
-      ]
-    );
+    router.push('/paywall' as any);
   };
 
-  const handleRestore = () => {
-    Alert.alert('Restauration', 'Aucun achat précédent trouvé.');
+  const handleRestore = async () => {
+    if (busy) return;
+    if (!iap.available) {
+      Alert.alert(
+        'Restauration',
+        'Disponible uniquement dans l\'app iOS native (TestFlight ou App Store).',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+    setLocalBusy(true);
+    try {
+      try { if (Platform.OS !== 'web') await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+      const res = await iap.restore();
+      if (res.notConfigured) {
+        Alert.alert(
+          'Serveur non configuré',
+          'La validation des achats Apple n\'est pas encore activée côté serveur. Réessayez bientôt.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+      if (res.success) {
+        try { if (Platform.OS !== 'web') await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
+        Alert.alert(
+          '✓ Abonnement restauré',
+          `${res.restored} abonnement${(res.restored || 0) > 1 ? 's' : ''} actif${(res.restored || 0) > 1 ? 's' : ''} sur votre compte Apple.`
+        );
+      } else if (res.state === 'EXPIRED' || res.state === 'REFUNDED') {
+        Alert.alert(
+          'Abonnement expiré',
+          'Votre dernier abonnement n\'est plus actif. Vous pouvez vous réabonner depuis cet écran.'
+        );
+      } else {
+        Alert.alert('Restauration', 'Aucun abonnement actif trouvé sur ce compte Apple.');
+      }
+    } finally {
+      setLocalBusy(false);
+    }
+  };
+
+  const renderStatus = () => {
+    if (!isPro) {
+      return (
+        <Card style={styles.statusCardFree}>
+          <View style={styles.statusRow}>
+            <Ionicons name="lock-closed" size={22} color={Colors.textTertiary} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.statusTitle}>Plan gratuit</Text>
+              <Text style={styles.statusSub}>Essayez Budgy Pro 7 jours, sans engagement.</Text>
+            </View>
+          </View>
+        </Card>
+      );
+    }
+    const isTrial = trialEndsAt && trialEndsAt > Date.now() && !plan;
+    return (
+      <Card style={styles.statusCard}>
+        <View style={styles.statusRow}>
+          <Ionicons name="checkmark-circle" size={22} color={Colors.success} />
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.statusTitle, { color: Colors.success }]}>
+              {isTrial ? 'Essai gratuit actif' : `Budgy Pro ${plan === 'annual' ? '· Annuel' : plan === 'monthly' ? '· Mensuel' : ''}`}
+            </Text>
+            <Text style={styles.statusSub}>
+              {isTrial && trialEndsAt
+                ? `Se termine le ${new Date(trialEndsAt).toLocaleDateString('fr-CH')}`
+                : subscriptionStartedAt
+                ? `Depuis le ${new Date(subscriptionStartedAt).toLocaleDateString('fr-CH')}`
+                : 'Merci pour votre confiance !'}
+            </Text>
+          </View>
+        </View>
+      </Card>
+    );
   };
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={Colors.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>Budgy Pro</Text>
+        <Text style={styles.title}>Abonnement</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -78,77 +144,70 @@ export default function SubscriptionScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* Hero */}
         <View style={styles.heroContainer}>
           <LinearGradient
-            colors={Colors.gradientPrimary as [string, string]}
+            colors={['#34D399', '#22D3EE']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
             style={styles.heroGradient}
           >
-            <Ionicons name="flash" size={48} color={Colors.text} />
+            <Ionicons name="sparkles" size={44} color="#0E1530" />
           </LinearGradient>
           <Text style={styles.heroTitle}>Budgy Pro</Text>
-          <Text style={styles.heroPrice}>7.90 CHF/mois</Text>
-          <Text style={styles.heroSubtitle}>Tout déverrouiller</Text>
+          <Text style={styles.heroSubtitle}>Tout débloquer · 4.90 CHF/mois ou 39.90/an</Text>
         </View>
 
-        {/* Current Status */}
-        {isPro && (
-          <Card style={styles.statusCard}>
-            <View style={styles.statusRow}>
-              <Ionicons name="checkmark-circle" size={24} color={Colors.success} />
-              <Text style={styles.statusText}>Vous êtes abonné à Budgy Pro</Text>
-            </View>
-          </Card>
-        )}
+        {renderStatus()}
 
-        {/* Features */}
         <Card style={styles.featuresCard}>
-          <Text style={styles.featuresTitle}>Fonctionnalités incluses</Text>
+          <Text style={styles.featuresTitle}>Ce que Pro inclut</Text>
           {PRO_FEATURES.map((feature, idx) => (
             <View key={idx} style={styles.featureRow}>
-              <Ionicons name="checkmark" size={18} color={Colors.success} />
+              <Ionicons name="checkmark-circle" size={18} color={Colors.success} />
               <Text style={styles.featureText}>{feature}</Text>
             </View>
           ))}
         </Card>
 
-        {/* Comparison */}
-        <Card style={styles.comparisonCard}>
-          <View style={styles.comparisonRow}>
-            <View style={styles.comparisonCol}>
-              <Text style={styles.comparisonTitle}>Gratuit</Text>
-              <Text style={styles.comparisonItem}>5 transactions</Text>
-              <Text style={styles.comparisonItem}>2 contrats</Text>
-              <Text style={styles.comparisonItem}>1 appareil</Text>
-            </View>
-            <View style={[styles.comparisonCol, styles.comparisonColPro]}>
-              <Text style={[styles.comparisonTitle, { color: Colors.primary }]}>Pro</Text>
-              <Text style={styles.comparisonItem}>Illimité</Text>
-              <Text style={styles.comparisonItem}>Illimité</Text>
-              <Text style={styles.comparisonItem}>Multi-appareils</Text>
-            </View>
-          </View>
-        </Card>
-
-        {/* CTA */}
         {!isPro && (
-          <Button
-            title="Passer à Pro — 7.90 CHF/mois"
-            onPress={handleSubscribe}
-            fullWidth
-            size="lg"
-            style={{ marginBottom: Spacing.md }}
-          />
+          <TouchableOpacity onPress={handleSubscribe} activeOpacity={0.9} style={styles.subscribeWrap}>
+            <LinearGradient
+              colors={['#34D399', '#22D3EE']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.subscribeBtn}
+            >
+              <Ionicons name="rocket" size={18} color="#0E1530" />
+              <Text style={styles.subscribeText}>Découvrir les offres</Text>
+            </LinearGradient>
+          </TouchableOpacity>
         )}
 
-        <TouchableOpacity style={styles.restoreButton} onPress={handleRestore}>
-          <Text style={styles.restoreText}>Restaurer les achats</Text>
+        {/* Restore Purchases — backend-validated */}
+        <TouchableOpacity
+          style={[styles.restoreButton, busy && { opacity: 0.6 }]}
+          onPress={handleRestore}
+          disabled={busy}
+          activeOpacity={0.7}
+        >
+          {busy ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <ActivityIndicator size="small" color={Colors.text} />
+              <Text style={styles.restoreText}>
+                {iap.phase === 'restoring' ? 'Restauration en cours…' : 'Validation…'}
+              </Text>
+            </View>
+          ) : (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Ionicons name="refresh" size={16} color={Colors.text} />
+              <Text style={styles.restoreText}>Restaurer mes achats</Text>
+            </View>
+          )}
         </TouchableOpacity>
 
-        {/* Legal */}
         <Text style={styles.legalText}>
           L'abonnement se renouvelle automatiquement sauf annulation 24h avant la fin de la période.
-          Les achats sont facturés via votre compte App Store/Google Play.
+          Géré par votre compte Apple. Restaurez vos achats si vous changez d'appareil.
         </Text>
 
         <View style={{ height: 40 }} />
@@ -158,10 +217,7 @@ export default function SubscriptionScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
+  container: { flex: 1, backgroundColor: Colors.background },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -169,68 +225,34 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.md,
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: {
-    color: Colors.text,
-    fontSize: FontSizes.xl,
-    fontWeight: FontWeights.bold,
-  },
-  scroll: {
-    flex: 1,
-  },
-  content: {
-    padding: Spacing.lg,
-  },
-  heroContainer: {
-    alignItems: 'center',
-    marginBottom: Spacing.xxl,
-  },
+  backButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  title: { color: Colors.text, fontSize: FontSizes.xl, fontWeight: FontWeights.bold },
+  scroll: { flex: 1 },
+  content: { padding: Spacing.lg },
+  heroContainer: { alignItems: 'center', marginBottom: Spacing.xl },
   heroGradient: {
-    width: 96,
-    height: 96,
-    borderRadius: 28,
+    width: 88,
+    height: 88,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: Spacing.lg,
+    marginBottom: Spacing.md,
   },
-  heroTitle: {
-    color: Colors.text,
-    fontSize: FontSizes.xxl,
-    fontWeight: FontWeights.bold,
-  },
-  heroPrice: {
-    color: Colors.primary,
-    fontSize: FontSizes.xl,
-    fontWeight: FontWeights.black,
-    marginTop: Spacing.sm,
-  },
-  heroSubtitle: {
-    color: Colors.textSecondary,
-    fontSize: FontSizes.md,
-  },
+  heroTitle: { color: Colors.text, fontSize: FontSizes.xxl, fontWeight: FontWeights.bold },
+  heroSubtitle: { color: Colors.textSecondary, fontSize: FontSizes.sm, marginTop: 4, textAlign: 'center' },
   statusCard: {
     backgroundColor: `${Colors.success}15`,
     borderColor: `${Colors.success}30`,
     marginBottom: Spacing.lg,
   },
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.md,
-  },
-  statusText: {
-    color: Colors.success,
-    fontSize: FontSizes.md,
-    fontWeight: FontWeights.semibold,
-  },
-  featuresCard: {
+  statusCardFree: {
+    backgroundColor: 'rgba(255,255,255,0.04)',
     marginBottom: Spacing.lg,
   },
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
+  statusTitle: { color: Colors.text, fontSize: FontSizes.md, fontWeight: FontWeights.bold },
+  statusSub: { color: Colors.textSecondary, fontSize: FontSizes.xs, marginTop: 2 },
+  featuresCard: { marginBottom: Spacing.lg },
   featuresTitle: {
     color: Colors.text,
     fontSize: FontSizes.lg,
@@ -243,45 +265,27 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
     marginBottom: Spacing.sm,
   },
-  featureText: {
-    color: Colors.textSecondary,
-    fontSize: FontSizes.sm,
-  },
-  comparisonCard: {
-    marginBottom: Spacing.lg,
-  },
-  comparisonRow: {
+  featureText: { color: Colors.textSecondary, fontSize: FontSizes.sm, flex: 1 },
+  subscribeWrap: { borderRadius: BorderRadius.lg, overflow: 'hidden', marginBottom: Spacing.md },
+  subscribeBtn: {
     flexDirection: 'row',
-  },
-  comparisonCol: {
-    flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 16,
   },
-  comparisonColPro: {
-    backgroundColor: `${Colors.primary}10`,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-    marginLeft: Spacing.md,
-  },
-  comparisonTitle: {
-    color: Colors.text,
+  subscribeText: {
+    color: '#0E1530',
     fontSize: FontSizes.md,
-    fontWeight: FontWeights.bold,
-    marginBottom: Spacing.sm,
-  },
-  comparisonItem: {
-    color: Colors.textSecondary,
-    fontSize: FontSizes.sm,
-    marginBottom: Spacing.xs,
+    fontWeight: FontWeights.black,
+    letterSpacing: 0.3,
   },
   restoreButton: {
     alignItems: 'center',
     paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.md,
   },
-  restoreText: {
-    color: Colors.textTertiary,
-    fontSize: FontSizes.sm,
-  },
+  restoreText: { color: Colors.text, fontSize: FontSizes.sm, fontWeight: FontWeights.semibold },
   legalText: {
     color: Colors.textMuted,
     fontSize: FontSizes.xs,

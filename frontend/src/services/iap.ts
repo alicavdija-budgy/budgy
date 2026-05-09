@@ -4,7 +4,11 @@
  * Wraps the native IAP layer with:
  *   - Web / Expo Go safe fallback (no-op — keeps bundler happy)
  *   - Product fetching for the Budgy Pro subscription group
- *   - Purchase / Restore helpers that always validate receipts on our backend
+ *   - Backend-first validation/restore via FastAPI (/api/iap/*) which talks
+ *     to Apple's App Store Server API (StoreKit 2 / production-ready).
+ *   - Graceful behavior when the server isn't configured yet (returns
+ *     `{ ok:false, missing:[...] }` so the UI can show a clear message
+ *     instead of crashing or silently unlocking).
  *
  * Product IDs MUST match App Store Connect → Monetization → Subscriptions.
  */
@@ -22,9 +26,9 @@ export const IAP_SKUS: string[] = [IAP_PRODUCT_IDS.monthly, IAP_PRODUCT_IDS.annu
 
 export interface IapProduct {
   productId: string;
-  price: string;          // e.g. "4.90"
-  localizedPrice: string; // e.g. "CHF 4.90"
-  currency: string;       // e.g. "CHF"
+  price: string;
+  localizedPrice: string;
+  currency: string;
   title: string;
   description: string;
   subscriptionPeriodUnitIOS?: 'DAY' | 'WEEK' | 'MONTH' | 'YEAR';
@@ -34,7 +38,7 @@ export interface IapProduct {
 export interface IapPurchaseReceipt {
   productId: string;
   transactionId: string;
-  transactionReceipt: string; // base64 receipt for Apple validation
+  transactionReceipt: string;
   originalTransactionId?: string;
   purchaseTime: number;
 }
@@ -74,7 +78,6 @@ export async function initIap(): Promise<boolean> {
   try {
     await RNIap.initConnection();
     if (Platform.OS === 'android') {
-      // No-op on iOS — flushes pending consumables on Android
       await RNIap.flushFailedPurchasesCachedAsPendingAndroid?.();
     }
     return true;
@@ -121,11 +124,9 @@ export async function requestSubscription(
   try {
     const purchase = await RNIap.requestSubscription({
       sku: productId,
-      // On iOS we manually finish after backend validation
       andDangerouslyFinishTransactionAutomaticallyIOS: false,
     });
 
-    // Some platforms return an array
     const p = Array.isArray(purchase) ? purchase[0] : purchase;
     if (!p || !p.transactionReceipt) return null;
 
@@ -151,7 +152,7 @@ export async function finishTransaction(purchase: IapPurchaseReceipt): Promise<v
   }
 }
 
-// ── Restore ──────────────────────────────────────────────────────────────────
+// ── Restore (native) ─────────────────────────────────────────────────────────
 export async function getAvailableReceipts(): Promise<IapPurchaseReceipt[]> {
   if (!isIapAvailable()) return [];
   try {
@@ -169,36 +170,121 @@ export async function getAvailableReceipts(): Promise<IapPurchaseReceipt[]> {
   }
 }
 
-// ── Backend validation ───────────────────────────────────────────────────────
+// ── Backend (FastAPI) ────────────────────────────────────────────────────────
 const BACKEND_URL =
   process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:8001';
 
-export interface BackendValidationResult {
-  valid: boolean;
-  productId?: string;
-  expiresAt?: number;      // unix ms
-  originalTransactionId?: string;
-  environment?: 'Sandbox' | 'Production';
-  error?: string;
+export type SubscriptionState =
+  | 'FREE'
+  | 'PRO'
+  | 'EXPIRED'
+  | 'GRACE_PERIOD'
+  | 'REFUNDED';
+
+export interface BackendValidation {
+  ok: boolean;                 // true if Apple call succeeded
+  valid: boolean;              // true if subscription is currently Pro
+  subscription_state?: SubscriptionState;
+  product_id?: string | null;
+  expires_at?: number | null;
+  pro_until?: string | null;
+  original_transaction_id?: string | null;
+  environment?: 'Sandbox' | 'Production' | null;
+  auto_renew?: boolean | null;
+  error?: string | null;
+  // 503 helpers
+  not_configured?: boolean;
+  missing?: string[];
 }
 
-export async function validateReceiptOnBackend(
-  receipt: IapPurchaseReceipt
-): Promise<BackendValidationResult> {
+async function postJson(path: string, body: any): Promise<BackendValidation> {
   try {
-    const res = await fetch(`${BACKEND_URL}/api/iap/validate`, {
+    const res = await fetch(`${BACKEND_URL}${path}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        platform: Platform.OS,
-        product_id: receipt.productId,
-        transaction_id: receipt.transactionId,
-        receipt_data: receipt.transactionReceipt,
-      }),
+      body: JSON.stringify(body),
     });
-    const data = await res.json();
-    return data;
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 503 || data?.error === 'iap_not_configured') {
+      return {
+        ok: false,
+        valid: false,
+        not_configured: true,
+        missing: data?.missing || [],
+        error: 'iap_not_configured',
+      };
+    }
+    return {
+      ok: !!data.ok,
+      valid: !!data.valid,
+      subscription_state: data.subscription_state,
+      product_id: data.product_id ?? null,
+      expires_at: data.expires_at ?? null,
+      pro_until: data.pro_until ?? null,
+      original_transaction_id: data.original_transaction_id ?? null,
+      environment: data.environment ?? null,
+      auto_renew: data.auto_renew ?? null,
+      error: data.error ?? null,
+    };
   } catch (e: any) {
-    return { valid: false, error: e?.message || 'Network error' };
+    return {
+      ok: false,
+      valid: false,
+      error: e?.message || 'network_error',
+    };
+  }
+}
+
+export async function validateOnBackend(input: {
+  transaction_id: string;
+  product_id?: string;
+  user_id?: string;
+  receipt_data?: string;
+}): Promise<BackendValidation> {
+  return postJson('/api/iap/validate', {
+    platform: 'ios',
+    transaction_id: input.transaction_id,
+    product_id: input.product_id,
+    user_id: input.user_id,
+    receipt_data: input.receipt_data,
+  });
+}
+
+export async function restoreOnBackend(input: {
+  original_transaction_id: string;
+  user_id?: string;
+}): Promise<BackendValidation> {
+  return postJson('/api/iap/restore', {
+    original_transaction_id: input.original_transaction_id,
+    user_id: input.user_id,
+  });
+}
+
+export interface RemoteSubscription {
+  is_pro: boolean;
+  subscription_state: SubscriptionState;
+  pro_until?: string | null;
+  apple_product_id?: string | null;
+  apple_original_transaction_id?: string | null;
+}
+
+export async function fetchSubscriptionFromBackend(
+  user_id: string
+): Promise<RemoteSubscription | null> {
+  try {
+    const res = await fetch(
+      `${BACKEND_URL}/api/iap/me?user_id=${encodeURIComponent(user_id)}`
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    return {
+      is_pro: !!data.is_pro,
+      subscription_state: (data.subscription_state || 'FREE') as SubscriptionState,
+      pro_until: data.pro_until ?? null,
+      apple_product_id: data.apple_product_id ?? null,
+      apple_original_transaction_id: data.apple_original_transaction_id ?? null,
+    };
+  } catch {
+    return null;
   }
 }

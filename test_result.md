@@ -103,6 +103,18 @@
 #====================================================================================================
 
 backend:
+  - task: "POST /api/iap/validate (production-ready) - App Store Server API + Supabase sync"
+    implemented: true
+    working: "NA"
+    file: "app/backend/server.py, app/backend/apple_iap.py, app/backend/supabase_admin.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Renamed legacy verifyReceipt path → use App Store Server API (StoreKit 2). Endpoints: POST /api/iap/validate {transaction_id, product_id, user_id, receipt_data?} → ES256 JWT minted server-side, calls api.storekit-sandbox.itunes.apple.com (auto-fallback to prod), decodes signed JWS payload, derives state machine (FREE/PRO/EXPIRED/GRACE_PERIOD/REFUNDED), upserts public.user_subscriptions in Supabase if user_id given. Returns 503 with {error:'iap_not_configured', missing:[...]} when APPLE_PRIVATE_KEY_P8 absent — NEVER fakes success. POST /api/iap/restore for cross-device restore. POST /api/iap/webhook/apple for Apple Server Notifications V2 (decodes signedPayload, re-derives state, syncs Supabase). GET /api/iap/me?user_id= for client polling. GET /api/iap/health for diagnostics. CURRENT STATUS: backend code stable, replied 503 on /validate and /restore with proper missing list (verified via curl). Will become functional once user adds APPLE_PRIVATE_KEY_P8 + SUPABASE_SERVICE_ROLE_KEY in /app/backend/.env and runs supabase_iap_migration.sql."
+
   - task: "POST /api/scanner/ocr - Vision LLM receipt OCR"
     implemented: true
     working: true

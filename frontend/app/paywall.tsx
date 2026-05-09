@@ -177,7 +177,18 @@ export default function PaywallScreen() {
     if (iap.available) {
       const res = await iap.purchase(selected);
       setProcessing(false);
+
+      if (res.cancelled) return; // silent on cancel
+      if (res.notConfigured) {
+        Alert.alert(
+          'Validation en attente',
+          'Votre achat a été enregistré chez Apple, mais notre serveur n\'est pas encore configuré pour l\'activer. Réessayez dans quelques minutes via "Restaurer mes achats".',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
       if (res.success) {
+        try { if (Platform.OS !== 'web') await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
         Alert.alert(
           '✨ Bienvenue sur Budgy Pro',
           selected === 'annual'
@@ -185,8 +196,8 @@ export default function PaywallScreen() {
             : 'Votre abonnement mensuel est actif. Merci !',
           [{ text: 'Commencer', onPress: () => router.back() }]
         );
-      } else if (res.error && res.error !== 'cancelled') {
-        Alert.alert('Achat échoué', res.error);
+      } else {
+        Alert.alert('Achat échoué', res.error || 'Une erreur est survenue. Veuillez réessayer.');
       }
       return;
     }
@@ -206,16 +217,34 @@ export default function PaywallScreen() {
   const handleRestore = async () => {
     if (processing) return;
     if (!iap.available) {
-      Alert.alert('Restauration', 'Disponible uniquement dans l\'app iOS native.');
+      Alert.alert('Restauration', 'Disponible uniquement dans l\'app iOS native (TestFlight ou App Store).');
       return;
     }
     setProcessing(true);
     const res = await iap.restore();
     setProcessing(false);
+
+    if (res.notConfigured) {
+      Alert.alert(
+        'Serveur non configuré',
+        'La validation des achats Apple n\'est pas encore activée côté serveur. Réessayez bientôt.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
     if (res.success) {
-      Alert.alert('✓ Abonnement restauré', `${res.restored} abonnement(s) réactivé(s).`, [
-        { text: 'OK', onPress: () => router.back() },
-      ]);
+      try { if (Platform.OS !== 'web') await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
+      Alert.alert(
+        '✓ Abonnement restauré',
+        `${res.restored} abonnement${(res.restored || 0) > 1 ? 's' : ''} actif${(res.restored || 0) > 1 ? 's' : ''} sur votre compte Apple.`,
+        [{ text: 'Super', onPress: () => router.back() }]
+      );
+    } else if (res.state === 'EXPIRED' || res.state === 'REFUNDED') {
+      Alert.alert(
+        'Abonnement expiré',
+        'Votre dernier abonnement n\'est plus actif. Vous pouvez vous réabonner ci-dessous.',
+        [{ text: 'OK' }]
+      );
     } else {
       Alert.alert('Restauration', 'Aucun abonnement actif trouvé sur ce compte Apple.');
     }
@@ -400,7 +429,7 @@ export default function PaywallScreen() {
         />
         <TouchableOpacity
           onPress={handleTrial}
-          disabled={processing}
+          disabled={processing || iap.phase === 'restoring' || iap.phase === 'validating'}
           activeOpacity={0.85}
           style={styles.ctaWrap}
         >
@@ -412,14 +441,22 @@ export default function PaywallScreen() {
           >
             <Ionicons name="rocket" size={18} color="#0E1530" />
             <Text style={styles.ctaText}>
-              {processing ? '...' : t('paywall.tryFree')}
+              {iap.phase === 'restoring'
+                ? 'Restauration…'
+                : iap.phase === 'validating'
+                ? 'Validation…'
+                : iap.phase === 'purchasing'
+                ? 'Achat en cours…'
+                : processing
+                ? '…'
+                : t('paywall.tryFree')}
             </Text>
           </LinearGradient>
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={handlePurchase} disabled={processing}>
+        <TouchableOpacity onPress={handlePurchase} disabled={processing || iap.phase !== 'idle'}>
           <Text style={styles.buyNowLink}>
-            ou s’abonner directement — CHF {(selected === 'annual' ? PRICE_ANNUAL : PRICE_MONTHLY).toFixed(2)}
+            ou s'abonner directement — CHF {(selected === 'annual' ? PRICE_ANNUAL : PRICE_MONTHLY).toFixed(2)}
             {selected === 'annual' ? ' / an' : ' / mois'}
           </Text>
         </TouchableOpacity>

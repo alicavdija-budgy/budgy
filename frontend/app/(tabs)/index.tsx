@@ -39,6 +39,7 @@ import { CategoryIcon, getCategoryName, getCategoryColor } from '../../src/compo
 import AnimatedNumber from '../../src/components/AnimatedNumber';
 import PressScale from '../../src/components/PressScale';
 import FinancialHealthScore from '../../src/components/FinancialHealthScore';
+import AITimeline from '../../src/components/AITimeline';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -304,6 +305,9 @@ export default function HomeScreen() {
         <Animated.View entering={FadeInDown.duration(500).delay(150)}>
           <FinancialHealthScore />
         </Animated.View>
+
+        {/* ─── AI TIMELINE — proactive insights feed ─── */}
+        <AITimeline />
 
         {/* ─── 2 QUICK STATS ─── */}
         <Animated.View entering={FadeInDown.duration(500).delay(200)} style={styles.quickStats}>

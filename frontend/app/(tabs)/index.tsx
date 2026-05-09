@@ -21,9 +21,12 @@ import Animated, {
   FadeIn,
   useSharedValue,
   useAnimatedStyle,
+  useAnimatedScrollHandler,
   withRepeat,
   withTiming,
   Easing,
+  interpolate,
+  Extrapolation,
 } from 'react-native-reanimated';
 import { BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
 import { useTheme } from '../../src/hooks/useTheme';
@@ -127,14 +130,45 @@ export default function HomeScreen() {
 
   // Hero glow pulse
   const glow = useSharedValue(0.35);
+  // Scroll position for parallax
+  const scrollY = useSharedValue(0);
+  // Shimmer slide (subtle diagonal sheen across the hero, every ~7s)
+  const shimmer = useSharedValue(0);
+
   useEffect(() => {
     glow.value = withRepeat(
       withTiming(0.65, { duration: 2200, easing: Easing.inOut(Easing.quad) }),
       -1,
       true
     );
+    // Shimmer: 0 → 1 every 7s, then small pause via repeat reverse=false
+    shimmer.value = withRepeat(
+      withTiming(1, { duration: 7000, easing: Easing.inOut(Easing.cubic) }),
+      -1,
+      false
+    );
   }, []);
+
   const glowStyle = useAnimatedStyle(() => ({ opacity: glow.value }));
+
+  // Parallax: hero translates up slightly + scales down a hair on scroll
+  const heroParallaxStyle = useAnimatedStyle(() => {
+    const y = interpolate(scrollY.value, [0, 200], [0, -18], Extrapolation.CLAMP);
+    const s = interpolate(scrollY.value, [0, 200], [1, 0.97], Extrapolation.CLAMP);
+    const o = interpolate(scrollY.value, [0, 220], [1, 0.8], Extrapolation.CLAMP);
+    return { transform: [{ translateY: y }, { scale: s }], opacity: o };
+  });
+
+  // Shimmer translation across the hero (diagonal sheen)
+  const shimmerStyle = useAnimatedStyle(() => {
+    const x = interpolate(shimmer.value, [0, 0.45, 1], [-200, 360, 360]);
+    const o = interpolate(shimmer.value, [0, 0.2, 0.4, 0.45, 1], [0, 0.18, 0.18, 0, 0]);
+    return { opacity: o, transform: [{ translateX: x }, { rotate: '18deg' }] };
+  });
+
+  const onScrollHandler = useAnimatedScrollHandler((e) => {
+    scrollY.value = e.contentOffset.y;
+  });
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -152,10 +186,12 @@ export default function HomeScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <ScrollView
+      <Animated.ScrollView
         style={styles.scroll}
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 100 }]}
         showsVerticalScrollIndicator={false}
+        onScroll={onScrollHandler}
+        scrollEventThrottle={16}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.primary} />}
       >
         {/* ─── HEADER ─── */}
@@ -187,8 +223,9 @@ export default function HomeScreen() {
           </PressScale>
         </Animated.View>
 
-        {/* ─── HERO CARD (glow + gradient + count-up) ─── */}
-        <Animated.View entering={FadeInDown.duration(500).delay(100)} style={styles.heroWrap}>
+        {/* ─── HERO CARD (glow + gradient + count-up + shimmer + parallax) ─── */}
+        <Animated.View style={[styles.heroWrap, heroParallaxStyle]}>
+          <Animated.View entering={FadeInDown.duration(500).delay(100)}>
           {/* Animated glow behind */}
           <Animated.View style={[styles.heroGlow, glowStyle, { backgroundColor: C.gradientGlow }]} />
 
@@ -198,6 +235,23 @@ export default function HomeScreen() {
             end={{ x: 1, y: 1 }}
             style={styles.hero}
           >
+            {/* Subtle diagonal shimmer sheen — sweeps across every ~7s */}
+            <Animated.View pointerEvents="none" style={[styles.heroShimmer, shimmerStyle]}>
+              <LinearGradient
+                colors={[
+                  'rgba(255,255,255,0)',
+                  'rgba(255,255,255,0.18)',
+                  'rgba(255,255,255,0)',
+                ]}
+                start={{ x: 0, y: 0.5 }}
+                end={{ x: 1, y: 0.5 }}
+                style={StyleSheet.absoluteFill as any}
+              />
+            </Animated.View>
+
+            {/* Top inner highlight (subtle 3D glass top edge) */}
+            <View pointerEvents="none" style={styles.heroTopSheen} />
+
             <View style={styles.heroTop}>
               <Text style={styles.heroLabel}>{t('home.available')}</Text>
               <View style={[styles.proPill, { backgroundColor: isPro ? 'rgba(251, 191, 36, 0.95)' : 'rgba(255,255,255,0.22)' }]}>
@@ -243,6 +297,7 @@ export default function HomeScreen() {
               </View>
             </View>
           </LinearGradient>
+          </Animated.View>
         </Animated.View>
 
         {/* ─── FINANCIAL HEALTH SCORE (premium card, just below balance) ─── */}
@@ -349,24 +404,38 @@ export default function HomeScreen() {
           </Animated.View>
         )}
 
-        {/* ─── EMPTY STATE ─── */}
+        {/* ─── EMPTY STATE (premium onboarding card) ─── */}
         {transactions.length === 0 && incomes.length === 0 && (
           <Animated.View entering={FadeInDown.duration(500).delay(300)} style={styles.emptyBox}>
-            <LinearGradient colors={C.gradientPrimary as [string, string]} style={styles.emptyIcon}>
-              <Ionicons name="rocket" size={32} color="#FFF" />
+            <View style={styles.emptyTopSheen} pointerEvents="none" />
+            <LinearGradient
+              colors={C.gradientPrimary as [string, string]}
+              style={styles.emptyIcon}
+              start={{ x: 0.1, y: 0 }} end={{ x: 0.9, y: 1 }}
+            >
+              <Ionicons name="sparkles" size={28} color="#FFF" />
             </LinearGradient>
-            <Text style={styles.emptyTitle}>{t('home.emptyTitle')}</Text>
+            <Text style={styles.emptyEyebrow}>BUDGY · DÉMARRAGE</Text>
+            <Text style={styles.emptyTitle}>Votre premier pas vers la sérénité</Text>
             <Text style={styles.emptySub}>
-              {t('home.emptySub')}
+              Ajoutez votre premier revenu, et Budgy commence à analyser vos finances en silence.
             </Text>
             <PressScale haptic="medium" onPress={() => router.push('/more/incomes' as any)}>
-              <LinearGradient colors={C.gradientPrimary as [string, string]} style={styles.emptyBtn}>
-                <Text style={styles.emptyBtnText}>{t('home.emptyBtn')}</Text>
+              <LinearGradient
+                colors={C.gradientPrimary as [string, string]}
+                style={styles.emptyBtn}
+                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+              >
+                <Ionicons name="arrow-forward" size={14} color="#FFF" style={{ marginRight: 6 }} />
+                <Text style={styles.emptyBtnText}>Ajouter mon premier revenu</Text>
               </LinearGradient>
             </PressScale>
+            <Text style={styles.emptyHint}>
+              Vous pourrez aussi scanner un reçu, ou dicter une dépense à la voix.
+            </Text>
           </Animated.View>
         )}
-      </ScrollView>
+      </Animated.ScrollView>
     </View>
   );
 }
@@ -410,6 +479,20 @@ const makeStyles = (C: any) =>
     hero: {
       borderRadius: BorderRadius.xxl, padding: Spacing.xl,
       overflow: 'hidden',
+    },
+    // Diagonal shimmer band that sweeps across hero
+    heroShimmer: {
+      position: 'absolute',
+      top: -40, bottom: -40,
+      left: 0,
+      width: 90,
+      // The transform translateX/rotate drive the sweep
+    },
+    // Subtle top inner highlight (1px top edge sheen)
+    heroTopSheen: {
+      position: 'absolute',
+      top: 0, left: 0, right: 0, height: 1,
+      backgroundColor: 'rgba(255,255,255,0.18)',
     },
     heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     heroLabel: {
@@ -523,19 +606,39 @@ const makeStyles = (C: any) =>
       alignItems: 'center', paddingVertical: Spacing.xxxl, paddingHorizontal: Spacing.lg,
       backgroundColor: C.card, borderRadius: BorderRadius.xl, marginTop: Spacing.lg,
       borderWidth: 1, borderColor: C.cardBorder,
+      overflow: 'hidden',
+    },
+    emptyTopSheen: {
+      position: 'absolute', top: 0, left: 0, right: 0, height: 1,
+      backgroundColor: 'rgba(255,255,255,0.10)',
     },
     emptyIcon: {
       width: 72, height: 72, borderRadius: 36,
       alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.md,
+      shadowColor: '#16E0C6',
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0.45,
+      shadowRadius: 16,
     },
-    emptyTitle: { color: C.text, fontSize: FontSizes.lg, fontWeight: FontWeights.bold, marginBottom: Spacing.xs },
+    emptyEyebrow: {
+      color: 'rgba(255,255,255,0.45)',
+      fontSize: 10.5, fontWeight: '700', letterSpacing: 1.6,
+      marginBottom: 6,
+    },
+    emptyTitle: { color: C.text, fontSize: FontSizes.lg, fontWeight: FontWeights.bold, marginBottom: Spacing.xs, textAlign: 'center', letterSpacing: -0.3 },
     emptySub: {
       color: C.textSecondary, fontSize: FontSizes.sm, textAlign: 'center',
       marginBottom: Spacing.lg, lineHeight: 20,
+      paddingHorizontal: 4,
     },
     emptyBtn: {
       paddingVertical: Spacing.md, paddingHorizontal: Spacing.xl,
       borderRadius: BorderRadius.lg,
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     },
     emptyBtnText: { color: '#FFF', fontSize: FontSizes.sm, fontWeight: FontWeights.bold, letterSpacing: 0.3 },
+    emptyHint: {
+      color: 'rgba(255,255,255,0.4)', fontSize: 11.5,
+      textAlign: 'center', marginTop: Spacing.md, lineHeight: 16,
+    },
   });

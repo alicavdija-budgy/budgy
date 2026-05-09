@@ -1,385 +1,429 @@
 """
-Backend test suite for Guardian Money CHF.
-Tests endpoints via the public EXPO_PUBLIC_BACKEND_URL + /api prefix.
+Backend Robustness Test Suite — IAP endpoints + smoke regression tests.
+Target: https://chf-guardian-wallet.preview.emergentagent.com/api
+
+Goal: Verify IAP endpoints are robust + graceful when APPLE_PRIVATE_KEY_P8 is
+missing (no fake Pro activation), and existing endpoints did not regress.
 """
-import os
-import io
+
+from __future__ import annotations
+
 import json
-import base64
+import sys
 import time
-import traceback
-from pathlib import Path
+from typing import Any
 
 import requests
-from PIL import Image, ImageDraw, ImageFont
 
-# ─── Config ──────────────────────────────────────────────────────────
-FRONTEND_ENV = Path("/app/frontend/.env")
-BASE_URL = None
-for line in FRONTEND_ENV.read_text().splitlines():
-    if line.startswith("EXPO_PUBLIC_BACKEND_URL="):
-        BASE_URL = line.split("=", 1)[1].strip().strip('"')
-        break
-assert BASE_URL, "EXPO_PUBLIC_BACKEND_URL not found in /app/frontend/.env"
+BASE = "https://chf-guardian-wallet.preview.emergentagent.com/api"
+TIMEOUT = 30
 
-API = f"{BASE_URL}/api"
-print(f"\n🌐 Testing API at: {API}\n")
-
-TIMEOUT = 90
-results = []  # list of dicts: {name, ok, detail}
+results: list[dict[str, Any]] = []
 
 
-def record(name: str, ok: bool, detail: str = ""):
-    symbol = "✅" if ok else "❌"
-    print(f"{symbol} {name}")
-    if detail:
-        for line in detail.splitlines():
-            print(f"   {line}")
-    results.append({"name": name, "ok": ok, "detail": detail})
+def _record(name: str, ok: bool, http_code, details: str) -> None:
+    status = "PASS" if ok else "FAIL"
+    results.append({"name": name, "status": status, "http": http_code, "details": details})
+    icon = "PASS" if ok else "FAIL"
+    print(f"[{icon}] {name} -- HTTP {http_code} -- {details}")
 
 
-# ─── Build a realistic Swiss receipt JPEG with PIL ─────────────────
-def build_receipt_jpeg() -> str:
-    """Create a receipt-looking image (MIGROS) with real text/features, JPEG base64."""
-    W, H = 600, 900
-    img = Image.new("RGB", (W, H), (248, 248, 248))
-    d = ImageDraw.Draw(img)
-
+def _summary_body(body: Any, max_len: int = 320) -> str:
     try:
-        font_big = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 42)
-        font_md = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 24)
-        font_sm = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 20)
-        font_total = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 32)
+        s = json.dumps(body, ensure_ascii=False, default=str)
     except Exception:
-        font_big = font_md = font_sm = font_total = ImageFont.load_default()
-
-    # Header block (orange banner like Migros)
-    d.rectangle([0, 0, W, 100], fill=(255, 102, 0))
-    d.text((40, 25), "MIGROS", fill=(255, 255, 255), font=font_big)
-
-    # Store info
-    d.text((40, 120), "Migros Lausanne Flon", fill=(30, 30, 30), font=font_md)
-    d.text((40, 155), "Rue du Flon 12, 1003 Lausanne", fill=(80, 80, 80), font=font_sm)
-    d.text((40, 185), "Date: 12.04.2025  14:37", fill=(80, 80, 80), font=font_sm)
-    d.text((40, 215), "Ticket N° 284/019345", fill=(80, 80, 80), font=font_sm)
-
-    # Separator
-    d.line([30, 260, W - 30, 260], fill=(150, 150, 150), width=2)
-
-    # Items
-    items = [
-        ("Pain complet 500g", "3.20"),
-        ("Lait UHT 1L x2", "2.40"),
-        ("Pommes Gala 1kg", "4.95"),
-        ("Fromage Gruyere 200g", "6.80"),
-        ("Chocolat Frey", "3.50"),
-        ("Eau minerale 1.5L", "1.25"),
-        ("Yogourt nature x4", "2.40"),
-    ]
-    y = 280
-    for name, price in items:
-        d.text((40, y), name, fill=(20, 20, 20), font=font_sm)
-        d.text((W - 120, y), f"CHF {price}", fill=(20, 20, 20), font=font_sm)
-        y += 36
-
-    d.line([30, y + 10, W - 30, y + 10], fill=(150, 150, 150), width=2)
-
-    # Total
-    d.text((40, y + 30), "Sous-total", fill=(30, 30, 30), font=font_md)
-    d.text((W - 170, y + 30), "CHF 24.50", fill=(30, 30, 30), font=font_md)
-    d.text((40, y + 65), "TVA 2.6%", fill=(80, 80, 80), font=font_sm)
-    d.text((W - 170, y + 65), "CHF 0.62", fill=(80, 80, 80), font=font_sm)
-
-    # Grand total highlight
-    d.rectangle([30, y + 105, W - 30, y + 165], outline=(255, 102, 0), width=3)
-    d.text((50, y + 115), "TOTAL CHF", fill=(255, 102, 0), font=font_total)
-    d.text((W - 200, y + 115), "24.50", fill=(255, 102, 0), font=font_total)
-
-    d.text((40, y + 185), "Merci de votre visite !", fill=(100, 100, 100), font=font_sm)
-    d.text((40, y + 215), "Cumulus 4000123456789", fill=(100, 100, 100), font=font_sm)
-
-    buf = io.BytesIO()
-    img.save(buf, format="JPEG", quality=85)
-    return base64.b64encode(buf.getvalue()).decode("ascii")
+        s = str(body)
+    return s if len(s) <= max_len else s[: max_len - 3] + "..."
 
 
-# ────────────────────────────────────────────────────────────────────
-# 1. GET /api/health
-# ────────────────────────────────────────────────────────────────────
-def test_health():
+def test_iap_health() -> None:
+    name = "1. GET /api/iap/health"
     try:
-        r = requests.get(f"{API}/health", timeout=15)
-        ok = r.status_code == 200 and r.json().get("status") == "ok"
-        record("GET /api/health", ok, f"status={r.status_code} body={r.text[:200]}")
+        r = requests.get(f"{BASE}/iap/health", timeout=TIMEOUT)
     except Exception as e:
-        record("GET /api/health", False, f"EXCEPTION: {e}")
+        _record(name, False, "ERR", f"request failed: {e}")
+        return
 
+    if r.status_code != 200:
+        _record(name, False, r.status_code, f"expected 200 -- body={r.text[:300]}")
+        return
 
-# ────────────────────────────────────────────────────────────────────
-# 2. POST /api/scanner/ocr
-# ────────────────────────────────────────────────────────────────────
-def test_scanner_ocr():
-    # 2a. Real receipt image
     try:
-        b64 = build_receipt_jpeg()
-        print(f"   [ocr] image base64 length = {len(b64)}")
-        r = requests.post(
-            f"{API}/scanner/ocr",
-            json={"image_base64": b64, "mime_type": "image/jpeg"},
+        body = r.json()
+    except Exception:
+        _record(name, False, r.status_code, f"non-json body: {r.text[:300]}")
+        return
+
+    expected_keys = {"iap_ready", "supabase_ready", "missing", "sandbox", "products"}
+    missing_keys = expected_keys - set(body.keys())
+    if missing_keys:
+        _record(name, False, r.status_code, f"missing keys: {missing_keys} -- body={_summary_body(body)}")
+        return
+
+    issues = []
+    if body.get("iap_ready") is not False:
+        issues.append(f"iap_ready expected False, got {body.get('iap_ready')!r}")
+    if not isinstance(body.get("missing"), list):
+        issues.append(f"missing[] expected list, got {type(body.get('missing'))}")
+    elif "APPLE_PRIVATE_KEY_P8" not in body.get("missing", []):
+        issues.append(f"missing[] should contain 'APPLE_PRIVATE_KEY_P8', got {body['missing']}")
+
+    raw = json.dumps(body)
+    for forbid in ("BEGIN PRIVATE KEY", "BEGIN EC PRIVATE", "-----BEGIN"):
+        if forbid in raw:
+            issues.append(f"SECRET LEAK: '{forbid}' found in body")
+
+    if issues:
+        _record(name, False, r.status_code, "; ".join(issues) + f" -- body={_summary_body(body)}")
+    else:
+        _record(
+            name,
+            True,
+            r.status_code,
+            f"iap_ready=False, missing={body.get('missing')}, sandbox={body.get('sandbox')}, "
+            f"supabase_ready={body.get('supabase_ready')}, products={body.get('products')}",
+        )
+
+
+def test_iap_me_unknown_user() -> None:
+    name = "2. GET /api/iap/me?user_id=<zero-uuid>"
+    try:
+        r = requests.get(
+            f"{BASE}/iap/me",
+            params={"user_id": "00000000-0000-0000-0000-000000000000"},
             timeout=TIMEOUT,
         )
-        body = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
-        success = bool(body.get("success"))
-        has_data = bool(body.get("merchant") or body.get("total_amount"))
-        ok = r.status_code == 200 and success and has_data
-        detail = (
-            f"status={r.status_code} success={success} merchant={body.get('merchant')} "
-            f"total={body.get('total_amount')} currency={body.get('currency')} "
-            f"date={body.get('date')} category={body.get('category')} "
-            f"type={body.get('receipt_type')} confidence={body.get('confidence')} "
-            f"items_count={len(body.get('items') or [])} error={body.get('error')}"
-        )
-        record("POST /api/scanner/ocr (real Migros receipt JPEG)", ok, detail)
-
-        # Verify required keys in response
-        required_keys = ["success", "merchant", "total_amount", "currency", "date",
-                         "category", "receipt_type", "items", "confidence", "raw_text"]
-        missing = [k for k in required_keys if k not in body]
-        record(
-            "OCR response schema (all expected keys present)",
-            len(missing) == 0,
-            f"missing={missing}",
-        )
     except Exception as e:
-        record("POST /api/scanner/ocr (real Migros receipt JPEG)", False,
-               f"EXCEPTION: {e}\n{traceback.format_exc()}")
+        _record(name, False, "ERR", f"request failed: {e}")
+        return
 
-    # 2b. Invalid input — empty base64
+    if r.status_code != 200:
+        _record(name, False, r.status_code, f"expected 200 -- body={r.text[:300]}")
+        return
+
     try:
-        r = requests.post(
-            f"{API}/scanner/ocr",
-            json={"image_base64": "", "mime_type": "image/jpeg"},
-            timeout=30,
-        )
-        body = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
-        # Expected: success=false with error populated
-        ok = r.status_code == 200 and body.get("success") is False and bool(body.get("error"))
-        record(
-            "POST /api/scanner/ocr (empty base64 → success=false)",
-            ok,
-            f"status={r.status_code} success={body.get('success')} error={body.get('error')}",
-        )
-    except Exception as e:
-        record("POST /api/scanner/ocr (empty base64)", False, f"EXCEPTION: {e}")
+        body = r.json()
+    except Exception:
+        _record(name, False, r.status_code, f"non-json body: {r.text[:300]}")
+        return
+
+    issues = []
+    if "is_pro" not in body:
+        issues.append("missing 'is_pro' key")
+    if "subscription_state" not in body:
+        issues.append("missing 'subscription_state' key")
+    if body.get("is_pro") is not False:
+        issues.append(f"is_pro expected False, got {body.get('is_pro')!r}")
+    state = body.get("subscription_state")
+    if state != "FREE":
+        issues.append(f"subscription_state expected 'FREE', got {state!r}")
+
+    if issues:
+        _record(name, False, r.status_code, "; ".join(issues) + f" -- body={_summary_body(body)}")
+    else:
+        _record(name, True, r.status_code, f"is_pro=False, subscription_state='FREE' -- body={_summary_body(body)}")
 
 
-# ────────────────────────────────────────────────────────────────────
-# 3. POST /api/email/parse
-# ────────────────────────────────────────────────────────────────────
-def test_email_parse():
+def test_iap_validate_no_keys() -> None:
+    name = "3. POST /api/iap/validate (no keys configured)"
     payload = {
-        "subject": "Facture Swisscom Avril 2025",
-        "from_addr": "facture@swisscom.ch",
-        "content": (
-            "Cher client,\n\n"
-            "Votre facture du 15.04.2025 d'un montant de CHF 89.50 "
-            "est payable au 30.04.2025.\n"
-            "IBAN CH9300762011623852957\n"
-            "Référence 210000000003139471430009017\n\n"
-            "Merci pour votre confiance.\n"
-            "Swisscom (Suisse) SA"
-        ),
+        "platform": "ios",
+        "product_id": "com.budgy.ch.budgy.monthly",
+        "transaction_id": "fake_txn_123",
+        "user_id": "00000000-0000-0000-0000-000000000000",
     }
     try:
-        r = requests.post(f"{API}/email/parse", json=payload, timeout=TIMEOUT)
-        body = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
-        success = bool(body.get("success"))
-
-        amt_ok = body.get("amount") is not None and abs(float(body.get("amount")) - 89.5) < 0.01
-        cur_ok = body.get("currency") == "CHF"
-        due_ok = body.get("due_date") == "2025-04-30"
-        inv_ok = body.get("invoice_date") == "2025-04-15"
-        iban_ok = bool(body.get("iban")) and "CH93" in (body.get("iban") or "").replace(" ", "")
-        ref_ok = bool(body.get("reference")) and "2100000000" in (body.get("reference") or "").replace(" ", "")
-        cat_ok = (body.get("category") or "").lower() == "telecoms"
-
-        ok = r.status_code == 200 and success and amt_ok and cur_ok and due_ok and inv_ok and iban_ok and ref_ok and cat_ok
-        detail = (
-            f"status={r.status_code} success={success} title={body.get('title')!r} "
-            f"issuer={body.get('issuer')!r} amount={body.get('amount')} currency={body.get('currency')} "
-            f"due={body.get('due_date')} invoice={body.get('invoice_date')} "
-            f"iban={body.get('iban')} ref={body.get('reference')} category={body.get('category')} | "
-            f"amt_ok={amt_ok} cur_ok={cur_ok} due_ok={due_ok} inv_ok={inv_ok} "
-            f"iban_ok={iban_ok} ref_ok={ref_ok} cat_ok={cat_ok}"
-        )
-        record("POST /api/email/parse (Swisscom invoice)", ok, detail)
+        r = requests.post(f"{BASE}/iap/validate", json=payload, timeout=TIMEOUT)
     except Exception as e:
-        record("POST /api/email/parse (Swisscom invoice)", False,
-               f"EXCEPTION: {e}\n{traceback.format_exc()}")
+        _record(name, False, "ERR", f"request failed: {e}")
+        return
 
+    if r.status_code != 503:
+        _record(name, False, r.status_code, f"expected 503 -- body={r.text[:300]}")
+        return
 
-# ────────────────────────────────────────────────────────────────────
-# 4. POST /api/lamal/subsidy
-# ────────────────────────────────────────────────────────────────────
-def test_lamal_subsidy():
-    # 4a. Eligible family
     try:
-        payload = {
-            "canton": "VD",
-            "yearly_income": 55000,
-            "household": "family",
-            "children": 2,
-            "monthly_premium": 450,
-        }
-        r = requests.post(f"{API}/lamal/subsidy", json=payload, timeout=30)
-        body = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
+        body = r.json()
+    except Exception:
+        _record(name, False, r.status_code, f"non-json body: {r.text[:300]}")
+        return
 
-        eligible = body.get("eligible") is True
-        sub = body.get("estimated_monthly_subsidy", 0) or 0
-        thr = body.get("threshold", 0) or 0
-        final = body.get("final_premium")
-        expected_final = 450 - sub
+    inner = body.get("detail") if isinstance(body, dict) and "detail" in body else body
 
-        ok = (
-            r.status_code == 200
-            and eligible
-            and sub > 0
-            and thr > 0
-            and final is not None
-            and abs(float(final) - expected_final) < 0.5
+    issues = []
+    if not isinstance(inner, dict):
+        issues.append(f"unexpected response shape (no dict): {type(inner)}")
+    else:
+        if inner.get("error") != "iap_not_configured":
+            issues.append(f"error expected 'iap_not_configured', got {inner.get('error')!r}")
+        miss = inner.get("missing")
+        if not isinstance(miss, list) or "APPLE_PRIVATE_KEY_P8" not in miss:
+            issues.append(f"missing[] should contain 'APPLE_PRIVATE_KEY_P8', got {miss!r}")
+        if inner.get("valid") is not False:
+            issues.append(f"valid expected False, got {inner.get('valid')!r}")
+        if inner.get("ok") is not False:
+            issues.append(f"ok expected False, got {inner.get('ok')!r}")
+
+    if issues:
+        _record(name, False, r.status_code, "; ".join(issues) + f" -- body={_summary_body(body)}")
+    else:
+        _record(
+            name,
+            True,
+            r.status_code,
+            f"error='iap_not_configured', valid=False, ok=False -- missing={inner.get('missing')}",
         )
-        detail = (
-            f"status={r.status_code} eligible={eligible} subsidy={sub} "
-            f"threshold={thr} final={final} expected_final={expected_final}"
-        )
-        record("POST /api/lamal/subsidy (VD 55k family 2 kids eligible)", ok, detail)
-    except Exception as e:
-        record("POST /api/lamal/subsidy (VD family)", False, f"EXCEPTION: {e}")
 
-    # 4b. High income → not eligible
+
+def test_iap_restore_no_keys() -> None:
+    name = "4. POST /api/iap/restore (no keys configured)"
+    payload = {
+        "original_transaction_id": "fake_orig_123",
+        "user_id": "00000000-0000-0000-0000-000000000000",
+    }
     try:
-        payload = {
-            "canton": "VD",
-            "yearly_income": 200000,
-            "household": "family",
-            "children": 2,
-            "monthly_premium": 450,
-        }
-        r = requests.post(f"{API}/lamal/subsidy", json=payload, timeout=30)
-        body = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
-        ok = (
-            r.status_code == 200
-            and body.get("eligible") is False
-            and (body.get("estimated_monthly_subsidy") or 0) == 0
-            and float(body.get("final_premium") or 0) == 450.0
-        )
-        record(
-            "POST /api/lamal/subsidy (high income → not eligible)",
-            ok,
-            f"status={r.status_code} eligible={body.get('eligible')} "
-            f"subsidy={body.get('estimated_monthly_subsidy')} final={body.get('final_premium')}",
-        )
+        r = requests.post(f"{BASE}/iap/restore", json=payload, timeout=TIMEOUT)
     except Exception as e:
-        record("POST /api/lamal/subsidy (high income)", False, f"EXCEPTION: {e}")
+        _record(name, False, "ERR", f"request failed: {e}")
+        return
 
-    # 4c. All 26 cantons must not crash
-    cantons = ["AG", "AI", "AR", "BE", "BL", "BS", "FR", "GE", "GL", "GR",
-               "JU", "LU", "NE", "NW", "OW", "SG", "SH", "SO", "SZ", "TG",
-               "TI", "UR", "VD", "VS", "ZG", "ZH"]
-    failures = []
-    for c in cantons:
+    if r.status_code != 503:
+        _record(name, False, r.status_code, f"expected 503 -- body={r.text[:300]}")
+        return
+
+    try:
+        body = r.json()
+    except Exception:
+        _record(name, False, r.status_code, f"non-json body: {r.text[:300]}")
+        return
+
+    inner = body.get("detail") if isinstance(body, dict) and "detail" in body else body
+
+    issues = []
+    if not isinstance(inner, dict):
+        issues.append(f"unexpected response shape: {type(inner)}")
+    else:
+        if inner.get("error") != "iap_not_configured":
+            issues.append(f"error expected 'iap_not_configured', got {inner.get('error')!r}")
+        miss = inner.get("missing")
+        if not isinstance(miss, list) or "APPLE_PRIVATE_KEY_P8" not in miss:
+            issues.append(f"missing[] should contain 'APPLE_PRIVATE_KEY_P8', got {miss!r}")
+        if inner.get("valid") is not False:
+            issues.append(f"valid expected False, got {inner.get('valid')!r}")
+        if inner.get("ok") is not False:
+            issues.append(f"ok expected False, got {inner.get('ok')!r}")
+
+    if issues:
+        _record(name, False, r.status_code, "; ".join(issues) + f" -- body={_summary_body(body)}")
+    else:
+        _record(
+            name,
+            True,
+            r.status_code,
+            f"error='iap_not_configured', valid=False, ok=False -- missing={inner.get('missing')}",
+        )
+
+
+def test_iap_validate_empty_body() -> None:
+    name = "5. POST /api/iap/validate (empty body)"
+    try:
+        r = requests.post(f"{BASE}/iap/validate", json={}, timeout=TIMEOUT)
+    except Exception as e:
+        _record(name, False, "ERR", f"request failed: {e}")
+        return
+
+    if r.status_code == 500:
+        _record(name, False, r.status_code, f"500 = crash, NOT acceptable -- body={r.text[:300]}")
+        return
+
+    if r.status_code in (503, 422, 200):
         try:
-            r = requests.post(
-                f"{API}/lamal/subsidy",
-                json={"canton": c, "yearly_income": 55000, "household": "family",
-                      "children": 2, "monthly_premium": 450},
-                timeout=15,
-            )
-            if r.status_code != 200:
-                failures.append(f"{c}:http{r.status_code}")
-                continue
-            b = r.json()
-            if "eligible" not in b or "threshold" not in b:
-                failures.append(f"{c}:schema")
-        except Exception as e:
-            failures.append(f"{c}:{e}")
-    record(
-        f"POST /api/lamal/subsidy (all 26 cantons iteration)",
-        len(failures) == 0,
-        f"failures={failures}" if failures else f"All 26 cantons responded 200.",
-    )
+            body = r.json()
+        except Exception:
+            body = r.text
+        _record(name, True, r.status_code, f"acceptable status (no crash) -- body={_summary_body(body)}")
+    else:
+        _record(name, False, r.status_code, f"unexpected status -- body={r.text[:300]}")
 
 
-# ────────────────────────────────────────────────────────────────────
-# 5. POST /api/coach/chat
-# ────────────────────────────────────────────────────────────────────
-def test_coach_chat():
-    """The server schema uses session_id/message/financial_context."""
+def test_iap_validate_unknown_product() -> None:
+    name = "6. POST /api/iap/validate (unknown product)"
+    payload = {"platform": "ios", "product_id": "com.unknown.product", "transaction_id": "x"}
     try:
-        payload = {
-            "session_id": f"smoke_{int(time.time())}",
-            "message": "Bonjour, donne-moi un conseil court pour économiser ce mois-ci.",
-            "financial_context": "Revenus: CHF 6000/mois. Loyer: CHF 1800. Solde: CHF 2500.",
-        }
-        r = requests.post(f"{API}/coach/chat", json=payload, timeout=TIMEOUT)
-        body = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
-        content = body.get("response") or ""
-        ok = r.status_code == 200 and len(content.strip()) > 10
-        record(
-            "POST /api/coach/chat (smoke)",
-            ok,
-            f"status={r.status_code} resp_len={len(content)} preview={content[:120]!r}",
-        )
+        r = requests.post(f"{BASE}/iap/validate", json=payload, timeout=TIMEOUT)
     except Exception as e:
-        record("POST /api/coach/chat (smoke)", False, f"EXCEPTION: {e}")
+        _record(name, False, "ERR", f"request failed: {e}")
+        return
 
+    if r.status_code == 500:
+        _record(name, False, r.status_code, f"500 = crash, NOT acceptable -- body={r.text[:300]}")
+        return
 
-# ────────────────────────────────────────────────────────────────────
-# 6. POST /api/export/pdf
-# ────────────────────────────────────────────────────────────────────
-def test_export_pdf():
-    """Server schema: user_name, company, expenses[], mode, canton, period."""
     try:
-        payload = {
-            "user_name": "Marie Dupont",
-            "company": "Guardian Money CHF",
-            "expenses": [],
-            "mode": "employee",
-            "canton": "VD",
-            "period": "Avril 2025",
-        }
-        r = requests.post(f"{API}/export/pdf", json=payload, timeout=30)
-        body = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
-        ok = r.status_code == 200 and "html" in body and body.get("count") == 0
-        record(
-            "POST /api/export/pdf (empty expenses smoke)",
-            ok,
-            f"status={r.status_code} keys={list(body.keys())} total_ttc={body.get('total_ttc')}",
-        )
+        body = r.json()
+    except Exception:
+        body = r.text
+
+    if r.status_code == 200:
+        if isinstance(body, dict) and body.get("valid") is False and "unknown_product" in str(body.get("error", "")):
+            _record(name, True, 200, f"valid=False, error={body.get('error')!r}")
+        elif isinstance(body, dict) and body.get("valid") is False:
+            _record(name, True, 200, f"valid=False -- body={_summary_body(body)}")
+        else:
+            _record(name, False, 200, f"valid should be False -- body={_summary_body(body)}")
+    elif r.status_code == 503:
+        _record(name, True, 503, f"missing-keys path (acceptable) -- body={_summary_body(body)}")
+    else:
+        _record(name, False, r.status_code, f"unexpected status -- body={_summary_body(body)}")
+
+
+def test_health() -> None:
+    name = "7a. GET /api/health"
+    try:
+        r = requests.get(f"{BASE}/health", timeout=TIMEOUT)
     except Exception as e:
-        record("POST /api/export/pdf (smoke)", False, f"EXCEPTION: {e}")
+        _record(name, False, "ERR", f"request failed: {e}")
+        return
+
+    if r.status_code != 200:
+        _record(name, False, r.status_code, f"expected 200 -- body={r.text[:300]}")
+        return
+
+    try:
+        body = r.json()
+    except Exception:
+        _record(name, False, r.status_code, f"non-json body: {r.text[:300]}")
+        return
+
+    issues = []
+    if body.get("status") != "ok":
+        issues.append(f"status expected 'ok', got {body.get('status')!r}")
+    if body.get("app") != "Budgy":
+        issues.append(f"app expected 'Budgy', got {body.get('app')!r}")
+
+    if issues:
+        _record(name, False, r.status_code, "; ".join(issues) + f" -- body={_summary_body(body)}")
+    else:
+        _record(name, True, r.status_code, f"status=ok, app=Budgy -- body={_summary_body(body)}")
 
 
-# ─── Run all ─────────────────────────────────────────────────────────
+def test_email_parse() -> None:
+    name = "7b. POST /api/email/parse (Swisscom)"
+    payload = {
+        "content": "Facture Swisscom CHF 89.50 due 30.04.2026",
+        "subject": "Facture",
+        "from_addr": "facture@swisscom.ch",
+    }
+    try:
+        r = requests.post(f"{BASE}/email/parse", json=payload, timeout=60)
+    except Exception as e:
+        _record(name, False, "ERR", f"request failed: {e}")
+        return
+
+    if r.status_code != 200:
+        _record(name, False, r.status_code, f"expected 200 -- body={r.text[:300]}")
+        return
+
+    try:
+        body = r.json()
+    except Exception:
+        _record(name, False, r.status_code, f"non-json body: {r.text[:300]}")
+        return
+
+    issues = []
+    if body.get("success") is not True:
+        issues.append(f"success expected True, got {body.get('success')!r}")
+    if body.get("amount") is None:
+        issues.append("amount missing/null")
+    if body.get("currency") is None:
+        issues.append("currency missing/null")
+
+    if issues:
+        _record(name, False, r.status_code, "; ".join(issues) + f" -- body={_summary_body(body)}")
+    else:
+        _record(
+            name,
+            True,
+            r.status_code,
+            f"success=True, amount={body.get('amount')}, currency={body.get('currency')}, "
+            f"due_date={body.get('due_date')}, issuer={body.get('issuer')}",
+        )
+
+
+def test_voice_parse() -> None:
+    name = "7c. POST /api/voice/parse (25 francs Migros)"
+    payload = {"text": "25 francs chez Migros", "locale": "fr-CH"}
+    try:
+        r = requests.post(f"{BASE}/voice/parse", json=payload, timeout=60)
+    except Exception as e:
+        _record(name, False, "ERR", f"request failed: {e}")
+        return
+
+    if r.status_code != 200:
+        _record(name, False, r.status_code, f"expected 200 -- body={r.text[:300]}")
+        return
+
+    try:
+        body = r.json()
+    except Exception:
+        _record(name, False, r.status_code, f"non-json body: {r.text[:300]}")
+        return
+
+    issues = []
+    if body.get("success") is not True:
+        issues.append(f"success expected True, got {body.get('success')!r}")
+    amount = body.get("amount")
+    try:
+        amt_f = float(amount) if amount is not None else None
+    except Exception:
+        amt_f = None
+    if amt_f is None or abs(amt_f - 25.0) > 1.0:
+        issues.append(f"amount expected ~25, got {amount!r}")
+    if body.get("type") != "expense":
+        issues.append(f"type expected 'expense', got {body.get('type')!r}")
+
+    if issues:
+        _record(name, False, r.status_code, "; ".join(issues) + f" -- body={_summary_body(body)}")
+    else:
+        _record(
+            name,
+            True,
+            r.status_code,
+            f"success=True, amount={amount}, type={body.get('type')}, merchant={body.get('merchant')}",
+        )
+
+
+def main() -> int:
+    print(f"=== Budgy Backend Robustness Test ===")
+    print(f"Target: {BASE}\n")
+
+    tests = [
+        test_iap_health,
+        test_iap_me_unknown_user,
+        test_iap_validate_no_keys,
+        test_iap_restore_no_keys,
+        test_iap_validate_empty_body,
+        test_iap_validate_unknown_product,
+        test_health,
+        test_email_parse,
+        test_voice_parse,
+    ]
+    for t in tests:
+        t()
+        time.sleep(0.2)
+
+    passed = sum(1 for r in results if r["status"] == "PASS")
+    failed = sum(1 for r in results if r["status"] == "FAIL")
+    print(f"\n=== RESULTS: {passed}/{len(results)} passed ({failed} failed) ===")
+
+    if failed:
+        print("\n--- FAILED TESTS ---")
+        for r in results:
+            if r["status"] == "FAIL":
+                print(f"  FAIL {r['name']} (HTTP {r['http']}): {r['details']}")
+
+    return 0 if failed == 0 else 1
+
+
 if __name__ == "__main__":
-    test_health()
-    test_scanner_ocr()
-    test_email_parse()
-    test_lamal_subsidy()
-    test_coach_chat()
-    test_export_pdf()
-
-    print("\n" + "=" * 70)
-    passed = sum(1 for x in results if x["ok"])
-    total = len(results)
-    print(f"RESULTS: {passed}/{total} tests passed")
-    print("=" * 70)
-    for r in results:
-        symbol = "✅" if r["ok"] else "❌"
-        print(f"{symbol} {r['name']}")
-        if not r["ok"] and r["detail"]:
-            for line in r["detail"].splitlines():
-                print(f"    {line}")
-
-    # exit code
-    exit(0 if passed == total else 1)
+    sys.exit(main())

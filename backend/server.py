@@ -1281,3 +1281,132 @@ async def validate_iap_receipt(req: IapValidateRequest):
     except Exception as e:
         print(f"[IAP] validate error: {e}")
         return IapValidateResponse(valid=False, error=str(e))
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# VOICE — Parse natural language into a Budgy transaction
+# ═══════════════════════════════════════════════════════════════════════════
+import re as _re
+
+class VoiceParseRequest(BaseModel):
+    text: str
+    locale: Optional[str] = "fr-CH"
+
+
+class VoiceParseResponse(BaseModel):
+    success: bool
+    type: Optional[str] = None       # "expense" | "income" | "subscription"
+    amount: Optional[float] = None
+    currency: Optional[str] = "CHF"
+    merchant: Optional[str] = None
+    category: Optional[str] = None
+    recurring: Optional[bool] = False
+    date: Optional[str] = None
+    confidence: Optional[float] = 0.0
+    error: Optional[str] = None
+
+
+def _parse_voice_local(text: str) -> dict:
+    """Lightweight regex-based parser as fallback or when LLM unavailable."""
+    t = (text or "").lower().strip()
+    if not t:
+        return {"success": False, "error": "Texte vide"}
+
+    # Type
+    income_kw = ["salaire", "reçu", "revenu", "j'ai reçu", "remboursement"]
+    sub_kw = ["abonnement", "netflix", "spotify", "icloud", "youtube", "prime", "disney"]
+    is_income = any(k in t for k in income_kw)
+    is_sub = any(k in t for k in sub_kw)
+    typ = "income" if is_income else ("subscription" if is_sub else "expense")
+
+    # Amount: number followed by francs/chf/€
+    amount = None
+    m = _re.search(r"(\d+[\.,]?\d*)\s*(francs?|chf|fr\.?|€)", t)
+    if not m:
+        m = _re.search(r"(\d+[\.,]?\d*)", t)
+    if m:
+        try:
+            amount = float(m.group(1).replace(",", "."))
+        except Exception:
+            amount = None
+
+    # Merchant: capture word after "chez", "à", "de" (last) or known brand
+    merchant = None
+    mm = _re.search(r"chez ([a-zàâäéèêëïîôöùûüÿç&'\- 0-9]+)", t)
+    if mm:
+        merchant = mm.group(1).strip().split(" ")[0].title()
+    else:
+        for brand in ["migros", "coop", "denner", "aldi", "lidl", "manor", "ikea",
+                      "swisscom", "salt", "sunrise", "css", "helsana",
+                      "netflix", "spotify", "icloud", "youtube", "disney"]:
+            if brand in t:
+                merchant = brand.title()
+                break
+
+    # Category guess
+    cat_map = {
+        "alimentation": ["migros", "coop", "denner", "aldi", "lidl", "course"],
+        "essence": ["essence", "carburant", "shell", "bp", "tamoil", "agrola", "coop pronto", "migrol"],
+        "transport": ["cff", "ffs", "tpf", "tl", "tpg", "transport"],
+        "abonnement": sub_kw,
+        "telephone": ["swisscom", "salt", "sunrise"],
+        "assurance": ["css", "helsana", "concordia", "groupe mutuel", "visana", "swica"],
+        "loyer": ["loyer", "rent", "régie"],
+        "salaire": ["salaire"],
+    }
+    category = None
+    for cat, words in cat_map.items():
+        if any(w in t for w in words):
+            category = cat
+            break
+
+    return {
+        "success": amount is not None,
+        "type": typ,
+        "amount": amount,
+        "currency": "CHF",
+        "merchant": merchant,
+        "category": category,
+        "recurring": is_sub,
+        "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        "confidence": 0.6 if amount is not None else 0.2,
+        "error": None if amount is not None else "Aucun montant détecté",
+    }
+
+
+@app.post("/api/voice/parse", response_model=VoiceParseResponse)
+async def voice_parse(req: VoiceParseRequest):
+    """Parse a natural language sentence into a structured transaction."""
+    text = (req.text or "").strip()
+    print(f"[voice] parsing: {text[:120]}")
+    if not text:
+        return VoiceParseResponse(success=False, error="Texte vide")
+
+    # Try LLM if available, fallback to regex
+    try:
+        if EMERGENT_LLM_KEY:
+            chat = LlmChat(
+                api_key=EMERGENT_LLM_KEY,
+                session_id=f"voice-{uuid.uuid4()}",
+                system_message=(
+                    "Tu es un parseur financier suisse. Extrait STRICTEMENT en JSON: "
+                    "{type:'expense'|'income'|'subscription', amount: number, "
+                    "currency:'CHF', merchant: string|null, category: string|null, "
+                    "recurring: bool, date: 'YYYY-MM-DD'}. Pas d'autre texte."
+                ),
+            ).with_model("openai", "gpt-4o-mini")
+            r = await chat.send_message(UserMessage(text=f"Phrase: {text}"))
+            content = r if isinstance(r, str) else getattr(r, "content", "")
+            # Extract JSON
+            jm = _re.search(r"\{.*\}", content, _re.DOTALL)
+            if jm:
+                import json as _json
+                parsed = _json.loads(jm.group(0))
+                parsed["success"] = bool(parsed.get("amount"))
+                parsed["confidence"] = 0.9 if parsed["success"] else 0.4
+                print(f"[voice] LLM parsed: {parsed}")
+                return VoiceParseResponse(**parsed)
+    except Exception as e:
+        print(f"[voice] LLM failed, falling back to regex: {e}")
+
+    return VoiceParseResponse(**_parse_voice_local(text))

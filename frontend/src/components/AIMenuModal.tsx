@@ -29,6 +29,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import VoiceInputModal from './VoiceInputModal';
+import { useTranslation } from '../hooks/useTranslation';
 
 const ACCENT = '#16E0C6';
 const ACCENT_SOFT = 'rgba(22, 224, 198, 0.18)';
@@ -36,62 +37,62 @@ const ACCENT_SOFT = 'rgba(22, 224, 198, 0.18)';
 interface ActionItem {
   id: string;
   icon: keyof typeof Ionicons.glyphMap;
-  title: string;
-  subtitle: string;
+  titleKey: string;
+  subtitleKey: string;
   /** A route to push, or 'voice' to open the voice modal instead. */
   route: string;
   /** Soft tint for the icon orb */
   tint?: string;
-  badge?: string;
+  badgeKey?: string;
 }
 
 const ACTIONS: ActionItem[] = [
   {
     id: 'voice',
     icon: 'mic-outline',
-    title: 'Ajouter par voix',
-    subtitle: 'Dictez une dépense ou un revenu',
+    titleKey: 'aimenu.voice',
+    subtitleKey: 'aimenu.voiceSub',
     route: 'voice',
     tint: 'rgba(22, 224, 198, 0.20)',
-    badge: 'NEW',
+    badgeKey: 'aimenu.voiceBadge',
   },
   {
     id: 'analyse-finances',
     icon: 'analytics-outline',
-    title: 'Analyse finances',
-    subtitle: 'Vue complète de vos finances',
+    titleKey: 'aimenu.analyse',
+    subtitleKey: 'aimenu.analyseSub',
     route: '/more/ai-optimizer',
     tint: 'rgba(22, 224, 198, 0.14)',
   },
   {
     id: 'scanner',
     icon: 'scan-outline',
-    title: 'Scanner intelligent',
-    subtitle: 'Scan IA de factures & reçus',
+    titleKey: 'aimenu.scanner',
+    subtitleKey: 'aimenu.scannerSub',
     route: '/scanner-modal',
     tint: 'rgba(116, 178, 255, 0.14)',
   },
   {
     id: 'abonnements',
     icon: 'sync-outline',
-    title: 'Analyse abonnements',
-    subtitle: 'Détecte vos abonnements récurrents',
+    titleKey: 'aimenu.subs',
+    subtitleKey: 'aimenu.subsSub',
     route: '/more/recurring',
     tint: 'rgba(190, 153, 255, 0.14)',
   },
   {
     id: 'conseils',
     icon: 'sparkles-outline',
-    title: 'Conseils économies',
-    subtitle: 'Recommandations IA personnalisées',
+    titleKey: 'aimenu.advice',
+    subtitleKey: 'aimenu.adviceSub',
     route: '/more/predict',
     tint: 'rgba(255, 200, 122, 0.14)',
   },
   {
     id: 'factures',
     icon: 'document-text-outline',
-    title: 'Analyse factures',
-    subtitle: 'Extraction & insights IA',
+    titleKey: 'aimenu.invoices',
+    subtitleKey: 'aimenu.invoicesSub',
     route: '/more/email-import',
     tint: 'rgba(255, 130, 184, 0.14)',
   },
@@ -105,6 +106,7 @@ interface Props {
 export default function AIMenuModal({ visible, onClose }: Props) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   const [voiceOpen, setVoiceOpen] = useState(false);
 
   // One Animated.Value per row for staggered entrance
@@ -226,7 +228,7 @@ export default function AIMenuModal({ visible, onClose }: Props) {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.eyebrow}>BUDGY · AI</Text>
-              <Text style={styles.title}>Que souhaitez-vous analyser ?</Text>
+              <Text style={styles.title}>{t('aimenu.title')}</Text>
             </View>
             <Pressable onPress={onClose} hitSlop={14} style={styles.closeBtn}>
               <Ionicons name="close" size={20} color="rgba(255,255,255,0.7)" />
@@ -254,7 +256,7 @@ export default function AIMenuModal({ visible, onClose }: Props) {
                   onPress={() => handleAction(item)}
                   style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
                   accessibilityRole="button"
-                  accessibilityLabel={item.title}
+                  accessibilityLabel={t(item.titleKey)}
                 >
                   <LinearGradient
                     colors={['rgba(255,255,255,0.045)', 'rgba(255,255,255,0.015)']}
@@ -267,14 +269,14 @@ export default function AIMenuModal({ visible, onClose }: Props) {
                   </View>
                   <View style={{ flex: 1 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <Text style={styles.cardTitle}>{item.title}</Text>
-                      {item.badge ? (
+                      <Text style={styles.cardTitle}>{t(item.titleKey)}</Text>
+                      {item.badgeKey ? (
                         <View style={styles.badge}>
-                          <Text style={styles.badgeTxt}>{item.badge}</Text>
+                          <Text style={styles.badgeTxt}>{t(item.badgeKey)}</Text>
                         </View>
                       ) : null}
                     </View>
-                    <Text style={styles.cardSubtitle}>{item.subtitle}</Text>
+                    <Text style={styles.cardSubtitle}>{t(item.subtitleKey)}</Text>
                   </View>
                   <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.35)" />
                 </Pressable>

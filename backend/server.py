@@ -1386,16 +1386,26 @@ async def voice_parse(req: VoiceParseRequest):
     try:
         if EMERGENT_LLM_KEY:
             today_iso = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            # Locale → user-language hint for the LLM
+            locale = (getattr(req, "locale", None) or "fr-CH").lower()
+            lang_hint = "French (Swiss French)"
+            if locale.startswith("en"): lang_hint = "English"
+            elif locale.startswith("de"): lang_hint = "German (Swiss German welcome)"
+            elif locale.startswith("it"): lang_hint = "Italian"
+            elif locale.startswith("es"): lang_hint = "Spanish"
+            elif locale.startswith("pt"): lang_hint = "Portuguese"
+            elif locale.startswith("sq"): lang_hint = "Albanian"
             chat = LlmChat(
                 api_key=EMERGENT_LLM_KEY,
                 session_id=f"voice-{uuid.uuid4()}",
                 system_message=(
-                    f"Tu es un parseur financier suisse. La date du jour est {today_iso}. "
-                    "Extrait STRICTEMENT en JSON: "
+                    f"You are a Swiss financial parser. Today is {today_iso}. "
+                    f"The user speaks {lang_hint}. Understand the sentence in that language, "
+                    "but ALWAYS reply in STRICT JSON with these EXACT English keys (do not translate keys): "
                     "{type:'expense'|'income'|'subscription', amount: number, "
                     "currency:'CHF', merchant: string|null, category: string|null, "
-                    f"recurring: bool, date: 'YYYY-MM-DD' (utilise {today_iso} sauf si une autre date est explicitement mentionnée)"
-                    "}. Pas d'autre texte."
+                    f"recurring: bool, date: 'YYYY-MM-DD' (default to {today_iso} unless explicitly stated)"
+                    "}. The merchant and category VALUES may stay in the user language. No other text outside JSON."
                 ),
             ).with_model("openai", "gpt-4o-mini")
             r = await chat.send_message(UserMessage(text=f"Phrase: {text}"))

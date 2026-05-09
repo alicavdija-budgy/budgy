@@ -17,6 +17,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Animated, Easing, Platform } from 'react-native';
 import Svg, { Circle, Defs, LinearGradient as SvgGrad, Stop } from 'react-native-svg';
 import { useStore } from '../stores/useStore';
+import { useTheme, useThemeMode } from '../hooks/useTheme';
+import { useTranslation } from '../hooks/useTranslation';
 
 const SIZE = 140;
 const STROKE = 10;
@@ -34,14 +36,6 @@ const TONE_COLOR: Record<Tone, { primary: string; soft: string; halo: string }> 
   neutral: { primary: '#9aa0aa', soft: '#cfd2d8', halo: 'rgba(255, 255, 255, 0.06)' },
 };
 
-const TONE_LABEL: Record<Tone, string> = {
-  good:    'Excellent',
-  stable:  'Stable',
-  mid:     'Attention',
-  low:     'Risque',
-  neutral: 'Démarrage',
-};
-
 function clamp(v: number, min = 0, max = 100) {
   return Math.max(min, Math.min(max, v));
 }
@@ -55,11 +49,12 @@ interface ComputeInput {
   hasAnyData: boolean;
 }
 
+interface InsightSig { key: string; params?: Record<string, any>; weight: number }
+
 interface ComputeOutput {
   score: number;
   tone: Tone;
-  label: string;
-  insights: string[];
+  insights: InsightSig[];
   ratio: number;
   monthsCovered: number;
 }
@@ -71,87 +66,64 @@ function computeScore(input: ComputeInput): ComputeOutput {
     return {
       score: 50,
       tone: 'neutral',
-      label: TONE_LABEL.neutral,
       insights: [
-        'Ajoutez votre premier revenu pour démarrer',
-        'Budgy peut analyser vos finances',
+        { key: 'health.emptyAdd1', weight: 100 },
+        { key: 'health.emptyAdd2', weight: 90 },
       ],
       ratio: 0,
       monthsCovered: 0,
     };
   }
 
-  // Savings rate (40 pts)
   const ratio = monthlyIncome > 0 ? (monthlyIncome - monthlyExpenses) / monthlyIncome : 0;
   const ratePts = clamp(ratio * 100, -20, 40);
-
-  // Subscription discipline (20 pts)
   const subsPts =
     subsCount === 0 ? 20 :
     subsCount <= 4 ? 16 :
     subsCount <= 8 ? 10 :
     subsCount <= 12 ? 4 : 0;
-
-  // Fixed-cost ratio (20 pts) — penalize if fixed costs > 50% of income
   const fixedRatio = monthlyIncome > 0 ? fixedCosts / monthlyIncome : 1;
   const loadPts = clamp(20 - Math.max(0, fixedRatio - 0.4) * 80, 0, 20);
-
-  // Emergency fund (20 pts) — savings >= 3 monthly expenses → full
   const monthsCovered = monthlyExpenses > 0 ? savings / monthlyExpenses : 0;
   const fundPts = clamp((monthsCovered / 3) * 20, 0, 20);
 
   const score = Math.round(clamp(ratePts + subsPts + loadPts + fundPts, 0, 100));
 
-  // ── Smart insights (max 3, ordered by relevance) ────────────────────────
-  const insights: { msg: string; weight: number }[] = [];
+  const insights: InsightSig[] = [];
 
   if (ratio < 0) {
-    insights.push({ msg: 'Vos dépenses dépassent vos revenus', weight: 100 });
+    insights.push({ key: 'health.insOver', weight: 100 });
   } else if (ratio >= 0.3) {
-    insights.push({ msg: `Bonne capacité d'épargne (${Math.round(ratio * 100)}%)`, weight: 70 });
+    insights.push({ key: 'health.insSavingsGood', params: { p: Math.round(ratio * 100) }, weight: 70 });
   } else if (ratio >= 0.1) {
-    insights.push({ msg: 'Vos dépenses sont stables ce mois', weight: 50 });
+    insights.push({ key: 'health.insStable', weight: 50 });
   } else if (ratio > 0) {
-    insights.push({ msg: 'Marge d\'épargne très réduite', weight: 80 });
+    insights.push({ key: 'health.insMargin', weight: 80 });
   }
 
-  if (fixedRatio > 0.6) {
-    insights.push({ msg: 'Charges fixes élevées (>60% du revenu)', weight: 90 });
-  } else if (fixedRatio > 0.4) {
-    insights.push({ msg: 'Charges fixes maîtrisées', weight: 30 });
-  }
+  if (fixedRatio > 0.6) insights.push({ key: 'health.insFixedHigh', weight: 90 });
+  else if (fixedRatio > 0.4) insights.push({ key: 'health.insFixedOk', weight: 30 });
 
-  if (subsCount >= 10) {
-    insights.push({ msg: `${subsCount} abonnements actifs — pensez à auditer`, weight: 75 });
-  } else if (subsCount >= 6) {
-    insights.push({ msg: `${subsCount} abonnements — surveillez les doublons`, weight: 40 });
-  }
+  if (subsCount >= 10) insights.push({ key: 'health.insSubsHigh', params: { n: subsCount }, weight: 75 });
+  else if (subsCount >= 6) insights.push({ key: 'health.insSubsMid', params: { n: subsCount }, weight: 40 });
 
-  if (monthsCovered >= 3) {
-    insights.push({ msg: `Fonds d'urgence solide (${monthsCovered.toFixed(1)} mois)`, weight: 35 });
-  } else if (monthsCovered >= 1) {
-    insights.push({ msg: `Fonds d'urgence : ${monthsCovered.toFixed(1)} mois couverts`, weight: 60 });
-  } else if (monthlyExpenses > 0) {
-    insights.push({ msg: 'Fonds d\'urgence < 1 mois de dépenses', weight: 85 });
-  }
+  if (monthsCovered >= 3) insights.push({ key: 'health.insFundGood', params: { m: monthsCovered.toFixed(1) }, weight: 35 });
+  else if (monthsCovered >= 1) insights.push({ key: 'health.insFundMid', params: { m: monthsCovered.toFixed(1) }, weight: 60 });
+  else if (monthlyExpenses > 0) insights.push({ key: 'health.insFundLow', weight: 85 });
 
-  if (score >= 85) {
-    insights.unshift({ msg: 'Excellent équilibre financier', weight: 95 });
-  } else if (score >= 70) {
-    insights.unshift({ msg: 'Profil financier sain', weight: 60 });
-  }
+  if (score >= 85) insights.unshift({ key: 'health.insExcellent', weight: 95 });
+  else if (score >= 70) insights.unshift({ key: 'health.insSane', weight: 60 });
 
   insights.sort((a, b) => b.weight - a.weight);
-  const top = insights.slice(0, 3).map((i) => i.msg);
+  const top = insights.slice(0, 3);
 
-  // ── Tone ─────────────────────────────────────────────────────────────────
   let tone: Tone = 'mid';
   if (score >= 80) tone = 'good';
   else if (score >= 65) tone = 'stable';
   else if (score >= 45) tone = 'mid';
   else tone = 'low';
 
-  return { score, tone, label: TONE_LABEL[tone], insights: top, ratio, monthsCovered };
+  return { score, tone, insights: top, ratio, monthsCovered };
 }
 
 // ── Lightweight count-up text (smooth, no flicker) ─────────────────────────
@@ -166,7 +138,6 @@ function ScoreCounter({ value, color }: { value: number; color: string }) {
     const duration = 1100;
     const tick = (now: number) => {
       const t = Math.min(1, (now - start) / duration);
-      // ease-out cubic
       const eased = 1 - Math.pow(1 - t, 3);
       const v = Math.round(from + (value - from) * eased);
       setDisplay(v);
@@ -177,7 +148,7 @@ function ScoreCounter({ value, color }: { value: number; color: string }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
-  return <Text style={[styles.scoreNum, { color }]}>{display}</Text>;
+  return <Text style={{ fontSize: 36, fontWeight: '800', letterSpacing: -1, color }}>{display}</Text>;
 }
 
 // ── Component ──────────────────────────────────────────────────────────────
@@ -186,8 +157,21 @@ export default function FinancialHealthScore() {
   const incomes = useStore((s) => s.incomes);
   const recurring = useStore((s) => s.recurringExpenses);
   const goals = useStore((s) => s.savingsGoals);
+  const theme = useTheme();
+  const themeMode = useThemeMode();
+  const isLight = themeMode === 'light';
+  const { t } = useTranslation();
+  const styles = makeStyles(theme, isLight);
 
-  const { score, tone, label, insights } = useMemo(() => {
+  const TONE_LABEL_KEY: Record<Tone, string> = {
+    good: 'health.toneExcellent',
+    stable: 'health.toneStable',
+    mid: 'health.toneMid',
+    low: 'health.toneLow',
+    neutral: 'health.toneNeutral',
+  };
+
+  const { score, tone, insights } = useMemo(() => {
     const now = new Date();
     const year = now.getFullYear();
     const month = now.getMonth();
@@ -270,18 +254,17 @@ export default function FinancialHealthScore() {
 
       <View style={styles.header}>
         <View>
-          <Text style={styles.eyebrow}>BUDGY · SCORE</Text>
-          <Text style={styles.title}>Santé financière</Text>
+          <Text style={styles.eyebrow}>{t('health.eyebrow')}</Text>
+          <Text style={styles.title}>{t('health.title')}</Text>
         </View>
         <View style={[styles.toneChip, { borderColor: palette.primary, backgroundColor: palette.halo }]}>
           <View style={[styles.toneDot, { backgroundColor: palette.primary }]} />
-          <Text style={[styles.toneTxt, { color: palette.primary }]}>{label}</Text>
+          <Text style={[styles.toneTxt, { color: palette.primary }]}>{t(TONE_LABEL_KEY[tone])}</Text>
         </View>
       </View>
 
       <View style={styles.body}>
         <View style={styles.gauge}>
-          {/* soft halo behind the ring */}
           <Animated.View
             pointerEvents="none"
             style={[
@@ -300,12 +283,10 @@ export default function FinancialHealthScore() {
                 <Stop offset="1" stopColor={palette.primary} stopOpacity="1" />
               </SvgGrad>
             </Defs>
-            {/* Track */}
             <Circle
               cx={SIZE / 2} cy={SIZE / 2} r={RADIUS}
-              stroke="rgba(255,255,255,0.06)" strokeWidth={STROKE} fill="none"
+              stroke={isLight ? 'rgba(15, 23, 42, 0.08)' : 'rgba(255,255,255,0.06)'} strokeWidth={STROKE} fill="none"
             />
-            {/* Progress */}
             <AnimatedCircle
               cx={SIZE / 2} cy={SIZE / 2} r={RADIUS}
               stroke="url(#g)" strokeWidth={STROKE} fill="none"
@@ -316,58 +297,59 @@ export default function FinancialHealthScore() {
             />
           </Svg>
           <View style={styles.gaugeCenter} pointerEvents="none">
-            <ScoreCounter value={score} color="#fff" />
+            <ScoreCounter value={score} color={theme.text} />
             <Text style={styles.scoreOf}>/ 100</Text>
           </View>
         </View>
 
         <View style={styles.signals}>
-          {(insights.length ? insights : ['Ajoutez vos premières transactions pour un diagnostic complet.'])
+          {(insights.length
+            ? insights
+            : [{ key: 'health.emptyHint' } as InsightSig]
+          )
             .slice(0, 3)
             .map((s, i) => (
               <View key={i} style={styles.signalRow}>
                 <View style={[styles.bullet, { backgroundColor: palette.primary }]} />
-                <Text style={styles.signalTxt}>{s}</Text>
+                <Text style={styles.signalTxt}>{t(s.key, s.params)}</Text>
               </View>
             ))}
         </View>
       </View>
 
-      <Text style={styles.foot}>Calculé localement · mis à jour en temps réel</Text>
+      <Text style={styles.foot}>{t('health.foot')}</Text>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (theme: any, isLight: boolean) => StyleSheet.create({
   card: {
-    backgroundColor: 'rgba(255,255,255,0.025)',
+    backgroundColor: isLight ? theme.card : 'rgba(255,255,255,0.025)',
     borderRadius: 22,
     padding: 18,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: theme.cardBorder,
     marginBottom: 16,
     overflow: 'hidden',
-    // Premium soft drop shadow
     ...Platform.select({
       ios: {
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.25,
+        shadowOpacity: isLight ? 0.06 : 0.25,
         shadowRadius: 18,
       },
       android: { elevation: 4 },
       default: {},
     }),
   },
-  // Subtle inner top highlight (gives a touch of glass / depth)
   cardSheen: {
     position: 'absolute',
     top: 0, left: 0, right: 0, height: 1,
-    backgroundColor: 'rgba(255,255,255,0.10)',
+    backgroundColor: isLight ? 'rgba(15, 23, 42, 0.06)' : 'rgba(255,255,255,0.10)',
   },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
-  eyebrow: { color: 'rgba(255,255,255,0.5)', fontSize: 11, fontWeight: '600', letterSpacing: 1.4, marginBottom: 2 },
-  title: { color: '#fff', fontSize: 17, fontWeight: '700' },
+  eyebrow: { color: theme.textTertiary, fontSize: 11, fontWeight: '600', letterSpacing: 1.4, marginBottom: 2 },
+  title: { color: theme.text, fontSize: 17, fontWeight: '700' },
   toneChip: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999,
@@ -383,7 +365,7 @@ const styles = StyleSheet.create({
     ...Platform.select({
       ios: {
         shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.6,
+        shadowOpacity: isLight ? 0.35 : 0.6,
         shadowRadius: 22,
       },
       default: {},
@@ -391,10 +373,10 @@ const styles = StyleSheet.create({
   },
   gaugeCenter: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
   scoreNum: { fontSize: 36, fontWeight: '800', letterSpacing: -1 },
-  scoreOf: { color: 'rgba(255,255,255,0.45)', fontSize: 11, marginTop: -2 },
+  scoreOf: { color: theme.textTertiary, fontSize: 11, marginTop: -2 },
   signals: { flex: 1, gap: 6 },
   signalRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   bullet: { width: 6, height: 6, borderRadius: 3, marginTop: 6 },
-  signalTxt: { color: 'rgba(255,255,255,0.82)', fontSize: 12.5, lineHeight: 17, flex: 1 },
-  foot: { color: 'rgba(255,255,255,0.32)', fontSize: 10, marginTop: 12, textAlign: 'right' },
+  signalTxt: { color: theme.textSecondary, fontSize: 12.5, lineHeight: 17, flex: 1 },
+  foot: { color: theme.textMuted, fontSize: 10, marginTop: 12, textAlign: 'right' },
 });

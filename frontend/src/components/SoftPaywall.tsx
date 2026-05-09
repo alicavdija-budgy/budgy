@@ -25,40 +25,44 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import { useTranslation } from '../hooks/useTranslation';
 
 const ACCENT = '#16E0C6';
 
 interface Props {
   visible: boolean;
   onClose: () => void;
-  /** Short pitch shown as the main title. */
+  /** Short pitch shown as the main title (already translated). */
   title?: string;
-  /** Sub-pitch — explains the value, not the limitation. */
+  /** Sub-pitch — explains the value, not the limitation (already translated). */
   subtitle?: string;
-  /** Bullet list of premium benefits highlighted in this paywall. */
+  /** Bullet list of premium benefits (already translated strings). */
   benefits?: string[];
   /** Override the icon shown in the header orb. */
   icon?: keyof typeof Ionicons.glyphMap;
 }
 
-const DEFAULT_BENEFITS = [
-  'Voice IA illimité',
-  'Timeline IA complète',
-  'OCR illimité & PDF complets',
-  'Suivi du portefeuille',
-  'Sync multi-appareils',
-];
-
 export default function SoftPaywall({
   visible,
   onClose,
-  title = 'Passez à Budgy Pro',
-  subtitle = 'Débloquez tous les outils intelligents pour reprendre le contrôle.',
-  benefits = DEFAULT_BENEFITS,
+  title,
+  subtitle,
+  benefits,
   icon = 'sparkles',
 }: Props) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
+
+  const finalTitle = title ?? t('softPaywall.defaultTitle');
+  const finalSubtitle = subtitle ?? t('softPaywall.defaultSubtitle');
+  const finalBenefits = benefits ?? [
+    t('softPaywall.benefit1'),
+    t('softPaywall.benefit2'),
+    t('softPaywall.benefit3'),
+    t('softPaywall.benefit4'),
+    t('softPaywall.benefit5'),
+  ];
 
   const goPaywall = () => {
     if (Platform.OS !== 'web') {
@@ -93,7 +97,7 @@ export default function SoftPaywall({
           <View style={styles.handle} />
 
           <View style={styles.header}>
-            <Text style={styles.eyebrow}>BUDGY · PREMIUM</Text>
+            <Text style={styles.eyebrow}>{t('softPaywall.eyebrow')}</Text>
             <Pressable onPress={onClose} hitSlop={14} style={styles.closeBtn}>
               <Ionicons name="close" size={18} color="rgba(255,255,255,0.7)" />
             </Pressable>
@@ -112,12 +116,12 @@ export default function SoftPaywall({
             </View>
           </View>
 
-          <Text style={styles.title}>{title}</Text>
-          <Text style={styles.subtitle}>{subtitle}</Text>
+          <Text style={styles.title}>{finalTitle}</Text>
+          <Text style={styles.subtitle}>{finalSubtitle}</Text>
 
           {/* Benefits list */}
           <View style={styles.benefits}>
-            {benefits.slice(0, 6).map((b, i) => (
+            {finalBenefits.slice(0, 6).map((b, i) => (
               <View key={i} style={styles.benefitRow}>
                 <View style={styles.checkOrb}>
                   <Ionicons name="checkmark" size={11} color={ACCENT} />
@@ -135,11 +139,11 @@ export default function SoftPaywall({
               style={StyleSheet.absoluteFill as any}
             />
             <Ionicons name="sparkles" size={15} color="#0F1115" />
-            <Text style={styles.ctaTxt}>Voir les offres Pro</Text>
+            <Text style={styles.ctaTxt}>{t('softPaywall.cta')}</Text>
           </Pressable>
 
           <Pressable onPress={onClose} hitSlop={10}>
-            <Text style={styles.later}>Plus tard</Text>
+            <Text style={styles.later}>{t('softPaywall.later')}</Text>
           </Pressable>
         </Pressable>
       </View>

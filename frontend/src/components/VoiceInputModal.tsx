@@ -47,10 +47,22 @@ import {
   type SttSupport,
 } from '../utils/speech';
 import { useUsageQuota, useIsPremium } from '../services/featureFlags';
+import { useTranslation } from '../hooks/useTranslation';
 import SoftPaywall from './SoftPaywall';
 
 const ACCENT = '#16E0C6';
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
+
+// App language → Speech-recognition locale (Swiss-first, with sensible fallbacks)
+const LANG_TO_STT_LOCALE: Record<string, string> = {
+  fr: 'fr-CH',
+  en: 'en-US',
+  de: 'de-CH',
+  it: 'it-CH',
+  es: 'es-ES',
+  pt: 'pt-PT',
+  sq: 'sq-AL',
+};
 
 type Phase = 'idle' | 'listening' | 'parsing' | 'preview' | 'saving';
 
@@ -72,12 +84,7 @@ interface ParsedTxn {
   error?: string;
 }
 
-const SUGGESTIONS = [
-  '« Ajoute une dépense de 25 francs chez Migros »',
-  '« J\'ai reçu 3200 francs de salaire »',
-  '« Abonnement Netflix 18 francs »',
-  '« 120 francs d\'essence »',
-];
+const SUGG_KEYS = ['voice.sugg1', 'voice.sugg2', 'voice.sugg3', 'voice.sugg4'];
 
 function lightHaptic() {
   if (Platform.OS === 'web') return;
@@ -103,6 +110,8 @@ export default function VoiceInputModal({ visible, onClose }: Props) {
   const inputRef = useRef<TextInput>(null);
   const isPremium = useIsPremium();
   const quota = useUsageQuota('voice');
+  const { t, lang } = useTranslation();
+  const sttLocale = LANG_TO_STT_LOCALE[lang] || 'fr-CH';
   // Latest transcript (avoid stale closure when stop fires)
   const transcriptRef = useRef<string>('');
   // Auto-parse when STT ends naturally
@@ -244,10 +253,7 @@ export default function VoiceInputModal({ visible, onClose }: Props) {
     if (!perm.granted) {
       setPermError(perm.reason || 'Permission micro refusée');
       setPhase('idle');
-      Alert.alert(
-        'Permission requise',
-        'Activez le micro et la reconnaissance vocale pour Budgy dans Réglages.',
-      );
+      Alert.alert(t('voice.errPermission'), t('voice.errPermMsg'));
       return;
     }
 
@@ -256,7 +262,6 @@ export default function VoiceInputModal({ visible, onClose }: Props) {
       {
         onState: (p) => {
           if (p === 'stopped') {
-            // Native engine ended — auto-parse if we have text
             const captured = (transcriptRef.current || '').trim();
             if (shouldAutoParseRef.current && captured.length >= 2) {
               setTimeout(() => tryParse(captured), 80);
@@ -268,22 +273,20 @@ export default function VoiceInputModal({ visible, onClose }: Props) {
             setPhase('idle');
           }
         },
-        onPartial: (t) => {
-          transcriptRef.current = t;
-          setText(t);
+        onPartial: (txt) => {
+          transcriptRef.current = txt;
+          setText(txt);
         },
-        onFinal: (t) => {
-          transcriptRef.current = t;
-          setText(t);
+        onFinal: (txt) => {
+          transcriptRef.current = txt;
+          setText(txt);
         },
         onError: (msg) => {
           console.warn('[voice] STT error:', msg);
           setPermError(msg);
         },
         onVolume: (level) => {
-          // Drive the waveform bars with real audio level
           wave.forEach((w, i) => {
-            // Each bar reacts to a slightly different range for organic motion
             const offset = 0.1 * Math.sin((Date.now() / 120) + i);
             const target = Math.max(0.25, Math.min(1, level + offset));
             Animated.timing(w, {
@@ -295,7 +298,7 @@ export default function VoiceInputModal({ visible, onClose }: Props) {
           });
         },
       },
-      { lang: 'fr-CH', continuous: true, interim: true },
+      { lang: sttLocale, continuous: true, interim: true },
     );
   };
 
@@ -349,7 +352,7 @@ export default function VoiceInputModal({ visible, onClose }: Props) {
       const res = await fetch(`${BACKEND_URL}/api/voice/parse`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: input, locale: 'fr-CH' }),
+        body: JSON.stringify({ text: input, locale: sttLocale }),
       });
       const data: ParsedTxn = await res.json();
       setParsed(data);
@@ -358,15 +361,12 @@ export default function VoiceInputModal({ visible, onClose }: Props) {
         setPhase('preview');
       } else {
         setPhase('idle');
-        Alert.alert(
-          'Je n\'ai pas compris',
-          data.error || 'Réessayez avec une phrase comme « 25 francs chez Migros »',
-        );
+        Alert.alert(t('voice.errNotUnderstood'), data.error || t('voice.errNotUnderstoodMsg'));
       }
     } catch (e: any) {
       console.error('[voice] error:', e);
       setPhase('idle');
-      Alert.alert('Connexion impossible', 'Vérifiez votre connexion Internet et réessayez.');
+      Alert.alert(t('voice.errNetwork'), t('voice.errNetworkMsg'));
     }
   };
 
@@ -428,26 +428,26 @@ export default function VoiceInputModal({ visible, onClose }: Props) {
     } catch (e) {
       console.error('[voice] save error:', e);
       setPhase('preview');
-      Alert.alert('Erreur', 'Impossible d\'enregistrer cette transaction.');
+      Alert.alert(t('voice.errSave'), t('voice.errSaveMsg'));
     }
   };
 
   // ── State labels ────────────────────────────────────────
   const stateLabel =
-    phase === 'listening' ? 'Je vous écoute…' :
-    phase === 'parsing' ? 'Analyse en cours…' :
-    phase === 'saving' ? 'Enregistrement…' :
-    phase === 'preview' ? 'Voici ce que j\'ai entendu' :
-    'Appuyer pour parler';
+    phase === 'listening' ? t('voice.stateListening') :
+    phase === 'parsing' ? t('voice.stateParsing') :
+    phase === 'saving' ? t('voice.stateSaving') :
+    phase === 'preview' ? t('voice.statePreview') :
+    t('voice.stateIdle');
 
   const subLabel = (() => {
     if (phase === 'listening') {
-      if (support.available) return 'Parlez naturellement, je transcris en direct';
+      if (support.available) return t('voice.subListeningReal');
       return Platform.OS === 'ios'
-        ? 'Appuyez sur 🎙️ du clavier puis dictez'
-        : 'Dictez via le clavier de votre téléphone';
+        ? t('voice.subListeningKbIos')
+        : t('voice.subListeningKbAndroid');
     }
-    if (phase === 'idle') return 'L\'IA ajoute votre dépense, revenu ou abonnement';
+    if (phase === 'idle') return t('voice.subIdle');
     return '';
   })();
 
@@ -486,7 +486,7 @@ export default function VoiceInputModal({ visible, onClose }: Props) {
 
             {/* Header */}
             <View style={styles.header}>
-              <Text style={styles.eyebrow}>BUDGY · VOICE</Text>
+              <Text style={styles.eyebrow}>{t('voice.eyebrow')}</Text>
               <Pressable onPress={onClose} hitSlop={14} style={styles.closeBtn}>
                 <Ionicons name="close" size={18} color="rgba(255,255,255,0.7)" />
               </Pressable>
@@ -497,15 +497,14 @@ export default function VoiceInputModal({ visible, onClose }: Props) {
               <View style={styles.banner}>
                 <Ionicons name="information-circle" size={15} color="#FFCB6B" />
                 <Text style={styles.bannerTxt}>
-                  Reconnaissance vocale réelle disponible en build TestFlight.
-                  {'\n'}Pour l'instant : utilisez la dictée du clavier.
+                  {t('voice.bannerExpoGo')}
                 </Text>
               </View>
             )}
             {permError && phase === 'idle' && (
               <View style={[styles.banner, { borderColor: 'rgba(255,122,138,0.3)' }]}>
                 <Ionicons name="alert-circle" size={15} color="#FF7A8A" />
-                <Text style={styles.bannerTxt}>Micro: {permError}</Text>
+                <Text style={styles.bannerTxt}>{t('voice.bannerMicError', { err: permError })}</Text>
               </View>
             )}
 
@@ -515,8 +514,8 @@ export default function VoiceInputModal({ visible, onClose }: Props) {
                 <Ionicons name="flash" size={11} color="rgba(22,224,198,0.7)" />
                 <Text style={styles.quotaTxt}>
                   {quota.remaining > 0
-                    ? `${quota.remaining} essai${quota.remaining > 1 ? 's' : ''} Voice gratuits ce mois`
-                    : 'Quota mensuel atteint — passez à Pro pour Voice illimité'}
+                    ? t(quota.remaining > 1 ? 'voice.quotaLeftPlural' : 'voice.quotaLeft', { n: quota.remaining })
+                    : t('voice.quotaExhausted')}
                 </Text>
               </View>
             )}
@@ -609,8 +608,8 @@ export default function VoiceInputModal({ visible, onClose }: Props) {
                     onChangeText={setText}
                     placeholder={
                       phase === 'listening'
-                        ? 'La dictée apparaîtra ici…'
-                        : 'Tapez ou dictez ici…'
+                        ? t('voice.placeholderListening')
+                        : t('voice.placeholder')
                     }
                     placeholderTextColor="rgba(255,255,255,0.35)"
                     style={styles.input}
@@ -636,7 +635,7 @@ export default function VoiceInputModal({ visible, onClose }: Props) {
                   >
                     <Ionicons name="sparkles" size={16} color="#0F1115" />
                     <Text style={styles.ctaTxt}>
-                      {phase === 'parsing' ? 'Analyse en cours…' : 'Analyser'}
+                      {phase === 'parsing' ? t('voice.analysing') : t('voice.analyse')}
                     </Text>
                   </Pressable>
                 )}
@@ -644,45 +643,50 @@ export default function VoiceInputModal({ visible, onClose }: Props) {
                 {/* Suggestion chips (only in idle) */}
                 {phase === 'idle' && (
                   <View style={styles.chipsWrap}>
-                    {SUGGESTIONS.map((s) => (
-                      <Pressable
-                        key={s}
-                        onPress={() => setText(s.replace(/[«»\s]+/g, ' ').trim())}
-                        style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}
-                      >
-                        <Text style={styles.chipTxt} numberOfLines={1}>{s}</Text>
-                      </Pressable>
-                    ))}
+                    {SUGG_KEYS.map((k) => {
+                      const txt = t(k);
+                      return (
+                        <Pressable
+                          key={k}
+                          onPress={() => setText(txt.replace(/[«»\s]+/g, ' ').replace(/^["']|["']$/g, '').trim())}
+                          style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}
+                        >
+                          <Text style={styles.chipTxt} numberOfLines={1}>{txt}</Text>
+                        </Pressable>
+                      );
+                    })}
                   </View>
                 )}
               </>
             ) : parsed ? (
               <View style={styles.previewCard}>
                 <View style={styles.previewRow}>
-                  <Text style={styles.previewLabel}>Type</Text>
+                  <Text style={styles.previewLabel}>{t('voice.labelType')}</Text>
                   <Text style={styles.previewValue}>
-                    {parsed.type === 'income' ? '💼 Revenu' : parsed.type === 'subscription' ? '🔁 Abonnement' : '💸 Dépense'}
+                    {parsed.type === 'income' ? t('voice.typeIncome')
+                      : parsed.type === 'subscription' ? t('voice.typeSubscription')
+                      : t('voice.typeExpense')}
                   </Text>
                 </View>
                 <View style={styles.previewRow}>
-                  <Text style={styles.previewLabel}>Montant</Text>
+                  <Text style={styles.previewLabel}>{t('voice.labelAmount')}</Text>
                   <Text style={styles.previewValueBig}>CHF {(parsed.amount || 0).toFixed(2)}</Text>
                 </View>
                 {parsed.merchant && (
                   <View style={styles.previewRow}>
-                    <Text style={styles.previewLabel}>Marchand</Text>
+                    <Text style={styles.previewLabel}>{t('voice.labelMerchant')}</Text>
                     <Text style={styles.previewValue}>{parsed.merchant}</Text>
                   </View>
                 )}
                 {parsed.category && (
                   <View style={styles.previewRow}>
-                    <Text style={styles.previewLabel}>Catégorie</Text>
+                    <Text style={styles.previewLabel}>{t('voice.labelCategory')}</Text>
                     <Text style={styles.previewValue}>{parsed.category}</Text>
                   </View>
                 )}
                 {parsed.confidence !== undefined && (
                   <Text style={styles.confidence}>
-                    Confiance : {Math.round((parsed.confidence || 0) * 100)}%
+                    {t('voice.confidence', { p: Math.round((parsed.confidence || 0) * 100) })}
                   </Text>
                 )}
 
@@ -691,14 +695,14 @@ export default function VoiceInputModal({ visible, onClose }: Props) {
                     onPress={() => { setParsed(null); setPhase('idle'); }}
                     style={[styles.actionBtn, styles.actionBtnGhost]}
                   >
-                    <Text style={styles.actionBtnGhostTxt}>Modifier</Text>
+                    <Text style={styles.actionBtnGhostTxt}>{t('voice.edit')}</Text>
                   </Pressable>
                   <Pressable
                     onPress={handleConfirm}
                     style={[styles.actionBtn, styles.actionBtnPrimary]}
                   >
                     <Ionicons name="checkmark" size={16} color="#0F1115" />
-                    <Text style={styles.actionBtnPrimaryTxt}>Confirmer</Text>
+                    <Text style={styles.actionBtnPrimaryTxt}>{t('voice.confirm')}</Text>
                   </Pressable>
                 </View>
               </View>
@@ -709,16 +713,9 @@ export default function VoiceInputModal({ visible, onClose }: Props) {
       <SoftPaywall
         visible={paywallOpen}
         onClose={() => setPaywallOpen(false)}
-        title="Voice IA illimité"
-        subtitle="Dictez toutes vos transactions sans limite. Notre IA les comprend instantanément."
+        title={t('softPaywall.voiceTitle')}
+        subtitle={t('softPaywall.voiceSubtitle')}
         icon="mic"
-        benefits={[
-          'Voice IA illimité',
-          'Parsing IA avancé des phrases',
-          'Timeline IA complète',
-          'OCR illimité & PDF complets',
-          'Suivi du portefeuille',
-        ]}
       />
     </Modal>
   );

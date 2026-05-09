@@ -1,18 +1,5 @@
 /**
- * BUDGY — AI Timeline (proactive insights feed)
- *
- * A small, deliberate stream of intelligent observations about the user's
- * finances. Inspired by Apple Wallet smart cards, Notion callouts and Arc's
- * sidebar nudges.
- *
- * ▸ All insights are generated LOCALLY from the Zustand store, in pure JS.
- *   No backend call, no LLM cost, instant offline.
- * ▸ We surface MAX 4 insights, scored & sorted by relevance/severity.
- * ▸ Cards have a tinted left rail, subtle gradient, a contextual icon and
- *   an optional delta pill. No dark patterns, no motion overload.
- *
- * Insight categories
- *   positive · info · warning · alert · tip
+ * BUDGY — AI Timeline (proactive insights feed) — i18n & theme aware
  */
 import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Platform, Pressable } from 'react-native';
@@ -21,6 +8,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import { useStore } from '../stores/useStore';
 import { useFeatureFlag, FREE_LIMITS } from '../services/featureFlags';
+import { useTheme, useThemeMode } from '../hooks/useTheme';
+import { useTranslation } from '../hooks/useTranslation';
 import SoftPaywall from './SoftPaywall';
 
 type Tone = 'positive' | 'info' | 'warning' | 'alert' | 'tip';
@@ -29,13 +18,14 @@ interface Insight {
   id: string;
   tone: Tone;
   icon: keyof typeof Ionicons.glyphMap;
-  title: string;
-  subtitle?: string;
-  delta?: string; // e.g. "+18%" / "-12%" / "3 abos"
-  weight: number; // 0..100, higher = more relevant
+  titleKey: string;
+  titleParams?: Record<string, any>;
+  subKey?: string;
+  subParams?: Record<string, any>;
+  delta?: string;
+  weight: number;
 }
 
-// ── Tone palette ───────────────────────────────────────────────────────────
 const TONE: Record<Tone, { primary: string; soft: string; rail: string; halo: string }> = {
   positive: { primary: '#16E0C6', soft: '#7BFCE3', rail: 'rgba(22, 224, 198, 0.65)',  halo: 'rgba(22, 224, 198, 0.10)'  },
   info:     { primary: '#74B2FF', soft: '#B2D6FF', rail: 'rgba(116, 178, 255, 0.65)', halo: 'rgba(116, 178, 255, 0.08)' },
@@ -44,7 +34,6 @@ const TONE: Record<Tone, { primary: string; soft: string; rail: string; halo: st
   tip:      { primary: '#BE99FF', soft: '#D8C2FF', rail: 'rgba(190, 153, 255, 0.65)', halo: 'rgba(190, 153, 255, 0.08)' },
 };
 
-// ── Pure generator ─────────────────────────────────────────────────────────
 interface GenInput {
   transactions: any[];
   incomes: any[];
@@ -56,7 +45,6 @@ function generateInsights({ transactions, incomes, recurring, goals }: GenInput)
   const out: Insight[] = [];
   const now = new Date();
 
-  // ── Helpers
   const monthlyIncome = incomes.reduce((s: number, i: any) => {
     if (i.type && i.type !== 'recurring') return s;
     const a = Number(i.amount) || 0;
@@ -68,10 +56,8 @@ function generateInsights({ transactions, incomes, recurring, goals }: GenInput)
   const monthlyRecurring = recurring
     .filter((r: any) => r.active !== false && (!r.frequency || r.frequency === 'monthly'))
     .reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0);
-
   const subsActive = recurring.filter((r: any) => r.active !== false);
 
-  // Group transactions by week & by category
   const dayMs = 24 * 60 * 60 * 1000;
   const startOfThisWeek = new Date(now);
   startOfThisWeek.setHours(0, 0, 0, 0);
@@ -97,42 +83,32 @@ function generateInsights({ transactions, incomes, recurring, goals }: GenInput)
   const monthExpenses = Object.values(byCategoryMonth).reduce((s, v) => s + v, 0) + monthlyRecurring;
   const ratio = monthlyIncome > 0 ? (monthlyIncome - monthExpenses) / monthlyIncome : 0;
 
-  // ── Insight 1: weekly variation ──────────────────────────────────────────
+  // weekly variation
   if (lastWeek > 0 && thisWeek >= 0) {
     const delta = ((thisWeek - lastWeek) / lastWeek) * 100;
     if (delta >= 10) {
       out.push({
-        id: 'week-up',
-        tone: delta >= 30 ? 'alert' : 'warning',
-        icon: 'trending-up',
-        title: `Vous avez dépensé +${Math.round(delta)}% cette semaine`,
-        subtitle: 'Comparé à la semaine précédente',
-        delta: `+${Math.round(delta)}%`,
-        weight: Math.min(100, 50 + delta),
+        id: 'week-up', tone: delta >= 30 ? 'alert' : 'warning', icon: 'trending-up',
+        titleKey: 'timeline.insWeekUp', titleParams: { p: Math.round(delta) },
+        subKey: 'timeline.insWeekUpSub',
+        delta: `+${Math.round(delta)}%`, weight: Math.min(100, 50 + delta),
       });
     } else if (delta <= -10) {
       out.push({
-        id: 'week-down',
-        tone: 'positive',
-        icon: 'trending-down',
-        title: `Belle baisse de ${Math.abs(Math.round(delta))}% cette semaine`,
-        subtitle: 'Vos dépenses ralentissent. Continuez ainsi.',
-        delta: `${Math.round(delta)}%`,
-        weight: 60 + Math.abs(delta) / 2,
+        id: 'week-down', tone: 'positive', icon: 'trending-down',
+        titleKey: 'timeline.insWeekDown', titleParams: { p: Math.abs(Math.round(delta)) },
+        subKey: 'timeline.insWeekDownSub',
+        delta: `${Math.round(delta)}%`, weight: 60 + Math.abs(delta) / 2,
       });
     } else {
       out.push({
-        id: 'week-stable',
-        tone: 'info',
-        icon: 'pulse',
-        title: 'Vos dépenses sont stables cette semaine',
-        subtitle: 'Aucun écart significatif détecté',
-        weight: 30,
+        id: 'week-stable', tone: 'info', icon: 'pulse',
+        titleKey: 'timeline.insWeekStable', subKey: 'timeline.insWeekStableSub', weight: 30,
       });
     }
   }
 
-  // ── Insight 2: top spending category ─────────────────────────────────────
+  // top spending category
   const catEntries = Object.entries(byCategoryMonth).sort((a, b) => b[1] - a[1]);
   const topCat = catEntries[0];
   if (topCat && monthExpenses > 0) {
@@ -153,78 +129,58 @@ function generateInsights({ transactions, incomes, recurring, goals }: GenInput)
     const meta = PRETTY[cat] || { label: cat, tip: 'good' as const };
     if (meta.tip === 'good' && share <= 35) {
       out.push({
-        id: 'cat-good',
-        tone: 'positive',
-        icon: 'checkmark-circle',
-        title: `Bonne maîtrise de votre ${meta.label}`,
-        subtitle: `${Math.round(share)}% de vos dépenses ce mois`,
-        weight: 55,
+        id: 'cat-good', tone: 'positive', icon: 'checkmark-circle',
+        titleKey: 'timeline.insCatGood', titleParams: { cat: meta.label },
+        subKey: 'timeline.insCatGoodSub', subParams: { p: Math.round(share) }, weight: 55,
       });
     } else if (share >= 30) {
+      const isWatch = meta.tip === 'watch';
       out.push({
-        id: 'cat-watch',
-        tone: meta.tip === 'watch' ? 'warning' : 'info',
-        icon: 'pie-chart',
-        title: `${cat[0].toUpperCase() + cat.slice(1)} — ${Math.round(share)}% de vos dépenses`,
-        subtitle: meta.tip === 'watch'
-          ? `Attention aux dépenses ${meta.label}`
-          : 'Premier poste de dépense ce mois',
-        delta: `${Math.round(share)}%`,
-        weight: 65,
+        id: 'cat-watch', tone: isWatch ? 'warning' : 'info', icon: 'pie-chart',
+        titleKey: 'timeline.insCatWatch', titleParams: { cat: cat[0].toUpperCase() + cat.slice(1), p: Math.round(share) },
+        subKey: isWatch ? 'timeline.insCatWatchSubWatch' : 'timeline.insCatWatchSubInfo',
+        subParams: { cat: meta.label }, delta: `${Math.round(share)}%`, weight: 65,
       });
     }
   }
 
-  // ── Insight 3: subscription audit ────────────────────────────────────────
+  // subs
   if (subsActive.length >= 8) {
     out.push({
-      id: 'subs-many',
-      tone: 'warning',
-      icon: 'sync',
-      title: `${subsActive.length} abonnements actifs`,
-      subtitle: 'Quelques-uns pourraient être inutiles. Auditez-les.',
-      delta: `${subsActive.length} abos`,
-      weight: 75,
+      id: 'subs-many', tone: 'warning', icon: 'sync',
+      titleKey: 'timeline.insSubsMany', titleParams: { n: subsActive.length },
+      subKey: 'timeline.insSubsManySub', delta: `${subsActive.length}`, weight: 75,
     });
   } else if (subsActive.length >= 4 && subsActive.length <= 7) {
     out.push({
-      id: 'subs-ok',
-      tone: 'info',
-      icon: 'sync',
-      title: `${subsActive.length} abonnements maîtrisés`,
-      subtitle: 'Total mensuel raisonnable',
-      weight: 25,
+      id: 'subs-ok', tone: 'info', icon: 'sync',
+      titleKey: 'timeline.insSubsOk', titleParams: { n: subsActive.length },
+      subKey: 'timeline.insSubsOkSub', weight: 25,
     });
   }
 
-  // ── Insight 4: savings goal progress ─────────────────────────────────────
+  // savings
   if (goals.length > 0) {
     const totalSaved = goals.reduce((s, g) => s + Number(g.saved ?? 0), 0);
     const totalTarget = goals.reduce((s, g) => s + Number(g.target ?? 0), 0);
     const pct = totalTarget > 0 ? (totalSaved / totalTarget) * 100 : 0;
     if (pct >= 60) {
       out.push({
-        id: 'savings-good',
-        tone: 'positive',
-        icon: 'trophy',
-        title: 'Votre épargne progresse bien ce mois-ci',
-        subtitle: `${Math.round(pct)}% de vos objectifs atteints`,
-        delta: `${Math.round(pct)}%`,
-        weight: 70,
+        id: 'savings-good', tone: 'positive', icon: 'trophy',
+        titleKey: 'timeline.insSavingsGood',
+        subKey: 'timeline.insSavingsGoodSub', subParams: { p: Math.round(pct) },
+        delta: `${Math.round(pct)}%`, weight: 70,
       });
     } else if (pct >= 20) {
       out.push({
-        id: 'savings-mid',
-        tone: 'info',
-        icon: 'trending-up',
-        title: 'Votre épargne avance régulièrement',
-        subtitle: `${Math.round(pct)}% de vos objectifs`,
-        weight: 40,
+        id: 'savings-mid', tone: 'info', icon: 'trending-up',
+        titleKey: 'timeline.insSavingsMid',
+        subKey: 'timeline.insSavingsMidSub', subParams: { p: Math.round(pct) }, weight: 40,
       });
     }
   }
 
-  // ── Insight 5: anomaly detection (unusually large transaction) ───────────
+  // anomaly
   if (ofThisMonth.length >= 4) {
     const amounts = ofThisMonth.map((t: any) => Number(t.amount) || 0);
     const avg = amounts.reduce((s, v) => s + v, 0) / amounts.length;
@@ -232,73 +188,62 @@ function generateInsights({ transactions, incomes, recurring, goals }: GenInput)
     if (max > avg * 3 && max > 80) {
       const txn = ofThisMonth.find((t: any) => Number(t.amount) === max);
       out.push({
-        id: 'anomaly',
-        tone: 'alert',
-        icon: 'warning',
-        title: 'Dépense inhabituelle détectée',
-        subtitle: txn?.title
-          ? `${txn.title} — CHF ${max.toFixed(0)} (×${(max / avg).toFixed(1)} la moyenne)`
-          : `CHF ${max.toFixed(0)} — bien au-dessus de votre moyenne`,
-        delta: `×${(max / avg).toFixed(1)}`,
-        weight: 80,
+        id: 'anomaly', tone: 'alert', icon: 'warning',
+        titleKey: 'timeline.insAnomaly',
+        subKey: txn?.title ? 'timeline.insAnomalySub' : 'timeline.insAnomalySubNoTitle',
+        subParams: { title: txn?.title || '', a: max.toFixed(0), r: (max / avg).toFixed(1) },
+        delta: `×${(max / avg).toFixed(1)}`, weight: 80,
       });
     }
   }
 
-  // ── Insight 6: macro mood (only if score is excellent / risky) ───────────
+  // mood
   if (ratio >= 0.35 && monthlyIncome > 0) {
     out.push({
-      id: 'mood-excellent',
-      tone: 'positive',
-      icon: 'star',
-      title: 'Excellent équilibre financier cette semaine',
-      subtitle: `Vous mettez de côté ${Math.round(ratio * 100)}% de vos revenus`,
-      delta: `${Math.round(ratio * 100)}%`,
-      weight: 85,
+      id: 'mood-excellent', tone: 'positive', icon: 'star',
+      titleKey: 'timeline.insMoodExc',
+      subKey: 'timeline.insMoodExcSub', subParams: { p: Math.round(ratio * 100) },
+      delta: `${Math.round(ratio * 100)}%`, weight: 85,
     });
   } else if (ratio < 0 && monthlyIncome > 0) {
     out.push({
-      id: 'mood-risk',
-      tone: 'alert',
-      icon: 'alert-circle',
-      title: 'Vos dépenses dépassent vos revenus',
-      subtitle: 'Réduire un poste non essentiel ce mois aiderait.',
-      delta: `${Math.round(ratio * 100)}%`,
-      weight: 95,
+      id: 'mood-risk', tone: 'alert', icon: 'alert-circle',
+      titleKey: 'timeline.insMoodRisk',
+      subKey: 'timeline.insMoodRiskSub',
+      delta: `${Math.round(ratio * 100)}%`, weight: 95,
     });
   }
 
-  // ── Insight 7: Smart "tip" (only if very few insights and we have data) ──
+  // tip
   if (out.length < 2 && transactions.length > 0) {
     out.push({
-      id: 'tip-explore',
-      tone: 'tip',
-      icon: 'sparkles',
-      title: 'Budgy comprend mieux vos finances chaque jour',
-      subtitle: 'Continuez à enregistrer dépenses et revenus pour des insights plus fins.',
-      weight: 20,
+      id: 'tip-explore', tone: 'tip', icon: 'sparkles',
+      titleKey: 'timeline.insTip', subKey: 'timeline.insTipSub', weight: 20,
     });
   }
 
-  // ── Sort by weight (desc), keep max 4
-  return out
-    .sort((a, b) => b.weight - a.weight)
-    .slice(0, 4);
+  return out.sort((a, b) => b.weight - a.weight).slice(0, 4);
 }
 
-// ── Card UI ────────────────────────────────────────────────────────────────
-function InsightCard({ insight, index }: { insight: Insight; index: number }) {
+function InsightCard({ insight, index, theme, isLight, t }: { insight: Insight; index: number; theme: any; isLight: boolean; t: any }) {
   const tone = TONE[insight.tone];
   return (
     <Animated.View
       entering={FadeInDown.duration(420).delay(80 + index * 70).springify().damping(16)}
       style={[
-        styles.card,
+        {
+          backgroundColor: isLight ? theme.card : 'rgba(255,255,255,0.025)',
+          borderRadius: 18,
+          borderWidth: StyleSheet.hairlineWidth,
+          borderColor: theme.cardBorder,
+          overflow: 'hidden',
+          minHeight: 60,
+        },
         Platform.select({
           ios: {
             shadowColor: tone.primary,
             shadowOffset: { width: 0, height: 6 },
-            shadowOpacity: 0.18,
+            shadowOpacity: isLight ? 0.10 : 0.18,
             shadowRadius: 14,
           },
           android: { elevation: 2 },
@@ -306,32 +251,27 @@ function InsightCard({ insight, index }: { insight: Insight; index: number }) {
         }) as any,
       ]}
     >
-      {/* Tinted left rail (the only "color signature") */}
       <View style={[styles.rail, { backgroundColor: tone.rail }]} />
-
-      {/* Top inner sheen for glass feel */}
-      <View style={styles.cardSheen} pointerEvents="none" />
-
-      {/* Subtle tinted gradient body */}
+      <View style={[styles.cardSheen, { backgroundColor: isLight ? 'rgba(15,23,42,0.06)' : 'rgba(255,255,255,0.08)' }]} pointerEvents="none" />
       <LinearGradient
-        colors={[tone.halo, 'rgba(255,255,255,0.012)']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
+        colors={[tone.halo, isLight ? 'rgba(15,23,42,0.01)' : 'rgba(255,255,255,0.012)']}
+        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFill as any}
       />
-
       <View style={styles.cardInner}>
         <View style={[styles.iconOrb, { backgroundColor: tone.halo, borderColor: tone.rail }]}>
           <Ionicons name={insight.icon} size={16} color={tone.primary} />
         </View>
-
         <View style={styles.cardBody}>
-          <Text style={styles.cardTitle} numberOfLines={2}>{insight.title}</Text>
-          {!!insight.subtitle && (
-            <Text style={styles.cardSub} numberOfLines={2}>{insight.subtitle}</Text>
+          <Text style={[styles.cardTitle, { color: theme.text }]} numberOfLines={2}>
+            {t(insight.titleKey, insight.titleParams)}
+          </Text>
+          {!!insight.subKey && (
+            <Text style={[styles.cardSub, { color: theme.textSecondary }]} numberOfLines={2}>
+              {t(insight.subKey, insight.subParams)}
+            </Text>
           )}
         </View>
-
         {!!insight.delta && (
           <View style={[styles.deltaPill, { borderColor: tone.rail, backgroundColor: tone.halo }]}>
             <Text style={[styles.deltaTxt, { color: tone.primary }]}>{insight.delta}</Text>
@@ -342,12 +282,15 @@ function InsightCard({ insight, index }: { insight: Insight; index: number }) {
   );
 }
 
-// ── Component ──────────────────────────────────────────────────────────────
 export default function AITimeline() {
   const transactions = useStore((s) => s.transactions);
   const incomes = useStore((s) => s.incomes);
   const recurring = useStore((s) => s.recurringExpenses);
   const goals = useStore((s) => s.savingsGoals);
+  const theme = useTheme();
+  const themeMode = useThemeMode();
+  const isLight = themeMode === 'light';
+  const { t } = useTranslation();
   const advanced = useFeatureFlag('canUseAdvancedTimeline');
   const [paywallOpen, setPaywallOpen] = useState(false);
 
@@ -356,31 +299,35 @@ export default function AITimeline() {
     [transactions, incomes, recurring, goals],
   );
 
-  // Free tier sees only top-N insights, premium sees everything.
   const visible = advanced.enabled
     ? allInsights
     : allInsights.slice(0, FREE_LIMITS.timelineInsightsCap);
   const hidden = allInsights.length - visible.length;
 
-  // Hide entirely when there is truly nothing to say
   if (allInsights.length === 0) return null;
 
   return (
     <View style={styles.wrap}>
       <Animated.View entering={FadeIn.duration(400)} style={styles.header}>
-        <Text style={styles.eyebrow}>BUDGY · INSIGHTS</Text>
+        <Text style={[styles.eyebrow, { color: theme.textTertiary }]}>{t('timeline.eyebrow')}</Text>
         <View style={styles.liveDot} />
       </Animated.View>
       {visible.map((ins, i) => (
-        <InsightCard key={ins.id} insight={ins} index={i} />
+        <InsightCard key={ins.id} insight={ins} index={i} theme={theme} isLight={isLight} t={t} />
       ))}
 
-      {/* Soft paywall hint when we capped the list */}
       {hidden > 0 && (
         <Animated.View entering={FadeInDown.duration(420).delay(80 + visible.length * 70)}>
           <Pressable
             onPress={() => setPaywallOpen(true)}
-            style={({ pressed }) => [styles.lockCard, pressed && { opacity: 0.85 }]}
+            style={({ pressed }) => [
+              styles.lockCard,
+              {
+                backgroundColor: isLight ? theme.card : 'rgba(255,255,255,0.02)',
+                borderColor: 'rgba(22,224,198,0.32)',
+              },
+              pressed && { opacity: 0.85 },
+            ]}
           >
             <LinearGradient
               colors={['rgba(22,224,198,0.10)', 'rgba(22,224,198,0.02)']}
@@ -391,10 +338,10 @@ export default function AITimeline() {
               <Ionicons name="sparkles" size={14} color="#16E0C6" />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.lockTitle}>
-                {hidden} insight{hidden > 1 ? 's' : ''} supplémentaire{hidden > 1 ? 's' : ''} disponible{hidden > 1 ? 's' : ''}
+              <Text style={[styles.lockTitle, { color: theme.text }]}>
+                {t(hidden > 1 ? 'timeline.lockTitlePlural' : 'timeline.lockTitle', { n: hidden })}
               </Text>
-              <Text style={styles.lockSub}>Débloquez la Timeline IA complète avec Pro</Text>
+              <Text style={[styles.lockSub, { color: theme.textSecondary }]}>{t('timeline.lockSub')}</Text>
             </View>
             <Ionicons name="lock-closed" size={14} color="rgba(22,224,198,0.85)" />
           </Pressable>
@@ -404,116 +351,50 @@ export default function AITimeline() {
       <SoftPaywall
         visible={paywallOpen}
         onClose={() => setPaywallOpen(false)}
-        title="Timeline IA complète"
-        subtitle="Profitez de toutes les analyses proactives et conseils personnalisés."
+        title={t('softPaywall.timelineTitle')}
+        subtitle={t('softPaywall.timelineSubtitle')}
         icon="analytics"
-        benefits={[
-          'Toutes les analyses proactives',
-          'Détection avancée d\'anomalies',
-          'Audit complet des abonnements',
-          'Conseils IA contextuels',
-          'Voice IA illimité',
-          'Sync multi-appareils',
-        ]}
       />
     </View>
   );
 }
 
-// ── Styles ─────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  wrap: {
-    marginTop: 4,
-    marginBottom: 12,
-    gap: 10,
-  },
+  wrap: { marginTop: 4, marginBottom: 12, gap: 10 },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 2,
-    marginBottom: 4,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 2, marginBottom: 4,
   },
-  eyebrow: {
-    color: 'rgba(255,255,255,0.5)',
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 1.4,
-  },
+  eyebrow: { fontSize: 11, fontWeight: '700', letterSpacing: 1.4 },
   liveDot: {
-    width: 6, height: 6, borderRadius: 3,
-    backgroundColor: '#16E0C6',
-    shadowColor: '#16E0C6',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 4,
+    width: 6, height: 6, borderRadius: 3, backgroundColor: '#16E0C6',
+    shadowColor: '#16E0C6', shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8, shadowRadius: 4,
   },
-  card: {
-    backgroundColor: 'rgba(255,255,255,0.025)',
-    borderRadius: 18,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.07)',
-    overflow: 'hidden',
-    minHeight: 60,
-  },
-  rail: {
-    position: 'absolute',
-    left: 0, top: 0, bottom: 0,
-    width: 3,
-  },
-  cardSheen: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0, height: 1,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-  },
+  rail: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 3 },
+  cardSheen: { position: 'absolute', top: 0, left: 0, right: 0, height: 1 },
   cardInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    paddingLeft: 16, // accommodate the rail
-    gap: 12,
+    flexDirection: 'row', alignItems: 'center',
+    paddingVertical: 12, paddingHorizontal: 14, paddingLeft: 16, gap: 12,
   },
   iconOrb: {
     width: 32, height: 32, borderRadius: 10,
     alignItems: 'center', justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
   },
-  cardBody: {
-    flex: 1,
-    gap: 2,
-  },
-  cardTitle: {
-    color: '#fff',
-    fontSize: 13.5,
-    fontWeight: '600',
-    letterSpacing: -0.1,
-    lineHeight: 18,
-  },
-  cardSub: {
-    color: 'rgba(255,255,255,0.55)',
-    fontSize: 11.5,
-    lineHeight: 15,
-  },
+  cardBody: { flex: 1, gap: 2 },
+  cardTitle: { fontSize: 13.5, fontWeight: '600', letterSpacing: -0.1, lineHeight: 18 },
+  cardSub: { fontSize: 11.5, lineHeight: 15 },
   deltaPill: {
-    paddingHorizontal: 8, paddingVertical: 3,
-    borderRadius: 999,
+    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  deltaTxt: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.2,
-  },
-
-  // Soft paywall hint card
+  deltaTxt: { fontSize: 11, fontWeight: '700', letterSpacing: 0.2 },
   lockCard: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     paddingVertical: 12, paddingHorizontal: 14,
     borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.02)',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(22,224,198,0.22)',
     overflow: 'hidden',
   },
   lockOrb: {
@@ -523,6 +404,6 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(22,224,198,0.32)',
   },
-  lockTitle: { color: '#fff', fontSize: 13, fontWeight: '600', letterSpacing: -0.1 },
-  lockSub: { color: 'rgba(255,255,255,0.55)', fontSize: 11.5, lineHeight: 15, marginTop: 1 },
+  lockTitle: { fontSize: 13, fontWeight: '600', letterSpacing: -0.1 },
+  lockSub: { fontSize: 11.5, lineHeight: 15, marginTop: 1 },
 });

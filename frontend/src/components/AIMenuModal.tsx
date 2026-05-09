@@ -11,7 +11,7 @@
  *   - Staggered fade-up entrance per card (200-400ms cascade)
  *   - Light haptics on press
  */
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -28,6 +28,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
+import VoiceInputModal from './VoiceInputModal';
 
 const ACCENT = '#16E0C6';
 const ACCENT_SOFT = 'rgba(22, 224, 198, 0.18)';
@@ -37,12 +38,23 @@ interface ActionItem {
   icon: keyof typeof Ionicons.glyphMap;
   title: string;
   subtitle: string;
+  /** A route to push, or 'voice' to open the voice modal instead. */
   route: string;
   /** Soft tint for the icon orb */
   tint?: string;
+  badge?: string;
 }
 
 const ACTIONS: ActionItem[] = [
+  {
+    id: 'voice',
+    icon: 'mic-outline',
+    title: 'Ajouter par voix',
+    subtitle: 'Dictez une dépense ou un revenu',
+    route: 'voice',
+    tint: 'rgba(22, 224, 198, 0.20)',
+    badge: 'NEW',
+  },
   {
     id: 'analyse-finances',
     icon: 'analytics-outline',
@@ -93,6 +105,7 @@ interface Props {
 export default function AIMenuModal({ visible, onClose }: Props) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const [voiceOpen, setVoiceOpen] = useState(false);
 
   // One Animated.Value per row for staggered entrance
   const anims = useRef(ACTIONS.map(() => new Animated.Value(0))).current;
@@ -128,6 +141,12 @@ export default function AIMenuModal({ visible, onClose }: Props) {
         Haptics.selectionAsync();
       } catch {}
     }
+    if (item.route === 'voice') {
+      // Close the AI menu first, then open voice modal (avoid stacked Modals)
+      onClose();
+      setTimeout(() => setVoiceOpen(true), 220);
+      return;
+    }
     onClose();
     setTimeout(() => {
       try {
@@ -139,6 +158,7 @@ export default function AIMenuModal({ visible, onClose }: Props) {
   };
 
   return (
+    <>
     <Modal
       visible={visible}
       animationType="slide"
@@ -246,7 +266,14 @@ export default function AIMenuModal({ visible, onClose }: Props) {
                     <Ionicons name={item.icon} size={20} color={ACCENT} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.cardTitle}>{item.title}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Text style={styles.cardTitle}>{item.title}</Text>
+                      {item.badge ? (
+                        <View style={styles.badge}>
+                          <Text style={styles.badgeTxt}>{item.badge}</Text>
+                        </View>
+                      ) : null}
+                    </View>
                     <Text style={styles.cardSubtitle}>{item.subtitle}</Text>
                   </View>
                   <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.35)" />
@@ -269,6 +296,8 @@ export default function AIMenuModal({ visible, onClose }: Props) {
         </Pressable>
       </Pressable>
     </Modal>
+    <VoiceInputModal visible={voiceOpen} onClose={() => setVoiceOpen(false)} />
+    </>
   );
 }
 
@@ -399,6 +428,15 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     marginTop: 2,
     letterSpacing: 0,
+  },
+  badge: {
+    paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6,
+    backgroundColor: 'rgba(22, 224, 198, 0.18)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(22, 224, 198, 0.45)',
+  },
+  badgeTxt: {
+    color: ACCENT, fontSize: 9.5, fontWeight: '800', letterSpacing: 0.6,
   },
   foot: {
     color: 'rgba(255,255,255,0.32)',

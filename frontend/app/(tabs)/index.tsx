@@ -35,6 +35,7 @@ import { DATE_LOCALES } from '../../src/i18n/translations';
 import { CategoryIcon, getCategoryName, getCategoryColor } from '../../src/components/CategoryIcon';
 import AnimatedNumber from '../../src/components/AnimatedNumber';
 import PressScale from '../../src/components/PressScale';
+import FinancialHealthScore from '../../src/components/FinancialHealthScore';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -242,6 +243,11 @@ export default function HomeScreen() {
               </View>
             </View>
           </LinearGradient>
+        </Animated.View>
+
+        {/* ─── FINANCIAL HEALTH SCORE (premium card, just below balance) ─── */}
+        <Animated.View entering={FadeInDown.duration(500).delay(150)}>
+          <FinancialHealthScore />
         </Animated.View>
 
         {/* ─── 2 QUICK STATS ─── */}

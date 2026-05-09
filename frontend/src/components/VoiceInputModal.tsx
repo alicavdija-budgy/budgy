@@ -26,6 +26,8 @@ import {
   Platform,
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
@@ -159,34 +161,49 @@ export default function VoiceInputModal({ visible, onClose }: Props) {
     try {
       const t = parsed.type;
       const amount = parsed.amount || 0;
+      // Sanitize date — fall back to today if missing/invalid/historic
+      let dateStr = parsed.date || '';
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const dt = dateStr ? new Date(dateStr) : null;
+      if (!dt || isNaN(dt.getTime()) || dt.getFullYear() < new Date().getFullYear() - 1) {
+        dateStr = todayStr;
+      }
+      const now = Date.now();
+
       if (t === 'income') {
         addIncome({
-          id: `inc_${Date.now()}`,
-          source: parsed.merchant || 'Revenu',
+          id: `inc_${now}`,
+          title: parsed.merchant || parsed.category || 'Revenu',
           amount,
+          type: 'occasional',
           frequency: 'monthly',
-          date: parsed.date || new Date().toISOString().slice(0, 10),
-          createdAt: Date.now(),
+          category: parsed.category || 'autre',
+          color: '#16E0C6',
+          icon: 'cash',
+          createdAt: now,
         } as any);
       } else if (t === 'subscription' || parsed.recurring) {
         addRecurringExpense({
-          id: `rec_${Date.now()}`,
-          name: parsed.merchant || parsed.category || 'Abonnement',
+          id: `rec_${now}`,
+          title: parsed.merchant || parsed.category || 'Abonnement',
           amount,
           frequency: 'monthly',
           category: parsed.category || 'abonnement',
-          dayOfMonth: 1,
+          dayOfMonth: new Date().getDate(),
+          color: '#BE99FF',
           active: true,
-          createdAt: Date.now(),
+          createdAt: now,
         } as any);
       } else {
         addTransaction({
-          id: `txn_${Date.now()}`,
+          id: `txn_${now}`,
           title: parsed.merchant || parsed.category || 'Dépense',
           amount,
           category: parsed.category || 'autre',
-          date: parsed.date || new Date().toISOString().slice(0, 10),
-          createdAt: Date.now(),
+          date: dateStr,
+          createdAt: now,
+          updatedAt: now,
+          synced: false,
         } as any);
       }
       // Done
@@ -209,7 +226,11 @@ export default function VoiceInputModal({ visible, onClose }: Props) {
         <Pressable style={styles.dim} onPress={onClose} />
       </BlurView>
 
-      <View style={styles.center} pointerEvents="box-none">
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.center}
+        pointerEvents="box-none"
+      >
         <Pressable
           onPress={(e) => e.stopPropagation()}
           style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 16) + 12 }]}
@@ -221,6 +242,11 @@ export default function VoiceInputModal({ visible, onClose }: Props) {
             style={StyleSheet.absoluteFill as any}
           />
 
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 8 }}
+          >
           {/* Drag handle */}
           <View style={styles.handle} />
 
@@ -340,8 +366,9 @@ export default function VoiceInputModal({ visible, onClose }: Props) {
               </View>
             </View>
           ) : null}
+          </ScrollView>
         </Pressable>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

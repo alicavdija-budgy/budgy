@@ -1385,14 +1385,17 @@ async def voice_parse(req: VoiceParseRequest):
     # Try LLM if available, fallback to regex
     try:
         if EMERGENT_LLM_KEY:
+            today_iso = datetime.now(timezone.utc).strftime("%Y-%m-%d")
             chat = LlmChat(
                 api_key=EMERGENT_LLM_KEY,
                 session_id=f"voice-{uuid.uuid4()}",
                 system_message=(
-                    "Tu es un parseur financier suisse. Extrait STRICTEMENT en JSON: "
+                    f"Tu es un parseur financier suisse. La date du jour est {today_iso}. "
+                    "Extrait STRICTEMENT en JSON: "
                     "{type:'expense'|'income'|'subscription', amount: number, "
                     "currency:'CHF', merchant: string|null, category: string|null, "
-                    "recurring: bool, date: 'YYYY-MM-DD'}. Pas d'autre texte."
+                    f"recurring: bool, date: 'YYYY-MM-DD' (utilise {today_iso} sauf si une autre date est explicitement mentionnée)"
+                    "}. Pas d'autre texte."
                 ),
             ).with_model("openai", "gpt-4o-mini")
             r = await chat.send_message(UserMessage(text=f"Phrase: {text}"))

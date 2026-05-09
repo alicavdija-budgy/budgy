@@ -80,18 +80,36 @@ export default function FinancialHealthScore() {
 
   const { score, label, tone, signals, monthlyIncome } = useMemo(() => {
     const now = new Date();
-    const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const year = now.getFullYear();
+    const month = now.getMonth();
 
-    const monthlyIncome =
-      (incomes || []).reduce((sum: number, i: any) => sum + (Number(i.amount) || 0), 0);
+    // Monthly income (normalized by frequency, only recurring counted)
+    const monthlyIncome = (incomes || []).reduce((sum: number, i: any) => {
+      if (i.type && i.type !== 'recurring') return sum;
+      const amt = Number(i.amount) || 0;
+      if (i.frequency === 'yearly') return sum + amt / 12;
+      if (i.frequency === 'quarterly') return sum + amt / 3;
+      return sum + amt;
+    }, 0);
 
-    const monthlyExpenses =
-      (transactions || [])
-        .filter((t: any) => (t.date || '').startsWith(monthKey))
-        .reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0) +
-      (recurring || []).filter((r: any) => r.active !== false).reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0);
+    // Monthly expenses (this month transactions + active monthly recurring)
+    const txnMonth = (transactions || []).reduce((sum: number, t: any) => {
+      const d = new Date(t.date);
+      if (d.getFullYear() === year && d.getMonth() === month) {
+        return sum + (Number(t.amount) || 0);
+      }
+      return sum;
+    }, 0);
+    const recurringMonth = (recurring || [])
+      .filter((r: any) => r.active !== false && (!r.frequency || r.frequency === 'monthly'))
+      .reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0);
+    const monthlyExpenses = txnMonth + recurringMonth;
 
-    const savings = (goals || []).reduce((s: number, g: any) => s + (Number(g.currentAmount || g.current || 0)), 0);
+    // Savings = aggregated current saved across goals
+    const savings = (goals || []).reduce(
+      (s: number, g: any) => s + (Number(g.saved ?? g.currentAmount ?? g.current ?? 0)),
+      0,
+    );
 
     const subsCount = (recurring || []).filter((r: any) => r.active !== false).length;
     const result = computeScore({ monthlyIncome, monthlyExpenses, subsCount, savings });

@@ -91,3 +91,12 @@ credentials.json
 *.key
 .credentials
 budgy_v2.zip
+-e 
+# Environment and credential files
+.env
+.env.*
+*.env
+credentials.json
+*.pem
+*.key
+.credentials

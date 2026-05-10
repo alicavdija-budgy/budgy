@@ -111,8 +111,8 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Scanner vos reçus et documents",
-          "microphonePermission": false,
+          "cameraPermission": "Scan receipts to log expenses automatically",
+          "microphonePermission": "Dictate expenses and income with your voice",
           "recordAudioAndroid": false
         }
       ],

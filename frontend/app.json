@@ -21,7 +21,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.budgy.ch.budgy",
-      "buildNumber": "21",
+      "buildNumber": "23",
       "associatedDomains": [
         "applinks:budgy.ch",
         "applinks:www.budgy.ch"
@@ -32,12 +32,7 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "LSApplicationCategoryType": "public.app-category.finance",
-        "CFBundleLocalizations": [
-          "fr",
-          "en",
-          "de",
-          "it"
-        ],
+        "CFBundleLocalizations": ["fr", "en", "de", "it"],
         "CFBundleDevelopmentRegion": "fr",
         "NSCameraUsageDescription": "Scan receipts to log expenses automatically",
         "NSPhotoLibraryUsageDescription": "Import receipt photos to track expenses",
@@ -45,9 +40,7 @@
         "NSFaceIDUsageDescription": "Unlock Budgy securely with Face ID",
         "NSMicrophoneUsageDescription": "Dictate expenses and income with your voice",
         "NSSpeechRecognitionUsageDescription": "Convert your voice into transactions",
-        "UIBackgroundModes": [
-          "fetch"
-        ],
+        "UIBackgroundModes": ["fetch"],
         "UIRequiresFullScreen": false
       }
     },
@@ -58,7 +51,7 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.budgy.ch.budgy",
-      "versionCode": 21,
+      "versionCode": 23,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_MEDIA_IMAGES",
@@ -75,19 +68,10 @@
           "action": "VIEW",
           "autoVerify": true,
           "data": [
-            {
-              "scheme": "https",
-              "host": "budgy.ch"
-            },
-            {
-              "scheme": "https",
-              "host": "www.budgy.ch"
-            }
+            { "scheme": "https", "host": "budgy.ch" },
+            { "scheme": "https", "host": "www.budgy.ch" }
           ],
-          "category": [
-            "BROWSABLE",
-            "DEFAULT"
-          ]
+          "category": ["BROWSABLE", "DEFAULT"]
         }
       ]
     },
@@ -119,15 +103,15 @@
       [
         "expo-speech-recognition",
         {
-          "microphonePermission": "Dicter vos dépenses et revenus à la voix",
-          "speechRecognitionPermission": "Transcrire votre voix en transactions",
+          "microphonePermission": "Dictate expenses and income with your voice",
+          "speechRecognitionPermission": "Convert your voice into transactions",
           "androidSpeechServicePackages": ["com.google.android.googlequicksearchbox"]
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "Importer photos de reçus et factures"
+          "photosPermission": "Import receipt photos to track expenses"
         }
       ],
       [
@@ -139,17 +123,13 @@
             "NSExtensionActivationSupportsText": true,
             "NSExtensionActivationSupportsWebURLWithMaxCount": 1
           },
-          "androidIntentFilters": [
-            "text/*",
-            "image/*",
-            "application/pdf"
-          ]
+          "androidIntentFilters": ["text/*", "image/*", "application/pdf"]
         }
       ],
       [
         "expo-local-authentication",
         {
-          "faceIDPermission": "Verrouiller l'app avec Face ID"
+          "faceIDPermission": "Unlock Budgy securely with Face ID"
         }
       ],
       [

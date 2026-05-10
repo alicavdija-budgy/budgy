@@ -11,9 +11,7 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "owner": "avdijaalic",
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
+    "runtimeVersion": "3.7.4",
     "updates": {
       "fallbackToCacheTimeout": 0,
       "url": "https://u.expo.dev/cf75668b-71ba-4bfb-9169-8ad2f572e982"

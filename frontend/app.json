@@ -8,7 +8,7 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "budgy",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "owner": "avdijaalic",
     "runtimeVersion": {
@@ -21,10 +21,8 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.budgy.ch.budgy",
-      "buildNumber": "20",
+      "buildNumber": "21",
       "associatedDomains": [
-        "applinks:budgy.ch",
-        "applinks:www.budgy.ch",
         "applinks:budgy.ch",
         "applinks:www.budgy.ch"
       ],
@@ -38,23 +36,16 @@
           "fr",
           "en",
           "de",
-          "it",
-          "fr",
-          "en",
-          "de",
           "it"
         ],
         "CFBundleDevelopmentRegion": "fr",
-        "NSCameraUsageDescription": "Scanner vos reçus et documents",
-        "NSPhotoLibraryUsageDescription": "Importer photos de reçus et documents",
-        "NSPhotoLibraryAddUsageDescription": "Enregistrer reçus PDF dans votre galerie",
-        "NSFaceIDUsageDescription": "Verrouiller l'app avec Face ID",
-        "NSUserTrackingUsageDescription": "Améliorer les conseils financiers personnalisés",
-        "NSContactsUsageDescription": "Partager des dépenses avec vos amis",
-        "NSMicrophoneUsageDescription": "Dicter vos dépenses et revenus à la voix",
-        "NSSpeechRecognitionUsageDescription": "Transcrire votre voix en transactions",
+        "NSCameraUsageDescription": "Scan receipts to log expenses automatically",
+        "NSPhotoLibraryUsageDescription": "Import receipt photos to track expenses",
+        "NSPhotoLibraryAddUsageDescription": "Save expense receipts as PDFs to your library",
+        "NSFaceIDUsageDescription": "Unlock Budgy securely with Face ID",
+        "NSMicrophoneUsageDescription": "Dictate expenses and income with your voice",
+        "NSSpeechRecognitionUsageDescription": "Convert your voice into transactions",
         "UIBackgroundModes": [
-          "fetch",
           "fetch"
         ],
         "UIRequiresFullScreen": false
@@ -67,17 +58,8 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.budgy.ch.budgy",
-      "versionCode": 20,
+      "versionCode": 21,
       "permissions": [
-        "android.permission.CAMERA",
-        "android.permission.READ_MEDIA_IMAGES",
-        "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE",
-        "android.permission.USE_BIOMETRIC",
-        "android.permission.USE_FINGERPRINT",
-        "android.permission.VIBRATE",
-        "android.permission.INTERNET",
-        "android.permission.RECORD_AUDIO",
         "android.permission.CAMERA",
         "android.permission.READ_MEDIA_IMAGES",
         "android.permission.READ_EXTERNAL_STORAGE",
@@ -89,24 +71,6 @@
         "android.permission.RECORD_AUDIO"
       ],
       "intentFilters": [
-        {
-          "action": "VIEW",
-          "autoVerify": true,
-          "data": [
-            {
-              "scheme": "https",
-              "host": "budgy.ch"
-            },
-            {
-              "scheme": "https",
-              "host": "www.budgy.ch"
-            }
-          ],
-          "category": [
-            "BROWSABLE",
-            "DEFAULT"
-          ]
-        },
         {
           "action": "VIEW",
           "autoVerify": true,

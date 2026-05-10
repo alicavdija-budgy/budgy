@@ -2,7 +2,7 @@
   "expo": {
     "name": "Budgy",
     "slug": "budgy",
-    "version": "3.7.4",
+    "version": "3.7.5",
     "description": "Budgy — Votre coach financier suisse premium. Budgets, LAMal, impôts, IA et épargne pour les 26 cantons. 🇨🇭",
     "primaryColor": "#34D399",
     "orientation": "portrait",
@@ -11,7 +11,9 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "owner": "avdijaalic",
-    "runtimeVersion": "3.7.4",
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
     "updates": {
       "fallbackToCacheTimeout": 0,
       "url": "https://u.expo.dev/cf75668b-71ba-4bfb-9169-8ad2f572e982"
@@ -19,7 +21,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.budgy.ch.budgy",
-      "buildNumber": "24",
+      "buildNumber": "25",
       "associatedDomains": [
         "applinks:budgy.ch",
         "applinks:www.budgy.ch"
@@ -56,7 +58,7 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.budgy.ch.budgy",
-      "versionCode": 24,
+      "versionCode": 25,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_MEDIA_IMAGES",
@@ -106,9 +108,32 @@
         }
       ],
       "expo-secure-store",
-      "expo-camera",
-      "expo-speech-recognition",
-      "expo-image-picker",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Scan receipts to log expenses automatically",
+          "microphonePermission": "Dictate expenses and income with your voice",
+          "recordAudioAndroid": true
+        }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Dictate expenses and income with your voice",
+          "speechRecognitionPermission": "Convert your voice into transactions",
+          "androidSpeechServicePackages": [
+            "com.google.android.googlequicksearchbox"
+          ]
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Import receipt photos to track expenses",
+          "cameraPermission": "Scan receipts to log expenses automatically",
+          "microphonePermission": false
+        }
+      ],
       [
         "expo-share-intent",
         {
@@ -125,7 +150,12 @@
           ]
         }
       ],
-      "expo-local-authentication",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Unlock Budgy securely with Face ID"
+        }
+      ],
       [
         "expo-notifications",
         {

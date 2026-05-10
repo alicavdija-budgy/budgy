@@ -21,7 +21,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.budgy.ch.budgy",
-      "buildNumber": "21",
+      "buildNumber": "24",
       "associatedDomains": [
         "applinks:budgy.ch",
         "applinks:www.budgy.ch"
@@ -58,7 +58,7 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.budgy.ch.budgy",
-      "versionCode": 21,
+      "versionCode": 24,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_MEDIA_IMAGES",
@@ -108,28 +108,9 @@
         }
       ],
       "expo-secure-store",
-      [
-        "expo-camera",
-        {
-          "cameraPermission": "Scan receipts to log expenses automatically",
-          "microphonePermission": "Dictate expenses and income with your voice",
-          "recordAudioAndroid": false
-        }
-      ],
-      [
-        "expo-speech-recognition",
-        {
-          "microphonePermission": "Dicter vos dépenses et revenus à la voix",
-          "speechRecognitionPermission": "Transcrire votre voix en transactions",
-          "androidSpeechServicePackages": ["com.google.android.googlequicksearchbox"]
-        }
-      ],
-      [
-        "expo-image-picker",
-        {
-          "photosPermission": "Importer photos de reçus et factures"
-        }
-      ],
+      "expo-camera",
+      "expo-speech-recognition",
+      "expo-image-picker",
       [
         "expo-share-intent",
         {
@@ -146,12 +127,7 @@
           ]
         }
       ],
-      [
-        "expo-local-authentication",
-        {
-          "faceIDPermission": "Verrouiller l'app avec Face ID"
-        }
-      ],
+      "expo-local-authentication",
       [
         "expo-notifications",
         {

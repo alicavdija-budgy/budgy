@@ -21,7 +21,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.budgy.ch.budgy",
-      "buildNumber": "25",
+      "buildNumber": "33",
       "associatedDomains": [
         "applinks:budgy.ch",
         "applinks:www.budgy.ch"
@@ -39,12 +39,14 @@
           "it"
         ],
         "CFBundleDevelopmentRegion": "fr",
-        "NSCameraUsageDescription": "Scan receipts to log expenses automatically",
-        "NSPhotoLibraryUsageDescription": "Import receipt photos to track expenses",
-        "NSPhotoLibraryAddUsageDescription": "Save expense receipts as PDFs to your library",
-        "NSFaceIDUsageDescription": "Unlock Budgy securely with Face ID",
-        "NSMicrophoneUsageDescription": "Dictate expenses and income with your voice",
-        "NSSpeechRecognitionUsageDescription": "Convert your voice into transactions",
+        "NSCameraUsageDescription": "Scan paper receipts to log expenses automatically.",
+        "NSPhotoLibraryUsageDescription": "Attach photos of your receipts to track and prove expenses.",
+        "NSPhotoLibraryAddUsageDescription": "Save expense receipts and exported reports to your photo library.",
+        "NSFaceIDUsageDescription": "Unlock Budgy securely using Face ID.",
+        "NSMicrophoneUsageDescription": "Dictate expenses and income with your voice to log transactions hands-free.",
+        "NSSpeechRecognitionUsageDescription": "Convert your voice into expense and income transactions automatically.",
+        "NSContactsUsageDescription": "Quickly split expenses with the people in your contacts.",
+        "NSLocationWhenInUseUsageDescription": "Tag your expenses with the merchant location for better insights.",
         "UIBackgroundModes": [
           "fetch"
         ],
@@ -58,7 +60,7 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.budgy.ch.budgy",
-      "versionCode": 25,
+      "versionCode": 33,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_MEDIA_IMAGES",
@@ -111,16 +113,22 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Scan receipts to log expenses automatically",
-          "microphonePermission": "Dictate expenses and income with your voice",
+          "cameraPermission": "Scan paper receipts to log expenses automatically.",
+          "microphonePermission": "Dictate expenses and income with your voice to log transactions hands-free.",
           "recordAudioAndroid": true
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Dictate expenses and income with your voice to log transactions hands-free."
         }
       ],
       [
         "expo-speech-recognition",
         {
-          "microphonePermission": "Dictate expenses and income with your voice",
-          "speechRecognitionPermission": "Convert your voice into transactions",
+          "microphonePermission": "Dictate expenses and income with your voice to log transactions hands-free.",
+          "speechRecognitionPermission": "Convert your voice into expense and income transactions automatically.",
           "androidSpeechServicePackages": [
             "com.google.android.googlequicksearchbox"
           ]
@@ -129,9 +137,9 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Import receipt photos to track expenses",
-          "cameraPermission": "Scan receipts to log expenses automatically",
-          "microphonePermission": false
+          "photosPermission": "Attach photos of your receipts to track and prove expenses.",
+          "cameraPermission": "Scan paper receipts to log expenses automatically.",
+          "microphonePermission": "Dictate expenses and income with your voice to log transactions hands-free."
         }
       ],
       [
@@ -153,7 +161,7 @@
       [
         "expo-local-authentication",
         {
-          "faceIDPermission": "Unlock Budgy securely with Face ID"
+          "faceIDPermission": "Unlock Budgy securely using Face ID."
         }
       ],
       [
@@ -164,7 +172,8 @@
           "sounds": []
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      "./plugins/withForcedInfoPlist"
     ],
     "extra": {
       "eas": {

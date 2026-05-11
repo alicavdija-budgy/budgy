@@ -55,9 +55,9 @@
   "submit": {
     "production": {
       "ios": {
-        "appleId": "votre-apple-id@example.com",
-        "ascAppId": "0000000000",
-        "appleTeamId": "XXXXXXXXXX",
+        "appleId": "alic.avdija@gmail.com",
+        "ascAppId": "6767026949",
+        "appleTeamId": "N69NHCB9S3",
         "language": "fr-FR"
       },
       "android": {
@@ -68,9 +68,9 @@
     },
     "preview": {
       "ios": {
-        "appleId": "votre-apple-id@example.com",
-        "ascAppId": "0000000000",
-        "appleTeamId": "XXXXXXXXXX",
+        "appleId": "alic.avdija@gmail.com",
+        "ascAppId": "6767026949",
+        "appleTeamId": "N69NHCB9S3",
         "language": "fr-FR"
       },
       "android": {

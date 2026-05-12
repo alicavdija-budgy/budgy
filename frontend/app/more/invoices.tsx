@@ -16,6 +16,8 @@ import Animated, { FadeInDown, SlideOutRight } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
+import { useTheme } from '../../src/hooks/useTheme';
+import type { ThemePalette } from '../../src/constants/palettes';
 import { Card, Button, Badge, EmptyState, ProgressBar } from '../../src/components/ui';
 import { formatNumber } from '../../src/utils/calculations';
 
@@ -51,6 +53,8 @@ const DEMO_INVOICES: Invoice[] = [];
 type Tab = 'all' | 'pending' | 'overdue' | 'paid';
 
 export default function InvoicesScreen() {
+  const theme = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
@@ -358,7 +362,7 @@ export default function InvoicesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (Colors: ThemePalette) => StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md },
   backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },

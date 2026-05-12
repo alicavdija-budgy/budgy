@@ -11,6 +11,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
+import { useTheme } from '../../src/hooks/useTheme';
+import type { ThemePalette } from '../../src/constants/palettes';
 import { useStore } from '../../src/stores/useStore';
 import { EmptyState, Button } from '../../src/components/ui';
 import { formatNumber } from '../../src/utils/calculations';
@@ -20,6 +22,8 @@ const PRESET_EMOJIS = ['💼', '🏠', '✈️', '🍽️', '🏖️', '👯', '
 const PRESET_COLORS = ['#A78BFA', '#34D399', '#60A5FA', '#F472B6', '#FBBF24', '#F87171', '#22D3EE', '#84CC16'];
 
 export default function GroupsScreen() {
+  const theme = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, groups, groupExpenses, addGroup } = useStore();
@@ -200,7 +204,7 @@ export default function GroupsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (Colors: ThemePalette) => StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md },
   iconBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },

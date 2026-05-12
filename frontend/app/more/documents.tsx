@@ -21,6 +21,8 @@ import * as Sharing from 'expo-sharing';
 import * as Haptics from 'expo-haptics';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
+import { useTheme } from '../../src/hooks/useTheme';
+import type { ThemePalette } from '../../src/constants/palettes';
 import { useStore } from '../../src/stores/useStore';
 import { Card, EmptyState, Button } from '../../src/components/ui';
 import ZoomableImage from '../../src/components/ZoomableImage';
@@ -51,6 +53,8 @@ const CATEGORIES: { id: DocumentCategory; label: string; emoji: string; color: s
 type Mode = 'list' | 'capture' | 'review' | 'crop' | 'edit' | 'detail';
 
 export default function DocumentsScreen() {
+  const theme = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { documents, addDocument, deleteDocument } = useStore();
@@ -783,7 +787,7 @@ ${pageDataUrls.map((src, i) => `
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (Colors: ThemePalette) => StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md },
   iconBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },

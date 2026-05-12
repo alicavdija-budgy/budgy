@@ -19,6 +19,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
+import { useTheme } from '../../src/hooks/useTheme';
+import type { ThemePalette } from '../../src/constants/palettes';
 import { useStore } from '../../src/stores/useStore';
 import { Card, EmptyState, Button } from '../../src/components/ui';
 import { CategoryIcon, getCategoryName } from '../../src/components/CategoryIcon';
@@ -29,6 +31,8 @@ import type { ReceiptType } from '../../src/types';
 type Filter = 'all' | ReceiptType;
 
 export default function ReceiptsScreen() {
+  const theme = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { receipts, deleteReceipt } = useStore();
@@ -282,7 +286,7 @@ export default function ReceiptsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (Colors: ThemePalette) => StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   header: {
     flexDirection: 'row',

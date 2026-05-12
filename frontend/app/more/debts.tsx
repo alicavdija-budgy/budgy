@@ -13,6 +13,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
+import { useTheme } from '../../src/hooks/useTheme';
+import type { ThemePalette } from '../../src/constants/palettes';
 import { Card, Button, ProgressBar, EmptyState } from '../../src/components/ui';
 import { useStore } from '../../src/stores/useStore';
 import { formatNumber, pct } from '../../src/utils/calculations';
@@ -27,6 +29,8 @@ const DEBT_TYPES = [
 ];
 
 export default function DebtsScreen() {
+  const theme = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { preferences, debts, addDebt, deleteDebt, updateDebt } = useStore();
@@ -351,7 +355,7 @@ export default function DebtsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (Colors: ThemePalette) => StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md },
   iconBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },

@@ -12,6 +12,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Slider from '@react-native-community/slider';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
+import { useTheme } from '../../src/hooks/useTheme';
+import type { ThemePalette } from '../../src/constants/palettes';
 import { Card, Badge, ProgressBar } from '../../src/components/ui';
 import { CANTONS, FRANCHISES, INSURANCE_MODELS, type CantonCode } from '../../src/data/swiss-data';
 import { formatNumber } from '../../src/utils/calculations';
@@ -33,6 +35,8 @@ const ALL_CANTONS: CantonCode[] = [
 ];
 
 export default function LamalComparatorScreen() {
+  const theme = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [canton, setCanton] = useState<CantonCode>('VD');
@@ -311,7 +315,7 @@ export default function LamalComparatorScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (Colors: ThemePalette) => StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md },
   backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },

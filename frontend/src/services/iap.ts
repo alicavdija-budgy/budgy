@@ -171,6 +171,8 @@ export async function getAvailableReceipts(): Promise<IapPurchaseReceipt[]> {
 }
 
 // ── Backend (FastAPI) ────────────────────────────────────────────────────────
+import { safeFetch } from '../lib/network';
+
 const BACKEND_URL =
   process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:8001';
 
@@ -198,41 +200,43 @@ export interface BackendValidation {
 }
 
 async function postJson(path: string, body: any): Promise<BackendValidation> {
-  try {
-    const res = await fetch(`${BACKEND_URL}${path}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (res.status === 503 || data?.error === 'iap_not_configured') {
-      return {
-        ok: false,
-        valid: false,
-        not_configured: true,
-        missing: data?.missing || [],
-        error: 'iap_not_configured',
-      };
-    }
-    return {
-      ok: !!data.ok,
-      valid: !!data.valid,
-      subscription_state: data.subscription_state,
-      product_id: data.product_id ?? null,
-      expires_at: data.expires_at ?? null,
-      pro_until: data.pro_until ?? null,
-      original_transaction_id: data.original_transaction_id ?? null,
-      environment: data.environment ?? null,
-      auto_renew: data.auto_renew ?? null,
-      error: data.error ?? null,
-    };
-  } catch (e: any) {
+  const r = await safeFetch(`${BACKEND_URL}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }, { timeoutMs: 8000, retries: 1, silent: true });
+
+  // Network failure → graceful offline result, never throw
+  if (r.offline || (!r.ok && r.status === 0)) {
     return {
       ok: false,
       valid: false,
-      error: e?.message || 'network_error',
+      error: 'network_error',
     };
   }
+
+  const data: any = r.data || {};
+  if (r.status === 503 || data?.error === 'iap_not_configured') {
+    return {
+      ok: false,
+      valid: false,
+      not_configured: true,
+      missing: data?.missing || [],
+      error: 'iap_not_configured',
+    };
+  }
+  return {
+    ok: !!data.ok,
+    valid: !!data.valid,
+    subscription_state: data.subscription_state,
+    product_id: data.product_id ?? null,
+    expires_at: data.expires_at ?? null,
+    pro_until: data.pro_until ?? null,
+    original_transaction_id: data.original_transaction_id ?? null,
+    environment: data.environment ?? null,
+    auto_renew: data.auto_renew ?? null,
+    error: data.error ?? null,
+  };
 }
 
 export async function validateOnBackend(input: {
@@ -271,20 +275,18 @@ export interface RemoteSubscription {
 export async function fetchSubscriptionFromBackend(
   user_id: string
 ): Promise<RemoteSubscription | null> {
-  try {
-    const res = await fetch(
-      `${BACKEND_URL}/api/iap/me?user_id=${encodeURIComponent(user_id)}`
-    );
-    if (!res.ok) return null;
-    const data = await res.json();
-    return {
-      is_pro: !!data.is_pro,
-      subscription_state: (data.subscription_state || 'FREE') as SubscriptionState,
-      pro_until: data.pro_until ?? null,
-      apple_product_id: data.apple_product_id ?? null,
-      apple_original_transaction_id: data.apple_original_transaction_id ?? null,
-    };
-  } catch {
-    return null;
-  }
+  const r = await safeFetch(
+    `${BACKEND_URL}/api/iap/me?user_id=${encodeURIComponent(user_id)}`,
+    undefined,
+    { timeoutMs: 6000, retries: 1, silent: true }
+  );
+  if (!r.ok || !r.data) return null;
+  const data: any = r.data;
+  return {
+    is_pro: !!data.is_pro,
+    subscription_state: (data.subscription_state || 'FREE') as SubscriptionState,
+    pro_until: data.pro_until ?? null,
+    apple_product_id: data.apple_product_id ?? null,
+    apple_original_transaction_id: data.apple_original_transaction_id ?? null,
+  };
 }

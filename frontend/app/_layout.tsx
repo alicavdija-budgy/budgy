@@ -6,10 +6,10 @@
 import React, { useEffect, useRef } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Platform, View, Text, StyleSheet, AppState, AppStateStatus } from 'react-native';
+import { Platform, AppState, AppStateStatus } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { Colors, FontSizes, FontWeights, Spacing } from '../src/constants/theme';
+import { Colors } from '../src/constants/theme';
 import {
   requestNotificationPermissions,
   scheduleMonthlyReminder,
@@ -19,21 +19,7 @@ import { pullAllFromCloud, pushAllToCloud, isSignedInToSupabase } from '../src/s
 import { useStore } from '../src/stores/useStore';
 import LockScreen from './lock';
 import ShareIntentRouter from '../src/components/ShareIntentRouter';
-
-function OfflineBadge() {
-  const isOnline = useStore((s) => s.isOnline);
-  const queueLen = useStore((s) => s.syncQueue.length);
-  if (isOnline && queueLen === 0) return null;
-  // Hide entirely if just queued items and online (no need to alarm user)
-  if (isOnline) return null;
-  return (
-    <View style={styles.offlineBar}>
-      <Text style={styles.offlineText}>
-        🔌 Hors ligne · données en sécurité localement
-      </Text>
-    </View>
-  );
-}
+import { OfflineBanner } from '../src/components/OfflineBanner';
 
 function LockGate({ children }: { children: React.ReactNode }) {
   const { security, isLocked, setLocked, isAuthenticated, setDecoyMode } = useStore();
@@ -138,7 +124,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <StatusBar style="light" />
-        <OfflineBadge />
+        <OfflineBanner />
         <ShareIntentRouter />
         <LockGate>
         <Stack
@@ -179,22 +165,3 @@ export default function RootLayout() {
     </GestureHandlerRootView>
   );
 }
-
-const styles = StyleSheet.create({
-  offlineBar: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: Colors.warning,
-    paddingVertical: Spacing.xs,
-    paddingHorizontal: Spacing.md,
-    zIndex: 9999,
-    alignItems: 'center',
-  },
-  offlineText: {
-    color: '#000',
-    fontSize: FontSizes.xs,
-    fontWeight: FontWeights.semibold,
-  },
-});

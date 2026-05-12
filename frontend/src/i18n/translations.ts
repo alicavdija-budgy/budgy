@@ -441,6 +441,50 @@ export const TRANSLATIONS = {
     de: { title: 'Investitionen', totalValue: 'Gesamtwert', totalPnl: 'Gesamtrendite', today: 'heute', allocation: 'ALLOKATION', insightsEyebrow: 'KI-INSIGHTS', typeCash: 'Cash', typeEtf: 'ETF', typeCrypto: 'Krypto', typeStock: 'Aktien', emptyTitle: 'Verfolgen Sie Ihr Vermögen', emptySub: 'Fügen Sie Ihre Anlagen (Cash, ETFs, Krypto, Aktien) hinzu, um Ihr Portfolio zu sehen.', addFirst: 'Erste Anlage hinzufügen', addTitle: 'Neue Anlage', addCta: 'Hinzufügen', addErrTitle: 'Felder unvollständig', addErrBody: 'Bitte geben Sie Namen, Menge und Durchschnittspreis ein.', removeTitle: 'Anlage entfernen', removeBody: 'Möchten Sie {{name}} aus Ihrem Portfolio entfernen?', remove: 'Entfernen', cancel: 'Abbrechen', fieldName: 'Name', fieldTicker: 'Symbol', fieldQty: 'Menge', fieldAmount: 'Betrag (CHF)', fieldAvgPrice: 'Ø Preis (CHF)', proInsightsTitle: '+{{n}} Pro-Insights', proInsightsSub: 'Detaillierte Allokation, Prognosen, Übergewichtungen und mehr.', insEmptyTitle: 'Bereit zum Start', insEmptySub: 'Fügen Sie Anlagen hinzu, um persönliche Insights zu erhalten.', insDiversified: 'Gut diversifiziertes Portfolio', insDiversifiedSub: 'Verteilt auf {{n}} Anlageklassen — gute Balance.', insMono: 'Konzentriertes Portfolio', insMonoSub: 'Nur eine Anlageklasse — eine Diversifikation reduziert das Risiko.', insCash: 'Hoher Cash-Anteil: {{p}}%', insCashSub: 'Viel Cash bedeutet maximale Sicherheit, aber niedrige Rendite.', insCrypto: 'Krypto-Anteil: {{p}}%', insCryptoSub: 'Krypto ist volatil. Halten Sie das Risiko vernünftig.', insPnlGood: 'Starke Performance: +{{p}}%', insPnlGoodSub: 'Ihr Portfolio entwickelt sich gut. Glückwunsch!', insPnlBad: 'Vorübergehender Rückgang: -{{p}}%', insPnlBadSub: 'Märkte schwanken. Vermeiden Sie impulsive Entscheidungen.', insOverweight: '{{type}} dominiert ({{p}}%)', insOverweightSub: 'Eine Klasse ist übergewichtet — eine Umschichtung könnte helfen.', insProjection: '1-Jahres-Prognose: ~CHF {{v}}', insProjectionSub: 'Wenn der aktuelle Trend anhält (indikative Schätzung).' },
     it: { title: 'Investimenti', totalValue: 'Valore totale', totalPnl: 'Rendimento totale', today: 'oggi', allocation: 'ALLOCAZIONE', insightsEyebrow: 'INSIGHTS IA', typeCash: 'Cash', typeEtf: 'ETF', typeCrypto: 'Crypto', typeStock: 'Azioni', emptyTitle: 'Inizia a monitorare il tuo patrimonio', emptySub: 'Aggiungi i tuoi asset (cash, ETF, crypto, azioni) per vedere il portafoglio completo.', addFirst: 'Aggiungi il mio primo asset', addTitle: 'Nuovo asset', addCta: 'Aggiungi', addErrTitle: 'Campi incompleti', addErrBody: 'Inserisci nome, quantità e prezzo medio validi.', removeTitle: 'Rimuovi asset', removeBody: 'Vuoi rimuovere {{name}} dal tuo portafoglio?', remove: 'Rimuovi', cancel: 'Annulla', fieldName: 'Nome', fieldTicker: 'Simbolo', fieldQty: 'Quantità', fieldAmount: 'Importo (CHF)', fieldAvgPrice: 'Prezzo medio (CHF)', proInsightsTitle: '+{{n}} insights Pro', proInsightsSub: 'Allocazione dettagliata, proiezioni, sovrappesi e altro.', insEmptyTitle: 'Pronto a partire', insEmptySub: 'Aggiungi asset per ottenere insights personalizzati.', insDiversified: 'Portafoglio ben diversificato', insDiversifiedSub: 'Distribuito su {{n}} classi di asset — buon equilibrio.', insMono: 'Portafoglio concentrato', insMonoSub: 'Una sola classe — diversifica per ridurre il rischio.', insCash: 'Cash elevato: {{p}}%', insCashSub: 'Grande quota in cash — massima sicurezza, ma basso rendimento.', insCrypto: 'Esposizione crypto: {{p}}%', insCryptoSub: 'Le crypto sono volatili. Mantieni il rischio ragionevole.', insPnlGood: 'Performance solida: +{{p}}%', insPnlGoodSub: 'Il tuo portafoglio sta andando bene. Bravo!', insPnlBad: 'Calo temporaneo: -{{p}}%', insPnlBadSub: 'I mercati oscillano. Evita decisioni impulsive.', insOverweight: '{{type}} domina ({{p}}%)', insOverweightSub: 'Una classe è sovrappesata — un ribilanciamento potrebbe aiutare.', insProjection: 'Proiezione 1 anno: ~CHF {{v}}', insProjectionSub: 'Se il trend attuale continua (stima indicativa).' },
   },
+
+  // ─────────── Network / Offline ───────────
+  network: {
+    fr: {
+      offlineBanner: 'Hors ligne — vos données sont en sécurité localement',
+      offlineShort: 'Hors ligne',
+      backOnline: 'Connexion rétablie',
+      retry: 'Réessayer',
+      noInternet: 'Pas d\'internet',
+      checking: 'Vérification du réseau…',
+      saved: 'Enregistré localement',
+      willSync: 'Synchronisation dès que possible',
+    },
+    en: {
+      offlineBanner: 'Offline — your data is safely saved locally',
+      offlineShort: 'Offline',
+      backOnline: 'Back online',
+      retry: 'Retry',
+      noInternet: 'No internet',
+      checking: 'Checking network…',
+      saved: 'Saved locally',
+      willSync: 'Will sync as soon as possible',
+    },
+    de: {
+      offlineBanner: 'Offline — Ihre Daten sind lokal gespeichert',
+      offlineShort: 'Offline',
+      backOnline: 'Wieder online',
+      retry: 'Erneut versuchen',
+      noInternet: 'Kein Internet',
+      checking: 'Netzwerk wird geprüft…',
+      saved: 'Lokal gespeichert',
+      willSync: 'Synchronisiert sobald möglich',
+    },
+    it: {
+      offlineBanner: 'Offline — i tuoi dati sono salvati localmente',
+      offlineShort: 'Offline',
+      backOnline: 'Di nuovo online',
+      retry: 'Riprova',
+      noInternet: 'Nessuna connessione',
+      checking: 'Verifica rete…',
+      saved: 'Salvato localmente',
+      willSync: 'Sincronizzerà appena possibile',
+    },
+  },
 } as const;
 
 // Helper for parameterized strings: t('savings.target', { n: 1000 })

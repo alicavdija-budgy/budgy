@@ -83,7 +83,7 @@ export default function LamalComparatorScreen() {
     <View style={[styles.container, { paddingTop: insets.top }]} testID="lamal-screen">
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} testID="back-button">
-          <Ionicons name="arrow-back" size={24} color={Colors.text} />
+          <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
           <Text style={styles.title}>{t('lamal.title')}</Text>
@@ -109,7 +109,7 @@ export default function LamalComparatorScreen() {
             <Text style={styles.sliderVal}>{age < 19 ? t('lamal.child') : age < 26 ? t('lamal.young', { n: age }) : t('lamal.adultYears', { n: age })}</Text>
           </View>
           <Slider style={styles.slider} minimumValue={0} maximumValue={70} step={1} value={age} onValueChange={setAge}
-            minimumTrackTintColor={Colors.primary} maximumTrackTintColor={Colors.cardBorder} thumbTintColor={Colors.primary} />
+            minimumTrackTintColor={theme.primary} maximumTrackTintColor={theme.cardBorder} thumbTintColor={theme.primary} />
 
           <Text style={styles.label}>{t('lamal.franchise')}</Text>
           <View style={styles.franchiseRow}>
@@ -133,7 +133,7 @@ export default function LamalComparatorScreen() {
         {/* Hero */}
         <Card style={styles.heroCard}>
           <View style={styles.srcRow}>
-            <Ionicons name="shield-checkmark" size={14} color={Colors.success} />
+            <Ionicons name="shield-checkmark" size={14} color={theme.success} />
             <Text style={styles.srcTxt}>{t('lamal.dataSource')}</Text>
           </View>
           <Text style={styles.heroLabel}>{t('lamal.bestOffer', { c: CANTONS[canton]?.name })}</Text>
@@ -145,20 +145,20 @@ export default function LamalComparatorScreen() {
             </View>
           </View>
           <View style={styles.heroStats}>
-            <View style={styles.heroStat}><Text style={styles.hsl}>{t('lamal.min')}</Text><Text style={[styles.hsv, { color: Colors.success }]}>{formatNumber(premiums.min)}</Text></View>
+            <View style={styles.heroStat}><Text style={styles.hsl}>{t('lamal.min')}</Text><Text style={[styles.hsv, { color: theme.success }]}>{formatNumber(premiums.min)}</Text></View>
             <View style={styles.heroStat}><Text style={styles.hsl}>{t('lamal.avg')}</Text><Text style={styles.hsv}>{formatNumber(premiums.avg)}</Text></View>
-            <View style={styles.heroStat}><Text style={styles.hsl}>{t('lamal.max')}</Text><Text style={[styles.hsv, { color: Colors.error }]}>{formatNumber(premiums.max)}</Text></View>
+            <View style={styles.heroStat}><Text style={styles.hsl}>{t('lamal.max')}</Text><Text style={[styles.hsv, { color: theme.error }]}>{formatNumber(premiums.max)}</Text></View>
           </View>
           <View style={styles.changeRow}>
-            <Ionicons name={cantonChange > 0 ? 'trending-up' : 'trending-down'} size={14} color={cantonChange > 4.4 ? Colors.error : Colors.warning} />
-            <Text style={[styles.changeTxt, { color: cantonChange > 4.4 ? Colors.error : Colors.warning }]}>
+            <Ionicons name={cantonChange > 0 ? 'trending-up' : 'trending-down'} size={14} color={cantonChange > 4.4 ? theme.error : theme.warning} />
+            <Text style={[styles.changeTxt, { color: cantonChange > 4.4 ? theme.error : theme.warning }]}>
               {cantonChange > 0 ? '+' : ''}{t('lamal.vsLast', { p: cantonChange })}
             </Text>
             <Text style={styles.changeAvg}>{t('lamal.avgCh', { n: formatNumber(Math.round(SWISS_AVG_PREMIUM_2026)) })}</Text>
           </View>
           {subsidy > 0 && (
             <View style={styles.subsidyBadge}>
-              <Ionicons name="heart" size={14} color={Colors.success} />
+              <Ionicons name="heart" size={14} color={theme.success} />
               <Text style={styles.subsidyBadgeTxt}>{t('lamal.subsidyBadge', { n: formatNumber(subsidy) })}</Text>
             </View>
           )}
@@ -169,7 +169,7 @@ export default function LamalComparatorScreen() {
           <View style={styles.tabs}>
             {tabs.map(t => (
               <TouchableOpacity key={t.key} style={[styles.tab, activeTab === t.key && styles.tabOn]} onPress={() => setActiveTab(t.key)}>
-                <Ionicons name={t.icon as any} size={16} color={activeTab === t.key ? Colors.text : Colors.textTertiary} />
+                <Ionicons name={t.icon as any} size={16} color={activeTab === t.key ? theme.text : theme.textTertiary} />
                 <Text style={[styles.tabTxt, activeTab === t.key && styles.tabTxtOn]}>{t.label}</Text>
               </TouchableOpacity>
             ))}
@@ -185,10 +185,10 @@ export default function LamalComparatorScreen() {
             {insurerList.map((item, idx) => {
               const isFirst = idx === 0;
               return (
-                <Card key={item.insurer.id} style={[styles.insurerCard, isFirst && { borderColor: `${Colors.success}40` }]}>
+                <Card key={item.insurer.id} style={[styles.insurerCard, isFirst && { borderColor: `${theme.success}40` }]}>
                   <View style={styles.insurerRow}>
-                    <View style={[styles.rankCircle, isFirst && { backgroundColor: `${Colors.success}20` }]}>
-                      <Text style={[styles.rankNum, isFirst && { color: Colors.success }]}>#{idx + 1}</Text>
+                    <View style={[styles.rankCircle, isFirst && { backgroundColor: `${theme.success}20` }]}>
+                      <Text style={[styles.rankNum, isFirst && { color: theme.success }]}>#{idx + 1}</Text>
                     </View>
                     <View style={styles.insurerInfo}>
                       <Text style={styles.insurerName}>{item.insurer.name}</Text>
@@ -199,19 +199,19 @@ export default function LamalComparatorScreen() {
                       )}
                     </View>
                     <View style={styles.insurerPrice}>
-                      <Text style={[styles.insurerAmt, isFirst && { color: Colors.success }]}>{formatNumber(item.premium)}</Text>
+                      <Text style={[styles.insurerAmt, isFirst && { color: theme.success }]}>{formatNumber(item.premium)}</Text>
                       <Text style={styles.insurerUnit}>{t('lamal.perMonth')}</Text>
                       <Text style={styles.insurerAnnual}>{t('lamal.annualPerYear', { n: formatNumber(item.annual) })}</Text>
                     </View>
                   </View>
                   <ProgressBar value={100 - ((item.premium - premiums.min) / Math.max(premiums.max - premiums.min, 1) * 100)}
-                    color={isFirst ? Colors.success : Colors.primary} height={4} />
+                    color={isFirst ? theme.success : theme.primary} height={4} />
                 </Card>
               );
             })}
 
             <Card style={styles.noteCard}>
-              <Ionicons name="information-circle" size={18} color={Colors.info} />
+              <Ionicons name="information-circle" size={18} color={theme.info} />
               <Text style={styles.noteTxt}>{t('lamal.noteText')}</Text>
             </Card>
           </>
@@ -223,26 +223,26 @@ export default function LamalComparatorScreen() {
             <Text style={styles.secTitle}>{t('lamal.optimizeFranchise')}</Text>
             <Card style={styles.optCard}>
               <View style={styles.optRow}>
-                <View style={[styles.optBox, { borderColor: Colors.success }]}>
-                  <Ionicons name="fitness" size={28} color={Colors.success} />
+                <View style={[styles.optBox, { borderColor: theme.success }]}>
+                  <Ionicons name="fitness" size={28} color={theme.success} />
                   <Text style={styles.optLabel}>{t('lamal.goodHealth')}</Text>
-                  <Text style={[styles.optVal, { color: Colors.success }]}>CHF 2'500</Text>
+                  <Text style={[styles.optVal, { color: theme.success }]}>CHF 2'500</Text>
                   <Text style={styles.optHint}>{t('lamal.savingPerYear', { n: formatNumber(savingsHighFranchise) })}</Text>
                 </View>
-                <View style={[styles.optBox, { borderColor: Colors.error }]}>
-                  <Ionicons name="medkit" size={28} color={Colors.error} />
+                <View style={[styles.optBox, { borderColor: theme.error }]}>
+                  <Ionicons name="medkit" size={28} color={theme.error} />
                   <Text style={styles.optLabel}>{t('lamal.chronic')}</Text>
-                  <Text style={[styles.optVal, { color: Colors.error }]}>CHF 300</Text>
+                  <Text style={[styles.optVal, { color: theme.error }]}>CHF 300</Text>
                   <Text style={styles.optHint}>{t('lamal.maxCoverage')}</Text>
                 </View>
               </View>
             </Card>
             <Card style={styles.tipCard}>
               <Text style={styles.tipTitle}>{t('lamal.importantDates')}</Text>
-              <View style={styles.tipItem}><Ionicons name="calendar" size={16} color={Colors.warning} /><Text style={styles.tipItemTxt}>{t('lamal.date1')}</Text></View>
-              <View style={styles.tipItem}><Ionicons name="mail" size={16} color={Colors.warning} /><Text style={styles.tipItemTxt}>{t('lamal.date2')}</Text></View>
-              <View style={styles.tipItem}><Ionicons name="swap-horizontal" size={16} color={Colors.info} /><Text style={styles.tipItemTxt}>{t('lamal.date3')}</Text></View>
-              <View style={styles.tipItem}><Ionicons name="shield-checkmark" size={16} color={Colors.success} /><Text style={styles.tipItemTxt}>{t('lamal.date4')}</Text></View>
+              <View style={styles.tipItem}><Ionicons name="calendar" size={16} color={theme.warning} /><Text style={styles.tipItemTxt}>{t('lamal.date1')}</Text></View>
+              <View style={styles.tipItem}><Ionicons name="mail" size={16} color={theme.warning} /><Text style={styles.tipItemTxt}>{t('lamal.date2')}</Text></View>
+              <View style={styles.tipItem}><Ionicons name="swap-horizontal" size={16} color={theme.info} /><Text style={styles.tipItemTxt}>{t('lamal.date3')}</Text></View>
+              <View style={styles.tipItem}><Ionicons name="shield-checkmark" size={16} color={theme.success} /><Text style={styles.tipItemTxt}>{t('lamal.date4')}</Text></View>
             </Card>
           </>
         )}
@@ -257,7 +257,7 @@ export default function LamalComparatorScreen() {
                 <Text style={styles.sliderVal}>CHF {formatNumber(income)}</Text>
               </View>
               <Slider style={styles.slider} minimumValue={20000} maximumValue={150000} step={1000} value={income} onValueChange={setIncome}
-                minimumTrackTintColor={Colors.success} maximumTrackTintColor={Colors.cardBorder} thumbTintColor={Colors.success} />
+                minimumTrackTintColor={theme.success} maximumTrackTintColor={theme.cardBorder} thumbTintColor={theme.success} />
               <View style={styles.statusRow}>
                 {[{ v: false, l: t('lamal.single') }, { v: true, l: t('lamal.married') }].map(o => (
                   <TouchableOpacity key={o.l} style={[styles.statusBtn, married === o.v && styles.statusBtnOn]} onPress={() => setMarried(o.v)}>
@@ -274,9 +274,9 @@ export default function LamalComparatorScreen() {
                 ))}
               </View>
             </Card>
-            <Card style={[styles.subsidyResult, { borderColor: subsidy > 0 ? Colors.success : Colors.cardBorder }]}>
-              <Ionicons name={subsidy > 0 ? 'checkmark-circle' : 'close-circle'} size={32} color={subsidy > 0 ? Colors.success : Colors.error} />
-              <Text style={[styles.subsidySt, { color: subsidy > 0 ? Colors.success : Colors.error }]}>
+            <Card style={[styles.subsidyResult, { borderColor: subsidy > 0 ? theme.success : theme.cardBorder }]}>
+              <Ionicons name={subsidy > 0 ? 'checkmark-circle' : 'close-circle'} size={32} color={subsidy > 0 ? theme.success : theme.error} />
+              <Text style={[styles.subsidySt, { color: subsidy > 0 ? theme.success : theme.error }]}>
                 {subsidy > 0 ? t('lamal.eligible') : t('lamal.notEligible')}
               </Text>
               {subsidy > 0 && (
@@ -299,8 +299,8 @@ export default function LamalComparatorScreen() {
                 <View style={styles.rkInfo}>
                   <Text style={styles.rkName}>{c.name} ({c.code})</Text>
                   <View style={styles.rkChgRow}>
-                    <Ionicons name={c.change > 4.4 ? 'arrow-up' : 'arrow-down'} size={11} color={c.change > 4.4 ? Colors.error : Colors.success} />
-                    <Text style={[styles.rkChg, { color: c.change > 4.4 ? Colors.error : Colors.success }]}>{c.change > 0 ? '+' : ''}{c.change}%</Text>
+                    <Ionicons name={c.change > 4.4 ? 'arrow-up' : 'arrow-down'} size={11} color={c.change > 4.4 ? theme.error : theme.success} />
+                    <Text style={[styles.rkChg, { color: c.change > 4.4 ? theme.error : theme.success }]}>{c.change > 0 ? '+' : ''}{c.change}%</Text>
                   </View>
                 </View>
                 <Text style={styles.rkPrem}>CHF {formatNumber(c.premium)}</Text>

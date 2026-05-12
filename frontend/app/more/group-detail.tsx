@@ -21,6 +21,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
+import { useTheme } from '../../src/hooks/useTheme';
+import type { ThemePalette } from '../../src/constants/palettes';
 import { useStore } from '../../src/stores/useStore';
 import { Card, EmptyState, Button } from '../../src/components/ui';
 import { formatNumber } from '../../src/utils/calculations';
@@ -87,6 +89,8 @@ function simplifySettlements(
 }
 
 export default function GroupDetailScreen() {
+  const theme = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { groupId } = useLocalSearchParams<{ groupId: string }>();
@@ -183,11 +187,11 @@ export default function GroupDetailScreen() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
-          <Ionicons name="chevron-back" size={24} color={Colors.text} />
+          <Ionicons name="chevron-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <Text style={styles.title}>{group.emoji} {group.name}</Text>
         <TouchableOpacity onPress={onDeleteGroup} style={styles.iconBtn}>
-          <Ionicons name="trash-outline" size={22} color={Colors.error} />
+          <Ionicons name="trash-outline" size={22} color={theme.error} />
         </TouchableOpacity>
       </View>
 
@@ -206,7 +210,7 @@ export default function GroupDetailScreen() {
                   <Text style={styles.memberName} numberOfLines={1}>{m.isMe ? 'Moi' : m.name}</Text>
                   <Text style={[
                     styles.memberBal,
-                    { color: bal >= 0 ? Colors.success : Colors.error }
+                    { color: bal >= 0 ? theme.success : theme.error }
                   ]}>
                     {bal >= 0 ? '+' : ''}{formatNumber(bal)}
                   </Text>
@@ -229,7 +233,7 @@ export default function GroupDetailScreen() {
                     <Text style={styles.smallAvatarText}>{from?.name[0]?.toUpperCase()}</Text>
                   </View>
                   <Text style={styles.settleText}>{from?.isMe ? 'Moi' : from?.name}</Text>
-                  <Ionicons name="arrow-forward" size={16} color={Colors.textTertiary} />
+                  <Ionicons name="arrow-forward" size={16} color={theme.textTertiary} />
                   <View style={[styles.smallAvatar, { backgroundColor: to?.color }]}>
                     <Text style={styles.smallAvatarText}>{to?.name[0]?.toUpperCase()}</Text>
                   </View>
@@ -245,7 +249,7 @@ export default function GroupDetailScreen() {
         <View style={styles.expHeader}>
           <Text style={styles.sectionTitle}>Dépenses</Text>
           <TouchableOpacity style={styles.addExpBtn} onPress={openAdd}>
-            <Ionicons name="add" size={18} color={Colors.text} />
+            <Ionicons name="add" size={18} color={theme.text} />
             <Text style={styles.addExpTxt}>Ajouter</Text>
           </TouchableOpacity>
         </View>
@@ -276,7 +280,7 @@ export default function GroupDetailScreen() {
                   <View style={{ alignItems: 'flex-end' }}>
                     <Text style={styles.expAmount}>CHF {formatNumber(e.amount)}</Text>
                     <TouchableOpacity onPress={() => deleteGroupExpense(e.id)}>
-                      <Ionicons name="trash-outline" size={16} color={Colors.error} />
+                      <Ionicons name="trash-outline" size={16} color={theme.error} />
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -290,8 +294,8 @@ export default function GroupDetailScreen() {
         style={[styles.fab, { bottom: insets.bottom + 20 }]}
         onPress={openAdd}
       >
-        <LinearGradient colors={Colors.gradientPrimary as [string, string]} style={styles.fabGrad}>
-          <Ionicons name="add" size={28} color={Colors.text} />
+        <LinearGradient colors={theme.gradientPrimary as [string, string]} style={styles.fabGrad}>
+          <Ionicons name="add" size={28} color={theme.text} />
         </LinearGradient>
       </TouchableOpacity>
 
@@ -305,7 +309,7 @@ export default function GroupDetailScreen() {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Nouvelle dépense</Text>
               <TouchableOpacity onPress={() => setModalOpen(false)}>
-                <Ionicons name="close" size={26} color={Colors.text} />
+                <Ionicons name="close" size={26} color={theme.text} />
               </TouchableOpacity>
             </View>
             <ScrollView style={{ maxHeight: 540 }} keyboardShouldPersistTaps="handled">
@@ -315,7 +319,7 @@ export default function GroupDetailScreen() {
                 value={title}
                 onChangeText={setTitle}
                 placeholder="Ex: Pizza, Essence, Internet..."
-                placeholderTextColor={Colors.textTertiary}
+                placeholderTextColor={theme.textTertiary}
               />
 
               <Text style={styles.label}>Montant (CHF)</Text>
@@ -324,7 +328,7 @@ export default function GroupDetailScreen() {
                 value={amount}
                 onChangeText={(t) => setAmount(t.replace(/[^0-9.,]/g, ''))}
                 placeholder="0.00"
-                placeholderTextColor={Colors.textTertiary}
+                placeholderTextColor={theme.textTertiary}
                 keyboardType="decimal-pad"
               />
 
@@ -363,14 +367,14 @@ export default function GroupDetailScreen() {
                     </View>
                     <Text style={styles.payerName}>{m.isMe ? 'Moi' : m.name}</Text>
                     {involved.includes(m.id) && (
-                      <Ionicons name="checkmark-circle" size={16} color={Colors.success} />
+                      <Ionicons name="checkmark-circle" size={16} color={theme.success} />
                     )}
                   </TouchableOpacity>
                 ))}
               </View>
 
               <View style={styles.infoBox}>
-                <Ionicons name="information-circle" size={16} color={Colors.primaryLight} />
+                <Ionicons name="information-circle" size={16} color={theme.primaryLight} />
                 <Text style={styles.infoText}>Partagé également entre {involved.length} personnes</Text>
               </View>
             </ScrollView>
@@ -389,7 +393,7 @@ export default function GroupDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (Colors: ThemePalette) => StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',

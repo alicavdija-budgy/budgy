@@ -1,17 +1,22 @@
 /**
- * BUDGY — Tab Layout
+ * BUDGY — Tab Layout (theme-aware)
  *
  * 5 main tabs: Home, Expenses, [Central AI Button], Savings, More.
  * The central button replaces the previous scan button: it now opens the
  * AI Menu (5 actions) — see BudgyAIButton + AIMenuModal.
+ *
+ * Light/Dark mode is driven by useTheme(); tab bar uses dedicated palette
+ * tokens (tabBarBackground, tabBarBorder, tabBarActive, tabBarInactive).
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Tabs } from 'expo-router';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors, FontSizes, FontWeights } from '../../src/constants/theme';
+import { FontSizes, FontWeights } from '../../src/constants/theme';
+import { useTheme } from '../../src/hooks/useTheme';
+import type { ThemePalette } from '../../src/constants/palettes';
 import { useTranslation } from '../../src/hooks/useTranslation';
 import BudgyAIButton from '../../src/components/BudgyAIButton';
 import AIMenuModal from '../../src/components/AIMenuModal';
@@ -19,6 +24,8 @@ import AIMenuModal from '../../src/components/AIMenuModal';
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
+  const theme = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const [aiMenuOpen, setAiMenuOpen] = useState(false);
 
   return (
@@ -27,15 +34,23 @@ export default function TabLayout() {
         screenOptions={{
           headerShown: false,
           tabBarStyle: {
-            backgroundColor: Colors.backgroundSecondary,
-            borderTopColor: Colors.cardBorder,
-            borderTopWidth: 1,
+            backgroundColor: theme.tabBarBackground,
+            borderTopColor: theme.tabBarBorder,
+            borderTopWidth: StyleSheet.hairlineWidth,
             height: 70 + insets.bottom,
             paddingBottom: insets.bottom,
             paddingTop: 8,
+            ...(Platform.OS === 'ios'
+              ? {
+                  shadowColor: theme.premiumShadow,
+                  shadowOpacity: theme.premiumShadowOpacity * 0.8,
+                  shadowOffset: { width: 0, height: -2 },
+                  shadowRadius: 12,
+                }
+              : { elevation: 12 }),
           },
-          tabBarActiveTintColor: Colors.primary,
-          tabBarInactiveTintColor: Colors.textTertiary,
+          tabBarActiveTintColor: theme.tabBarActive,
+          tabBarInactiveTintColor: theme.tabBarInactive,
           tabBarLabelStyle: {
             fontSize: FontSizes.xs,
             fontWeight: FontWeights.semibold,
@@ -77,7 +92,6 @@ export default function TabLayout() {
           }}
           listeners={{
             tabPress: (e) => {
-              // Prevent default tab navigation — the AI button handles it
               e.preventDefault();
               setAiMenuOpen(true);
             },
@@ -103,13 +117,12 @@ export default function TabLayout() {
         />
       </Tabs>
 
-      {/* AI Menu modal — opened by central Budgy button */}
       <AIMenuModal visible={aiMenuOpen} onClose={() => setAiMenuOpen(false)} />
     </>
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (_Colors: ThemePalette) => StyleSheet.create({
   centerSlot: {
     position: 'absolute',
     top: 0,

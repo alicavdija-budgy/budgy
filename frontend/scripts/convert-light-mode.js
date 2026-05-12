@@ -16,6 +16,7 @@ const fs = require('fs');
 const path = require('path');
 
 const TARGETS = [
+  // Already done in previous wave (idempotent — script will skip)
   'app/more/recurring.tsx',
   'app/more/budgets.tsx',
   'app/more/debts.tsx',
@@ -26,6 +27,22 @@ const TARGETS = [
   'app/more/documents.tsx',
   'app/more/lamal-comparator.tsx',
   'app/more/analytics.tsx',
+  // New wave — Premium Light Mode globalization
+  'app/(tabs)/savings.tsx',
+  'app/(tabs)/index.tsx',
+  'app/(tabs)/expenses.tsx',
+  'app/(tabs)/more.tsx',
+  'app/(tabs)/scanner.tsx',
+  'app/more/predict.tsx',
+  'app/more/tax-optimizer.tsx',
+  'app/more/security.tsx',
+  'app/more/cloud-sync.tsx',
+  'app/more/lamal-subsidy.tsx',
+  'app/more/subscription.tsx',
+  'app/more/notifications.tsx',
+  'app/more/email-import.tsx',
+  'app/more/group-detail.tsx',
+  'app/scanner-modal.tsx',
 ];
 
 const ROOT = '/app/frontend';
@@ -74,12 +91,15 @@ function transform(filePath) {
     const colorsImport = src.match(/import\s+\{[^}]*Colors[^}]*\}\s+from\s+'[^']*\/constants\/theme'\s*;?/);
     if (colorsImport) {
       const after = colorsImport[0];
-      const hookPath = filePath.startsWith('app/more/')
-        ? '../../src/hooks/useTheme'
-        : '../src/hooks/useTheme';
-      const palettePath = filePath.startsWith('app/more/')
-        ? '../../src/constants/palettes'
-        : '../src/constants/palettes';
+      // Compute depth from app/ folder
+      // app/X.tsx → 1 level up (../src/...)
+      // app/X/Y.tsx → 2 levels up (../../src/...)
+      // app/X/Y/Z.tsx → 3 levels up (../../../src/...)
+      const segments = filePath.split('/');
+      const depth = segments.length - 1; // 'app/foo.tsx' has 2 segments → 1 'up' needed
+      const upPath = '../'.repeat(depth);
+      const hookPath = `${upPath}src/hooks/useTheme`;
+      const palettePath = `${upPath}src/constants/palettes`;
       const inserts = [
         `import { useTheme } from '${hookPath}';`,
         `import type { ThemePalette } from '${palettePath}';`,

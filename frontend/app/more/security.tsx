@@ -7,7 +7,7 @@
  * - Auto-lock timing
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -25,6 +25,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
+import { useTheme } from '../../src/hooks/useTheme';
+import type { ThemePalette } from '../../src/constants/palettes';
 import { useStore } from '../../src/stores/useStore';
 import { Card, Button } from '../../src/components/ui';
 import { setPin, setDecoyPin, isBiometricAvailable, requestBiometric } from '../../src/services/security';
@@ -32,6 +34,8 @@ import { setPin, setDecoyPin, isBiometricAvailable, requestBiometric } from '../
 type PinModalKind = 'main-set' | 'main-change' | 'decoy' | null;
 
 export default function SecurityScreen() {
+  const theme = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { security, setSecurity, transactions, receipts, documents } = useStore();
@@ -127,7 +131,7 @@ export default function SecurityScreen() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
-          <Ionicons name="chevron-back" size={24} color={Colors.text} />
+          <Ionicons name="chevron-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <Text style={styles.title}>Sécurité</Text>
         <View style={{ width: 36 }} />
@@ -135,7 +139,7 @@ export default function SecurityScreen() {
 
       <ScrollView contentContainerStyle={{ padding: Spacing.lg, paddingBottom: insets.bottom + 40 }}>
         <LinearGradient colors={['#10B981', '#059669']} style={styles.hero}>
-          <Ionicons name="shield-checkmark" size={36} color={Colors.text} />
+          <Ionicons name="shield-checkmark" size={36} color={theme.text} />
           <View style={{ flex: 1 }}>
             <Text style={styles.heroTitle}>Vos données sont protégées</Text>
             <Text style={styles.heroSub}>{dataCount} éléments stockés localement • Aucun partage tiers</Text>
@@ -145,7 +149,7 @@ export default function SecurityScreen() {
         <Text style={styles.section}>Verrouillage</Text>
         <Card style={styles.card}>
           <View style={styles.row}>
-            <Ionicons name="lock-closed" size={22} color={Colors.primaryLight} />
+            <Ionicons name="lock-closed" size={22} color={theme.primaryLight} />
             <View style={{ flex: 1 }}>
               <Text style={styles.rowTitle}>App lock</Text>
               <Text style={styles.rowSub}>{security.appLockEnabled ? 'Actif • PIN configuré' : 'Inactif'}</Text>
@@ -156,21 +160,21 @@ export default function SecurityScreen() {
                 if (v) openSetMain();
                 else removePin();
               }}
-              thumbColor={security.appLockEnabled ? Colors.primary : '#9CA3AF'}
-              trackColor={{ true: `${Colors.primary}80`, false: '#374151' }}
+              thumbColor={security.appLockEnabled ? theme.primary : '#9CA3AF'}
+              trackColor={{ true: `${theme.primary}80`, false: '#374151' }}
             />
           </View>
           {security.appLockEnabled && (
             <>
               <View style={styles.divider} />
               <TouchableOpacity style={styles.row} onPress={openSetMain}>
-                <Ionicons name="key-outline" size={22} color={Colors.text} />
+                <Ionicons name="key-outline" size={22} color={theme.text} />
                 <Text style={[styles.rowTitle, { flex: 1 }]}>Changer le code PIN</Text>
-                <Ionicons name="chevron-forward" size={18} color={Colors.textTertiary} />
+                <Ionicons name="chevron-forward" size={18} color={theme.textTertiary} />
               </TouchableOpacity>
               <View style={styles.divider} />
               <View style={styles.row}>
-                <Ionicons name="finger-print" size={22} color={Colors.success} />
+                <Ionicons name="finger-print" size={22} color={theme.success} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.rowTitle}>Face ID / Touch ID</Text>
                   <Text style={styles.rowSub}>{bioAvail ? (security.biometricEnabled ? 'Activé' : 'Disponible') : 'Indisponible sur cet appareil'}</Text>
@@ -179,13 +183,13 @@ export default function SecurityScreen() {
                   value={security.biometricEnabled}
                   onValueChange={(v) => v ? enableBiometric() : setSecurity({ biometricEnabled: false })}
                   disabled={!bioAvail}
-                  thumbColor={security.biometricEnabled ? Colors.success : '#9CA3AF'}
-                  trackColor={{ true: `${Colors.success}80`, false: '#374151' }}
+                  thumbColor={security.biometricEnabled ? theme.success : '#9CA3AF'}
+                  trackColor={{ true: `${theme.success}80`, false: '#374151' }}
                 />
               </View>
               <View style={styles.divider} />
               <View style={styles.row}>
-                <Ionicons name="timer-outline" size={22} color={Colors.warning} />
+                <Ionicons name="timer-outline" size={22} color={theme.warning} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.rowTitle}>Verrouillage auto</Text>
                   <Text style={styles.rowSub}>Après {security.autoLockSeconds}s en arrière-plan</Text>
@@ -213,7 +217,7 @@ export default function SecurityScreen() {
             <Text style={styles.section}>Mode panique 🚨</Text>
             <Card style={styles.card}>
               <View style={styles.row}>
-                <Ionicons name="swap-horizontal" size={22} color={Colors.warning} />
+                <Ionicons name="swap-horizontal" size={22} color={theme.warning} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.rowTitle}>Code de décoy</Text>
                   <Text style={styles.rowSub}>
@@ -237,19 +241,19 @@ export default function SecurityScreen() {
         <Text style={styles.section}>Stockage</Text>
         <Card style={styles.card}>
           <View style={styles.statRow}>
-            <Ionicons name="phone-portrait-outline" size={20} color={Colors.primaryLight} />
+            <Ionicons name="phone-portrait-outline" size={20} color={theme.primaryLight} />
             <Text style={styles.statLabel}>Appareil (chiffré)</Text>
             <Text style={styles.statValue}>{dataCount} items</Text>
           </View>
           <View style={styles.divider} />
           <View style={styles.statRow}>
-            <Ionicons name="cloud-offline-outline" size={20} color={Colors.textTertiary} />
+            <Ionicons name="cloud-offline-outline" size={20} color={theme.textTertiary} />
             <Text style={styles.statLabel}>Backend</Text>
             <Text style={styles.statValueDim}>0 (privé)</Text>
           </View>
           <View style={styles.divider} />
           <View style={styles.statRow}>
-            <Ionicons name="server-outline" size={20} color={Colors.success} />
+            <Ionicons name="server-outline" size={20} color={theme.success} />
             <Text style={styles.statLabel}>Supabase (auth)</Text>
             <Text style={styles.statValue}>Configuré</Text>
           </View>
@@ -283,7 +287,7 @@ export default function SecurityScreen() {
                     if (k === 'back') {
                       return (
                         <TouchableOpacity key="back" style={styles.key} onPress={onBack}>
-                          <Ionicons name="backspace-outline" size={22} color={Colors.text} />
+                          <Ionicons name="backspace-outline" size={22} color={theme.text} />
                         </TouchableOpacity>
                       );
                     }
@@ -304,7 +308,7 @@ export default function SecurityScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (Colors: ThemePalette) => StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',

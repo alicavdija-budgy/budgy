@@ -5,7 +5,7 @@
  * Subscribe redirects to the dedicated /paywall screen.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -22,6 +22,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { Platform } from 'react-native';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
+import { useTheme } from '../../src/hooks/useTheme';
+import type { ThemePalette } from '../../src/constants/palettes';
 import { usePremiumStore } from '../../src/stores/usePremiumStore';
 import { useIAP } from '../../src/hooks/useIAP';
 import { useTranslation } from '../../src/hooks/useTranslation';
@@ -39,6 +41,8 @@ const PRO_FEATURE_KEYS = [
 ];
 
 export default function SubscriptionScreen() {
+  const theme = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { t } = useTranslation();
@@ -92,7 +96,7 @@ export default function SubscriptionScreen() {
       return (
         <Card style={styles.statusCardFree}>
           <View style={styles.statusRow}>
-            <Ionicons name="lock-closed" size={22} color={Colors.textTertiary} />
+            <Ionicons name="lock-closed" size={22} color={theme.textTertiary} />
             <View style={{ flex: 1 }}>
               <Text style={styles.statusTitle}>{t('more.freePlan') || 'Plan gratuit'}</Text>
               <Text style={styles.statusSub}>{t('more.tryProSub') || 'Essayez Budgy Pro 7 jours, sans engagement.'}</Text>
@@ -105,9 +109,9 @@ export default function SubscriptionScreen() {
     return (
       <Card style={styles.statusCard}>
         <View style={styles.statusRow}>
-          <Ionicons name="checkmark-circle" size={22} color={Colors.success} />
+          <Ionicons name="checkmark-circle" size={22} color={theme.success} />
           <View style={{ flex: 1 }}>
-            <Text style={[styles.statusTitle, { color: Colors.success }]}>
+            <Text style={[styles.statusTitle, { color: theme.success }]}>
               {isTrial
                 ? (t('more.trialActive') || 'Essai gratuit actif')
                 : `Budgy Pro ${plan === 'annual' ? '· ' + (t('more.yearly') || 'Annuel') : plan === 'monthly' ? '· ' + (t('more.monthly') || 'Mensuel') : ''}`}
@@ -129,7 +133,7 @@ export default function SubscriptionScreen() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={Colors.text} />
+          <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <Text style={styles.title}>Abonnement</Text>
         <View style={{ width: 40 }} />
@@ -159,7 +163,7 @@ export default function SubscriptionScreen() {
           <Text style={styles.featuresTitle}>{t('more.featuresTitle') || 'Ce que Pro inclut'}</Text>
           {PRO_FEATURE_KEYS.map((k, idx) => (
             <View key={idx} style={styles.featureRow}>
-              <Ionicons name="checkmark-circle" size={18} color={Colors.success} />
+              <Ionicons name="checkmark-circle" size={18} color={theme.success} />
               <Text style={styles.featureText}>{t(k)}</Text>
             </View>
           ))}
@@ -188,14 +192,14 @@ export default function SubscriptionScreen() {
         >
           {busy ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <ActivityIndicator size="small" color={Colors.text} />
+              <ActivityIndicator size="small" color={theme.text} />
               <Text style={styles.restoreText}>
                 {iap.phase === 'restoring' ? t('iap.btnRestoreInProgress') : t('iap.btnValidating')}
               </Text>
             </View>
           ) : (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Ionicons name="refresh" size={16} color={Colors.text} />
+              <Ionicons name="refresh" size={16} color={theme.text} />
               <Text style={styles.restoreText}>{t('iap.btnRestore')}</Text>
             </View>
           )}
@@ -209,7 +213,7 @@ export default function SubscriptionScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (Colors: ThemePalette) => StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   header: {
     flexDirection: 'row',

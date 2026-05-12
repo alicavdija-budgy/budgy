@@ -78,17 +78,17 @@ export default function GroupsScreen() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
-          <Ionicons name="chevron-back" size={24} color={Colors.text} />
+          <Ionicons name="chevron-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <Text style={styles.title}>Groupes & Amis</Text>
         <TouchableOpacity onPress={openModal} style={styles.iconBtn}>
-          <Ionicons name="add-circle" size={28} color={Colors.primary} />
+          <Ionicons name="add-circle" size={28} color={theme.primary} />
         </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={{ padding: Spacing.lg, paddingBottom: insets.bottom + 40 }}>
-        <LinearGradient colors={Colors.gradientPrimary as [string, string]} style={styles.hero}>
-          <Ionicons name="people" size={32} color={Colors.text} />
+        <LinearGradient colors={theme.gradientPrimary as [string, string]} style={styles.hero}>
+          <Ionicons name="people" size={32} color={theme.text} />
           <View style={{ flex: 1 }}>
             <Text style={styles.heroTitle}>Partagez vos dépenses</Text>
             <Text style={styles.heroSub}>Bureau, coloc, voyage — Budgy calcule qui doit quoi.</Text>
@@ -132,7 +132,7 @@ export default function GroupsScreen() {
                     </View>
                     <View style={{ alignItems: 'flex-end' }}>
                       <Text style={styles.smallLabel}>Mon solde</Text>
-                      <Text style={[styles.balanceText, { color: myBalance >= 0 ? Colors.success : Colors.error }]}>
+                      <Text style={[styles.balanceText, { color: myBalance >= 0 ? theme.success : theme.error }]}>
                         {myBalance >= 0 ? '+' : ''}CHF {formatNumber(Math.abs(myBalance))}
                       </Text>
                     </View>
@@ -150,12 +150,12 @@ export default function GroupsScreen() {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Nouveau groupe</Text>
               <TouchableOpacity onPress={() => setModalOpen(false)}>
-                <Ionicons name="close" size={26} color={Colors.text} />
+                <Ionicons name="close" size={26} color={theme.text} />
               </TouchableOpacity>
             </View>
             <ScrollView style={{ maxHeight: 600 }} keyboardShouldPersistTaps="handled">
               <Text style={styles.label}>Nom du groupe</Text>
-              <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="Ex: Bureau Lausanne" placeholderTextColor={Colors.textTertiary} />
+              <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="Ex: Bureau Lausanne" placeholderTextColor={theme.textTertiary} />
 
               <Text style={styles.label}>Emoji</Text>
               <View style={styles.emojiRow}>
@@ -175,9 +175,9 @@ export default function GroupsScreen() {
 
               <Text style={styles.label}>Membres ({members.length})</Text>
               <View style={styles.memberAddRow}>
-                <TextInput style={[styles.input, { flex: 1 }]} value={memberInput} onChangeText={setMemberInput} placeholder="Ajouter un membre (prénom)" placeholderTextColor={Colors.textTertiary} onSubmitEditing={addMember} />
+                <TextInput style={[styles.input, { flex: 1 }]} value={memberInput} onChangeText={setMemberInput} placeholder="Ajouter un membre (prénom)" placeholderTextColor={theme.textTertiary} onSubmitEditing={addMember} />
                 <TouchableOpacity style={styles.addBtn} onPress={addMember}>
-                  <Ionicons name="add" size={24} color={Colors.text} />
+                  <Ionicons name="add" size={24} color={theme.text} />
                 </TouchableOpacity>
               </View>
               <View style={styles.membersList}>
@@ -189,7 +189,7 @@ export default function GroupsScreen() {
                     <Text style={styles.memberName}>{m.name}{m.isMe ? ' (moi)' : ''}</Text>
                     {!m.isMe && (
                       <TouchableOpacity onPress={() => removeMember(m.id)}>
-                        <Ionicons name="close-circle" size={18} color={Colors.error} />
+                        <Ionicons name="close-circle" size={18} color={theme.error} />
                       </TouchableOpacity>
                     )}
                   </View>

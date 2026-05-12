@@ -25,6 +25,8 @@ import Animated, {
   interpolate,
 } from 'react-native-reanimated';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
+import { useTheme } from '../../src/hooks/useTheme';
+import type { ThemePalette } from '../../src/constants/palettes';
 import { useStore } from '../../src/stores/useStore';
 import { CategoryIcon, getCategoryName } from '../../src/components/CategoryIcon';
 import { formatNumber, pct, predictMonthlyExpenses } from '../../src/utils/calculations';
@@ -35,6 +37,8 @@ const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 const { width: SCREEN_W } = Dimensions.get('window');
 
 export default function PredictScreen() {
+  const theme = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { preferences, transactions, incomes, budgets, chatHistory, addChatMessage, user } = useStore();
@@ -198,7 +202,7 @@ Alertes actives: ${alerts.length}`;
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={26} color={Colors.text} />
+          <Ionicons name="chevron-back" size={26} color={theme.text} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
           <View style={styles.titleRow}>
@@ -230,7 +234,7 @@ Alertes actives: ${alerts.length}`;
                 </LinearGradient>
               ) : (
                 <View style={styles.tab}>
-                  <Ionicons name={t.icon as any} size={15} color={Colors.textTertiary} />
+                  <Ionicons name={t.icon as any} size={15} color={theme.textTertiary} />
                   <Text style={styles.tabTxt}>{t.label}</Text>
                 </View>
               )}
@@ -302,7 +306,7 @@ Alertes actives: ${alerts.length}`;
               value={message}
               onChangeText={setMessage}
               placeholder="Posez votre question..."
-              placeholderTextColor={Colors.textTertiary}
+              placeholderTextColor={theme.textTertiary}
               multiline
               onSubmitEditing={handleSendMessage}
               returnKeyType="send"
@@ -397,7 +401,7 @@ Alertes actives: ${alerts.length}`;
                   <Text style={styles.askAiTitle}>Demandez à l'IA</Text>
                   <Text style={styles.askAiSub}>"Comment optimiser mon budget ce mois ?"</Text>
                 </View>
-                <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
+                <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} />
               </LinearGradient>
             </TouchableOpacity>
           </Animated.View>
@@ -606,7 +610,7 @@ Alertes actives: ${alerts.length}`;
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (Colors: ThemePalette) => StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
 
   // Background gradient orbs

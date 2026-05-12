@@ -546,7 +546,7 @@ ${pageDataUrls.map((src, i) => `
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => setMode('capture')} style={styles.iconBtn}>
-            <Ionicons name="chevron-back" size={24} color={Colors.text} />
+            <Ionicons name="chevron-back" size={24} color={theme.text} />
           </TouchableOpacity>
           <Text style={styles.title}>Nouveau PDF</Text>
           <View style={{ width: 36 }} />
@@ -556,11 +556,11 @@ ${pageDataUrls.map((src, i) => `
           {/* Pages preview - GRID with reorder/retake/delete */}
           <View style={styles.pdfPreview}>
             <View style={styles.pdfHeader}>
-              <Ionicons name="document-text" size={20} color={Colors.primary} />
+              <Ionicons name="document-text" size={20} color={theme.primary} />
               <Text style={styles.pdfHeaderTxt}>{pages.length} page{pages.length > 1 ? 's' : ''} scannée{pages.length > 1 ? 's' : ''}</Text>
               <View style={{ flex: 1 }} />
               <TouchableOpacity style={styles.addPageMini} onPress={() => setMode('capture')}>
-                <Ionicons name="add" size={16} color={Colors.primary} />
+                <Ionicons name="add" size={16} color={theme.primary} />
                 <Text style={styles.addPageMiniTxt}>Page</Text>
               </TouchableOpacity>
             </View>
@@ -601,14 +601,14 @@ ${pageDataUrls.map((src, i) => `
                 );
               })}
               <TouchableOpacity style={styles.gridAddTile} onPress={() => setMode('capture')}>
-                <Ionicons name="add-circle" size={28} color={Colors.primary} />
+                <Ionicons name="add-circle" size={28} color={theme.primary} />
                 <Text style={styles.gridAddTxt}>Ajouter{'\n'}une page</Text>
               </TouchableOpacity>
             </View>
           </View>
 
           <Text style={styles.label}>Titre</Text>
-          <TextInput style={styles.input} value={title} onChangeText={setTitle} placeholder="Ex: Bail logement, Contrat travail..." placeholderTextColor={Colors.textTertiary} />
+          <TextInput style={styles.input} value={title} onChangeText={setTitle} placeholder="Ex: Bail logement, Contrat travail..." placeholderTextColor={theme.textTertiary} />
           <Text style={styles.label}>Catégorie</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View style={styles.catRow}>
@@ -621,11 +621,11 @@ ${pageDataUrls.map((src, i) => `
             </View>
           </ScrollView>
           <Text style={styles.label}>Tags (séparés par virgules)</Text>
-          <TextInput style={styles.input} value={tagsInput} onChangeText={setTagsInput} placeholder="voiture, urgent, 2025" placeholderTextColor={Colors.textTertiary} />
+          <TextInput style={styles.input} value={tagsInput} onChangeText={setTagsInput} placeholder="voiture, urgent, 2025" placeholderTextColor={theme.textTertiary} />
           <Text style={styles.label}>Date d'expiration (optionnel)</Text>
-          <TextInput style={styles.input} value={expiresAt} onChangeText={setExpiresAt} placeholder="YYYY-MM-DD" placeholderTextColor={Colors.textTertiary} />
+          <TextInput style={styles.input} value={expiresAt} onChangeText={setExpiresAt} placeholder="YYYY-MM-DD" placeholderTextColor={theme.textTertiary} />
           <Text style={styles.label}>Note (optionnel)</Text>
-          <TextInput style={[styles.input, { minHeight: 80, textAlignVertical: 'top' }]} value={note} onChangeText={setNote} placeholder="Informations complémentaires" placeholderTextColor={Colors.textTertiary} multiline />
+          <TextInput style={[styles.input, { minHeight: 80, textAlignVertical: 'top' }]} value={note} onChangeText={setNote} placeholder="Informations complémentaires" placeholderTextColor={theme.textTertiary} multiline />
           <Button
             title={generating ? 'Génération du PDF...' : 'Générer le PDF & enregistrer'}
             onPress={handleSave}
@@ -646,11 +646,11 @@ ${pageDataUrls.map((src, i) => `
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => { setSelected(null); setMode('list'); }} style={styles.iconBtn}>
-            <Ionicons name="chevron-back" size={24} color={Colors.text} />
+            <Ionicons name="chevron-back" size={24} color={theme.text} />
           </TouchableOpacity>
           <Text style={styles.title} numberOfLines={1}>{sel.title}</Text>
           <TouchableOpacity onPress={() => onDelete(sel.id)} style={styles.iconBtn}>
-            <Ionicons name="trash" size={20} color={Colors.error} />
+            <Ionicons name="trash" size={20} color={theme.error} />
           </TouchableOpacity>
         </View>
         <ScrollView contentContainerStyle={{ padding: Spacing.lg }}>
@@ -663,7 +663,7 @@ ${pageDataUrls.map((src, i) => `
           ) : null}
           <Text style={styles.label}>Pages ({(sel.pages || [sel.imageBase64]).length})</Text>
           <View style={styles.zoomHint}>
-            <Ionicons name="resize" size={12} color={Colors.textTertiary} />
+            <Ionicons name="resize" size={12} color={theme.textTertiary} />
             <Text style={styles.zoomHintTxt}>Pincez pour zoomer · Double-tap pour réinitialiser</Text>
           </View>
           {(sel.pages || [sel.imageBase64]).map((p, i) => (
@@ -692,11 +692,11 @@ ${pageDataUrls.map((src, i) => `
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
-          <Ionicons name="chevron-back" size={24} color={Colors.text} />
+          <Ionicons name="chevron-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <Text style={styles.title}>Mon classeur</Text>
         <TouchableOpacity onPress={startCapture} style={styles.iconBtn}>
-          <Ionicons name="scan" size={22} color={Colors.primary} />
+          <Ionicons name="scan" size={22} color={theme.primary} />
         </TouchableOpacity>
       </View>
 
@@ -708,13 +708,13 @@ ${pageDataUrls.map((src, i) => `
           activeOpacity={0.85}
         >
           <View style={styles.importBannerIcon}>
-            <Ionicons name="sparkles" size={22} color={Colors.primary} />
+            <Ionicons name="sparkles" size={22} color={theme.primary} />
           </View>
           <View style={styles.importBannerContent}>
             <Text style={styles.importBannerTitle}>Import IA</Text>
             <Text style={styles.importBannerSub}>Photo · Fichier · Partage email</Text>
           </View>
-          <Ionicons name="chevron-forward" size={20} color={Colors.textTertiary} />
+          <Ionicons name="chevron-forward" size={20} color={theme.textTertiary} />
         </TouchableOpacity>
 
         <TextInput
@@ -722,7 +722,7 @@ ${pageDataUrls.map((src, i) => `
           value={search}
           onChangeText={setSearch}
           placeholder="Rechercher un document, un tag..."
-          placeholderTextColor={Colors.textTertiary}
+          placeholderTextColor={theme.textTertiary}
         />
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: Spacing.md }}>
@@ -770,7 +770,7 @@ ${pageDataUrls.map((src, i) => `
                     <Text style={styles.docTags} numberOfLines={1}>{d.tags.map(t => `#${t}`).join(' ')}</Text>
                   ) : null}
                 </View>
-                {d.pdfUri ? <Ionicons name="document-text" size={20} color={Colors.primary} /> : <Ionicons name="image" size={20} color={Colors.textTertiary} />}
+                {d.pdfUri ? <Ionicons name="document-text" size={20} color={theme.primary} /> : <Ionicons name="image" size={20} color={theme.textTertiary} />}
               </TouchableOpacity>
             );
           })

@@ -8,7 +8,7 @@
  * Tous les chemins convergent vers /api/email/parse (texte) ou /api/scanner/ocr (image).
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
   TextInput, Alert, Platform, KeyboardAvoidingView, ActivityIndicator,
@@ -22,6 +22,8 @@ import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import { readAsBase64, readAsText } from '../../src/utils/fsCompat';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
+import { useTheme } from '../../src/hooks/useTheme';
+import type { ThemePalette } from '../../src/constants/palettes';
 import { useStore } from '../../src/stores/useStore';
 import { Card, Button } from '../../src/components/ui';
 
@@ -37,6 +39,8 @@ const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:800
 type ImportMethod = 'share' | 'file' | 'photo' | 'paste';
 
 export default function ImportInvoiceScreen() {
+  const theme = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { addInvoice } = useStore();
@@ -332,7 +336,7 @@ export default function ImportInvoiceScreen() {
     >
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
-          <Ionicons name="chevron-back" size={24} color={Colors.text} />
+          <Ionicons name="chevron-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <Text style={styles.title}>Importer une facture</Text>
         <View style={{ width: 36 }} />
@@ -372,14 +376,14 @@ export default function ImportInvoiceScreen() {
                 <Text style={styles.methodSubtitle}>{m.subtitle}</Text>
                 <Text style={styles.methodTip}>💡 {m.tip}</Text>
               </View>
-              <Ionicons name="chevron-forward" size={20} color={Colors.textTertiary} />
+              <Ionicons name="chevron-forward" size={20} color={theme.textTertiary} />
             </View>
           </TouchableOpacity>
         ))}
 
         {/* Mode avancé : coller du texte */}
         <TouchableOpacity onPress={() => setPasteOpen(o => !o)} style={styles.advancedToggle}>
-          <Ionicons name={pasteOpen ? 'chevron-up' : 'chevron-down'} size={16} color={Colors.textSecondary} />
+          <Ionicons name={pasteOpen ? 'chevron-up' : 'chevron-down'} size={16} color={theme.textSecondary} />
           <Text style={styles.advancedToggleTxt}>
             Mode avancé · Coller le contenu d'un email
           </Text>
@@ -392,7 +396,7 @@ export default function ImportInvoiceScreen() {
               value={pasteContent}
               onChangeText={setPasteContent}
               placeholder="Collez ici le contenu complet de l'email (montant, IBAN, échéance, référence...)"
-              placeholderTextColor={Colors.textTertiary}
+              placeholderTextColor={theme.textTertiary}
               multiline
               textAlignVertical="top"
             />
@@ -411,10 +415,10 @@ export default function ImportInvoiceScreen() {
         {result && (
           <View style={styles.resultCard}>
             <View style={styles.resultHeader}>
-              <Ionicons name="checkmark-circle" size={22} color={Colors.success} />
+              <Ionicons name="checkmark-circle" size={22} color={theme.success} />
               <Text style={styles.resultTitle}>Facture détectée</Text>
               <TouchableOpacity onPress={dismissResult} style={{ marginLeft: 'auto' }}>
-                <Ionicons name="close" size={20} color={Colors.textTertiary} />
+                <Ionicons name="close" size={20} color={theme.textTertiary} />
               </TouchableOpacity>
             </View>
             {result.merchant || result.issuer ? <Row label="Émetteur" value={result.merchant || result.issuer} /> : null}
@@ -444,7 +448,7 @@ export default function ImportInvoiceScreen() {
       {busy && (
         <View style={styles.busyOverlay} pointerEvents="auto">
           <View style={styles.busyBox}>
-            <ActivityIndicator size="large" color={Colors.primary} />
+            <ActivityIndicator size="large" color={theme.primary} />
             <Text style={styles.busyText}>{busyLabel}</Text>
           </View>
         </View>
@@ -454,15 +458,17 @@ export default function ImportInvoiceScreen() {
 }
 
 function Row({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+  const theme = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   return (
     <View style={styles.row}>
       <Text style={styles.rowLabel}>{label}</Text>
-      <Text style={[styles.rowValue, highlight && { color: Colors.primary, fontWeight: FontWeights.bold as any }]}>{value}</Text>
+      <Text style={[styles.rowValue, highlight && { color: theme.primary, fontWeight: FontWeights.bold as any }]}>{value}</Text>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (Colors: ThemePalette) => StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.md, paddingTop: Spacing.sm, paddingBottom: Spacing.md },
   iconBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },

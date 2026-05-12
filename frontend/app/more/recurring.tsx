@@ -69,12 +69,12 @@ export default function RecurringScreen() {
   );
 
   const getPriority = (amount: number): { label: string; emoji: string; color: string } => {
-    if (monthlyIncome <= 0) return { label: 'Impact inconnu', emoji: 'ℹ️', color: Colors.textTertiary };
+    if (monthlyIncome <= 0) return { label: 'Impact inconnu', emoji: 'ℹ️', color: theme.textTertiary };
     const pct = (amount / monthlyIncome) * 100;
-    if (pct >= 20) return { label: 'Impact élevé', emoji: '🔥', color: Colors.error };
-    if (pct >= 10) return { label: 'Impact moyen', emoji: '⚠️', color: Colors.warning };
+    if (pct >= 20) return { label: 'Impact élevé', emoji: '🔥', color: theme.error };
+    if (pct >= 10) return { label: 'Impact moyen', emoji: '⚠️', color: theme.warning };
     if (pct >= 5)  return { label: 'Impact modéré', emoji: '🟡', color: '#EAB308' };
-    return { label: 'Faible impact', emoji: '✅', color: Colors.success };
+    return { label: 'Faible impact', emoji: '✅', color: theme.success };
   };
 
   const handleAdd = () => {
@@ -101,11 +101,11 @@ export default function RecurringScreen() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={Colors.text} />
+          <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <Text style={styles.title}>Récurrents</Text>
         <TouchableOpacity style={styles.addButton} onPress={() => setShowAddModal(true)}>
-          <Ionicons name="add" size={24} color={Colors.text} />
+          <Ionicons name="add" size={24} color={theme.text} />
         </TouchableOpacity>
       </View>
 
@@ -113,7 +113,7 @@ export default function RecurringScreen() {
         {/* Hero summary with revenue-share gauge */}
         <Animated.View entering={FadeInDown.duration(500)}>
           <LinearGradient
-            colors={totalPctIncome >= 50 ? [Colors.error, Colors.errorDark] as any : Colors.gradientPrimary as any}
+            colors={totalPctIncome >= 50 ? [theme.error, theme.errorDark] as any : theme.gradientPrimary as any}
             style={styles.heroSummary}
           >
             <Text style={styles.heroLabel}>CHARGES FIXES MENSUELLES</Text>
@@ -169,8 +169,8 @@ export default function RecurringScreen() {
                       <Switch
                         value={rec.active}
                         onValueChange={() => toggleRecurringExpense(rec.id)}
-                        trackColor={{ false: Colors.cardBorder, true: `${Colors.success}50` }}
-                        thumbColor={rec.active ? Colors.success : Colors.textTertiary}
+                        trackColor={{ false: theme.cardBorder, true: `${theme.success}50` }}
+                        thumbColor={rec.active ? theme.success : theme.textTertiary}
                       />
                     </View>
                   </View>
@@ -197,7 +197,7 @@ export default function RecurringScreen() {
                       { text: 'Supprimer', style: 'destructive', onPress: () => deleteRecurringExpense(rec.id) },
                     ])}
                   >
-                    <Ionicons name="trash-outline" size={16} color={Colors.textTertiary} />
+                    <Ionicons name="trash-outline" size={16} color={theme.textTertiary} />
                   </TouchableOpacity>
                 </Card>
               </Animated.View>
@@ -219,7 +219,7 @@ export default function RecurringScreen() {
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>Nouvel abonnement</Text>
                 <TouchableOpacity onPress={() => { Keyboard.dismiss(); setShowAddModal(false); }}>
-                  <Ionicons name="close" size={24} color={Colors.text} />
+                  <Ionicons name="close" size={24} color={theme.text} />
                 </TouchableOpacity>
               </View>
               <ScrollView
@@ -234,7 +234,7 @@ export default function RecurringScreen() {
               value={newRec.title}
               onChangeText={(t) => setNewRec((p) => ({ ...p, title: t }))}
               placeholder="Netflix"
-              placeholderTextColor={Colors.textTertiary}
+              placeholderTextColor={theme.textTertiary}
             />
 
             <View style={styles.inputRow}>
@@ -245,7 +245,7 @@ export default function RecurringScreen() {
                   value={newRec.amount}
                   onChangeText={(t) => setNewRec((p) => ({ ...p, amount: t }))}
                   placeholder="17.90"
-                  placeholderTextColor={Colors.textTertiary}
+                  placeholderTextColor={theme.textTertiary}
                   keyboardType="decimal-pad"
                 />
               </View>
@@ -256,7 +256,7 @@ export default function RecurringScreen() {
                   value={newRec.dayOfMonth}
                   onChangeText={(t) => setNewRec((p) => ({ ...p, dayOfMonth: t }))}
                   placeholder="8"
-                  placeholderTextColor={Colors.textTertiary}
+                  placeholderTextColor={theme.textTertiary}
                   keyboardType="number-pad"
                 />
               </View>

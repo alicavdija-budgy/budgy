@@ -94,11 +94,11 @@ export default function BudgetsScreen() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={Colors.text} />
+          <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <Text style={styles.title}>Budgets</Text>
         <TouchableOpacity style={styles.addButton} onPress={() => setShowAddModal(true)}>
-          <Ionicons name="add" size={24} color={Colors.text} />
+          <Ionicons name="add" size={24} color={theme.text} />
         </TouchableOpacity>
       </View>
 
@@ -145,14 +145,14 @@ export default function BudgetsScreen() {
               <Ionicons
                 name={savingsCapacity >= 0 ? 'trending-up' : 'trending-down'}
                 size={18}
-                color={savingsCapacity >= 0 ? Colors.success : Colors.error}
+                color={savingsCapacity >= 0 ? theme.success : theme.error}
               />
               <Text style={styles.capacityLabel}>
                 Capacité d'épargne {incomeView === 'monthly' ? '/mois' : '/an'}
               </Text>
               <Text style={[
                 styles.capacityValue,
-                { color: savingsCapacity >= 0 ? Colors.success : Colors.error }
+                { color: savingsCapacity >= 0 ? theme.success : theme.error }
               ]}>
                 {savingsCapacity >= 0 ? '+' : ''}{CUR} {formatNumber(savingsCapacity)}
               </Text>
@@ -177,7 +177,7 @@ export default function BudgetsScreen() {
                   <Text style={styles.budgetLimit}>Limite: {CUR} {formatNumber(b.limit)}</Text>
                 </View>
                 <View style={styles.budgetAmounts}>
-                  <Text style={[styles.budgetSpent, { color: b.percentage > 100 ? Colors.error : Colors.text }]}>
+                  <Text style={[styles.budgetSpent, { color: b.percentage > 100 ? theme.error : theme.text }]}>
                     {formatNumber(b.spent)}
                   </Text>
                   <Text style={styles.budgetRemaining}>
@@ -190,7 +190,7 @@ export default function BudgetsScreen() {
                 height={10}
               />
               <TouchableOpacity style={styles.deleteBtn} onPress={() => deleteBudget(b.id)}>
-                <Ionicons name="trash-outline" size={16} color={Colors.textTertiary} />
+                <Ionicons name="trash-outline" size={16} color={theme.textTertiary} />
               </TouchableOpacity>
             </Card>
           ))
@@ -205,7 +205,7 @@ export default function BudgetsScreen() {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Nouveau budget</Text>
               <TouchableOpacity onPress={() => setShowAddModal(false)}>
-                <Ionicons name="close" size={24} color={Colors.text} />
+                <Ionicons name="close" size={24} color={theme.text} />
               </TouchableOpacity>
             </View>
 
@@ -231,7 +231,7 @@ export default function BudgetsScreen() {
               value={newBudget.limit}
               onChangeText={(t) => setNewBudget((p) => ({ ...p, limit: t }))}
               placeholder="200"
-              placeholderTextColor={Colors.textTertiary}
+              placeholderTextColor={theme.textTertiary}
               keyboardType="decimal-pad"
             />
 

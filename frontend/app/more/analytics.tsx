@@ -22,7 +22,7 @@ export default function AnalyticsScreen() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={Colors.text} />
+          <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <Text style={styles.title}>Analytique</Text>
         <View style={{ width: 40 }} />
@@ -30,7 +30,7 @@ export default function AnalyticsScreen() {
       
       <View style={styles.content}>
         <Card style={styles.card}>
-          <Ionicons name="bar-chart" size={48} color={Colors.primary} />
+          <Ionicons name="bar-chart" size={48} color={theme.primary} />
           <Text style={styles.cardTitle}>Rapports détaillés</Text>
           <Text style={styles.cardText}>Graphiques et analyses de vos finances.</Text>
         </Card>

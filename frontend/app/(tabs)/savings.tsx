@@ -20,6 +20,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
+import { useTheme } from '../../src/hooks/useTheme';
+import type { ThemePalette } from '../../src/constants/palettes';
 import { useStore } from '../../src/stores/useStore';
 import { Card, Button, ProgressBar, EmptyState } from '../../src/components/ui';
 import { formatNumber, pct } from '../../src/utils/calculations';
@@ -30,6 +32,8 @@ import { useTranslation } from '../../src/hooks/useTranslation';
 import { DATE_LOCALES } from '../../src/i18n/translations';
 
 export default function SavingsScreen() {
+  const theme = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const [confetti, setConfetti] = useState(false);
   const [celebratedIds, setCelebratedIds] = useState<Set<string>>(new Set());
@@ -55,7 +59,7 @@ export default function SavingsScreen() {
     saved: '0',
     autoSave: '',
     deadline: '',
-    color: Colors.primary,
+    color: theme.primary,
   });
 
   const CUR = preferences.currency;
@@ -104,7 +108,7 @@ export default function SavingsScreen() {
       createdAt: Date.now(),
     });
 
-    setNewGoal({ title: '', emoji: '🎯', target: '', saved: '0', autoSave: '', deadline: '', color: Colors.primary });
+    setNewGoal({ title: '', emoji: '🎯', target: '', saved: '0', autoSave: '', deadline: '', color: theme.primary });
     setStep('templates');
     setShowAddModal(false);
   };
@@ -161,7 +165,7 @@ export default function SavingsScreen() {
           style={styles.addButton}
           onPress={() => setShowAddModal(true)}
         >
-          <Ionicons name="add" size={24} color={Colors.text} />
+          <Ionicons name="add" size={24} color={theme.text} />
         </TouchableOpacity>
       </View>
 
@@ -182,11 +186,11 @@ export default function SavingsScreen() {
           <Text style={styles.summaryTarget}>{t('savings.target', { n: formatNumber(totalTarget) })}</Text>
           <ProgressBar
             value={pct(totalSaved, totalTarget)}
-            color={Colors.primary}
+            color={theme.primary}
             height={10}
           />
           <View style={styles.autoSaveRow}>
-            <Ionicons name="sync" size={16} color={Colors.success} />
+            <Ionicons name="sync" size={16} color={theme.success} />
             <Text style={styles.autoSaveText}>
               {t('savings.autoSave', { c: CUR, n: formatNumber(monthlyAutoSave) })}
             </Text>
@@ -270,7 +274,7 @@ export default function SavingsScreen() {
                     <Text style={[styles.projectionText, { color: goal.color }]}>
                       {t('savings.reachedOn', { d: projectedDate })}
                     </Text>
-                    <Text style={[styles.projectionSub, { color: Colors.textSecondary }]}>
+                    <Text style={[styles.projectionSub, { color: theme.textSecondary }]}>
                       {t('savings.monthsLeft', { n: monthsLeft })}
                     </Text>
                   </View>
@@ -278,7 +282,7 @@ export default function SavingsScreen() {
 
                 {goal.tip && (
                   <View style={styles.tipRow}>
-                    <Ionicons name="bulb" size={14} color={Colors.warning} />
+                    <Ionicons name="bulb" size={14} color={theme.warning} />
                     <Text style={styles.tipText}>{goal.tip}</Text>
                   </View>
                 )}
@@ -295,7 +299,7 @@ export default function SavingsScreen() {
                     style={styles.deleteButton}
                     onPress={() => handleDelete(goal.id)}
                   >
-                    <Ionicons name="trash-outline" size={18} color={Colors.textTertiary} />
+                    <Ionicons name="trash-outline" size={18} color={theme.textTertiary} />
                   </TouchableOpacity>
                 </View>
               </Card>
@@ -326,7 +330,7 @@ export default function SavingsScreen() {
                 {step === 'templates' ? t('savings.chooseTemplate') : t('savings.newProject')}
               </Text>
               <TouchableOpacity onPress={() => { setShowAddModal(false); setStep('templates'); }}>
-                <Ionicons name="close" size={24} color={Colors.text} />
+                <Ionicons name="close" size={24} color={theme.text} />
               </TouchableOpacity>
             </View>
 
@@ -349,7 +353,7 @@ export default function SavingsScreen() {
                   style={styles.customButton}
                   onPress={() => setStep('custom')}
                 >
-                  <Ionicons name="create" size={18} color={Colors.primary} />
+                  <Ionicons name="create" size={18} color={theme.primary} />
                   <Text style={styles.customButtonText}>{t('savings.customProject')}</Text>
                 </TouchableOpacity>
               </ScrollView>
@@ -368,7 +372,7 @@ export default function SavingsScreen() {
                       value={newGoal.title}
                       onChangeText={(t) => setNewGoal((p) => ({ ...p, title: t }))}
                       placeholder={t('savings.myProject')}
-                      placeholderTextColor={Colors.textTertiary}
+                      placeholderTextColor={theme.textTertiary}
                     />
                   </View>
                 </View>
@@ -381,7 +385,7 @@ export default function SavingsScreen() {
                       value={newGoal.target}
                       onChangeText={(t) => setNewGoal((p) => ({ ...p, target: t }))}
                       placeholder="10000"
-                      placeholderTextColor={Colors.textTertiary}
+                      placeholderTextColor={theme.textTertiary}
                       keyboardType="decimal-pad"
                     />
                   </View>
@@ -392,7 +396,7 @@ export default function SavingsScreen() {
                       value={newGoal.saved}
                       onChangeText={(t) => setNewGoal((p) => ({ ...p, saved: t }))}
                       placeholder="0"
-                      placeholderTextColor={Colors.textTertiary}
+                      placeholderTextColor={theme.textTertiary}
                       keyboardType="decimal-pad"
                     />
                   </View>
@@ -406,7 +410,7 @@ export default function SavingsScreen() {
                       value={newGoal.autoSave}
                       onChangeText={(t) => setNewGoal((p) => ({ ...p, autoSave: t }))}
                       placeholder="200"
-                      placeholderTextColor={Colors.textTertiary}
+                      placeholderTextColor={theme.textTertiary}
                       keyboardType="decimal-pad"
                     />
                   </View>
@@ -417,7 +421,7 @@ export default function SavingsScreen() {
                       value={newGoal.deadline}
                       onChangeText={(t) => setNewGoal((p) => ({ ...p, deadline: t }))}
                       placeholder="2026-06"
-                      placeholderTextColor={Colors.textTertiary}
+                      placeholderTextColor={theme.textTertiary}
                     />
                   </View>
                 </View>
@@ -465,7 +469,7 @@ export default function SavingsScreen() {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{t('savings.addDeposit')}</Text>
               <TouchableOpacity onPress={() => setShowDepositModal(null)}>
-                <Ionicons name="close" size={24} color={Colors.text} />
+                <Ionicons name="close" size={24} color={theme.text} />
               </TouchableOpacity>
             </View>
 
@@ -475,7 +479,7 @@ export default function SavingsScreen() {
               value={depositAmount}
               onChangeText={setDepositAmount}
               placeholder="100"
-              placeholderTextColor={Colors.textTertiary}
+              placeholderTextColor={theme.textTertiary}
               keyboardType="decimal-pad"
               autoFocus
             />
@@ -494,7 +498,7 @@ export default function SavingsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (Colors: ThemePalette) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,

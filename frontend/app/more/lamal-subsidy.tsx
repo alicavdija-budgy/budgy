@@ -3,7 +3,7 @@
  * Estimates eligibility and amount of LAMal subsidy per canton.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -20,6 +20,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
+import { useTheme } from '../../src/hooks/useTheme';
+import type { ThemePalette } from '../../src/constants/palettes';
 import { useStore } from '../../src/stores/useStore';
 import { CANTONS, type CantonCode } from '../../src/data/swiss-data';
 import { Card, Button } from '../../src/components/ui';
@@ -35,6 +37,8 @@ const HOUSEHOLD_OPTIONS = [
 ] as const;
 
 export default function LamalSubsidyScreen() {
+  const theme = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { preferences } = useStore();
@@ -83,7 +87,7 @@ export default function LamalSubsidyScreen() {
     >
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
-          <Ionicons name="chevron-back" size={24} color={Colors.text} />
+          <Ionicons name="chevron-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <Text style={styles.title}>Subsides LAMal</Text>
         <View style={{ width: 36 }} />
@@ -130,7 +134,7 @@ export default function LamalSubsidyScreen() {
             value={income}
             onChangeText={(t) => setIncome(t.replace(/[^0-9.,]/g, ''))}
             placeholder="60000"
-            placeholderTextColor={Colors.textTertiary}
+            placeholderTextColor={theme.textTertiary}
             keyboardType="decimal-pad"
           />
           <Text style={styles.curSuffix}>/ an</Text>
@@ -163,14 +167,14 @@ export default function LamalSubsidyScreen() {
                 style={styles.counterBtn}
                 onPress={() => setChildren(Math.max(0, children - 1))}
               >
-                <Ionicons name="remove" size={20} color={Colors.text} />
+                <Ionicons name="remove" size={20} color={theme.text} />
               </TouchableOpacity>
               <Text style={styles.counterValue}>{children}</Text>
               <TouchableOpacity
                 style={styles.counterBtn}
                 onPress={() => setChildren(Math.min(10, children + 1))}
               >
-                <Ionicons name="add" size={20} color={Colors.text} />
+                <Ionicons name="add" size={20} color={theme.text} />
               </TouchableOpacity>
             </View>
           </>
@@ -185,7 +189,7 @@ export default function LamalSubsidyScreen() {
             value={premium}
             onChangeText={(t) => setPremium(t.replace(/[^0-9.,]/g, ''))}
             placeholder="450"
-            placeholderTextColor={Colors.textTertiary}
+            placeholderTextColor={theme.textTertiary}
             keyboardType="decimal-pad"
           />
           <Text style={styles.curSuffix}>/ mois</Text>
@@ -202,7 +206,7 @@ export default function LamalSubsidyScreen() {
         />
 
         {loading && (
-          <ActivityIndicator color={Colors.primaryLight} style={{ marginTop: Spacing.lg }} />
+          <ActivityIndicator color={theme.primaryLight} style={{ marginTop: Spacing.lg }} />
         )}
 
         {result && (
@@ -210,7 +214,7 @@ export default function LamalSubsidyScreen() {
             <LinearGradient
               colors={
                 result.eligible
-                  ? (Colors.gradientSuccess as [string, string])
+                  ? (theme.gradientSuccess as [string, string])
                   : ['#374151', '#1F2937']
               }
               style={styles.resultCard}
@@ -218,7 +222,7 @@ export default function LamalSubsidyScreen() {
               <Ionicons
                 name={result.eligible ? 'checkmark-circle' : 'close-circle'}
                 size={36}
-                color={Colors.text}
+                color={theme.text}
               />
               <Text style={styles.resultTitle}>
                 {result.eligible ? 'Vous êtes éligible !' : 'Pas de subside attendu'}
@@ -257,7 +261,7 @@ export default function LamalSubsidyScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (Colors: ThemePalette) => StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   header: {
     flexDirection: 'row',

@@ -109,26 +109,26 @@ export default function InvoicesScreen() {
     ]);
   };
 
-  const getStatusColor = (s: string) => s === 'paid' ? Colors.success : s === 'overdue' ? Colors.error : Colors.warning;
+  const getStatusColor = (s: string) => s === 'paid' ? theme.success : s === 'overdue' ? theme.error : theme.warning;
   const getStatusLabel = (s: string) => s === 'paid' ? 'Payée' : s === 'overdue' ? 'En retard' : 'À payer';
   const getCat = (id: string) => INVOICE_CATEGORIES.find(c => c.id === id) || INVOICE_CATEGORIES[9];
 
   const tabs: { key: Tab; label: string; count: number; color: string }[] = [
-    { key: 'all', label: 'Toutes', count: invoices.length, color: Colors.text },
-    { key: 'pending', label: 'À payer', count: pendingCount, color: Colors.warning },
-    { key: 'overdue', label: 'En retard', count: overdueCount, color: Colors.error },
-    { key: 'paid', label: 'Payées', count: invoices.filter(i => i.status === 'paid').length, color: Colors.success },
+    { key: 'all', label: 'Toutes', count: invoices.length, color: theme.text },
+    { key: 'pending', label: 'À payer', count: pendingCount, color: theme.warning },
+    { key: 'overdue', label: 'En retard', count: overdueCount, color: theme.error },
+    { key: 'paid', label: 'Payées', count: invoices.filter(i => i.status === 'paid').length, color: theme.success },
   ];
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]} testID="invoices-screen">
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={Colors.text} />
+          <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <Text style={styles.title}>Factures</Text>
         <TouchableOpacity onPress={() => setShowAdd(true)} style={styles.addBtn}>
-          <Ionicons name="add" size={24} color={Colors.text} />
+          <Ionicons name="add" size={24} color={theme.text} />
         </TouchableOpacity>
       </View>
 
@@ -137,23 +137,23 @@ export default function InvoicesScreen() {
         <Card style={styles.summaryCard}>
           <View style={styles.summaryGrid}>
             <View style={styles.summaryItem}>
-              <Ionicons name="time" size={20} color={Colors.warning} />
+              <Ionicons name="time" size={20} color={theme.warning} />
               <Text style={styles.summaryLabel}>À payer</Text>
-              <Text style={[styles.summaryAmt, { color: Colors.warning }]}>{formatNumber(totalPending)}</Text>
+              <Text style={[styles.summaryAmt, { color: theme.warning }]}>{formatNumber(totalPending)}</Text>
               <Text style={styles.summaryCount}>{pendingCount} facture{pendingCount > 1 ? 's' : ''}</Text>
             </View>
             <View style={[styles.summaryDivider]} />
             <View style={styles.summaryItem}>
-              <Ionicons name="alert-circle" size={20} color={Colors.error} />
+              <Ionicons name="alert-circle" size={20} color={theme.error} />
               <Text style={styles.summaryLabel}>En retard</Text>
-              <Text style={[styles.summaryAmt, { color: Colors.error }]}>{formatNumber(totalOverdue)}</Text>
+              <Text style={[styles.summaryAmt, { color: theme.error }]}>{formatNumber(totalOverdue)}</Text>
               <Text style={styles.summaryCount}>{overdueCount} facture{overdueCount > 1 ? 's' : ''}</Text>
             </View>
             <View style={[styles.summaryDivider]} />
             <View style={styles.summaryItem}>
-              <Ionicons name="checkmark-circle" size={20} color={Colors.success} />
+              <Ionicons name="checkmark-circle" size={20} color={theme.success} />
               <Text style={styles.summaryLabel}>Payées</Text>
-              <Text style={[styles.summaryAmt, { color: Colors.success }]}>{formatNumber(totalPaid)}</Text>
+              <Text style={[styles.summaryAmt, { color: theme.success }]}>{formatNumber(totalPaid)}</Text>
             </View>
           </View>
         </Card>
@@ -161,23 +161,23 @@ export default function InvoicesScreen() {
         {/* Email Sync Banner */}
         <TouchableOpacity style={styles.emailBanner} onPress={() => router.push('/more/email-import')}>
           <View style={styles.emailBannerIcon}>
-            <Ionicons name="mail" size={24} color={Colors.primary} />
+            <Ionicons name="mail" size={24} color={theme.primary} />
           </View>
           <View style={styles.emailBannerContent}>
             <Text style={styles.emailBannerTitle}>Import email IA</Text>
             <Text style={styles.emailBannerSub}>Retrouvez toutes vos factures au même endroit</Text>
           </View>
-          <Ionicons name="chevron-forward" size={20} color={Colors.textTertiary} />
+          <Ionicons name="chevron-forward" size={20} color={theme.textTertiary} />
         </TouchableOpacity>
 
         {/* Tabs */}
         <View style={styles.tabs}>
           {tabs.map(t => (
             <TouchableOpacity key={t.key} style={[styles.tab, activeTab === t.key && styles.tabOn]} onPress={() => setActiveTab(t.key)}>
-              <Text style={[styles.tabTxt, activeTab === t.key && { color: Colors.text }]}>{t.label}</Text>
+              <Text style={[styles.tabTxt, activeTab === t.key && { color: theme.text }]}>{t.label}</Text>
               {t.count > 0 && (
-                <View style={[styles.tabBadge, { backgroundColor: activeTab === t.key ? `${t.color}30` : Colors.card }]}>
-                  <Text style={[styles.tabBadgeTxt, { color: activeTab === t.key ? t.color : Colors.textTertiary }]}>{t.count}</Text>
+                <View style={[styles.tabBadge, { backgroundColor: activeTab === t.key ? `${t.color}30` : theme.card }]}>
+                  <Text style={[styles.tabBadgeTxt, { color: activeTab === t.key ? t.color : theme.textTertiary }]}>{t.count}</Text>
                 </View>
               )}
             </TouchableOpacity>
@@ -274,18 +274,18 @@ export default function InvoicesScreen() {
                           <Ionicons
                             name={isOverdue ? 'warning' : 'calendar-outline'}
                             size={12}
-                            color={isOverdue ? Colors.error : Colors.textTertiary}
+                            color={isOverdue ? theme.error : theme.textTertiary}
                           />
                           <Text style={[
                             styles.invDueTxt,
-                            { color: isOverdue ? Colors.error : Colors.textSecondary },
+                            { color: isOverdue ? theme.error : theme.textSecondary },
                           ]}>
                             {inv.dueDate}
                           </Text>
                           {inv.recurring && (
                             <>
                               <View style={{ width: 6 }} />
-                              <Ionicons name="repeat" size={12} color={Colors.textTertiary} />
+                              <Ionicons name="repeat" size={12} color={theme.textTertiary} />
                             </>
                           )}
                         </View>
@@ -294,7 +294,7 @@ export default function InvoicesScreen() {
                       {/* Swipe hint (only on pending/overdue) */}
                       {!isPaid && (
                         <View style={styles.swipeHint}>
-                          <Ionicons name="arrow-back" size={11} color={Colors.textTertiary} />
+                          <Ionicons name="arrow-back" size={11} color={theme.textTertiary} />
                           <Text style={styles.swipeHintTxt}>Glisser pour marquer payé</Text>
                         </View>
                       )}
@@ -315,23 +315,23 @@ export default function InvoicesScreen() {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Nouvelle facture</Text>
-              <TouchableOpacity onPress={() => setShowAdd(false)}><Ionicons name="close" size={24} color={Colors.text} /></TouchableOpacity>
+              <TouchableOpacity onPress={() => setShowAdd(false)}><Ionicons name="close" size={24} color={theme.text} /></TouchableOpacity>
             </View>
 
             <Text style={styles.inputLabel}>Titre</Text>
-            <TextInput style={styles.input} value={newInvoice.title} onChangeText={t => setNewInvoice(p => ({ ...p, title: t }))} placeholder="ex: Loyer mai 2026" placeholderTextColor={Colors.textTertiary} />
+            <TextInput style={styles.input} value={newInvoice.title} onChangeText={t => setNewInvoice(p => ({ ...p, title: t }))} placeholder="ex: Loyer mai 2026" placeholderTextColor={theme.textTertiary} />
 
             <Text style={styles.inputLabel}>Émetteur</Text>
-            <TextInput style={styles.input} value={newInvoice.sender} onChangeText={t => setNewInvoice(p => ({ ...p, sender: t }))} placeholder="ex: Régie du Lac SA" placeholderTextColor={Colors.textTertiary} />
+            <TextInput style={styles.input} value={newInvoice.sender} onChangeText={t => setNewInvoice(p => ({ ...p, sender: t }))} placeholder="ex: Régie du Lac SA" placeholderTextColor={theme.textTertiary} />
 
             <View style={styles.row}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.inputLabel}>Montant (CHF)</Text>
-                <TextInput style={styles.input} value={newInvoice.amount} onChangeText={t => setNewInvoice(p => ({ ...p, amount: t }))} placeholder="0.00" placeholderTextColor={Colors.textTertiary} keyboardType="decimal-pad" />
+                <TextInput style={styles.input} value={newInvoice.amount} onChangeText={t => setNewInvoice(p => ({ ...p, amount: t }))} placeholder="0.00" placeholderTextColor={theme.textTertiary} keyboardType="decimal-pad" />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.inputLabel}>Échéance</Text>
-                <TextInput style={styles.input} value={newInvoice.dueDate} onChangeText={t => setNewInvoice(p => ({ ...p, dueDate: t }))} placeholder="30.04.2026" placeholderTextColor={Colors.textTertiary} />
+                <TextInput style={styles.input} value={newInvoice.dueDate} onChangeText={t => setNewInvoice(p => ({ ...p, dueDate: t }))} placeholder="30.04.2026" placeholderTextColor={theme.textTertiary} />
               </View>
             </View>
 
@@ -348,7 +348,7 @@ export default function InvoicesScreen() {
             </ScrollView>
 
             <TouchableOpacity style={styles.recurringToggle} onPress={() => setNewInvoice(p => ({ ...p, recurring: !p.recurring }))}>
-              <Ionicons name={newInvoice.recurring ? 'checkbox' : 'square-outline'} size={22} color={Colors.primary} />
+              <Ionicons name={newInvoice.recurring ? 'checkbox' : 'square-outline'} size={22} color={theme.primary} />
               <Text style={styles.recurringTxt}>Facture récurrente (mensuelle)</Text>
             </TouchableOpacity>
 

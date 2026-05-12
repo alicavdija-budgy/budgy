@@ -3,7 +3,7 @@
  * Family-aware questionnaire → auto-computes deductions, LAMal premium, IFD + ICC.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput,
   ActivityIndicator, Alert, KeyboardAvoidingView, Platform,
@@ -14,6 +14,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
+import { useTheme } from '../../src/hooks/useTheme';
+import type { ThemePalette } from '../../src/constants/palettes';
 import { Card, Button } from '../../src/components/ui';
 import { useStore } from '../../src/stores/useStore';
 
@@ -41,6 +43,8 @@ interface Result {
 }
 
 export default function TaxOptimizerScreen() {
+  const theme = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { preferences } = useStore();
@@ -93,7 +97,7 @@ export default function TaxOptimizerScreen() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => step === 'result' ? setStep('form') : router.back()} style={styles.iconBtn}>
-          <Ionicons name="chevron-back" size={26} color={Colors.text} />
+          <Ionicons name="chevron-back" size={26} color={theme.text} />
         </TouchableOpacity>
         <Text style={styles.title}>Optimiseur d'impôts</Text>
         <View style={{ width: 40 }} />
@@ -120,7 +124,7 @@ export default function TaxOptimizerScreen() {
                 value={form.gross_salary}
                 onChangeText={(t) => setForm((p) => ({ ...p, gross_salary: t }))}
                 placeholder="85000"
-                placeholderTextColor={Colors.textTertiary}
+                placeholderTextColor={theme.textTertiary}
                 keyboardType="numeric"
               />
 
@@ -167,7 +171,7 @@ export default function TaxOptimizerScreen() {
                     value={form.spouse_income}
                     onChangeText={(t) => setForm((p) => ({ ...p, spouse_income: t }))}
                     placeholder="0"
-                    placeholderTextColor={Colors.textTertiary}
+                    placeholderTextColor={theme.textTertiary}
                     keyboardType="numeric"
                   />
                 </>
@@ -182,7 +186,7 @@ export default function TaxOptimizerScreen() {
                   style={styles.counterBtn}
                   onPress={() => setForm((p) => ({ ...p, num_children: Math.max(0, p.num_children - 1) }))}
                 >
-                  <Ionicons name="remove" size={24} color={Colors.text} />
+                  <Ionicons name="remove" size={24} color={theme.text} />
                 </TouchableOpacity>
                 <View style={styles.counterDisplay}>
                   <Text style={styles.counterValue}>{form.num_children}</Text>
@@ -194,7 +198,7 @@ export default function TaxOptimizerScreen() {
                   style={styles.counterBtn}
                   onPress={() => setForm((p) => ({ ...p, num_children: Math.min(10, p.num_children + 1) }))}
                 >
-                  <Ionicons name="add" size={24} color={Colors.text} />
+                  <Ionicons name="add" size={24} color={theme.text} />
                 </TouchableOpacity>
               </View>
 
@@ -223,7 +227,7 @@ export default function TaxOptimizerScreen() {
                 value={form.pillar_3a}
                 onChangeText={(t) => setForm((p) => ({ ...p, pillar_3a: t }))}
                 placeholder="0"
-                placeholderTextColor={Colors.textTertiary}
+                placeholderTextColor={theme.textTertiary}
                 keyboardType="numeric"
               />
 
@@ -234,7 +238,7 @@ export default function TaxOptimizerScreen() {
                 value={form.transport_costs}
                 onChangeText={(t) => setForm((p) => ({ ...p, transport_costs: t }))}
                 placeholder="0 (max CHF 3'200)"
-                placeholderTextColor={Colors.textTertiary}
+                placeholderTextColor={theme.textTertiary}
                 keyboardType="numeric"
               />
 
@@ -338,7 +342,7 @@ export default function TaxOptimizerScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (Colors: ThemePalette) => StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',

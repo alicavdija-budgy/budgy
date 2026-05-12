@@ -91,7 +91,7 @@ export default function FamilyScreen() {
     <View style={[styles.container, { paddingTop: insets.top }]} testID="family-screen">
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={Colors.text} />
+          <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <Text style={styles.title}>Mode Famille</Text>
         <View style={{ width: 40 }} />
@@ -116,7 +116,7 @@ export default function FamilyScreen() {
                 <Text style={styles.codeLabel}>Code d'invitation</Text>
                 <Text style={styles.codeValue}>{family.code}</Text>
                 <TouchableOpacity style={styles.shareBtn} onPress={handleShare}>
-                  <Ionicons name="share-outline" size={18} color={Colors.primary} />
+                  <Ionicons name="share-outline" size={18} color={theme.primary} />
                   <Text style={styles.shareTxt}>Partager</Text>
                 </TouchableOpacity>
               </View>
@@ -125,19 +125,19 @@ export default function FamilyScreen() {
             <Text style={styles.sectionTitle}>Membres</Text>
             {family.members.map((m, idx) => (
               <Card key={m.id} style={styles.memberCard}>
-                <View style={[styles.memberAvatar, { backgroundColor: idx === 0 ? `${Colors.primary}20` : `${Colors.success}20` }]}>
+                <View style={[styles.memberAvatar, { backgroundColor: idx === 0 ? `${theme.primary}20` : `${theme.success}20` }]}>
                   <Text style={styles.memberInitial}>{m.name[0]?.toUpperCase()}</Text>
                 </View>
                 <View style={styles.memberInfo}>
                   <Text style={styles.memberName}>{m.name}</Text>
                   <Text style={styles.memberRole}>{m.role === 'admin' ? 'Administrateur' : 'Membre'}</Text>
                 </View>
-                {m.role === 'admin' && <Ionicons name="shield-checkmark" size={20} color={Colors.primary} />}
+                {m.role === 'admin' && <Ionicons name="shield-checkmark" size={20} color={theme.primary} />}
               </Card>
             ))}
 
             <Card style={styles.tipCard}>
-              <Ionicons name="information-circle" size={18} color={Colors.info} />
+              <Ionicons name="information-circle" size={18} color={theme.info} />
               <Text style={styles.tipTxt}>
                 Partagez le code {family.code} avec votre famille. Chaque membre peut voir les statistiques communes et les objectifs partagés. Max 6 membres.
               </Text>
@@ -156,7 +156,7 @@ export default function FamilyScreen() {
               value={familyName}
               onChangeText={setFamilyName}
               placeholder="ex: Famille Dupont"
-              placeholderTextColor={Colors.textTertiary}
+              placeholderTextColor={theme.textTertiary}
               autoFocus
             />
 
@@ -178,7 +178,7 @@ export default function FamilyScreen() {
               value={joinCode}
               onChangeText={(t) => setJoinCode(t.toUpperCase().slice(0, 8))}
               placeholder="XXXXXXXX"
-              placeholderTextColor={Colors.textTertiary}
+              placeholderTextColor={theme.textTertiary}
               autoCapitalize="characters"
               maxLength={8}
               autoFocus
@@ -199,34 +199,34 @@ export default function FamilyScreen() {
             </View>
 
             <TouchableOpacity style={styles.actionCard} onPress={() => setMode('create')}>
-              <View style={[styles.actionIcon, { backgroundColor: `${Colors.primary}15` }]}>
-                <Ionicons name="add-circle" size={28} color={Colors.primary} />
+              <View style={[styles.actionIcon, { backgroundColor: `${theme.primary}15` }]}>
+                <Ionicons name="add-circle" size={28} color={theme.primary} />
               </View>
               <View style={styles.actionContent}>
                 <Text style={styles.actionTitle}>Créer une famille</Text>
                 <Text style={styles.actionSub}>Générez un code d'invitation unique</Text>
               </View>
-              <Ionicons name="chevron-forward" size={20} color={Colors.textTertiary} />
+              <Ionicons name="chevron-forward" size={20} color={theme.textTertiary} />
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.actionCard} onPress={() => setMode('join')}>
-              <View style={[styles.actionIcon, { backgroundColor: `${Colors.success}15` }]}>
-                <Ionicons name="enter" size={28} color={Colors.success} />
+              <View style={[styles.actionIcon, { backgroundColor: `${theme.success}15` }]}>
+                <Ionicons name="enter" size={28} color={theme.success} />
               </View>
               <View style={styles.actionContent}>
                 <Text style={styles.actionTitle}>Rejoindre une famille</Text>
                 <Text style={styles.actionSub}>Entrez un code de 8 caractères</Text>
               </View>
-              <Ionicons name="chevron-forward" size={20} color={Colors.textTertiary} />
+              <Ionicons name="chevron-forward" size={20} color={theme.textTertiary} />
             </TouchableOpacity>
 
             <Card style={styles.featuresCard}>
               <Text style={styles.featuresTitle}>Fonctionnalités famille</Text>
               {[
-                { icon: 'people', label: 'Jusqu\'à 6 membres', color: Colors.primary },
-                { icon: 'bar-chart', label: 'Statistiques communes', color: Colors.success },
-                { icon: 'flag', label: 'Objectifs partagés', color: Colors.warning },
-                { icon: 'notifications', label: 'Alertes famille', color: Colors.error },
+                { icon: 'people', label: 'Jusqu\'à 6 membres', color: theme.primary },
+                { icon: 'bar-chart', label: 'Statistiques communes', color: theme.success },
+                { icon: 'flag', label: 'Objectifs partagés', color: theme.warning },
+                { icon: 'notifications', label: 'Alertes famille', color: theme.error },
               ].map((f, i) => (
                 <View key={i} style={styles.featureRow}>
                   <Ionicons name={f.icon as any} size={18} color={f.color} />

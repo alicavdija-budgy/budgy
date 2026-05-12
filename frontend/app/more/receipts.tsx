@@ -86,14 +86,14 @@ export default function ReceiptsScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
-          <Ionicons name="chevron-back" size={24} color={Colors.text} />
+          <Ionicons name="chevron-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <Text style={styles.title}>Tickets & Reçus</Text>
         <TouchableOpacity
           onPress={() => router.push('/scanner-modal')}
           style={styles.iconBtn}
         >
-          <Ionicons name="add" size={26} color={Colors.primary} />
+          <Ionicons name="add" size={26} color={theme.primary} />
         </TouchableOpacity>
       </View>
 
@@ -108,7 +108,7 @@ export default function ReceiptsScreen() {
           <Card style={styles.statCard}>
             <Text style={styles.statEmoji}>💼</Text>
             <Text style={styles.statLabel}>Remboursements</Text>
-            <Text style={[styles.statValue, { color: Colors.warning }]}>
+            <Text style={[styles.statValue, { color: theme.warning }]}>
               CHF {formatNumber(totals.remb)}
             </Text>
           </Card>
@@ -121,24 +121,24 @@ export default function ReceiptsScreen() {
           activeOpacity={0.85}
         >
           <View style={styles.importBannerIcon}>
-            <Ionicons name="sparkles" size={22} color={Colors.primary} />
+            <Ionicons name="sparkles" size={22} color={theme.primary} />
           </View>
           <View style={styles.importBannerContent}>
             <Text style={styles.importBannerTitle}>Import IA</Text>
             <Text style={styles.importBannerSub}>Photo · Fichier · Partage email</Text>
           </View>
-          <Ionicons name="chevron-forward" size={20} color={Colors.textTertiary} />
+          <Ionicons name="chevron-forward" size={20} color={theme.textTertiary} />
         </TouchableOpacity>
 
         {/* Search */}
         <View style={styles.searchBox}>
-          <Ionicons name="search" size={18} color={Colors.textTertiary} />
+          <Ionicons name="search" size={18} color={theme.textTertiary} />
           <TextInput
             style={styles.searchInput}
             value={search}
             onChangeText={setSearch}
             placeholder="Rechercher un commerce..."
-            placeholderTextColor={Colors.textTertiary}
+            placeholderTextColor={theme.textTertiary}
           />
         </View>
 
@@ -214,13 +214,13 @@ export default function ReceiptsScreen() {
                 <View style={styles.modalHeader}>
                   <Text style={styles.modalTitle}>{sel.merchant}</Text>
                   <TouchableOpacity onPress={() => setSelected(null)}>
-                    <Ionicons name="close" size={26} color={Colors.text} />
+                    <Ionicons name="close" size={26} color={theme.text} />
                   </TouchableOpacity>
                 </View>
                 <ScrollView style={{ maxHeight: 500 }}>
                   <ZoomableImage source={{ uri: sel.imageBase64 }} style={styles.modalImage} resizeMode="contain" />
                   <View style={styles.zoomHintBar}>
-                    <Ionicons name="resize" size={11} color={Colors.textTertiary} />
+                    <Ionicons name="resize" size={11} color={theme.textTertiary} />
                     <Text style={styles.zoomHintTxt}>Pincez pour zoomer · Double-tap pour réinitialiser</Text>
                   </View>
                   <View style={styles.detailGrid}>

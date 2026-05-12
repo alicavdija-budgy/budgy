@@ -12,7 +12,7 @@
  * On web/Expo Go where camera isn't available, falls back to manual entry.
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -32,6 +32,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions, type CameraType } from 'expo-camera';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../src/constants/theme';
+import { useTheme } from '../src/hooks/useTheme';
+import type { ThemePalette } from '../src/constants/palettes';
 import { useStore } from '../src/stores/useStore';
 import { Button } from '../src/components/ui';
 import { EXPENSE_CATEGORIES, PAYMENT_METHODS } from '../src/data/swiss-data';
@@ -44,6 +46,8 @@ const BACKEND_URL =
 type Stage = 'permission' | 'camera' | 'ocr' | 'edit' | 'saving';
 
 export default function ScannerModal() {
+  const theme = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { addTransaction, addReceipt } = useStore();
@@ -215,14 +219,14 @@ export default function ScannerModal() {
     return (
       <View style={[styles.permContainer, { paddingTop: insets.top }]}>
         <TouchableOpacity style={styles.closeBtnTop} onPress={handleClose}>
-          <Ionicons name="close" size={28} color={Colors.text} />
+          <Ionicons name="close" size={28} color={theme.text} />
         </TouchableOpacity>
         <View style={styles.permContent}>
           <LinearGradient
-            colors={Colors.gradientPrimary as [string, string]}
+            colors={theme.gradientPrimary as [string, string]}
             style={styles.permIcon}
           >
-            <Ionicons name="camera" size={48} color={Colors.text} />
+            <Ionicons name="camera" size={48} color={theme.text} />
           </LinearGradient>
           <Text style={styles.permTitle}>Accès à la caméra</Text>
           <Text style={styles.permDesc}>
@@ -258,7 +262,7 @@ export default function ScannerModal() {
         {/* Top bar */}
         <View style={[styles.cameraTop, { paddingTop: insets.top + 8 }]}>
           <TouchableOpacity style={styles.cameraIconBtn} onPress={handleClose}>
-            <Ionicons name="close" size={24} color={Colors.text} />
+            <Ionicons name="close" size={24} color={theme.text} />
           </TouchableOpacity>
           <Text style={styles.cameraTitle}>Scanner un ticket</Text>
           <TouchableOpacity
@@ -268,7 +272,7 @@ export default function ScannerModal() {
             <Ionicons
               name={flash === 'on' ? 'flash' : 'flash-off'}
               size={22}
-              color={flash === 'on' ? Colors.warning : Colors.text}
+              color={flash === 'on' ? theme.warning : theme.text}
             />
           </TouchableOpacity>
         </View>
@@ -290,7 +294,7 @@ export default function ScannerModal() {
             style={styles.cameraIconBtn}
             onPress={() => setStage('edit')}
           >
-            <Ionicons name="create-outline" size={22} color={Colors.text} />
+            <Ionicons name="create-outline" size={22} color={theme.text} />
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -301,9 +305,9 @@ export default function ScannerModal() {
           >
             <View style={styles.captureInner}>
               {capturing ? (
-                <ActivityIndicator color={Colors.text} />
+                <ActivityIndicator color={theme.text} />
               ) : (
-                <Ionicons name="camera" size={32} color={Colors.background} />
+                <Ionicons name="camera" size={32} color={theme.background} />
               )}
             </View>
           </TouchableOpacity>
@@ -312,7 +316,7 @@ export default function ScannerModal() {
             style={styles.cameraIconBtn}
             onPress={() => setFacing(facing === 'back' ? 'front' : 'back')}
           >
-            <Ionicons name="camera-reverse-outline" size={22} color={Colors.text} />
+            <Ionicons name="camera-reverse-outline" size={22} color={theme.text} />
           </TouchableOpacity>
         </View>
       </View>
@@ -328,7 +332,7 @@ export default function ScannerModal() {
         )}
         <View style={styles.ocrOverlay}>
           <View style={styles.ocrCard}>
-            <ActivityIndicator size="large" color={Colors.primaryLight} />
+            <ActivityIndicator size="large" color={theme.primaryLight} />
             <Text style={styles.ocrTitle}>Analyse du ticket par IA</Text>
             <Text style={styles.ocrSubtitle}>
               Extraction du commerçant, montant, date et catégorie...
@@ -347,7 +351,7 @@ export default function ScannerModal() {
     >
       <View style={styles.editHeader}>
         <TouchableOpacity onPress={photo ? handleRetake : handleClose} style={styles.iconBtn}>
-          <Ionicons name={photo ? 'arrow-back' : 'close'} size={26} color={Colors.text} />
+          <Ionicons name={photo ? 'arrow-back' : 'close'} size={26} color={theme.text} />
         </TouchableOpacity>
         <Text style={styles.editTitle}>Détails du ticket</Text>
         <View style={{ width: 36 }} />
@@ -361,16 +365,16 @@ export default function ScannerModal() {
         {/* OCR result banner */}
         {ocrConfidence !== null && (
           <View style={styles.ocrBanner}>
-            <Ionicons name="sparkles" size={16} color={Colors.primaryLight} />
+            <Ionicons name="sparkles" size={16} color={theme.primaryLight} />
             <Text style={styles.ocrBannerText}>
               Données pré-remplies par IA · confiance {Math.round(ocrConfidence * 100)}%
             </Text>
           </View>
         )}
         {ocrError && (
-          <View style={[styles.ocrBanner, { backgroundColor: `${Colors.warning}15` }]}>
-            <Ionicons name="alert-circle" size={16} color={Colors.warning} />
-            <Text style={[styles.ocrBannerText, { color: Colors.warning }]}>{ocrError}</Text>
+          <View style={[styles.ocrBanner, { backgroundColor: `${theme.warning}15` }]}>
+            <Ionicons name="alert-circle" size={16} color={theme.warning} />
+            <Text style={[styles.ocrBannerText, { color: theme.warning }]}>{ocrError}</Text>
           </View>
         )}
 
@@ -419,13 +423,13 @@ export default function ScannerModal() {
           <View style={styles.previewCard}>
             <Image source={{ uri: photo.uri }} style={styles.previewImage} resizeMode="cover" />
             <TouchableOpacity style={styles.retakeBtn} onPress={handleRetake}>
-              <Ionicons name="refresh" size={16} color={Colors.text} />
+              <Ionicons name="refresh" size={16} color={theme.text} />
               <Text style={styles.retakeText}>Reprendre</Text>
             </TouchableOpacity>
           </View>
         ) : (
           <View style={styles.noPhotoCard}>
-            <Ionicons name="document-text-outline" size={40} color={Colors.textTertiary} />
+            <Ionicons name="document-text-outline" size={40} color={theme.textTertiary} />
             <Text style={styles.noPhotoText}>Saisie manuelle</Text>
             {Platform.OS !== 'web' && permission?.granted && (
               <TouchableOpacity onPress={() => setStage('camera')}>
@@ -439,13 +443,13 @@ export default function ScannerModal() {
         <View style={styles.fieldGroup}>
           <Text style={styles.label}>Commerce / Titre</Text>
           <View style={styles.inputWrap}>
-            <Ionicons name="storefront-outline" size={20} color={Colors.textTertiary} />
+            <Ionicons name="storefront-outline" size={20} color={theme.textTertiary} />
             <TextInput
               style={styles.input}
               value={title}
               onChangeText={setTitle}
               placeholder="Ex: Migros, Coop, Pharmacie..."
-              placeholderTextColor={Colors.textTertiary}
+              placeholderTextColor={theme.textTertiary}
             />
           </View>
         </View>
@@ -460,7 +464,7 @@ export default function ScannerModal() {
               value={amount}
               onChangeText={(t) => setAmount(t.replace(/[^0-9.,]/g, ''))}
               placeholder="0.00"
-              placeholderTextColor={Colors.textTertiary}
+              placeholderTextColor={theme.textTertiary}
               keyboardType="decimal-pad"
             />
           </View>
@@ -500,7 +504,7 @@ export default function ScannerModal() {
                   style={[styles.chip, paymentMethod === p.id && styles.chipSelected]}
                   onPress={() => setPaymentMethod(p.id)}
                 >
-                  <Ionicons name={p.icon as any} size={14} color={Colors.textSecondary} />
+                  <Ionicons name={p.icon as any} size={14} color={theme.textSecondary} />
                   <Text
                     style={[
                       styles.chipText,
@@ -519,13 +523,13 @@ export default function ScannerModal() {
         <View style={styles.fieldGroup}>
           <Text style={styles.label}>Note (optionnel)</Text>
           <View style={styles.inputWrap}>
-            <Ionicons name="document-text-outline" size={20} color={Colors.textTertiary} />
+            <Ionicons name="document-text-outline" size={20} color={theme.textTertiary} />
             <TextInput
               style={styles.input}
               value={note}
               onChangeText={setNote}
               placeholder="Détails supplémentaires"
-              placeholderTextColor={Colors.textTertiary}
+              placeholderTextColor={theme.textTertiary}
             />
           </View>
         </View>
@@ -547,7 +551,7 @@ export default function ScannerModal() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (Colors: ThemePalette) => StyleSheet.create({
   // Permission
   permContainer: {
     flex: 1,

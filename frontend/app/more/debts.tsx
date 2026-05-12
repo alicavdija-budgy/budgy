@@ -118,11 +118,11 @@ export default function DebtsScreen() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
-          <Ionicons name="arrow-back" size={24} color={Colors.text} />
+          <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <Text style={styles.title}>Dettes</Text>
         <TouchableOpacity onPress={() => setShowAdd(true)} style={styles.iconBtn}>
-          <Ionicons name="add" size={26} color={Colors.text} />
+          <Ionicons name="add" size={26} color={theme.text} />
         </TouchableOpacity>
       </View>
 
@@ -183,14 +183,14 @@ export default function DebtsScreen() {
                       </Text>
                     </View>
                     <TouchableOpacity onPress={() => handleDelete(d.id, d.title)} style={styles.delIcon}>
-                      <Ionicons name="trash-outline" size={18} color={Colors.textTertiary} />
+                      <Ionicons name="trash-outline" size={18} color={theme.textTertiary} />
                     </TouchableOpacity>
                   </View>
 
                   <View style={styles.debtAmtRow}>
                     <View>
                       <Text style={styles.debtAmtLabel}>Reste à payer</Text>
-                      <Text style={[styles.debtAmt, isComplete && { color: Colors.success }]}>
+                      <Text style={[styles.debtAmt, isComplete && { color: theme.success }]}>
                         {CUR} {formatNumber(remaining)}
                       </Text>
                     </View>
@@ -202,7 +202,7 @@ export default function DebtsScreen() {
                     </View>
                   </View>
 
-                  <ProgressBar value={progress} color={isComplete ? Colors.success : d.color} height={8} showLabel />
+                  <ProgressBar value={progress} color={isComplete ? theme.success : d.color} height={8} showLabel />
 
                   <View style={styles.debtBottomRow}>
                     <Text style={styles.debtMonthly}>
@@ -219,7 +219,7 @@ export default function DebtsScreen() {
                     )}
                     {isComplete && (
                       <View style={styles.completeBadge}>
-                        <Ionicons name="checkmark-circle" size={14} color={Colors.success} />
+                        <Ionicons name="checkmark-circle" size={14} color={theme.success} />
                         <Text style={styles.completeTxt}>Remboursé !</Text>
                       </View>
                     )}
@@ -240,7 +240,7 @@ export default function DebtsScreen() {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Nouvelle dette</Text>
               <TouchableOpacity onPress={() => setShowAdd(false)}>
-                <Ionicons name="close" size={24} color={Colors.text} />
+                <Ionicons name="close" size={24} color={theme.text} />
               </TouchableOpacity>
             </View>
 
@@ -256,7 +256,7 @@ export default function DebtsScreen() {
                       form.typeId === t.id && { borderColor: t.color, backgroundColor: `${t.color}18` },
                     ]}
                   >
-                    <Ionicons name={t.icon as any} size={18} color={form.typeId === t.id ? t.color : Colors.textSecondary} />
+                    <Ionicons name={t.icon as any} size={18} color={form.typeId === t.id ? t.color : theme.textSecondary} />
                     <Text style={[styles.typeChipTxt, form.typeId === t.id && { color: t.color }]}>{t.label}</Text>
                   </TouchableOpacity>
                 ))}
@@ -268,7 +268,7 @@ export default function DebtsScreen() {
                 value={form.title}
                 onChangeText={(t) => setForm((p) => ({ ...p, title: t }))}
                 placeholder="ex: Carte Mastercard UBS"
-                placeholderTextColor={Colors.textTertiary}
+                placeholderTextColor={theme.textTertiary}
               />
 
               <View style={styles.row2}>
@@ -279,7 +279,7 @@ export default function DebtsScreen() {
                     value={form.total}
                     onChangeText={(t) => setForm((p) => ({ ...p, total: t }))}
                     placeholder="10000"
-                    placeholderTextColor={Colors.textTertiary}
+                    placeholderTextColor={theme.textTertiary}
                     keyboardType="decimal-pad"
                   />
                 </View>
@@ -290,7 +290,7 @@ export default function DebtsScreen() {
                     value={form.paid}
                     onChangeText={(t) => setForm((p) => ({ ...p, paid: t }))}
                     placeholder="0"
-                    placeholderTextColor={Colors.textTertiary}
+                    placeholderTextColor={theme.textTertiary}
                     keyboardType="decimal-pad"
                   />
                 </View>
@@ -304,7 +304,7 @@ export default function DebtsScreen() {
                     value={form.interestRate}
                     onChangeText={(t) => setForm((p) => ({ ...p, interestRate: t }))}
                     placeholder="9.9"
-                    placeholderTextColor={Colors.textTertiary}
+                    placeholderTextColor={theme.textTertiary}
                     keyboardType="decimal-pad"
                   />
                 </View>
@@ -315,7 +315,7 @@ export default function DebtsScreen() {
                     value={form.monthlyPayment}
                     onChangeText={(t) => setForm((p) => ({ ...p, monthlyPayment: t }))}
                     placeholder="250"
-                    placeholderTextColor={Colors.textTertiary}
+                    placeholderTextColor={theme.textTertiary}
                     keyboardType="decimal-pad"
                   />
                 </View>
@@ -334,7 +334,7 @@ export default function DebtsScreen() {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Ajouter un versement</Text>
               <TouchableOpacity onPress={() => setShowPay(null)}>
-                <Ionicons name="close" size={24} color={Colors.text} />
+                <Ionicons name="close" size={24} color={theme.text} />
               </TouchableOpacity>
             </View>
             <Text style={styles.label}>Montant ({CUR})</Text>
@@ -343,7 +343,7 @@ export default function DebtsScreen() {
               value={payAmount}
               onChangeText={setPayAmount}
               placeholder="100"
-              placeholderTextColor={Colors.textTertiary}
+              placeholderTextColor={theme.textTertiary}
               keyboardType="decimal-pad"
               autoFocus
             />

@@ -3,7 +3,7 @@
  * Manual sync UI + status. Auto-sync happens on login via auth.tsx.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, Alert,
 } from 'react-native';
@@ -12,6 +12,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
+import { useTheme } from '../../src/hooks/useTheme';
+import type { ThemePalette } from '../../src/constants/palettes';
 import { useStore } from '../../src/stores/useStore';
 import { Card, Button } from '../../src/components/ui';
 import {
@@ -20,6 +22,8 @@ import {
 import { isSupabaseConfigured } from '../../src/lib/supabase';
 
 export default function CloudSyncScreen() {
+  const theme = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const store = useStore();
@@ -72,7 +76,7 @@ export default function CloudSyncScreen() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
-          <Ionicons name="chevron-back" size={24} color={Colors.text} />
+          <Ionicons name="chevron-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <Text style={styles.title}>Sync Cloud</Text>
         <View style={{ width: 36 }} />
@@ -80,10 +84,10 @@ export default function CloudSyncScreen() {
 
       <ScrollView contentContainerStyle={{ padding: Spacing.lg, paddingBottom: insets.bottom + 40 }}>
         <LinearGradient
-          colors={signedIn ? (Colors.gradientSuccess as [string, string]) : ['#374151', '#1F2937']}
+          colors={signedIn ? (theme.gradientSuccess as [string, string]) : ['#374151', '#1F2937']}
           style={styles.hero}
         >
-          <Ionicons name={signedIn ? 'cloud-done' : 'cloud-offline'} size={36} color={Colors.text} />
+          <Ionicons name={signedIn ? 'cloud-done' : 'cloud-offline'} size={36} color={theme.text} />
           <View style={{ flex: 1 }}>
             <Text style={styles.heroTitle}>
               {signedIn ? 'Connecté à Supabase' : 'Non connecté au cloud'}
@@ -104,7 +108,7 @@ export default function CloudSyncScreen() {
           </View>
           <View style={styles.statRow}>
             <Text style={styles.statLabel}>Configuration Supabase</Text>
-            <Text style={[styles.statValue, { color: isSupabaseConfigured() ? Colors.success : Colors.error }]}>
+            <Text style={[styles.statValue, { color: isSupabaseConfigured() ? theme.success : theme.error }]}>
               {isSupabaseConfigured() ? 'OK' : 'Manquante'}
             </Text>
           </View>
@@ -120,7 +124,7 @@ export default function CloudSyncScreen() {
 
         {error && (
           <View style={styles.errorBox}>
-            <Ionicons name="alert-circle" size={20} color={Colors.error} />
+            <Ionicons name="alert-circle" size={20} color={theme.error} />
             <Text style={styles.errorText}>{error}</Text>
           </View>
         )}
@@ -163,7 +167,7 @@ export default function CloudSyncScreen() {
           </>
         )}
 
-        {working && <ActivityIndicator color={Colors.primaryLight} style={{ marginTop: Spacing.lg }} />}
+        {working && <ActivityIndicator color={theme.primaryLight} style={{ marginTop: Spacing.lg }} />}
 
         <Card style={[styles.helpCard, { marginTop: Spacing.xl }]}>
           <Text style={styles.helpTitle}>Sync automatique activée ✨</Text>
@@ -188,7 +192,7 @@ export default function CloudSyncScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (Colors: ThemePalette) => StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md },
   iconBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },

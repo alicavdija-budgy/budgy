@@ -1,7 +1,7 @@
 {
   "cli": {
     "version": ">= 12.0.0",
-    "appVersionSource": "remote"
+    "appVersionSource": "local"
   },
   "build": {
     "development": {
@@ -16,7 +16,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_BACKEND_URL": "https://budgy-api.preview.example.com"
+        "EXPO_PUBLIC_BACKEND_URL": "https://chf-guardian-wallet.preview.emergentagent.com"
       }
     },
     "preview": {
@@ -24,31 +24,26 @@
       "channel": "preview",
       "ios": {
         "simulator": false,
-        "resourceClass": "m-medium",
-        "autoIncrement": "buildNumber"
+        "resourceClass": "m-medium"
       },
       "android": {
-        "buildType": "apk",
-        "autoIncrement": "versionCode"
+        "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_BACKEND_URL": "https://budgy-api.preview.example.com"
+        "EXPO_PUBLIC_BACKEND_URL": "https://chf-guardian-wallet.preview.emergentagent.com"
       }
     },
     "production": {
       "channel": "production",
-      "autoIncrement": true,
       "ios": {
         "resourceClass": "m-medium",
-        "autoIncrement": "buildNumber",
         "image": "latest"
       },
       "android": {
-        "buildType": "app-bundle",
-        "autoIncrement": "versionCode"
+        "buildType": "app-bundle"
       },
       "env": {
-        "EXPO_PUBLIC_BACKEND_URL": "https://api.budgy.ch"
+        "EXPO_PUBLIC_BACKEND_URL": "https://chf-guardian-wallet.preview.emergentagent.com"
       }
     }
   },

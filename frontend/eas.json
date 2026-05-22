@@ -34,8 +34,10 @@
       }
     },
     "production": {
+      "distribution": "store",
       "channel": "production",
       "ios": {
+        "simulator": false,
         "resourceClass": "m-medium",
         "image": "latest"
       },
@@ -57,8 +59,8 @@
       },
       "android": {
         "serviceAccountKeyPath": "./google-service-account.json",
-        "track": "production",
-        "releaseStatus": "completed"
+        "track": "internal",
+        "releaseStatus": "draft"
       }
     },
     "preview": {

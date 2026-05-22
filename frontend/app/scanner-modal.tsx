@@ -134,14 +134,15 @@ export default function ScannerModal() {
             setNote(`Articles: ${data.items.slice(0, 3).join(', ')}`);
           }
         } else {
+          // OCR ran but extracted nothing usable — show inline banner only
+          // (no modal — user can still fill manually)
           setOcrError(t('errors.ocrFailed'));
         }
       } else {
-        // Offline / 5xx / invalid JSON — show banner but keep manual entry working
+        // Network/server failure — ONLY show inline banner (no modal)
+        // The user has already typed nothing; they need to fill manually anyway.
+        // Showing both a banner AND a modal is confusing UX.
         setOcrError(t('errors.ocrFailed'));
-        if (!r.offline) {
-          setAppError(buildErrorFromResult(r, 'OCR', true));
-        }
       }
     } finally {
       setStage('edit');

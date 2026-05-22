@@ -148,6 +148,35 @@ export function useIAP() {
       try {
         const sku =
           plan === 'monthly' ? IAP_PRODUCT_IDS.monthly : IAP_PRODUCT_IDS.annual;
+
+        // CRITICAL: ensure the product is loaded from App Store Connect BEFORE
+        // attempting to purchase. Calling requestSubscription on a product that
+        // wasn't returned by getSubscriptions causes the iOS error
+        // "Missing purchase request configuration".
+        const localProduct = (state.products || []).find((p) => p.productId === sku);
+        if (!localProduct) {
+          // Try one reload in case products weren't loaded yet
+          const freshProducts = await fetchSubscriptions();
+          const freshHas = freshProducts.some((p) => p.productId === sku);
+          if (!freshHas) {
+            setState((s) => ({
+              ...s,
+              phase: 'idle',
+              error: 'product_not_found',
+              notConfigured: true,
+              products: freshProducts,
+            }));
+            return {
+              success: false,
+              notConfigured: true,
+              error:
+                'Achat momentanément indisponible. Le produit n\'est pas encore disponible dans App Store. (Vérifiez que les produits sont en statut "Ready to Submit" et que le contrat Paid Apps est signé.)',
+            };
+          }
+          // Update state with the freshly-loaded products
+          setState((s) => ({ ...s, products: freshProducts }));
+        }
+
         const receipt = await requestSubscription(sku);
         if (!receipt) {
           setPhase('idle');

@@ -18,6 +18,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useFocusEffect } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
+import { safeFetchJson } from '../../src/lib/network';
+import { normalizeImageForUpload } from '../../src/lib/imageUpload';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import { readAsBase64, readAsText } from '../../src/utils/fsCompat';
@@ -111,12 +113,12 @@ export default function ImportInvoiceScreen() {
     setBusyLabel('IA analyse votre facture...');
     setResult(null);
     try {
-      const res = await fetch(`${BACKEND_URL}/api/email/parse`, {
+      const r = await safeFetchJson<any>(`${BACKEND_URL}/api/email/parse`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content, subject, from_addr: '' }),
-      });
-      const data = await res.json();
+        body: JSON.stringify({ text: content, subject }),
+      }, { timeoutMs: 20000, retries: 1, silent: true });
+      const data = r.data || { success: false, error: r.error };
       if (data.success) setResult({ ...data, _source: 'email' });
       else Alert.alert(
         'Impossible d\'importer cette facture',
@@ -145,12 +147,12 @@ export default function ImportInvoiceScreen() {
         base64 = await readAsBase64(uriOrPath);
       }
       console.log('[email-import] OCR call, b64 length:', base64.length);
-      const res = await fetch(`${BACKEND_URL}/api/scanner/ocr`, {
+      const r = await safeFetchJson<any>(`${BACKEND_URL}/api/scanner/ocr`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ image_base64: `data:image/jpeg;base64,${base64}` }),
-      });
-      const data = await res.json();
+      }, { timeoutMs: 25000, retries: 1, silent: true });
+      const data = r.data || { success: false, error: r.error };
       if (data.success) setResult({ ...data, _source: 'photo' });
       else Alert.alert(
         'Échec de l\'analyse',
@@ -209,12 +211,12 @@ export default function ImportInvoiceScreen() {
         setBusy(true);
         setBusyLabel('OCR + IA en cours...');
         try {
-          const apiRes = await fetch(`${BACKEND_URL}/api/scanner/ocr`, {
+          const r = await safeFetchJson<any>(`${BACKEND_URL}/api/scanner/ocr`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ image_base64: `data:image/jpeg;base64,${a.base64}` }),
-          });
-          const data = await apiRes.json();
+          }, { timeoutMs: 25000, retries: 1, silent: true });
+          const data = r.data || { success: false, error: r.error };
           if (data.success) setResult({ ...data, _source: 'photo' });
           else Alert.alert('Échec OCR', data.error || 'Impossible d\'analyser.');
         } finally {
@@ -246,12 +248,12 @@ export default function ImportInvoiceScreen() {
         setBusy(true);
         setBusyLabel('OCR + IA en cours...');
         try {
-          const apiRes = await fetch(`${BACKEND_URL}/api/scanner/ocr`, {
+          const r = await safeFetchJson<any>(`${BACKEND_URL}/api/scanner/ocr`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ image_base64: `data:image/jpeg;base64,${a.base64}` }),
-          });
-          const data = await apiRes.json();
+          }, { timeoutMs: 25000, retries: 1, silent: true });
+          const data = r.data || { success: false, error: r.error };
           if (data.success) setResult({ ...data, _source: 'photo' });
           else Alert.alert('Échec OCR', data.error || 'Impossible d\'analyser.');
         } finally {

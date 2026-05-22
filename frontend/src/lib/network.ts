@@ -244,3 +244,68 @@ export async function ping(
   const r = await safeFetch(url, { method: 'GET' }, { timeoutMs, retries: 0, silent: true });
   return r.ok || (r.status >= 200 && r.status < 500);
 }
+
+/**
+ * Safely parse a JSON string. NEVER throws. Returns a default if parsing fails
+ * or if the input is not valid JSON (e.g. HTML / plain text from a proxy
+ * returning a 500 error page).
+ *
+ * Use for any backend response where the server might misbehave.
+ */
+export function safeJsonParse<T = any>(input: any, fallback: T | null = null): T | null {
+  if (input == null) return fallback;
+  if (typeof input === 'object') return input as T;
+  if (typeof input !== 'string') return fallback;
+  const trimmed = input.trim();
+  if (!trimmed) return fallback;
+  // Quick guard: HTML/text responses
+  if (trimmed.startsWith('<') || trimmed.toLowerCase().startsWith('<!doctype')) {
+    return fallback;
+  }
+  try {
+    return JSON.parse(trimmed) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+/**
+ * Convenience: fetch a JSON endpoint with full resilience (timeout, retry,
+ * graceful parse, never throws). Returns `{ ok, data, error, status }`.
+ */
+export async function safeFetchJson<T = any>(
+  url: string,
+  init?: RequestInit,
+  opts?: SafeFetchOptions
+): Promise<SafeFetchResult<T>> {
+  const r = await safeFetch<T>(url, init, opts);
+  // safeFetch already attempts JSON.parse — but if the body was HTML/text we
+  // may have stored it as a string. Re-parse defensively.
+  if (r.ok && typeof r.data === 'string') {
+    const parsed = safeJsonParse<T>(r.data);
+    return {
+      ...r,
+      data: parsed,
+      ok: parsed !== null,
+      error: parsed === null ? 'invalid_json' : null,
+    };
+  }
+  return r;
+}
+
+/**
+ * Map a SafeFetchResult to a user-facing message (i18n-friendly key).
+ * The component can pass this key to t() for translation.
+ */
+export function describeError(
+  r: SafeFetchResult<any> | { ok: boolean; status: number; error?: string | null; offline?: boolean }
+): string {
+  if (r.offline) return 'network.noInternet';
+  if (!r.error) return 'errors.unknown';
+  if (r.status === 0 || r.error.includes('aborted')) return 'errors.timeout';
+  if (r.status === 404) return 'errors.notFound';
+  if (r.status === 401 || r.status === 403) return 'errors.unauthorized';
+  if (r.status >= 500) return 'errors.serverError';
+  if (r.error === 'invalid_json' || r.error?.includes('JSON')) return 'errors.invalidResponse';
+  return 'errors.generic';
+}

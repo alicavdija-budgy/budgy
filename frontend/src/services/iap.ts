@@ -76,9 +76,13 @@ export async function initIap(): Promise<boolean> {
   loadIap();
   if (!isIapAvailable()) return false;
   try {
+    if (typeof RNIap?.initConnection !== 'function') {
+      console.warn('[IAP] initConnection unavailable on this build');
+      return false;
+    }
     await RNIap.initConnection();
-    if (Platform.OS === 'android') {
-      await RNIap.flushFailedPurchasesCachedAsPendingAndroid?.();
+    if (Platform.OS === 'android' && typeof RNIap?.flushFailedPurchasesCachedAsPendingAndroid === 'function') {
+      await RNIap.flushFailedPurchasesCachedAsPendingAndroid();
     }
     return true;
   } catch (e) {
@@ -90,7 +94,9 @@ export async function initIap(): Promise<boolean> {
 export async function endIap(): Promise<void> {
   if (!isIapAvailable()) return;
   try {
-    await RNIap.endConnection();
+    if (typeof RNIap?.endConnection === 'function') {
+      await RNIap.endConnection();
+    }
   } catch {}
 }
 
@@ -98,6 +104,12 @@ export async function endIap(): Promise<void> {
 export async function fetchSubscriptions(): Promise<IapProduct[]> {
   if (!isIapAvailable()) return [];
   try {
+    // react-native-iap v12+ uses `getSubscriptions({ skus })`. Older versions
+    // used `getSubscriptions({ skus })` too — but some forks may have removed it.
+    if (typeof RNIap?.getSubscriptions !== 'function') {
+      console.warn('[IAP] getSubscriptions is not a function on this build');
+      return [];
+    }
     const raw = await RNIap.getSubscriptions({ skus: IAP_SKUS });
     return (raw || []).map((p: any) => ({
       productId: p.productId,
@@ -122,7 +134,18 @@ export async function requestSubscription(
   if (!isIapAvailable()) throw new Error(getIapUnavailableReason() || 'IAP indisponible');
 
   try {
-    const purchase = await RNIap.requestSubscription({
+    // Defensive: react-native-iap v12+ uses `requestSubscription`; some forks
+    // renamed it to `requestPurchase`. Pick whichever is callable.
+    const fn =
+      typeof RNIap?.requestSubscription === 'function'
+        ? RNIap.requestSubscription
+        : typeof RNIap?.requestPurchase === 'function'
+          ? RNIap.requestPurchase
+          : null;
+    if (!fn) {
+      throw new Error('IAP module is missing a purchase function on this build');
+    }
+    const purchase = await fn({
       sku: productId,
       andDangerouslyFinishTransactionAutomaticallyIOS: false,
     });
@@ -146,6 +169,7 @@ export async function requestSubscription(
 export async function finishTransaction(purchase: IapPurchaseReceipt): Promise<void> {
   if (!isIapAvailable()) return;
   try {
+    if (typeof RNIap?.finishTransaction !== 'function') return;
     await RNIap.finishTransaction({ purchase: purchase as any, isConsumable: false });
   } catch (e) {
     console.warn('[IAP] finishTransaction failed', e);
@@ -156,6 +180,7 @@ export async function finishTransaction(purchase: IapPurchaseReceipt): Promise<v
 export async function getAvailableReceipts(): Promise<IapPurchaseReceipt[]> {
   if (!isIapAvailable()) return [];
   try {
+    if (typeof RNIap?.getAvailablePurchases !== 'function') return [];
     const purchases = await RNIap.getAvailablePurchases();
     return (purchases || []).map((p: any) => ({
       productId: p.productId,

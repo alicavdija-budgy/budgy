@@ -12,6 +12,9 @@ import {
   TextInput,
   Modal,
   Alert,
+  KeyboardAvoidingView,
+  Keyboard,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -200,44 +203,56 @@ export default function BudgetsScreen() {
       </ScrollView>
 
       <Modal visible={showAddModal} animationType="slide" transparent onRequestClose={() => setShowAddModal(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Nouveau budget</Text>
-              <TouchableOpacity onPress={() => setShowAddModal(false)}>
-                <Ionicons name="close" size={24} color={theme.text} />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.inputLabel}>Catégorie</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View style={styles.categoryGrid}>
-                {EXPENSE_CATEGORIES.slice(0, 8).map((cat) => (
-                  <TouchableOpacity
-                    key={cat.id}
-                    style={[styles.categoryItem, newBudget.category === cat.id && styles.categoryItemSelected]}
-                    onPress={() => setNewBudget((p) => ({ ...p, category: cat.id }))}
-                  >
-                    <CategoryIcon category={cat.id} size="sm" />
-                    <Text style={styles.categoryLabel}>{cat.name}</Text>
-                  </TouchableOpacity>
-                ))}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+          keyboardVerticalOffset={0}
+        >
+          <ScrollView
+            contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Nouveau budget</Text>
+                <TouchableOpacity onPress={() => setShowAddModal(false)}>
+                  <Ionicons name="close" size={24} color={theme.text} />
+                </TouchableOpacity>
               </View>
-            </ScrollView>
 
-            <Text style={styles.inputLabel}>Limite mensuelle ({CUR})</Text>
-            <TextInput
-              style={styles.input}
-              value={newBudget.limit}
-              onChangeText={(t) => setNewBudget((p) => ({ ...p, limit: t }))}
-              placeholder="200"
-              placeholderTextColor={theme.textTertiary}
-              keyboardType="decimal-pad"
-            />
+              <Text style={styles.inputLabel}>Catégorie</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View style={styles.categoryGrid}>
+                  {EXPENSE_CATEGORIES.slice(0, 8).map((cat) => (
+                    <TouchableOpacity
+                      key={cat.id}
+                      style={[styles.categoryItem, newBudget.category === cat.id && styles.categoryItemSelected]}
+                      onPress={() => setNewBudget((p) => ({ ...p, category: cat.id }))}
+                    >
+                      <CategoryIcon category={cat.id} size="sm" />
+                      <Text style={styles.categoryLabel}>{cat.name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
 
-            <Button title="Créer le budget" onPress={handleAddBudget} fullWidth size="lg" style={{ marginTop: Spacing.lg }} />
-          </View>
-        </View>
+              <Text style={styles.inputLabel}>Limite mensuelle ({CUR})</Text>
+              <TextInput
+                style={styles.input}
+                value={newBudget.limit}
+                onChangeText={(t) => setNewBudget((p) => ({ ...p, limit: t }))}
+                placeholder="200"
+                placeholderTextColor={theme.textTertiary}
+                keyboardType="decimal-pad"
+                returnKeyType="done"
+                onSubmitEditing={() => Keyboard.dismiss()}
+              />
+
+              <Button title="Créer le budget" onPress={handleAddBudget} fullWidth size="lg" style={{ marginTop: Spacing.lg }} />
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );

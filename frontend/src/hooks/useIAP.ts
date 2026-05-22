@@ -164,7 +164,7 @@ export function useIAP() {
           receipt_data: receipt.transactionReceipt,
         });
 
-        if (verdict.notConfigured) {
+        if (verdict.not_configured) {
           // Don't unlock Pro yet — backend missing keys.
           setState((s) => ({
             ...s,
@@ -243,7 +243,7 @@ export function useIAP() {
           original_transaction_id: orig,
           user_id: userId,
         });
-        if (verdict.notConfigured) {
+        if (verdict.not_configured) {
           serverNotConfigured = true;
           missingEnv = verdict.missing || [];
           break;

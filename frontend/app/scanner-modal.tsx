@@ -39,6 +39,10 @@ import { Button } from '../src/components/ui';
 import { EXPENSE_CATEGORIES, PAYMENT_METHODS } from '../src/data/swiss-data';
 import { CategoryIcon } from '../src/components/CategoryIcon';
 import type { ReceiptType } from '../src/types';
+import { safeFetchJson } from '../src/lib/network';
+import { normalizeImageForUpload } from '../src/lib/imageUpload';
+import { AppErrorModal, buildErrorFromResult, type ErrorPayload } from '../src/components/AppErrorModal';
+import { useTranslation } from '../src/hooks/useTranslation';
 
 const BACKEND_URL =
   process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:8001';
@@ -50,6 +54,7 @@ export default function ScannerModal() {
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { t } = useTranslation();
   const { addTransaction, addReceipt } = useStore();
 
   const [permission, requestPermission] = useCameraPermissions();
@@ -58,6 +63,7 @@ export default function ScannerModal() {
   const [flash, setFlash] = useState<'off' | 'on'>('off');
   const [photo, setPhoto] = useState<{ uri: string; base64?: string } | null>(null);
   const [capturing, setCapturing] = useState(false);
+  const [appError, setAppError] = useState<ErrorPayload | null>(null);
   const cameraRef = useRef<CameraView | null>(null);
 
   // Form state for edit stage
@@ -106,27 +112,37 @@ export default function ScannerModal() {
   const runOcr = async (b64: string) => {
     setStage('ocr');
     setOcrError(null);
-    try {
-      const res = await fetch(`${BACKEND_URL}/api/scanner/ocr`, {
+    const r = await safeFetchJson<any>(
+      `${BACKEND_URL}/api/scanner/ocr`,
+      {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ image_base64: b64, mime_type: 'image/jpeg' }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        if (data.merchant) setTitle(data.merchant);
-        if (data.total_amount) setAmount(String(data.total_amount));
-        if (data.category) setCategory(data.category);
-        if (data.receipt_type) setReceiptType(data.receipt_type as ReceiptType);
-        setOcrConfidence(data.confidence || null);
-        if (data.items && data.items.length) {
-          setNote(`Articles: ${data.items.slice(0, 3).join(', ')}`);
+      },
+      { timeoutMs: 25000, retries: 1, silent: true }
+    );
+    try {
+      if (r.ok && r.data) {
+        const data: any = r.data;
+        if (data.success) {
+          if (data.merchant) setTitle(data.merchant);
+          if (data.total_amount) setAmount(String(data.total_amount));
+          if (data.category) setCategory(data.category);
+          if (data.receipt_type) setReceiptType(data.receipt_type as ReceiptType);
+          setOcrConfidence(data.confidence || null);
+          if (data.items && data.items.length) {
+            setNote(`Articles: ${data.items.slice(0, 3).join(', ')}`);
+          }
+        } else {
+          setOcrError(t('errors.ocrFailed'));
         }
       } else {
-        setOcrError(data.error || 'OCR a échoué — saisie manuelle');
+        // Offline / 5xx / invalid JSON — show banner but keep manual entry working
+        setOcrError(t('errors.ocrFailed'));
+        if (!r.offline) {
+          setAppError(buildErrorFromResult(r, 'OCR', true));
+        }
       }
-    } catch (e: any) {
-      setOcrError(e?.message || 'Erreur réseau OCR');
     } finally {
       setStage('edit');
     }
@@ -138,19 +154,29 @@ export default function ScannerModal() {
       setCapturing(true);
       const pic = await cameraRef.current.takePictureAsync({
         quality: 0.6,
-        base64: true,
+        base64: false,
         skipProcessing: false,
       });
       if (pic?.uri) {
-        setPhoto({ uri: pic.uri, base64: pic.base64 });
-        if (pic.base64) {
-          await runOcr(pic.base64);
+        // Normalize: HEIC/HEIF → JPEG, resize, base64
+        const norm = await normalizeImageForUpload(pic.uri, {
+          includeBase64: true,
+          quality: 0.85,
+        });
+        setPhoto({ uri: norm.uri, base64: norm.base64 });
+        if (norm.base64) {
+          await runOcr(norm.base64);
         } else {
           setStage('edit');
         }
       }
     } catch (e: any) {
-      Alert.alert('Erreur', e?.message || 'Impossible de capturer la photo');
+      setAppError({
+        messageKey: 'errors.unknown',
+        context: 'capture',
+        severity: 'error',
+        retryable: true,
+      });
     } finally {
       setCapturing(false);
     }
@@ -547,6 +573,14 @@ export default function ScannerModal() {
           icon="checkmark-circle"
         />
       </View>
+
+      <AppErrorModal
+        error={appError}
+        onClose={() => setAppError(null)}
+        onRetry={() => {
+          if (photo?.base64) runOcr(photo.base64);
+        }}
+      />
     </KeyboardAvoidingView>
   );
 }

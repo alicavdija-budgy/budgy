@@ -739,12 +739,68 @@ ${pageDataUrls.map((src, i) => `
           </View>
         </ScrollView>
 
+        {/* Premium quick-actions row (always visible) */}
+        <View style={styles.qaRow}>
+          <TouchableOpacity style={[styles.qaBtn, styles.qaPrimary]} onPress={startCapture} activeOpacity={0.85}>
+            <Ionicons name="scan" size={18} color="#FFF" />
+            <Text style={styles.qaTxtPrimary}>Scanner</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.qaBtn} onPress={() => router.push('/more/email-import')} activeOpacity={0.85}>
+            <Ionicons name="document-attach" size={18} color={theme.primary} />
+            <Text style={styles.qaTxt}>Importer PDF</Text>
+          </TouchableOpacity>
+        </View>
+
         {filtered.length === 0 ? (
-          <EmptyState
-            icon="folder-open-outline"
-            title="Votre classeur est vide"
-            description="Scannez vos contrats, factures et documents importants en PDF multi-pages."
-          />
+          <View style={styles.emptyPremium}>
+            <LinearGradient
+              colors={[`${theme.primary}25`, `${theme.primary}05`]}
+              style={styles.emptyHero}
+            >
+              <View style={styles.emptyIconRing}>
+                <Ionicons name="folder-open" size={42} color={theme.primary} />
+              </View>
+              <Text style={styles.emptyTitle}>Votre classeur premium</Text>
+              <Text style={styles.emptySub}>
+                Centralisez vos contrats, factures, assurances et documents fiscaux. Scan multi-pages, recherche IA, rappels d'échéance — tout au même endroit.
+              </Text>
+            </LinearGradient>
+
+            {/* Category preview chips */}
+            <View style={styles.emptyCats}>
+              {CATEGORIES.slice(0, 6).map((c) => (
+                <View key={c.id} style={[styles.emptyCatChip, { borderColor: `${c.color}40` }]}>
+                  <Text style={{ fontSize: 16 }}>{c.emoji}</Text>
+                  <Text style={styles.emptyCatTxt}>{c.label}</Text>
+                </View>
+              ))}
+            </View>
+
+            {/* Primary CTAs — premium 3-action grid */}
+            <View style={styles.emptyCtas}>
+              <TouchableOpacity style={[styles.emptyCta, styles.emptyCtaPrimary]} onPress={startCapture} activeOpacity={0.85}>
+                <Ionicons name="scan" size={28} color="#FFF" />
+                <Text style={styles.emptyCtaTitle}>Scanner</Text>
+                <Text style={styles.emptyCtaSub}>Multi-pages PDF</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.emptyCta} onPress={() => router.push('/more/email-import')} activeOpacity={0.85}>
+                <Ionicons name="cloud-upload" size={28} color={theme.primary} />
+                <Text style={[styles.emptyCtaTitle, { color: theme.primary }]}>Importer</Text>
+                <Text style={styles.emptyCtaSub}>PDF · Email · Photo</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.emptyCta} onPress={() => router.push('/(tabs)/expenses?tab=contracts' as any)} activeOpacity={0.85}>
+                <Ionicons name="document-text" size={28} color={theme.success} />
+                <Text style={[styles.emptyCtaTitle, { color: theme.success }]}>Contrat</Text>
+                <Text style={styles.emptyCtaSub}>Saisie manuelle</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Pro tip */}
+            <View style={styles.emptyTipRow}>
+              <Ionicons name="sparkles" size={16} color={theme.warning} />
+              <Text style={styles.emptyTip}>Astuce — Scannez vos contrats Sunrise / Salt / Swisscom dès aujourd'hui pour activer les rappels d'échéance.</Text>
+            </View>
+          </View>
         ) : (
           filtered.map((d) => {
             const cat = CATEGORIES.find((c) => c.id === d.category);
@@ -917,4 +973,67 @@ const makeStyles = (Colors: ThemePalette) => StyleSheet.create({
   // FAB
   fab: { position: 'absolute', right: 20, width: 60, height: 60, borderRadius: 30, overflow: 'hidden', shadowColor: '#34D399', shadowOpacity: 0.5, shadowRadius: 20, shadowOffset: { width: 0, height: 6 }, elevation: 8 },
   fabInner: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+
+  // Quick actions row (always visible above the list)
+  qaRow: { flexDirection: 'row', gap: 8, marginBottom: Spacing.md },
+  qaBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    paddingVertical: 12, borderRadius: BorderRadius.lg,
+    backgroundColor: Colors.card, borderWidth: 1.5, borderColor: Colors.primary,
+  },
+  qaPrimary: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  qaTxt: { color: Colors.primary, fontSize: 13, fontWeight: '700' },
+  qaTxtPrimary: { color: '#FFF', fontSize: 13, fontWeight: '700' },
+
+  // Premium empty state
+  emptyPremium: { marginTop: Spacing.md },
+  emptyHero: {
+    padding: Spacing.xl,
+    borderRadius: BorderRadius.xl,
+    alignItems: 'center',
+    marginBottom: Spacing.lg,
+    borderWidth: 1,
+    borderColor: `${Colors.primary}25`,
+  },
+  emptyIconRing: {
+    width: 86, height: 86, borderRadius: 43,
+    backgroundColor: `${Colors.primary}20`,
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: Spacing.md,
+    borderWidth: 2,
+    borderColor: `${Colors.primary}50`,
+  },
+  emptyTitle: {
+    color: Colors.text, fontSize: 20, fontWeight: '900',
+    textAlign: 'center', marginBottom: 8,
+  },
+  emptySub: {
+    color: Colors.textSecondary, fontSize: 13, lineHeight: 19, textAlign: 'center',
+    paddingHorizontal: Spacing.md,
+  },
+  emptyCats: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center', marginBottom: Spacing.lg },
+  emptyCatChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 12, paddingVertical: 8,
+    borderRadius: 999, borderWidth: 1,
+    backgroundColor: Colors.card,
+  },
+  emptyCatTxt: { color: Colors.textSecondary, fontSize: 12, fontWeight: '700' },
+  emptyCtas: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.lg },
+  emptyCta: {
+    flex: 1, alignItems: 'center', justifyContent: 'center',
+    paddingVertical: Spacing.lg, borderRadius: BorderRadius.lg,
+    backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder,
+    gap: 6,
+  },
+  emptyCtaPrimary: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  emptyCtaTitle: { color: '#FFF', fontSize: 14, fontWeight: '800' },
+  emptyCtaSub: { color: Colors.textTertiary, fontSize: 10, fontWeight: '600' },
+  emptyTipRow: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
+    backgroundColor: `${Colors.warning}10`,
+    borderRadius: BorderRadius.md, padding: Spacing.md,
+    borderWidth: 1, borderColor: `${Colors.warning}30`,
+  },
+  emptyTip: { flex: 1, color: Colors.textSecondary, fontSize: 12, lineHeight: 17 },
 });

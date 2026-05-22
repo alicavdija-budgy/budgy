@@ -36,6 +36,32 @@ export default function CloudSyncScreen() {
     isSignedInToSupabase().then(setSignedIn);
   }, []);
 
+  const supabaseConfigured = isSupabaseConfigured();
+
+  // Three-state UX:
+  //  • cloudReady       → user is signed in & ready to sync ("Cloud synchronisé")
+  //  • signInRequired   → config OK but no session yet ("Connectez-vous au cloud")
+  //  • configMissing    → env vars not set ("Configuration cloud requise")
+  const cloudReady = signedIn && supabaseConfigured;
+  const signInRequired = supabaseConfigured && !signedIn;
+
+  const heroGradient: [string, string] = cloudReady
+    ? (theme.gradientSuccess as [string, string])
+    : signInRequired
+      ? ['#1E40AF', '#2563EB']
+      : ['#7C2D12', '#9A3412'];
+  const heroIcon = cloudReady ? 'cloud-done' : signInRequired ? 'cloud-outline' : 'cloud-offline';
+  const heroTitleTxt = cloudReady
+    ? 'Cloud synchronisé ✨'
+    : signInRequired
+      ? 'Connectez-vous au cloud'
+      : 'Configuration cloud requise';
+  const heroSubTxt = cloudReady
+    ? 'Vos données sont protégées et synchronisées sur tous vos appareils'
+    : signInRequired
+      ? 'Activez la sync multi-appareil avec votre compte gratuit'
+      : 'Le cloud est désactivé — utilisez l\'app normalement, vos données restent en local';
+
   const localCount =
     store.transactions.length + store.incomes.length + store.savingsGoals.length +
     store.budgets.length + store.recurringExpenses.length + store.contracts.length +
@@ -84,19 +110,13 @@ export default function CloudSyncScreen() {
 
       <ScrollView contentContainerStyle={{ padding: Spacing.lg, paddingBottom: insets.bottom + 40 }}>
         <LinearGradient
-          colors={signedIn ? (theme.gradientSuccess as [string, string]) : ['#374151', '#1F2937']}
+          colors={heroGradient}
           style={styles.hero}
         >
-          <Ionicons name={signedIn ? 'cloud-done' : 'cloud-offline'} size={36} color={theme.text} />
+          <Ionicons name={heroIcon as any} size={36} color="#FFFFFF" />
           <View style={{ flex: 1 }}>
-            <Text style={styles.heroTitle}>
-              {signedIn ? 'Connecté à Supabase' : 'Non connecté au cloud'}
-            </Text>
-            <Text style={styles.heroSub}>
-              {signedIn
-                ? 'Vos données peuvent être synchronisées'
-                : 'Connectez-vous pour activer la sync multi-appareil'}
-            </Text>
+            <Text style={styles.heroTitle}>{heroTitleTxt}</Text>
+            <Text style={styles.heroSub}>{heroSubTxt}</Text>
           </View>
         </LinearGradient>
 
@@ -129,14 +149,7 @@ export default function CloudSyncScreen() {
           </View>
         )}
 
-        {!signedIn ? (
-          <Button
-            title="Se connecter à Supabase"
-            onPress={() => router.push('/auth')}
-            fullWidth size="lg" icon="log-in"
-            style={{ marginTop: Spacing.lg }}
-          />
-        ) : (
+        {cloudReady ? (
           <>
             <Text style={styles.sectionTitle}>Actions de sync</Text>
             <Button
@@ -165,6 +178,20 @@ export default function CloudSyncScreen() {
               fullWidth icon="cloud-download"
             />
           </>
+        ) : signInRequired ? (
+          <Button
+            title="Se connecter au cloud"
+            onPress={() => router.push('/auth')}
+            fullWidth size="lg" icon="log-in"
+            style={{ marginTop: Spacing.lg }}
+          />
+        ) : (
+          <View style={[styles.helpCard, { backgroundColor: `${theme.warning}10`, borderColor: theme.warning, borderWidth: 1, padding: Spacing.lg, marginTop: Spacing.lg, borderRadius: BorderRadius.lg }]}>
+            <Text style={[styles.helpTitle, { color: theme.warning }]}>Cloud désactivé sur cet appareil</Text>
+            <Text style={styles.helpText}>
+              La sync cloud n'est pas configurée. Vos données restent stockées localement sur votre iPhone — l'app fonctionne normalement sans cloud.
+            </Text>
+          </View>
         )}
 
         {working && <ActivityIndicator color={theme.primaryLight} style={{ marginTop: Spacing.lg }} />}

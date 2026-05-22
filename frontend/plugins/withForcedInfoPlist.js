@@ -15,28 +15,31 @@
 const { withInfoPlist } = require('expo/config-plugins');
 
 const REQUIRED_PURPOSE_STRINGS = {
+  // ── In-use by the app ───────────────────────────────────────────────
+  // Microphone — used by expo-speech-recognition + expo-audio + expo-camera (video)
   NSMicrophoneUsageDescription:
     'Dictate expenses and income with your voice to log transactions hands-free.',
+  // Speech recognition — used by expo-speech-recognition
   NSSpeechRecognitionUsageDescription:
     'Convert your voice into expense and income transactions automatically.',
+  // Camera — used by expo-camera + expo-image-picker
   NSCameraUsageDescription:
     'Scan paper receipts to log expenses automatically.',
+  // Photo library (read) — used by expo-image-picker
   NSPhotoLibraryUsageDescription:
     'Attach photos of your receipts to track and prove expenses.',
+  // Photo library (write) — used to save exported PDF reports
   NSPhotoLibraryAddUsageDescription:
-    'Save expense receipts and exported reports to your photo library.',
+    'Save exported budget reports and receipts to your photo library.',
+  // Face ID — used by expo-local-authentication
   NSFaceIDUsageDescription:
     'Unlock Budgy securely using Face ID.',
-  NSContactsUsageDescription:
-    'Quickly split expenses with the people in your contacts.',
-  NSLocationWhenInUseUsageDescription:
-    'Tag your expenses with the merchant location for better insights.',
-  NSUserTrackingUsageDescription:
-    'We do not track you. This permission is only declared for ad-related SDK compatibility.',
-  NSCalendarsUsageDescription:
-    'Add recurring bills and upcoming payments to your calendar.',
-  NSRemindersUsageDescription:
-    'Create reminders for upcoming bills and budget reviews.',
+
+  // NOTE: NSUserTrackingUsageDescription, NSContactsUsageDescription,
+  // NSLocationWhenInUseUsageDescription, NSCalendarsUsageDescription,
+  // NSRemindersUsageDescription INTENTIONALLY REMOVED.
+  // Budgy is a privacy-first app and does NOT use those APIs.
+  // Declaring unused permission strings risks an App Store rejection.
 };
 
 const withForcedInfoPlist = (config) => {

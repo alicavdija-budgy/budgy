@@ -21,7 +21,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.budgy.ch.budgy",
-      "buildNumber": "46",
+      "buildNumber": "47",
       "associatedDomains": [
         "applinks:budgy.ch",
         "applinks:www.budgy.ch"
@@ -41,15 +41,10 @@
         "CFBundleDevelopmentRegion": "fr",
         "NSCameraUsageDescription": "Scan paper receipts to log expenses automatically.",
         "NSPhotoLibraryUsageDescription": "Attach photos of your receipts to track and prove expenses.",
-        "NSPhotoLibraryAddUsageDescription": "Save expense receipts and exported reports to your photo library.",
+        "NSPhotoLibraryAddUsageDescription": "Save exported budget reports and receipts to your photo library.",
         "NSFaceIDUsageDescription": "Unlock Budgy securely using Face ID.",
         "NSMicrophoneUsageDescription": "Dictate expenses and income with your voice to log transactions hands-free.",
         "NSSpeechRecognitionUsageDescription": "Convert your voice into expense and income transactions automatically.",
-        "NSContactsUsageDescription": "Quickly split expenses with the people in your contacts.",
-        "NSLocationWhenInUseUsageDescription": "Tag your expenses with the merchant location for better insights.",
-        "UIBackgroundModes": [
-          "fetch"
-        ],
         "UIRequiresFullScreen": false
       }
     },
@@ -60,7 +55,7 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.budgy.ch.budgy",
-      "versionCode": 46,
+      "versionCode": 47,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_MEDIA_IMAGES",

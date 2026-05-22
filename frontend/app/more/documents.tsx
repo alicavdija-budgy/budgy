@@ -788,7 +788,7 @@ ${pageDataUrls.map((src, i) => `
                 <Text style={[styles.emptyCtaTitle, { color: theme.primary }]}>Importer</Text>
                 <Text style={styles.emptyCtaSub}>PDF · Email · Photo</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.emptyCta} onPress={() => router.push('/(tabs)/expenses?tab=contracts' as any)} activeOpacity={0.85}>
+              <TouchableOpacity style={styles.emptyCta} onPress={() => router.push('/more/add-contract' as any)} activeOpacity={0.85}>
                 <Ionicons name="document-text" size={28} color={theme.success} />
                 <Text style={[styles.emptyCtaTitle, { color: theme.success }]}>Contrat</Text>
                 <Text style={styles.emptyCtaSub}>Saisie manuelle</Text>

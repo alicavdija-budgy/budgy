@@ -376,7 +376,7 @@ export default function InvestmentsScreen() {
           </Animated.View>
         )}
 
-        {/* Empty state */}
+        {/* Empty state — Premium tutorial */}
         {summary.assets.length === 0 && (
           <Animated.View entering={FadeIn.duration(420)} style={styles.emptyCard}>
             <View style={styles.emptyOrb}>
@@ -384,6 +384,48 @@ export default function InvestmentsScreen() {
             </View>
             <Text style={styles.emptyTitle}>{t('invest.emptyTitle')}</Text>
             <Text style={styles.emptySub}>{t('invest.emptySub')}</Text>
+
+            {/* Tutorial mini-cards */}
+            <View style={styles.tutoRow}>
+              {[
+                { emoji: '📈', label: 'ETF', sub: 'Vanguard, iShares' },
+                { emoji: '🏢', label: 'Actions', sub: 'Nestlé, Roche, UBS' },
+                { emoji: '₿', label: 'Crypto', sub: 'BTC, ETH, SOL' },
+                { emoji: '🥇', label: 'Métaux', sub: 'Or, argent' },
+              ].map((x) => (
+                <View key={x.label} style={styles.tutoCard}>
+                  <Text style={styles.tutoEmoji}>{x.emoji}</Text>
+                  <Text style={styles.tutoLabel}>{x.label}</Text>
+                  <Text style={styles.tutoSub}>{x.sub}</Text>
+                </View>
+              ))}
+            </View>
+
+            {/* How it works */}
+            <View style={styles.howRow}>
+              <View style={styles.howStep}>
+                <View style={styles.howNum}><Text style={styles.howNumTxt}>1</Text></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.howTitle}>Choisissez un type</Text>
+                  <Text style={styles.howSub}>ETF, action, crypto ou cash</Text>
+                </View>
+              </View>
+              <View style={styles.howStep}>
+                <View style={styles.howNum}><Text style={styles.howNumTxt}>2</Text></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.howTitle}>Indiquez quantité & prix moyen d'achat</Text>
+                  <Text style={styles.howSub}>Ex : 10 parts à CHF 100 chacune</Text>
+                </View>
+              </View>
+              <View style={styles.howStep}>
+                <View style={styles.howNum}><Text style={styles.howNumTxt}>3</Text></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.howTitle}>Prix actuel : auto ou manuel</Text>
+                  <Text style={styles.howSub}>Cours réel pour ETF/crypto · sinon saisissez la valeur</Text>
+                </View>
+              </View>
+            </View>
+
             <Pressable onPress={() => setShowAdd(true)} style={styles.emptyCta}>
               <LinearGradient colors={[ACCENT_SOFT, ACCENT]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill as any} />
               <Ionicons name="add" size={16} color="#0F1115" />
@@ -707,4 +749,32 @@ const makeStyles = (theme: any, isLight: boolean) => StyleSheet.create({
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
   },
   submitTxt: { color: '#0F1115', fontSize: 14, fontWeight: '900' as any, letterSpacing: 0.3 },
+
+  // Tutorial empty state — premium onboarding
+  tutoRow: {
+    flexDirection: 'row', gap: 8, marginTop: 14, flexWrap: 'wrap', justifyContent: 'center',
+  },
+  tutoCard: {
+    width: '23%', alignItems: 'center',
+    padding: 10, borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: isLight ? 'rgba(15,23,42,0.10)' : 'rgba(255,255,255,0.10)',
+    backgroundColor: isLight ? 'rgba(15,23,42,0.03)' : 'rgba(255,255,255,0.03)',
+  },
+  tutoEmoji: { fontSize: 22 },
+  tutoLabel: { color: theme.text, fontSize: 11, fontWeight: '800' as any, marginTop: 4 },
+  tutoSub: { color: theme.textTertiary, fontSize: 9, marginTop: 2, textAlign: 'center' },
+  howRow: { width: '100%', gap: 10, marginTop: 18 },
+  howStep: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 12,
+    paddingVertical: 8, paddingHorizontal: 4,
+  },
+  howNum: {
+    width: 24, height: 24, borderRadius: 12,
+    backgroundColor: 'rgba(22,224,198,0.18)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  howNumTxt: { color: '#16E0C6', fontSize: 11, fontWeight: '900' as any },
+  howTitle: { color: theme.text, fontSize: 12.5, fontWeight: '700' as any, lineHeight: 16 },
+  howSub: { color: theme.textSecondary, fontSize: 11, marginTop: 2, lineHeight: 15 },
 });

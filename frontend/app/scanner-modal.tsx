@@ -221,8 +221,26 @@ export default function ScannerModal() {
       : undefined;
 
     // Route to the correct collection based on receipt type chosen by the user.
+    // - 'contract' → opens dedicated contract verification screen with extracted fields
     // - 'invoice' → Factures (only); does NOT create a transaction (paid later)
     // - 'ticket' / 'expense' (default) → Dépenses + Tickets & Reçus gallery
+    if (receiptType === 'contract') {
+      // Redirect to verification wizard so the user sees the IA-extracted fields
+      // and presses "Ajouter le contrat" — no silent save without confirmation.
+      router.replace({
+        pathname: '/more/add-contract' as any,
+        params: {
+          source: 'scan',
+          title: title.trim(),
+          amount: String(amt),
+          notes: note.trim(),
+          photoUri: receiptData || '',
+          category: category || 'abonnements',
+        },
+      });
+      return;
+    }
+
     if (receiptType === 'invoice') {
       addInvoice({
         id: `inv_${Date.now()}`,

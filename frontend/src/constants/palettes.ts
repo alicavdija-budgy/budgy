@@ -212,6 +212,8 @@ export const lightColors: ThemePalette = {
   gradientSuccess: ['#10B981', '#34D399'],
   gradientWarning: ['#F59E0B', '#D97706'],
   gradientError: ['#EF4444', '#DC2626'],
-  gradientHero: ['#FFFFFF', '#ECFDF5', '#10B981'],
+  // Hero card kept SATURATED green even in light mode so white text stays readable.
+  // App Store fintech apps (Revolut, Curve…) do the same.
+  gradientHero: ['#10B981', '#22D3EE', '#0891B2'],
   gradientGlow: 'rgba(16, 185, 129, 0.18)',
 };

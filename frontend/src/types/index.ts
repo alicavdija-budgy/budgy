@@ -167,7 +167,7 @@ export interface ChatMessage {
   timestamp: number;
 }
 
-export type ReceiptType = 'ticket' | 'remboursement';
+export type ReceiptType = 'ticket' | 'remboursement' | 'invoice' | 'contract';
 
 export interface Receipt {
   id: string;

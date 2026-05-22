@@ -181,3 +181,87 @@ export async function checkAndNotifyBudgets(
     }
   }
 }
+
+
+// ──────────────────────────────────────────────────────────────────────────
+// CONTRACT / INVOICE DEADLINE REMINDERS
+// Schedules a local notification 90 days AND 1 day before the deadline.
+// Returns the scheduled identifiers (so they can be cancelled if the contract
+// is deleted/edited). All errors are swallowed — never crashes the caller.
+// ──────────────────────────────────────────────────────────────────────────
+
+interface DeadlineReminderInput {
+  type: 'contract' | 'invoice' | 'recurring';
+  name: string;        // e.g. "Swisscom Internet"
+  dueDate: string;     // ISO 8601 or YYYY-MM-DD
+  amount?: number;
+}
+
+const DEADLINE_OFFSETS_DAYS = [90, 1];
+
+export async function scheduleDeadlineReminders(
+  input: DeadlineReminderInput
+): Promise<string[]> {
+  if (Platform.OS === 'web') return [];
+  try {
+    const due = new Date(input.dueDate);
+    if (isNaN(due.getTime())) return [];
+
+    const titles: Record<DeadlineReminderInput['type'], string> = {
+      contract: 'Contrat bientôt à échéance',
+      invoice: 'Facture à payer bientôt',
+      recurring: 'Paiement récurrent à venir',
+    };
+
+    const ids: string[] = [];
+    const now = Date.now();
+    for (const offsetDays of DEADLINE_OFFSETS_DAYS) {
+      const triggerDate = new Date(due);
+      triggerDate.setDate(triggerDate.getDate() - offsetDays);
+      // Schedule at 09:00 local time
+      triggerDate.setHours(9, 0, 0, 0);
+      if (triggerDate.getTime() <= now) continue; // already in the past
+
+      const dueLabel = due.toLocaleDateString('fr-CH', {
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric',
+      });
+      const amountLabel =
+        input.amount && input.amount > 0
+          ? ` (CHF ${input.amount.toFixed(2)})`
+          : '';
+
+      try {
+        const id = await Notifications.scheduleNotificationAsync({
+          content: {
+            title: titles[input.type],
+            body:
+              offsetDays === 1
+                ? `Demain : ${input.name}${amountLabel} arrive à échéance.`
+                : `Votre ${input.type === 'contract' ? 'contrat' : 'paiement'} ${input.name}${amountLabel} arrive à échéance le ${dueLabel}.`,
+            sound: 'default',
+            data: { type: 'deadline', kind: input.type, name: input.name },
+          },
+          trigger: triggerDate as any,
+        });
+        ids.push(id);
+      } catch {
+        // ignore individual scheduling failures
+      }
+    }
+    return ids;
+  } catch {
+    return [];
+  }
+}
+
+/** Cancel previously scheduled deadline reminders (by identifier list). */
+export async function cancelDeadlineReminders(ids: string[]): Promise<void> {
+  if (Platform.OS === 'web' || !ids?.length) return;
+  for (const id of ids) {
+    try {
+      await Notifications.cancelScheduledNotificationAsync(id);
+    } catch {}
+  }
+}

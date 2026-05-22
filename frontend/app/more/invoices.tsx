@@ -20,6 +20,8 @@ import { useTheme } from '../../src/hooks/useTheme';
 import type { ThemePalette } from '../../src/constants/palettes';
 import { Card, Button, Badge, EmptyState, ProgressBar } from '../../src/components/ui';
 import { formatNumber } from '../../src/utils/calculations';
+import { useStore } from '../../src/stores/useStore';
+import type { Invoice as StoreInvoice } from '../../src/types';
 
 interface Invoice {
   id: string;
@@ -52,13 +54,36 @@ const DEMO_INVOICES: Invoice[] = [];
 
 type Tab = 'all' | 'pending' | 'overdue' | 'paid';
 
+// Map store Invoice (issuer/dueDate?) into local rendering shape
+function mapStoreInvoice(i: StoreInvoice): Invoice {
+  return {
+    id: i.id,
+    title: i.title || i.issuer || 'Facture',
+    sender: i.issuer || '',
+    amount: i.amount || 0,
+    dueDate: i.dueDate || i.invoiceDate || '',
+    status: i.status || 'pending',
+    category: i.category || 'autre',
+    recurring: false,
+    note: undefined,
+    createdAt: i.createdAt || Date.now(),
+  };
+}
+
 export default function InvoicesScreen() {
   const theme = useTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
-  const [invoices, setInvoices] = useState<Invoice[]>(DEMO_INVOICES);
+  // ── Connect to store (FIX: was useState local, invoice imports never appeared) ──
+  const storeInvoices = useStore((s) => s.invoices);
+  const addInvoice = useStore((s) => s.addInvoice);
+  const updateInvoice = useStore((s) => s.updateInvoice);
+  const deleteInvoiceAction = useStore((s) => s.deleteInvoice);
+
+  const invoices = useMemo(() => storeInvoices.map(mapStoreInvoice), [storeInvoices]);
+
   const [activeTab, setActiveTab] = useState<Tab>('all');
   const [showAdd, setShowAdd] = useState(false);
   const [newInvoice, setNewInvoice] = useState({
@@ -81,31 +106,35 @@ export default function InvoicesScreen() {
       Alert.alert('Erreur', 'Titre et montant requis');
       return;
     }
-    setInvoices(prev => [{
+    addInvoice({
       id: `inv_${Date.now()}`,
       title: newInvoice.title,
-      sender: newInvoice.sender || 'Inconnu',
+      issuer: newInvoice.sender || 'Inconnu',
       amount: parseFloat(newInvoice.amount),
-      dueDate: newInvoice.dueDate || new Date().toLocaleDateString('fr-CH'),
+      currency: 'CHF',
+      dueDate: newInvoice.dueDate || undefined,
       status: 'pending',
       category: newInvoice.category,
-      recurring: newInvoice.recurring,
+      source: 'manual',
       createdAt: Date.now(),
-    }, ...prev]);
+    });
     setNewInvoice({ title: '', sender: '', amount: '', dueDate: '', category: 'autre', recurring: false });
     setShowAdd(false);
   };
 
   const toggleStatus = (id: string) => {
-    setInvoices(prev => prev.map(i =>
-      i.id === id ? { ...i, status: i.status === 'paid' ? 'pending' : 'paid' } : i
-    ));
+    const inv = storeInvoices.find((i) => i.id === id);
+    if (!inv) return;
+    updateInvoice(id, {
+      status: inv.status === 'paid' ? 'pending' : 'paid',
+      paidAt: inv.status === 'paid' ? undefined : Date.now(),
+    });
   };
 
   const deleteInvoice = (id: string) => {
     Alert.alert('Supprimer', 'Confirmer la suppression?', [
       { text: 'Annuler', style: 'cancel' },
-      { text: 'Supprimer', style: 'destructive', onPress: () => setInvoices(prev => prev.filter(i => i.id !== id)) },
+      { text: 'Supprimer', style: 'destructive', onPress: () => deleteInvoiceAction(id) },
     ]);
   };
 

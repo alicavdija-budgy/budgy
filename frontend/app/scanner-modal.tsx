@@ -55,7 +55,7 @@ export default function ScannerModal() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { t } = useTranslation();
-  const { addTransaction, addReceipt } = useStore();
+  const { addTransaction, addReceipt, addInvoice } = useStore();
 
   const [permission, requestPermission] = useCameraPermissions();
   const [stage, setStage] = useState<Stage>('camera');
@@ -205,35 +205,53 @@ export default function ScannerModal() {
       ? `data:image/jpeg;base64,${photo.base64}`
       : undefined;
 
-    addTransaction({
-      id: txId,
-      title: title.trim(),
-      amount: amt,
-      date: now.toLocaleDateString('fr-CH'),
-      category,
-      paymentMethod: paymentMethod as any,
-      note: note.trim() || undefined,
-      receipt: receiptData,
-      createdAt: now.getTime(),
-      updatedAt: now.getTime(),
-      synced: false,
-    });
-
-    // Save to receipt gallery if we have a photo
-    if (receiptData) {
-      addReceipt({
-        id: `rec_${Date.now()}`,
-        imageBase64: receiptData,
-        merchant: title.trim(),
+    // Route to the correct collection based on receipt type chosen by the user.
+    // - 'invoice' → Factures (only); does NOT create a transaction (paid later)
+    // - 'ticket' / 'expense' (default) → Dépenses + Tickets & Reçus gallery
+    if (receiptType === 'invoice') {
+      addInvoice({
+        id: `inv_${Date.now()}`,
+        title: title.trim(),
+        issuer: title.trim(),
         amount: amt,
         currency: 'CHF',
-        date: now.toISOString().split('T')[0],
+        invoiceDate: now.toISOString().split('T')[0],
         category,
-        type: receiptType,
-        note: note.trim() || undefined,
-        transactionId: txId,
+        status: 'pending',
+        source: 'scan',
         createdAt: now.getTime(),
       });
+    } else {
+      addTransaction({
+        id: txId,
+        title: title.trim(),
+        amount: amt,
+        date: now.toLocaleDateString('fr-CH'),
+        category,
+        paymentMethod: paymentMethod as any,
+        note: note.trim() || undefined,
+        receipt: receiptData,
+        createdAt: now.getTime(),
+        updatedAt: now.getTime(),
+        synced: false,
+      });
+
+      // Save to receipt gallery if we have a photo
+      if (receiptData) {
+        addReceipt({
+          id: `rec_${Date.now()}`,
+          imageBase64: receiptData,
+          merchant: title.trim(),
+          amount: amt,
+          currency: 'CHF',
+          date: now.toISOString().split('T')[0],
+          category,
+          type: receiptType,
+          note: note.trim() || undefined,
+          transactionId: txId,
+          createdAt: now.getTime(),
+        });
+      }
     }
 
     setTimeout(() => {
@@ -566,7 +584,15 @@ export default function ScannerModal() {
 
       <View style={[styles.saveFooter, { paddingBottom: insets.bottom + 16 }]}>
         <Button
-          title={stage === 'saving' ? 'Enregistrement...' : 'Enregistrer la dépense'}
+          title={
+            stage === 'saving'
+              ? 'Enregistrement...'
+              : receiptType === 'invoice'
+                ? 'Ajouter la facture'
+                : receiptType === 'contract'
+                  ? 'Ajouter le contrat'
+                  : 'Enregistrer la dépense'
+          }
           onPress={handleSave}
           fullWidth
           size="lg"

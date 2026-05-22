@@ -62,7 +62,7 @@ const cleanCamel = (row: any) => {
 async function upsertTable(table: string, rows: any[]) {
   const sb = getSupabase();
   if (!sb || rows.length === 0) return;
-  const { error } = await sb.from(table).upsert(rows, { onConflict: 'id' });
+  const { error } = await sb.from(table).upsert(rows as any, { onConflict: 'id' });
   if (error) {
     console.warn(`[sync] upsert ${table} failed`, error.message);
     throw error;

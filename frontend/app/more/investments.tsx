@@ -21,6 +21,8 @@ import { useTranslation } from '../../src/hooks/useTranslation';
 import { useFeatureFlag } from '../../src/services/featureFlags';
 import { useInvestments, AssetType, ComputedAsset } from '../../src/services/investments';
 import { ProLockCard } from '../../src/components/ProLockCard';
+import { EntityActionsSheet, type EntityActionsContext } from '../../src/components/EntityActionsSheet';
+import { EntityEditModal, type EditField } from '../../src/components/EntityEditModal';
 
 const ACCENT = '#16E0C6';
 const ACCENT_SOFT = '#7BFCE3';
@@ -235,9 +237,46 @@ export default function InvestmentsScreen() {
   const isLight = themeMode === 'light';
   const { t } = useTranslation();
   const advanced = useFeatureFlag('canUseInvestments');
-  const { addAsset, removeAsset, summary, insights } = useInvestments();
+  const { addAsset, removeAsset, updateAsset, summary, insights } = useInvestments();
   const [showAdd, setShowAdd] = useState(false);
   const styles = makeStyles(theme, isLight);
+
+  // CRUD: actions sheet & edit modal
+  const [actionsCtx, setActionsCtx] = useState<EntityActionsContext | null>(null);
+  const [editingAssetId, setEditingAssetId] = useState<string | null>(null);
+  const editingAsset = useMemo(
+    () => summary.assets.find((a) => a.id === editingAssetId) || null,
+    [editingAssetId, summary.assets]
+  );
+  const ASSET_EDIT_FIELDS: EditField[] = useMemo(() => [
+    { key: 'name', label: 'Nom', type: 'text', icon: 'pricetag-outline', placeholder: 'Vanguard FTSE All-World', required: true },
+    { key: 'ticker', label: 'Ticker (optionnel)', type: 'text', icon: 'code-outline', placeholder: 'VWRL' },
+    { key: 'type', label: 'Type', type: 'select', options: [
+      { value: 'etf', label: 'ETF', color: TYPE_META.etf.color },
+      { value: 'stock', label: 'Action', color: TYPE_META.stock.color },
+      { value: 'crypto', label: 'Crypto', color: TYPE_META.crypto.color },
+      { value: 'cash', label: 'Cash', color: TYPE_META.cash.color },
+    ] },
+    { key: 'quantity', label: 'Quantité', type: 'number', icon: 'layers-outline', placeholder: '10', required: true },
+    { key: 'avgPrice', label: 'Prix moyen d\'achat (CHF)', type: 'number', icon: 'cash-outline', placeholder: '100', required: true },
+    { key: 'manualPrice', label: 'Prix actuel manuel (optionnel)', type: 'number', icon: 'pulse-outline', placeholder: 'auto' },
+  ], []);
+  const handleEditAssetSubmit = (values: Record<string, any>) => {
+    if (!editingAsset) return;
+    const qty = parseFloat(String(values.quantity).replace(',', '.')) || editingAsset.quantity;
+    const avg = parseFloat(String(values.avgPrice).replace(',', '.')) || editingAsset.avgPrice;
+    const manualRaw = String(values.manualPrice || '').trim();
+    const manual = manualRaw ? parseFloat(manualRaw.replace(',', '.')) : undefined;
+    updateAsset(editingAsset.id, {
+      name: String(values.name || '').trim() || editingAsset.name,
+      ticker: String(values.ticker || '').trim() || undefined,
+      type: (values.type as AssetType) || editingAsset.type,
+      quantity: qty,
+      avgPrice: avg,
+      manualPrice: manual && !isNaN(manual) ? manual : undefined,
+    });
+    setEditingAssetId(null);
+  };
 
   const visibleInsights = advanced.enabled
     ? insights
@@ -372,7 +411,12 @@ export default function InvestmentsScreen() {
               {list.map((a) => (
                 <Pressable
                   key={a.id}
-                  onLongPress={() => handleRemove(a.id, a.name)}
+                  onLongPress={() => setActionsCtx({
+                    id: a.id,
+                    title: a.name,
+                    subtitle: `${a.ticker ? a.ticker + ' · ' : ''}${a.quantity.toLocaleString('fr-CH', { maximumFractionDigits: 4 })} × CHF ${fmtCHF(a.currentPrice)}`,
+                    accent: TYPE_META[kind].color,
+                  })}
                   style={styles.assetCard}
                 >
                   <View style={[styles.assetIconWrap, {
@@ -455,6 +499,38 @@ export default function InvestmentsScreen() {
         theme={theme}
         isLight={isLight}
         t={t}
+      />
+
+      {/* CRUD: actions sheet + edit modal */}
+      <EntityActionsSheet
+        ctx={actionsCtx}
+        onClose={() => setActionsCtx(null)}
+        onEdit={() => {
+          const id = actionsCtx?.id;
+          setActionsCtx(null);
+          if (id) setEditingAssetId(id);
+        }}
+        onDelete={() => {
+          const id = actionsCtx?.id;
+          setActionsCtx(null);
+          if (id) removeAsset(id);
+        }}
+        deleteConfirmTitle="Supprimer cet actif ?"
+      />
+      <EntityEditModal
+        visible={!!editingAsset}
+        onClose={() => setEditingAssetId(null)}
+        title="Modifier l'investissement"
+        fields={ASSET_EDIT_FIELDS}
+        initialValues={{
+          name: editingAsset?.name || '',
+          ticker: editingAsset?.ticker || '',
+          type: editingAsset?.type || 'etf',
+          quantity: editingAsset?.quantity?.toString() || '',
+          avgPrice: editingAsset?.avgPrice?.toString() || '',
+          manualPrice: editingAsset?.manualPrice?.toString() || '',
+        }}
+        onSubmit={handleEditAssetSubmit}
       />
     </View>
   );

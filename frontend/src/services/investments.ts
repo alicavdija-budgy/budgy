@@ -320,8 +320,16 @@ export function useInvestments() {
     });
   }, [persist]);
 
+  const updateAsset = useCallback((id: string, patch: Partial<Omit<Asset, 'id' | 'createdAt'>>) => {
+    setAssets((prev) => {
+      const next = prev.map((x) => (x.id === id ? { ...x, ...patch } : x));
+      persist(next);
+      return next;
+    });
+  }, [persist]);
+
   const summary = useMemo(() => computePortfolio(assets), [assets]);
   const insights = useMemo(() => buildInsights(summary), [summary]);
 
-  return { assets, addAsset, removeAsset, summary, insights, loading };
+  return { assets, addAsset, removeAsset, updateAsset, summary, insights, loading };
 }

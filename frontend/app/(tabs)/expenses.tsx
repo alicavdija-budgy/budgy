@@ -52,6 +52,7 @@ export default function ExpensesScreen() {
     addContract,
     updateContract,
     deleteContract,
+    updateTransaction,
     isPro,
   } = useStore();
 
@@ -74,9 +75,40 @@ export default function ExpensesScreen() {
     urgent: false,
   });
 
-  // CRUD action sheet & edit modal state
+  // CRUD action sheet & edit modal state (contracts)
   const [actionsCtx, setActionsCtx] = useState<EntityActionsContext | null>(null);
   const [editingContractId, setEditingContractId] = useState<string | null>(null);
+
+  // CRUD for transactions (daily expenses)
+  const [txActionsCtx, setTxActionsCtx] = useState<EntityActionsContext | null>(null);
+  const [editingTxId, setEditingTxId] = useState<string | null>(null);
+  const editingTx = useMemo(
+    () => transactions.find((tx) => tx.id === editingTxId) || null,
+    [editingTxId, transactions]
+  );
+  const TX_EDIT_FIELDS: EditField[] = useMemo(() => [
+    { key: 'title', label: 'Titre', type: 'text', icon: 'document-text-outline', placeholder: 'Migros', required: true },
+    { key: 'amount', label: 'Montant (CHF)', type: 'number', icon: 'cash-outline', placeholder: '0.00', required: true },
+    { key: 'date', label: 'Date', type: 'text', icon: 'calendar-outline', placeholder: '15.04.2026' },
+    { key: 'category', label: 'Catégorie', type: 'select', options: EXPENSE_CATEGORIES.slice(0, 12).map((c) => ({ value: c.id, label: c.name, color: c.color })) },
+    { key: 'paymentMethod', label: 'Moyen de paiement', type: 'select', options: PAYMENT_METHODS.map((p) => ({ value: p.id, label: p.name, color: p.color, icon: p.icon })) },
+    { key: 'note', label: 'Note (optionnel)', type: 'multiline', placeholder: 'Détails...' },
+  ], []);
+  const handleEditTxSubmit = (values: Record<string, any>) => {
+    if (!editingTx) return;
+    const amt = parseFloat(String(values.amount).replace(',', '.')) || editingTx.amount;
+    updateTransaction(editingTx.id, {
+      title: String(values.title || '').trim() || editingTx.title,
+      amount: amt,
+      date: values.date || editingTx.date,
+      category: values.category || editingTx.category,
+      paymentMethod: (values.paymentMethod || editingTx.paymentMethod) as any,
+      note: values.note || undefined,
+      updatedAt: Date.now(),
+      synced: false,
+    });
+    setEditingTxId(null);
+  };
 
   const editingContract = useMemo(
     () => contracts.find((c) => c.id === editingContractId) || null,
@@ -312,7 +344,17 @@ export default function ExpensesScreen() {
               />
             ) : (
               transactions.map((tx) => (
-                <Card key={tx.id} style={styles.expenseCard}>
+                <TouchableOpacity
+                  key={tx.id}
+                  activeOpacity={0.85}
+                  onLongPress={() => setTxActionsCtx({
+                    id: tx.id,
+                    title: tx.title,
+                    subtitle: `${CUR} ${formatNumber(tx.amount, 2)} · ${tx.date}`,
+                    accent: getCategoryColor(tx.category),
+                  })}
+                >
+                <Card style={styles.expenseCard}>
                   <View style={styles.expenseRow}>
                     <BrandLogo merchant={tx.title} size="md" fallbackColor={getCategoryColor(tx.category)} />
                     <View style={styles.expenseInfo}>
@@ -333,12 +375,18 @@ export default function ExpensesScreen() {
                           </Text>
                         </View>
                       )}
-                      <TouchableOpacity onPress={() => handleDelete(tx.id)}>
-                        <Ionicons name="trash-outline" size={18} color={theme.textTertiary} />
+                      <TouchableOpacity onPress={() => setTxActionsCtx({
+                        id: tx.id,
+                        title: tx.title,
+                        subtitle: `${CUR} ${formatNumber(tx.amount, 2)} · ${tx.date}`,
+                        accent: getCategoryColor(tx.category),
+                      })}>
+                        <Ionicons name="ellipsis-horizontal" size={18} color={theme.textTertiary} />
                       </TouchableOpacity>
                     </View>
                   </View>
                 </Card>
+                </TouchableOpacity>
               ))
             )}
           </>
@@ -688,6 +736,38 @@ export default function ExpensesScreen() {
           urgent: !!editingContract?.urgent,
         }}
         onSubmit={handleEditContractSubmit}
+      />
+
+      {/* CRUD for daily transactions */}
+      <EntityActionsSheet
+        ctx={txActionsCtx}
+        onClose={() => setTxActionsCtx(null)}
+        onEdit={() => {
+          const id = txActionsCtx?.id;
+          setTxActionsCtx(null);
+          if (id) setEditingTxId(id);
+        }}
+        onDelete={() => {
+          const id = txActionsCtx?.id;
+          setTxActionsCtx(null);
+          if (id) deleteTransaction(id);
+        }}
+        deleteConfirmTitle="Supprimer cette dépense ?"
+      />
+      <EntityEditModal
+        visible={!!editingTx}
+        onClose={() => setEditingTxId(null)}
+        title="Modifier la dépense"
+        fields={TX_EDIT_FIELDS}
+        initialValues={{
+          title: editingTx?.title || '',
+          amount: editingTx?.amount?.toString() || '',
+          date: editingTx?.date || '',
+          category: editingTx?.category || 'autre',
+          paymentMethod: editingTx?.paymentMethod || 'card',
+          note: editingTx?.note || '',
+        }}
+        onSubmit={handleEditTxSubmit}
       />
     </View>
   );

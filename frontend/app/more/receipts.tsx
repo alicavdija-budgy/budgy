@@ -27,6 +27,9 @@ import { CategoryIcon, getCategoryName } from '../../src/components/CategoryIcon
 import { formatNumber } from '../../src/utils/calculations';
 import ZoomableImage from '../../src/components/ZoomableImage';
 import type { ReceiptType } from '../../src/types';
+import { EntityActionsSheet, type EntityActionsContext } from '../../src/components/EntityActionsSheet';
+import { EntityEditModal, type EditField } from '../../src/components/EntityEditModal';
+import { EXPENSE_CATEGORIES } from '../../src/data/swiss-data';
 
 type Filter = 'all' | ReceiptType;
 
@@ -35,10 +38,54 @@ export default function ReceiptsScreen() {
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { receipts, deleteReceipt } = useStore();
+  const { receipts, deleteReceipt, updateReceipt, updateTransaction, deleteTransaction } = useStore();
   const [filter, setFilter] = useState<Filter>('all');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<string | null>(null);
+
+  // CRUD: actions sheet + edit modal
+  const [actionsCtx, setActionsCtx] = useState<EntityActionsContext | null>(null);
+  const [editingReceiptId, setEditingReceiptId] = useState<string | null>(null);
+  const editingReceipt = useMemo(
+    () => receipts.find((r) => r.id === editingReceiptId) || null,
+    [editingReceiptId, receipts]
+  );
+  const RECEIPT_EDIT_FIELDS: EditField[] = useMemo(() => [
+    { key: 'merchant', label: 'Commerce', type: 'text', icon: 'storefront-outline', placeholder: 'Migros, Coop...', required: true },
+    { key: 'amount', label: 'Montant (CHF)', type: 'number', icon: 'cash-outline', placeholder: '0.00', required: true },
+    { key: 'date', label: 'Date', type: 'text', icon: 'calendar-outline', placeholder: 'AAAA-MM-JJ' },
+    { key: 'category', label: 'Catégorie', type: 'select', options: EXPENSE_CATEGORIES.slice(0, 12).map((c) => ({ value: c.id, label: c.name, color: c.color })) },
+    { key: 'type', label: 'Type', type: 'select', options: [
+      { value: 'ticket', label: '🛒 Ticket de caisse' },
+      { value: 'remboursement', label: '💼 Remboursement' },
+    ] },
+    { key: 'note', label: 'Note (optionnel)', type: 'multiline', placeholder: 'Détails...' },
+  ], []);
+  const handleEditReceiptSubmit = (values: Record<string, any>) => {
+    if (!editingReceipt) return;
+    const amt = parseFloat(String(values.amount).replace(',', '.')) || editingReceipt.amount;
+    const merchant = String(values.merchant || '').trim() || editingReceipt.merchant;
+    const cat = values.category || editingReceipt.category;
+    const newType = (values.type === 'remboursement' ? 'remboursement' : 'ticket') as ReceiptType;
+    updateReceipt(editingReceipt.id, {
+      merchant,
+      amount: amt,
+      date: values.date || editingReceipt.date,
+      category: cat,
+      type: newType,
+      note: values.note || undefined,
+    });
+    // If receipt linked to a transaction (ticket), keep it in sync
+    if (editingReceipt.transactionId && newType === 'ticket') {
+      updateTransaction(editingReceipt.transactionId, {
+        title: merchant,
+        amount: amt,
+        category: cat,
+        note: values.note || undefined,
+      });
+    }
+    setEditingReceiptId(null);
+  };
 
   const filtered = useMemo(() => {
     return receipts.filter((r) => {
@@ -68,17 +115,44 @@ export default function ReceiptsScreen() {
   const sel = receipts.find((r) => r.id === selected) || null;
 
   const handleDelete = (id: string) => {
-    Alert.alert('Supprimer ce reçu ?', 'Cette action est irréversible.', [
-      { text: 'Annuler', style: 'cancel' },
-      {
-        text: 'Supprimer',
-        style: 'destructive',
-        onPress: () => {
-          deleteReceipt(id);
-          setSelected(null);
+    const r = receipts.find((x) => x.id === id);
+    const hasLinkedTx = !!(r?.transactionId && r.type === 'ticket');
+    const message = hasLinkedTx
+      ? 'Cette action est irréversible. Une dépense est liée à ce reçu — voulez-vous aussi la supprimer ?'
+      : 'Cette action est irréversible.';
+    if (hasLinkedTx) {
+      Alert.alert('Supprimer ce reçu ?', message, [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Reçu seulement',
+          onPress: () => {
+            deleteReceipt(id);
+            setSelected(null);
+          },
         },
-      },
-    ]);
+        {
+          text: 'Reçu + dépense',
+          style: 'destructive',
+          onPress: () => {
+            if (r?.transactionId) deleteTransaction(r.transactionId);
+            deleteReceipt(id);
+            setSelected(null);
+          },
+        },
+      ]);
+    } else {
+      Alert.alert('Supprimer ce reçu ?', message, [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: () => {
+            deleteReceipt(id);
+            setSelected(null);
+          },
+        },
+      ]);
+    }
   };
 
   return (
@@ -196,6 +270,12 @@ export default function ReceiptsScreen() {
                 key={r.id}
                 style={styles.gridItem}
                 onPress={() => setSelected(r.id)}
+                onLongPress={() => setActionsCtx({
+                  id: r.id,
+                  title: r.merchant,
+                  subtitle: `CHF ${formatNumber(r.amount)} · ${r.type === 'ticket' ? 'Ticket' : 'Remboursement'}`,
+                  accent: r.type === 'ticket' ? theme.primary : '#7C3AED',
+                })}
                 activeOpacity={0.7}
               >
                 <Image source={{ uri: r.imageBase64 }} style={styles.gridImage} />
@@ -273,14 +353,26 @@ export default function ReceiptsScreen() {
                     )}
                   </View>
                 </ScrollView>
-                <Button
-                  title="Supprimer le reçu"
-                  variant="danger"
-                  onPress={() => handleDelete(sel.id)}
-                  fullWidth
-                  icon="trash-outline"
-                  style={{ marginTop: Spacing.lg }}
-                />
+                <View style={{ flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.lg }}>
+                  <Button
+                    title="Modifier"
+                    variant="secondary"
+                    onPress={() => {
+                      const id = sel.id;
+                      setSelected(null);
+                      setEditingReceiptId(id);
+                    }}
+                    icon="create-outline"
+                    style={{ flex: 1 }}
+                  />
+                  <Button
+                    title="Supprimer"
+                    variant="danger"
+                    onPress={() => handleDelete(sel.id)}
+                    icon="trash-outline"
+                    style={{ flex: 1 }}
+                  />
+                </View>
               </>
             )}
           </View>
@@ -300,6 +392,38 @@ export default function ReceiptsScreen() {
           <Ionicons name="scan" size={26} color="#0F1115" />
         </View>
       </TouchableOpacity>
+
+      {/* CRUD: actions sheet + edit modal */}
+      <EntityActionsSheet
+        ctx={actionsCtx}
+        onClose={() => setActionsCtx(null)}
+        onEdit={() => {
+          const id = actionsCtx?.id;
+          setActionsCtx(null);
+          if (id) setEditingReceiptId(id);
+        }}
+        onDelete={() => {
+          const id = actionsCtx?.id;
+          setActionsCtx(null);
+          if (id) handleDelete(id);
+        }}
+        deleteConfirmTitle="Supprimer ce reçu ?"
+      />
+      <EntityEditModal
+        visible={!!editingReceipt}
+        onClose={() => setEditingReceiptId(null)}
+        title="Modifier le reçu"
+        fields={RECEIPT_EDIT_FIELDS}
+        initialValues={{
+          merchant: editingReceipt?.merchant || '',
+          amount: editingReceipt?.amount?.toString() || '',
+          date: editingReceipt?.date || '',
+          category: editingReceipt?.category || 'autre',
+          type: editingReceipt?.type || 'ticket',
+          note: editingReceipt?.note || '',
+        }}
+        onSubmit={handleEditReceiptSubmit}
+      />
     </View>
   );
 }

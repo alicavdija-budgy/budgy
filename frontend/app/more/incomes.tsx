@@ -19,6 +19,8 @@ import { useTheme } from '../../src/hooks/useTheme';
 import { useStore } from '../../src/stores/useStore';
 import { Card, Button, EmptyState } from '../../src/components/ui';
 import { formatNumber } from '../../src/utils/calculations';
+import { EntityActionsSheet, type EntityActionsContext } from '../../src/components/EntityActionsSheet';
+import { EntityEditModal, type EditField } from '../../src/components/EntityEditModal';
 
 const INCOME_TYPES = [
   { key: 'salary',     label: 'Salaire',         icon: 'briefcase',     color: '#06D6A0', emoji: '💼' },
@@ -41,7 +43,7 @@ export default function IncomesScreen() {
   const router = useRouter();
   const theme = useTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
-  const { preferences, incomes, addIncome, deleteIncome } = useStore();
+  const { preferences, incomes, addIncome, updateIncome, deleteIncome } = useStore();
 
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({
@@ -51,6 +53,43 @@ export default function IncomesScreen() {
     frequency: 'monthly' as 'monthly' | 'quarterly' | 'yearly',
     type: 'recurring' as 'recurring' | 'occasional',
   });
+
+  // CRUD: actions sheet & edit modal
+  const [actionsCtx, setActionsCtx] = useState<EntityActionsContext | null>(null);
+  const [editingIncomeId, setEditingIncomeId] = useState<string | null>(null);
+  const editingIncome = useMemo(
+    () => incomes.find((i) => i.id === editingIncomeId) || null,
+    [editingIncomeId, incomes]
+  );
+  const INCOME_EDIT_FIELDS: EditField[] = useMemo(() => [
+    { key: 'title', label: 'Nom', type: 'text', placeholder: 'Salaire net', icon: 'briefcase-outline', required: true },
+    { key: 'amount', label: 'Montant (CHF)', type: 'number', icon: 'cash-outline', placeholder: '6500', required: true },
+    { key: 'category', label: 'Catégorie', type: 'select', options: INCOME_TYPES.map((t) => ({ value: t.key, label: t.label, color: t.color, icon: t.icon })) },
+    { key: 'type', label: 'Nature', type: 'select', options: [
+      { value: 'recurring', label: '🔁 Récurrent' },
+      { value: 'occasional', label: '⚡ Ponctuel' },
+    ] },
+    { key: 'frequency', label: 'Fréquence', type: 'select', options: [
+      { value: 'monthly', label: 'Mensuel' },
+      { value: 'quarterly', label: 'Trimestriel' },
+      { value: 'yearly', label: 'Annuel' },
+    ] },
+  ], []);
+  const handleEditIncomeSubmit = (values: Record<string, any>) => {
+    if (!editingIncome) return;
+    const amt = parseFloat(String(values.amount).replace(',', '.')) || editingIncome.amount;
+    const cat = INCOME_TYPES.find((t) => t.key === values.category) || INCOME_TYPES[0];
+    updateIncome(editingIncome.id, {
+      title: String(values.title || '').trim() || editingIncome.title,
+      amount: amt,
+      category: values.category || editingIncome.category,
+      type: (values.type === 'occasional' ? 'occasional' : 'recurring') as any,
+      frequency: values.type === 'occasional' ? undefined : (values.frequency || editingIncome.frequency),
+      color: cat.color,
+      icon: cat.icon,
+    });
+    setEditingIncomeId(null);
+  };
 
   const CUR = preferences.currency;
 
@@ -185,6 +224,15 @@ export default function IncomesScreen() {
                 : inc.amount;
               return (
                 <Animated.View key={inc.id} entering={FadeInDown.duration(300).delay(idx * 50)}>
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    onLongPress={() => setActionsCtx({
+                      id: inc.id,
+                      title: inc.title,
+                      subtitle: `${CUR} ${formatNumber(inc.amount)}${freqLabel} · ${t.label}`,
+                      accent: t.color,
+                    })}
+                  >
                   <Card style={styles.incCard}>
                     <View style={styles.incRow}>
                       <View style={[styles.incIcon, { backgroundColor: `${t.color}25` }]}>
@@ -206,13 +254,19 @@ export default function IncomesScreen() {
                         )}
                       </View>
                       <TouchableOpacity
-                        onPress={() => handleDelete(inc.id, inc.title)}
+                        onPress={() => setActionsCtx({
+                          id: inc.id,
+                          title: inc.title,
+                          subtitle: `${CUR} ${formatNumber(inc.amount)}${freqLabel}`,
+                          accent: t.color,
+                        })}
                         style={styles.delBtn}
                       >
-                        <Ionicons name="trash-outline" size={18} color={theme.textTertiary} />
+                        <Ionicons name="ellipsis-horizontal" size={18} color={theme.textTertiary} />
                       </TouchableOpacity>
                     </View>
                   </Card>
+                  </TouchableOpacity>
                 </Animated.View>
               );
             })}
@@ -337,6 +391,37 @@ export default function IncomesScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* CRUD: actions sheet + edit modal */}
+      <EntityActionsSheet
+        ctx={actionsCtx}
+        onClose={() => setActionsCtx(null)}
+        onEdit={() => {
+          const id = actionsCtx?.id;
+          setActionsCtx(null);
+          if (id) setEditingIncomeId(id);
+        }}
+        onDelete={() => {
+          const id = actionsCtx?.id;
+          setActionsCtx(null);
+          if (id) deleteIncome(id);
+        }}
+        deleteConfirmTitle="Supprimer ce revenu ?"
+      />
+      <EntityEditModal
+        visible={!!editingIncome}
+        onClose={() => setEditingIncomeId(null)}
+        title="Modifier le revenu"
+        fields={INCOME_EDIT_FIELDS}
+        initialValues={{
+          title: editingIncome?.title || '',
+          amount: editingIncome?.amount?.toString() || '',
+          category: editingIncome?.category || 'salary',
+          type: editingIncome?.type || 'recurring',
+          frequency: editingIncome?.frequency || 'monthly',
+        }}
+        onSubmit={handleEditIncomeSubmit}
+      />
     </View>
   );
 }

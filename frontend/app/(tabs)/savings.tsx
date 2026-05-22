@@ -76,7 +76,7 @@ export default function SavingsScreen() {
     return savingsGoals.reduce((sum, g) => sum + g.autoSave, 0);
   }, [savingsGoals]);
 
-  const handleSelectTemplate = (template: typeof SAVINGS_TEMPLATES[0]) => {
+  const handleSelectTemplate = (template: (typeof SAVINGS_TEMPLATES)[number]) => {
     setNewGoal({
       title: template.title,
       emoji: template.emoji,

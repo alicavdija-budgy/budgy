@@ -32,16 +32,47 @@ import { CategoryIcon, getCategoryName, getCategoryColor } from '../../src/compo
 import BrandLogo from '../../src/components/BrandLogo';
 import { formatNumber } from '../../src/utils/calculations';
 import { EXPENSE_CATEGORIES } from '../../src/data/swiss-data';
+import { EntityActionsSheet, type EntityActionsContext } from '../../src/components/EntityActionsSheet';
+import { EntityEditModal, type EditField } from '../../src/components/EntityEditModal';
 
 export default function RecurringScreen() {
   const theme = useTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { preferences, recurringExpenses, incomes, addRecurringExpense, toggleRecurringExpense, deleteRecurringExpense } = useStore();
+  const { preferences, recurringExpenses, incomes, addRecurringExpense, updateRecurringExpense, toggleRecurringExpense, deleteRecurringExpense } = useStore();
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [newRec, setNewRec] = useState({ title: '', amount: '', category: 'abonnements', dayOfMonth: '1' });
+
+  // CRUD: actions sheet & edit modal
+  const [actionsCtx, setActionsCtx] = useState<EntityActionsContext | null>(null);
+  const [editingRecId, setEditingRecId] = useState<string | null>(null);
+  const editingRec = useMemo(
+    () => recurringExpenses.find((r) => r.id === editingRecId) || null,
+    [editingRecId, recurringExpenses]
+  );
+  const REC_EDIT_FIELDS: EditField[] = useMemo(() => [
+    { key: 'title', label: 'Titre', type: 'text', icon: 'document-text-outline', placeholder: 'Netflix', required: true },
+    { key: 'amount', label: 'Montant (CHF)', type: 'number', icon: 'cash-outline', placeholder: '17.90', required: true },
+    { key: 'category', label: 'Catégorie', type: 'select', options: EXPENSE_CATEGORIES.slice(0, 12).map((c) => ({ value: c.id, label: c.name, color: c.color })) },
+    { key: 'dayOfMonth', label: 'Jour du mois (1-31)', type: 'number', icon: 'calendar-outline', placeholder: '8' },
+    { key: 'active', label: 'Actif', type: 'switch' },
+  ], []);
+  const handleEditRecSubmit = (values: Record<string, any>) => {
+    if (!editingRec) return;
+    const amt = parseFloat(String(values.amount).replace(',', '.')) || editingRec.amount;
+    const day = Math.max(1, Math.min(31, parseInt(String(values.dayOfMonth)) || editingRec.dayOfMonth));
+    updateRecurringExpense(editingRec.id, {
+      title: String(values.title || '').trim() || editingRec.title,
+      amount: amt,
+      category: values.category || editingRec.category,
+      dayOfMonth: day,
+      color: getCategoryColor(values.category || editingRec.category),
+      active: typeof values.active === 'boolean' ? values.active : editingRec.active,
+    });
+    setEditingRecId(null);
+  };
 
   const CUR = preferences.currency;
 
@@ -154,6 +185,15 @@ export default function RecurringScreen() {
             const barColor = priority.color;
             return (
               <Animated.View key={rec.id} entering={FadeInDown.duration(300).delay(idx * 40)}>
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onLongPress={() => setActionsCtx({
+                    id: rec.id,
+                    title: rec.title,
+                    subtitle: `${CUR} ${formatNumber(rec.amount)}/mois · Jour ${rec.dayOfMonth}`,
+                    accent: getCategoryColor(rec.category),
+                  })}
+                >
                 <Card style={[styles.recCard, !rec.active && styles.recCardInactive]}>
                   <View style={styles.recTopRow}>
                     <BrandLogo merchant={rec.title} size="md" fallbackColor={getCategoryColor(rec.category)} />
@@ -192,14 +232,17 @@ export default function RecurringScreen() {
 
                   <TouchableOpacity
                     style={styles.deleteBtn}
-                    onPress={() => Alert.alert('Supprimer', 'Confirmer ?', [
-                      { text: 'Annuler', style: 'cancel' },
-                      { text: 'Supprimer', style: 'destructive', onPress: () => deleteRecurringExpense(rec.id) },
-                    ])}
+                    onPress={() => setActionsCtx({
+                      id: rec.id,
+                      title: rec.title,
+                      subtitle: `${CUR} ${formatNumber(rec.amount)}/mois`,
+                      accent: getCategoryColor(rec.category),
+                    })}
                   >
-                    <Ionicons name="trash-outline" size={16} color={theme.textTertiary} />
+                    <Ionicons name="ellipsis-horizontal" size={16} color={theme.textTertiary} />
                   </TouchableOpacity>
                 </Card>
+                </TouchableOpacity>
               </Animated.View>
             );
           })
@@ -268,6 +311,37 @@ export default function RecurringScreen() {
           </TouchableWithoutFeedback>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* CRUD: actions sheet + edit modal */}
+      <EntityActionsSheet
+        ctx={actionsCtx}
+        onClose={() => setActionsCtx(null)}
+        onEdit={() => {
+          const id = actionsCtx?.id;
+          setActionsCtx(null);
+          if (id) setEditingRecId(id);
+        }}
+        onDelete={() => {
+          const id = actionsCtx?.id;
+          setActionsCtx(null);
+          if (id) deleteRecurringExpense(id);
+        }}
+        deleteConfirmTitle="Supprimer cet abonnement ?"
+      />
+      <EntityEditModal
+        visible={!!editingRec}
+        onClose={() => setEditingRecId(null)}
+        title="Modifier l'abonnement"
+        fields={REC_EDIT_FIELDS}
+        initialValues={{
+          title: editingRec?.title || '',
+          amount: editingRec?.amount?.toString() || '',
+          category: editingRec?.category || 'abonnements',
+          dayOfMonth: editingRec?.dayOfMonth?.toString() || '1',
+          active: editingRec?.active ?? true,
+        }}
+        onSubmit={handleEditRecSubmit}
+      />
     </View>
   );
 }

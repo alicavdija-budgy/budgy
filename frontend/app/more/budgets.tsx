@@ -28,17 +28,41 @@ import AnimatedProgressBar from '../../src/components/AnimatedProgressBar';
 import { CategoryIcon, getCategoryName, getCategoryColor } from '../../src/components/CategoryIcon';
 import { formatNumber, pct } from '../../src/utils/calculations';
 import { EXPENSE_CATEGORIES } from '../../src/data/swiss-data';
+import { EntityActionsSheet, type EntityActionsContext } from '../../src/components/EntityActionsSheet';
+import { EntityEditModal, type EditField } from '../../src/components/EntityEditModal';
 
 export default function BudgetsScreen() {
   const theme = useTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { preferences, budgets, transactions, incomes, addBudget, deleteBudget } = useStore();
+  const { preferences, budgets, transactions, incomes, addBudget, updateBudget, deleteBudget } = useStore();
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [newBudget, setNewBudget] = useState({ category: 'courses', limit: '' });
   const [incomeView, setIncomeView] = useState<'monthly' | 'yearly'>('monthly');
+
+  // CRUD: actions sheet & edit modal
+  const [actionsCtx, setActionsCtx] = useState<EntityActionsContext | null>(null);
+  const [editingBudgetId, setEditingBudgetId] = useState<string | null>(null);
+  const editingBudget = useMemo(
+    () => budgets.find((b) => b.id === editingBudgetId) || null,
+    [editingBudgetId, budgets]
+  );
+  const BUDGET_EDIT_FIELDS: EditField[] = useMemo(() => [
+    { key: 'category', label: 'Catégorie', type: 'select', options: EXPENSE_CATEGORIES.slice(0, 12).map((c) => ({ value: c.id, label: c.name, color: c.color })) },
+    { key: 'limit', label: 'Limite mensuelle (CHF)', type: 'number', icon: 'cash-outline', placeholder: '500', required: true },
+  ], []);
+  const handleEditBudgetSubmit = (values: Record<string, any>) => {
+    if (!editingBudget) return;
+    const limit = parseFloat(String(values.limit).replace(',', '.')) || editingBudget.limit;
+    updateBudget(editingBudget.id, {
+      category: values.category || editingBudget.category,
+      limit,
+      color: getCategoryColor(values.category || editingBudget.category),
+    });
+    setEditingBudgetId(null);
+  };
 
   const CUR = preferences.currency;
 
@@ -172,7 +196,17 @@ export default function BudgetsScreen() {
           />
         ) : (
           budgetData.map((b) => (
-            <Card key={b.id} style={styles.budgetCard}>
+            <TouchableOpacity
+              key={b.id}
+              activeOpacity={0.85}
+              onLongPress={() => setActionsCtx({
+                id: b.id,
+                title: getCategoryName(b.category),
+                subtitle: `Limite ${CUR} ${formatNumber(b.limit)} · Dépensé ${formatNumber(b.spent)}`,
+                accent: getCategoryColor(b.category),
+              })}
+            >
+            <Card style={styles.budgetCard}>
               <View style={styles.budgetHeader}>
                 <CategoryIcon category={b.category} size="md" />
                 <View style={styles.budgetInfo}>
@@ -192,10 +226,16 @@ export default function BudgetsScreen() {
                 value={b.percentage}
                 height={10}
               />
-              <TouchableOpacity style={styles.deleteBtn} onPress={() => deleteBudget(b.id)}>
-                <Ionicons name="trash-outline" size={16} color={theme.textTertiary} />
+              <TouchableOpacity style={styles.deleteBtn} onPress={() => setActionsCtx({
+                id: b.id,
+                title: getCategoryName(b.category),
+                subtitle: `Limite ${CUR} ${formatNumber(b.limit)}`,
+                accent: getCategoryColor(b.category),
+              })}>
+                <Ionicons name="ellipsis-horizontal" size={16} color={theme.textTertiary} />
               </TouchableOpacity>
             </Card>
+            </TouchableOpacity>
           ))
         )}
 
@@ -254,6 +294,34 @@ export default function BudgetsScreen() {
           </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* CRUD: actions sheet + edit modal */}
+      <EntityActionsSheet
+        ctx={actionsCtx}
+        onClose={() => setActionsCtx(null)}
+        onEdit={() => {
+          const id = actionsCtx?.id;
+          setActionsCtx(null);
+          if (id) setEditingBudgetId(id);
+        }}
+        onDelete={() => {
+          const id = actionsCtx?.id;
+          setActionsCtx(null);
+          if (id) deleteBudget(id);
+        }}
+        deleteConfirmTitle="Supprimer ce budget ?"
+      />
+      <EntityEditModal
+        visible={!!editingBudget}
+        onClose={() => setEditingBudgetId(null)}
+        title="Modifier le budget"
+        fields={BUDGET_EDIT_FIELDS}
+        initialValues={{
+          category: editingBudget?.category || 'courses',
+          limit: editingBudget?.limit?.toString() || '',
+        }}
+        onSubmit={handleEditBudgetSubmit}
+      />
     </View>
   );
 }

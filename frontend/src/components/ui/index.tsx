@@ -14,6 +14,7 @@ import {
   ActivityIndicator,
   ViewStyle,
   TextStyle,
+  StyleProp,
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -32,7 +33,7 @@ interface ButtonProps {
   loading?: boolean;
   icon?: keyof typeof Ionicons.glyphMap;
   fullWidth?: boolean;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
 }
 
 export function Button({
@@ -142,7 +143,7 @@ export function Button({
 // ─── Card ───────────────────────────────────────────────────────────────────
 interface CardProps {
   children: React.ReactNode;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
   onPress?: () => void;
   borderColor?: string;
   elevated?: boolean;

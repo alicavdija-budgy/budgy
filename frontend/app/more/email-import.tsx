@@ -116,7 +116,7 @@ export default function ImportInvoiceScreen() {
       const r = await safeFetchJson<any>(`${BACKEND_URL}/api/email/parse`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: content, subject }),
+        body: JSON.stringify({ content, subject }),
       }, { timeoutMs: 20000, retries: 1, silent: true });
       const data = r.data || { success: false, error: r.error };
       if (data.success) setResult({ ...data, _source: 'email' });

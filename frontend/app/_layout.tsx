@@ -20,6 +20,7 @@ import { useStore } from '../src/stores/useStore';
 import LockScreen from './lock';
 import ShareIntentRouter from '../src/components/ShareIntentRouter';
 import { OfflineBanner } from '../src/components/OfflineBanner';
+import LanguageOnboardModal from '../src/components/LanguageOnboardModal';
 
 function LockGate({ children }: { children: React.ReactNode }) {
   const { security, isLocked, setLocked, isAuthenticated, setDecoyMode } = useStore();
@@ -125,6 +126,7 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <StatusBar style="light" />
         <OfflineBanner />
+        <LanguageOnboardModal />
         <ShareIntentRouter />
         <LockGate>
         <Stack

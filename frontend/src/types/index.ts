@@ -23,6 +23,7 @@ export interface UserPreferences {
   theme: 'dark' | 'light';
   themeMode?: 'dark' | 'light' | 'system';  // NEW: user-selected theme mode
   biometricEnabled: boolean;
+  languagePicked?: boolean;        // True once user explicitly chose language at first launch
   monthlyIncome?: number;          // Net monthly income (CHF)
   household?: HouseholdType;        // Situation familiale
   children?: number;                // Nombre d'enfants

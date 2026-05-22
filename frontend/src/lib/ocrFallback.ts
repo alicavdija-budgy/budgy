@@ -76,27 +76,42 @@ export function parseSwissReceiptText(rawText: string | null | undefined): Fallb
     }
   }
 
-  // ── 3. Total amount detection (looks for "TOTAL", "MONTANT", "TTC", "CHF") ─
+  // ── 3. Total amount detection (looks for "TOTAL", "MONTANT", "TTC", "CHF", "Somme", "À payer") ─
   const amountPatterns = [
     // "TOTAL CHF 12.50" or "TOTAL: 12.50"
-    /total[^0-9]{0,20}(\d{1,5}[.,]\d{2})/i,
-    /montant[^0-9]{0,20}(\d{1,5}[.,]\d{2})/i,
-    /ttc[^0-9]{0,20}(\d{1,5}[.,]\d{2})/i,
+    /total[^0-9\n]{0,20}(\d{1,5}[.,]\d{2})/i,
+    /montant[^0-9\n]{0,20}(\d{1,5}[.,]\d{2})/i,
+    /ttc[^0-9\n]{0,20}(\d{1,5}[.,]\d{2})/i,
+    // Swiss French/German: "Somme", "Betrag", "À payer", "Zu zahlen"
+    /somme[^0-9\n]{0,20}(\d{1,5}[.,]\d{2})/i,
+    /betrag[^0-9\n]{0,20}(\d{1,5}[.,]\d{2})/i,
+    /à\s*payer[^0-9\n]{0,20}(\d{1,5}[.,]\d{2})/i,
+    /zu\s*zahlen[^0-9\n]{0,20}(\d{1,5}[.,]\d{2})/i,
+    /prix[^0-9\n]{0,20}(\d{1,5}[.,]\d{2})/i,
     // "CHF 12.50" anywhere
     /chf\s*(\d{1,5}[.,]\d{2})/i,
     /(\d{1,5}[.,]\d{2})\s*chf/i,
+    // Card / payment indicators with adjacent amount
+    /(?:cb|carte|mastercard|visa|twint)[^0-9\n]{0,30}(\d{1,5}[.,]\d{2})/i,
   ];
+  // Track the LARGEST plausible match (Swiss receipts often have many small
+  // line-item totals; the TRUE total is usually the largest amount displayed).
+  let bestAmount: number | undefined;
   for (const pat of amountPatterns) {
     const m = text.match(pat);
     if (m && m[1]) {
       const num = parseFloat(m[1].replace(',', '.'));
       if (!isNaN(num) && num > 0 && num < 100000) {
-        result.total = num;
-        result.currency = 'CHF';
-        result.matched = true;
-        break;
+        if (bestAmount === undefined || num > bestAmount) {
+          bestAmount = num;
+        }
       }
     }
+  }
+  if (bestAmount !== undefined) {
+    result.total = bestAmount;
+    result.currency = 'CHF';
+    result.matched = true;
   }
 
   // ── 4. Date detection (DD.MM.YYYY, DD/MM/YYYY, YYYY-MM-DD) ───────────

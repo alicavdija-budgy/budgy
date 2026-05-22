@@ -83,6 +83,7 @@ interface AppState {
   
   // Income actions
   addIncome: (income: Income) => void;
+  updateIncome: (id: string, income: Partial<Income>) => void;
   deleteIncome: (id: string) => void;
   
   // Savings actions
@@ -93,15 +94,18 @@ interface AppState {
   
   // Budget actions
   addBudget: (budget: Budget) => void;
+  updateBudget: (id: string, budget: Partial<Budget>) => void;
   deleteBudget: (id: string) => void;
   
   // Recurring expense actions
   addRecurringExpense: (expense: RecurringExpense) => void;
+  updateRecurringExpense: (id: string, expense: Partial<RecurringExpense>) => void;
   toggleRecurringExpense: (id: string) => void;
   deleteRecurringExpense: (id: string) => void;
   
   // Contract actions
   addContract: (contract: Contract) => void;
+  updateContract: (id: string, contract: Partial<Contract>) => void;
   deleteContract: (id: string) => void;
   
   // Debt actions
@@ -253,6 +257,10 @@ export const useStore = create<AppState>()(
         incomes: [income, ...state.incomes],
       })),
       
+      updateIncome: (id, income) => set((state) => ({
+        incomes: state.incomes.map((i) => (i.id === id ? { ...i, ...income } : i)),
+      })),
+      
       deleteIncome: (id) => set((state) => ({
         incomes: state.incomes.filter((i) => i.id !== id),
       })),
@@ -283,6 +291,10 @@ export const useStore = create<AppState>()(
         budgets: [budget, ...state.budgets.filter((b) => b.category !== budget.category)],
       })),
       
+      updateBudget: (id, budget) => set((state) => ({
+        budgets: state.budgets.map((b) => (b.id === id ? { ...b, ...budget } : b)),
+      })),
+      
       deleteBudget: (id) => set((state) => ({
         budgets: state.budgets.filter((b) => b.id !== id),
       })),
@@ -290,6 +302,12 @@ export const useStore = create<AppState>()(
       // Recurring expense actions
       addRecurringExpense: (expense) => set((state) => ({
         recurringExpenses: [expense, ...state.recurringExpenses],
+      })),
+      
+      updateRecurringExpense: (id, expense) => set((state) => ({
+        recurringExpenses: state.recurringExpenses.map((e) =>
+          e.id === id ? { ...e, ...expense } : e
+        ),
       })),
       
       toggleRecurringExpense: (id) => set((state) => ({
@@ -305,6 +323,12 @@ export const useStore = create<AppState>()(
       // Contract actions
       addContract: (contract) => set((state) => ({
         contracts: [contract, ...state.contracts],
+      })),
+      
+      updateContract: (id, contract) => set((state) => ({
+        contracts: state.contracts.map((c) =>
+          c.id === id ? { ...c, ...contract } : c
+        ),
       })),
       
       deleteContract: (id) => set((state) => ({

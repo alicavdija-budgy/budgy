@@ -98,6 +98,24 @@ export default function ReceiptsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={{ padding: Spacing.lg, paddingBottom: insets.bottom + 40 }}>
+        {/* Quick actions: Scan + Manual Add */}
+        <View style={styles.quickActions}>
+          <TouchableOpacity
+            style={[styles.quickBtn, styles.quickBtnPrimary]}
+            onPress={() => router.push('/scanner-modal')}
+          >
+            <Ionicons name="scan" size={20} color="#FFF" />
+            <Text style={styles.quickBtnTxtPrimary}>Scanner</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.quickBtn}
+            onPress={() => router.push('/more/add-receipt-manual' as any)}
+          >
+            <Ionicons name="create-outline" size={20} color={theme.primary} />
+            <Text style={styles.quickBtnTxt}>Ajouter manuellement</Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Stats */}
         <View style={styles.statsRow}>
           <Card style={styles.statCard}>
@@ -325,6 +343,24 @@ const makeStyles = (Colors: ThemePalette) => StyleSheet.create({
   importBannerContent: { flex: 1 },
   importBannerTitle: { color: Colors.text, fontSize: FontSizes.md, fontWeight: FontWeights.bold },
   importBannerSub: { color: Colors.textSecondary, fontSize: FontSizes.xs, marginTop: 2 },
+
+  // Quick actions (scanner + manual add)
+  quickActions: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.md },
+  quickBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    backgroundColor: Colors.card,
+    borderWidth: 1.5,
+    borderColor: Colors.primary,
+  },
+  quickBtnPrimary: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  quickBtnTxt: { color: Colors.primary, fontSize: FontSizes.sm, fontWeight: FontWeights.bold },
+  quickBtnTxtPrimary: { color: '#FFF', fontSize: FontSizes.sm, fontWeight: FontWeights.bold },
 
   // Floating Scan FAB (Tickets & reçus)
   fab: {

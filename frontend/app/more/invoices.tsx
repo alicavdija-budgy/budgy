@@ -23,9 +23,11 @@ import { formatNumber } from '../../src/utils/calculations';
 import { useStore } from '../../src/stores/useStore';
 import type { Invoice as StoreInvoice } from '../../src/types';
 import {
-  scheduleDeadlineReminders,
-  cancelDeadlineReminders,
+  scheduleDeadlineRemindersForEntity,
+  cancelDeadlineRemindersForEntity,
 } from '../../src/services/notifications';
+import { EntityActionsSheet, type EntityActionsContext } from '../../src/components/EntityActionsSheet';
+import { EntityEditModal, type EditField } from '../../src/components/EntityEditModal';
 
 interface Invoice {
   id: string;
@@ -124,9 +126,9 @@ export default function InvoicesScreen() {
       source: 'manual',
       createdAt: Date.now(),
     });
-    // Schedule deadline reminders (J-30 + J-1) if dueDate present
+    // Schedule deadline reminders (J-90 / J-30 / J-7 / J-1) if dueDate present
     if (newInvoice.dueDate) {
-      scheduleDeadlineReminders({
+      scheduleDeadlineRemindersForEntity(id, {
         type: 'invoice',
         name: newInvoice.title,
         dueDate: newInvoice.dueDate,
@@ -149,8 +151,51 @@ export default function InvoicesScreen() {
   const deleteInvoice = (id: string) => {
     Alert.alert('Supprimer', 'Confirmer la suppression?', [
       { text: 'Annuler', style: 'cancel' },
-      { text: 'Supprimer', style: 'destructive', onPress: () => deleteInvoiceAction(id) },
+      { text: 'Supprimer', style: 'destructive', onPress: () => {
+        cancelDeadlineRemindersForEntity(id).catch(() => {});
+        deleteInvoiceAction(id);
+      } },
     ]);
+  };
+
+  // ── CRUD: actions sheet + edit modal ──
+  const [actionsCtx, setActionsCtx] = useState<EntityActionsContext | null>(null);
+  const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null);
+  const editingInvoice = useMemo(
+    () => storeInvoices.find((i) => i.id === editingInvoiceId) || null,
+    [editingInvoiceId, storeInvoices]
+  );
+
+  const INVOICE_EDIT_FIELDS: EditField[] = useMemo(() => [
+    { key: 'title', label: 'Titre', type: 'text', icon: 'document-text-outline', placeholder: 'Loyer mai 2026', required: true },
+    { key: 'issuer', label: 'Émetteur', type: 'text', icon: 'business-outline', placeholder: 'Régie du Lac SA' },
+    { key: 'amount', label: 'Montant (CHF)', type: 'number', icon: 'cash-outline', placeholder: '0.00', required: true },
+    { key: 'dueDate', label: 'Échéance', type: 'text', icon: 'calendar-outline', placeholder: '30.04.2026' },
+    { key: 'category', label: 'Catégorie', type: 'select', options: INVOICE_CATEGORIES.map((c) => ({ value: c.id, label: c.name, color: c.color, icon: c.icon })) },
+  ], []);
+
+  const handleEditInvoiceSubmit = (values: Record<string, any>) => {
+    if (!editingInvoice) return;
+    const amount = parseFloat(String(values.amount).replace(',', '.')) || 0;
+    updateInvoice(editingInvoice.id, {
+      title: String(values.title || '').trim() || editingInvoice.title,
+      issuer: String(values.issuer || '').trim() || editingInvoice.issuer,
+      amount,
+      dueDate: values.dueDate || undefined,
+      category: values.category || editingInvoice.category,
+    });
+    // Reschedule reminders cleanly
+    if (values.dueDate) {
+      scheduleDeadlineRemindersForEntity(editingInvoice.id, {
+        type: 'invoice',
+        name: String(values.title || editingInvoice.title),
+        dueDate: values.dueDate,
+        amount,
+      }).catch(() => {});
+    } else {
+      cancelDeadlineRemindersForEntity(editingInvoice.id).catch(() => {});
+    }
+    setEditingInvoiceId(null);
   };
 
   const getStatusColor = (s: string) => s === 'paid' ? theme.success : s === 'overdue' ? theme.error : theme.warning;
@@ -275,6 +320,15 @@ export default function InvoicesScreen() {
                     toggleStatus(inv.id);
                   }}
                 >
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    onLongPress={() => setActionsCtx({
+                      id: inv.id,
+                      title: inv.title,
+                      subtitle: `CHF ${formatNumber(inv.amount, 2)} · ${inv.dueDate || 'sans échéance'}`,
+                      accent: statusColor,
+                    })}
+                  >
                   <View style={[
                     styles.invCardPremium,
                     isOverdue && styles.invCardOverdue,
@@ -339,11 +393,12 @@ export default function InvoicesScreen() {
                       {!isPaid && (
                         <View style={styles.swipeHint}>
                           <Ionicons name="arrow-back" size={11} color={theme.textTertiary} />
-                          <Text style={styles.swipeHintTxt}>Glisser pour marquer payé</Text>
+                          <Text style={styles.swipeHintTxt}>Glisser pour marquer payé · Long-press pour modifier</Text>
                         </View>
                       )}
                     </View>
                   </View>
+                  </TouchableOpacity>
                 </Swipeable>
               </Animated.View>
             );
@@ -402,6 +457,41 @@ export default function InvoicesScreen() {
       </Modal>
 
       {/* Email Setup Modal — REMOVED: replaced by /more/email-import (3-methods screen) */}
+
+      {/* Generic CRUD modals */}
+      <EntityActionsSheet
+        ctx={actionsCtx}
+        onClose={() => setActionsCtx(null)}
+        onEdit={() => {
+          const id = actionsCtx?.id;
+          setActionsCtx(null);
+          if (id) setEditingInvoiceId(id);
+        }}
+        onDelete={() => {
+          const id = actionsCtx?.id;
+          setActionsCtx(null);
+          if (id) {
+            cancelDeadlineRemindersForEntity(id).catch(() => {});
+            deleteInvoiceAction(id);
+          }
+        }}
+        deleteConfirmTitle="Supprimer cette facture ?"
+        deleteConfirmMessage="Les rappels d'échéance seront aussi annulés."
+      />
+      <EntityEditModal
+        visible={!!editingInvoice}
+        onClose={() => setEditingInvoiceId(null)}
+        title="Modifier la facture"
+        fields={INVOICE_EDIT_FIELDS}
+        initialValues={{
+          title: editingInvoice?.title || '',
+          issuer: editingInvoice?.issuer || '',
+          amount: editingInvoice?.amount?.toString() || '',
+          dueDate: editingInvoice?.dueDate || '',
+          category: editingInvoice?.category || 'autre',
+        }}
+        onSubmit={handleEditInvoiceSubmit}
+      />
     </View>
   );
 }

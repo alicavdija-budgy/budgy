@@ -27,6 +27,12 @@ import BrandLogo from '../../src/components/BrandLogo';
 import { formatNumber } from '../../src/utils/calculations';
 import { EXPENSE_CATEGORIES, PAYMENT_METHODS } from '../../src/data/swiss-data';
 import { useTranslation } from '../../src/hooks/useTranslation';
+import { EntityActionsSheet, type EntityActionsContext } from '../../src/components/EntityActionsSheet';
+import { EntityEditModal, type EditField } from '../../src/components/EntityEditModal';
+import {
+  scheduleDeadlineRemindersForEntity,
+  cancelDeadlineRemindersForEntity,
+} from '../../src/services/notifications';
 
 type Tab = 'daily' | 'pro' | 'contracts';
 
@@ -44,6 +50,7 @@ export default function ExpensesScreen() {
     addProExpense,
     deleteProExpense,
     addContract,
+    updateContract,
     deleteContract,
     isPro,
   } = useStore();
@@ -66,6 +73,25 @@ export default function ExpensesScreen() {
     category: 'abonnements',
     urgent: false,
   });
+
+  // CRUD action sheet & edit modal state
+  const [actionsCtx, setActionsCtx] = useState<EntityActionsContext | null>(null);
+  const [editingContractId, setEditingContractId] = useState<string | null>(null);
+
+  const editingContract = useMemo(
+    () => contracts.find((c) => c.id === editingContractId) || null,
+    [editingContractId, contracts]
+  );
+
+  // ISO date conversion helper for notifs (accepts DD.MM.YYYY or YYYY-MM-DD)
+  const toISODate = (s: string): string | null => {
+    if (!s) return null;
+    const a = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (a) return s;
+    const b = s.match(/^(\d{1,2})[./](\d{1,2})[./](\d{4})$/);
+    if (b) return `${b[3]}-${b[2].padStart(2, '0')}-${b[1].padStart(2, '0')}`;
+    return null;
+  };
 
   const CUR = preferences.currency;
 
@@ -115,18 +141,78 @@ export default function ExpensesScreen() {
       Alert.alert(t('common.error'), t('common.requiredFields'));
       return;
     }
+    const id = `ct_${Date.now()}`;
+    const amount = parseFloat(newContract.amount.replace(',', '.')) || 0;
+    const expirationDate = newContract.expirationDate || '—';
     addContract({
-      id: `ct_${Date.now()}`,
+      id,
       title: newContract.title.trim(),
-      amount: parseFloat(newContract.amount.replace(',', '.')) || 0,
-      expirationDate: newContract.expirationDate || '—',
+      amount,
+      expirationDate,
       urgent: newContract.urgent,
       category: newContract.category,
       createdAt: Date.now(),
     });
+    // Schedule deadline reminders (J-90, J-30, J-7, J-1) if a valid date is set
+    const iso = toISODate(expirationDate);
+    if (iso) {
+      scheduleDeadlineRemindersForEntity(id, {
+        type: 'contract',
+        name: newContract.title.trim(),
+        dueDate: iso,
+        amount,
+      }).catch(() => {});
+    }
     setNewContract({ title: '', amount: '', expirationDate: '', category: 'abonnements', urgent: false });
     setShowContractModal(false);
   };
+
+  const handleDeleteContract = (id: string) => {
+    cancelDeadlineRemindersForEntity(id).catch(() => {});
+    deleteContract(id);
+  };
+
+  const handleEditContractSubmit = (values: Record<string, any>) => {
+    if (!editingContract) return;
+    const amount = parseFloat(String(values.amount).replace(',', '.')) || 0;
+    const newExpiration = values.expirationDate || editingContract.expirationDate;
+    updateContract(editingContract.id, {
+      title: String(values.title || '').trim() || editingContract.title,
+      amount,
+      expirationDate: newExpiration,
+      category: values.category || editingContract.category,
+      urgent: !!values.urgent,
+    });
+    // Reschedule reminders cleanly (cancel old → re-schedule)
+    const iso = toISODate(newExpiration);
+    if (iso) {
+      scheduleDeadlineRemindersForEntity(editingContract.id, {
+        type: 'contract',
+        name: String(values.title || editingContract.title),
+        dueDate: iso,
+        amount,
+      }).catch(() => {});
+    } else {
+      cancelDeadlineRemindersForEntity(editingContract.id).catch(() => {});
+    }
+    setEditingContractId(null);
+  };
+
+  const CONTRACT_CATEGORIES_OPTIONS = useMemo(
+    () => EXPENSE_CATEGORIES.map((c) => ({ value: c.id, label: c.name, color: c.color })),
+    []
+  );
+
+  const CONTRACT_EDIT_FIELDS: EditField[] = useMemo(
+    () => [
+      { key: 'title', label: 'Nom du contrat', type: 'text', placeholder: 'Sunrise mobile…', icon: 'document-text-outline', required: true },
+      { key: 'amount', label: `Montant (${CUR})`, type: 'number', placeholder: '49.90', icon: 'cash-outline', required: true },
+      { key: 'expirationDate', label: 'Date d\'échéance', type: 'text', placeholder: '31.12.2026', icon: 'calendar-outline' },
+      { key: 'category', label: 'Catégorie', type: 'select', options: CONTRACT_CATEGORIES_OPTIONS },
+      { key: 'urgent', label: 'Marquer comme urgent', type: 'switch' },
+    ],
+    [CONTRACT_CATEGORIES_OPTIONS, CUR]
+  );
 
   const handleDelete = (id: string) => {
     Alert.alert(
@@ -310,8 +396,17 @@ export default function ExpensesScreen() {
               />
             ) : (
               contracts.map((contract) => (
-                <Card
+                <TouchableOpacity
                   key={contract.id}
+                  activeOpacity={0.7}
+                  onLongPress={() => setActionsCtx({
+                    id: contract.id,
+                    title: contract.title,
+                    subtitle: `${CUR} ${formatNumber(contract.amount)} · ${contract.expirationDate}`,
+                    accent: contract.urgent ? theme.error : theme.primary,
+                  })}
+                >
+                <Card
                   style={styles.contractCard}
                   borderColor={contract.urgent ? theme.error : undefined}
                 >
@@ -330,20 +425,19 @@ export default function ExpensesScreen() {
                       {CUR} {formatNumber(contract.amount)}/mois
                     </Text>
                     <TouchableOpacity
-                      onPress={() => Alert.alert(
-                        t('expenses.deleteTitle'),
-                        t('expenses.deleteMsg'),
-                        [
-                          { text: t('common.cancel'), style: 'cancel' },
-                          { text: t('common.delete'), style: 'destructive', onPress: () => deleteContract(contract.id) },
-                        ],
-                      )}
+                      onPress={() => setActionsCtx({
+                        id: contract.id,
+                        title: contract.title,
+                        subtitle: `${CUR} ${formatNumber(contract.amount)} · ${contract.expirationDate}`,
+                        accent: contract.urgent ? theme.error : theme.primary,
+                      })}
                       style={styles.contractDelBtn}
                     >
-                      <Ionicons name="trash-outline" size={16} color={theme.textTertiary} />
+                      <Ionicons name="ellipsis-horizontal" size={18} color={theme.textTertiary} />
                     </TouchableOpacity>
                   </View>
                 </Card>
+                </TouchableOpacity>
               ))
             )}
           </>
@@ -564,6 +658,37 @@ export default function ExpensesScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+      {/* Generic CRUD: actions sheet + edit modal for contracts */}
+      <EntityActionsSheet
+        ctx={actionsCtx}
+        onClose={() => setActionsCtx(null)}
+        onEdit={() => {
+          const id = actionsCtx?.id;
+          setActionsCtx(null);
+          if (id) setEditingContractId(id);
+        }}
+        onDelete={() => {
+          const id = actionsCtx?.id;
+          setActionsCtx(null);
+          if (id) handleDeleteContract(id);
+        }}
+        deleteConfirmTitle="Supprimer ce contrat ?"
+        deleteConfirmMessage="Les rappels d'échéance seront aussi annulés."
+      />
+      <EntityEditModal
+        visible={!!editingContract}
+        onClose={() => setEditingContractId(null)}
+        title="Modifier le contrat"
+        fields={CONTRACT_EDIT_FIELDS}
+        initialValues={{
+          title: editingContract?.title || '',
+          amount: editingContract?.amount?.toString() || '',
+          expirationDate: editingContract?.expirationDate || '',
+          category: editingContract?.category || 'abonnements',
+          urgent: !!editingContract?.urgent,
+        }}
+        onSubmit={handleEditContractSubmit}
+      />
     </View>
   );
 }

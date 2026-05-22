@@ -6,6 +6,7 @@
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Configure notification handler
 Notifications.setNotificationHandler({
@@ -197,7 +198,7 @@ interface DeadlineReminderInput {
   amount?: number;
 }
 
-const DEADLINE_OFFSETS_DAYS = [90, 1];
+const DEADLINE_OFFSETS_DAYS = [90, 30, 7, 1];
 
 export async function scheduleDeadlineReminders(
   input: DeadlineReminderInput
@@ -239,7 +240,11 @@ export async function scheduleDeadlineReminders(
             body:
               offsetDays === 1
                 ? `Demain : ${input.name}${amountLabel} arrive à échéance.`
-                : `Votre ${input.type === 'contract' ? 'contrat' : 'paiement'} ${input.name}${amountLabel} arrive à échéance le ${dueLabel}.`,
+                : offsetDays === 7
+                  ? `Dans 1 semaine : ${input.name}${amountLabel} (échéance le ${dueLabel}).`
+                  : offsetDays === 30
+                    ? `Dans 30 jours : ${input.name}${amountLabel} (échéance le ${dueLabel}).`
+                    : `Votre ${input.type === 'contract' ? 'contrat' : 'paiement'} ${input.name}${amountLabel} arrive à échéance le ${dueLabel}.`,
             sound: 'default',
             data: { type: 'deadline', kind: input.type, name: input.name },
           },
@@ -264,4 +269,52 @@ export async function cancelDeadlineReminders(ids: string[]): Promise<void> {
       await Notifications.cancelScheduledNotificationAsync(id);
     } catch {}
   }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// ENTITY-SCOPED DEADLINE REMINDERS
+// Convenience wrappers that automatically persist scheduled notification IDs
+// in AsyncStorage so that callers don't have to manage them.
+// Use these from create / edit / delete handlers across the app.
+// ──────────────────────────────────────────────────────────────────────────
+
+const NOTIF_IDS_KEY = (entityId: string) => `budgy_notif_ids_${entityId}`;
+
+/**
+ * Schedule deadline reminders AND persist their IDs (keyed by entityId) so
+ * subsequent edits or deletions can cancel and reschedule cleanly.
+ *
+ * Returns the scheduled IDs (same as scheduleDeadlineReminders).
+ */
+export async function scheduleDeadlineRemindersForEntity(
+  entityId: string,
+  input: DeadlineReminderInput
+): Promise<string[]> {
+  if (Platform.OS === 'web') return [];
+  // Cancel any previous reminders first so we never duplicate
+  await cancelDeadlineRemindersForEntity(entityId);
+  const ids = await scheduleDeadlineReminders(input);
+  try {
+    if (ids.length) {
+      await AsyncStorage.setItem(NOTIF_IDS_KEY(entityId), JSON.stringify(ids));
+    }
+  } catch {}
+  return ids;
+}
+
+/**
+ * Cancel all reminders previously scheduled for an entity and forget the IDs.
+ * Safe to call multiple times — never throws.
+ */
+export async function cancelDeadlineRemindersForEntity(entityId: string): Promise<void> {
+  if (Platform.OS === 'web') return;
+  try {
+    const raw = await AsyncStorage.getItem(NOTIF_IDS_KEY(entityId));
+    if (!raw) return;
+    const ids: string[] = JSON.parse(raw);
+    if (Array.isArray(ids) && ids.length) {
+      await cancelDeadlineReminders(ids);
+    }
+    await AsyncStorage.removeItem(NOTIF_IDS_KEY(entityId));
+  } catch {}
 }

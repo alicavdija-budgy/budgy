@@ -47,7 +47,7 @@ export default function NotificationsScreen() {
               key={notif.id}
               onPress={() => markNotificationRead(notif.id)}
             >
-              <Card style={[styles.notifCard, !notif.read && styles.notifCardUnread]}>
+              <Card style={[styles.notifCard, !notif.read ? styles.notifCardUnread : undefined].filter(Boolean) as any}>
                 <Text style={styles.notifIcon}>{notif.icon}</Text>
                 <View style={styles.notifContent}>
                   <Text style={styles.notifTitle}>{notif.title}</Text>

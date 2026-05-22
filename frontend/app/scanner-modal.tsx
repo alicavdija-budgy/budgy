@@ -43,6 +43,7 @@ import { safeFetchJson } from '../src/lib/network';
 import { normalizeImageForUpload } from '../src/lib/imageUpload';
 import { AppErrorModal, buildErrorFromResult, type ErrorPayload } from '../src/components/AppErrorModal';
 import { useTranslation } from '../src/hooks/useTranslation';
+import { mergeOcrWithFallback } from '../src/lib/ocrFallback';
 
 const BACKEND_URL =
   process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:8001';
@@ -124,14 +125,28 @@ export default function ScannerModal() {
     try {
       if (r.ok && r.data) {
         const data: any = r.data;
-        if (data.success) {
-          if (data.merchant) setTitle(data.merchant);
-          if (data.total_amount) setAmount(String(data.total_amount));
-          if (data.category) setCategory(data.category);
+        // Run regex fallback to RESCUE missing fields from raw text
+        const merged = mergeOcrWithFallback(
+          {
+            merchant: data.merchant,
+            total_amount: data.total_amount,
+            date: data.date,
+            category: data.category,
+          },
+          data.raw_text || data.rawText || ''
+        );
+        if (data.success || merged.rescued) {
+          if (merged.merchant) setTitle(merged.merchant);
+          if (merged.total_amount) setAmount(String(merged.total_amount));
+          if (merged.category) setCategory(merged.category);
           if (data.receipt_type) setReceiptType(data.receipt_type as ReceiptType);
-          setOcrConfidence(data.confidence || null);
+          setOcrConfidence(data.confidence || (merged.rescued ? 0.5 : null));
           if (data.items && data.items.length) {
             setNote(`Articles: ${data.items.slice(0, 3).join(', ')}`);
+          }
+          if (!data.success && merged.rescued) {
+            // Tell user we did our best — saisie manuelle still possible
+            setOcrError('Extraction partielle — vérifiez les champs ci-dessous');
           }
         } else {
           // OCR ran but extracted nothing usable — show inline banner only

@@ -22,6 +22,10 @@ import { Card, Button, Badge, EmptyState, ProgressBar } from '../../src/componen
 import { formatNumber } from '../../src/utils/calculations';
 import { useStore } from '../../src/stores/useStore';
 import type { Invoice as StoreInvoice } from '../../src/types';
+import {
+  scheduleDeadlineReminders,
+  cancelDeadlineReminders,
+} from '../../src/services/notifications';
 
 interface Invoice {
   id: string;
@@ -106,11 +110,13 @@ export default function InvoicesScreen() {
       Alert.alert('Erreur', 'Titre et montant requis');
       return;
     }
+    const id = `inv_${Date.now()}`;
+    const amount = parseFloat(newInvoice.amount);
     addInvoice({
-      id: `inv_${Date.now()}`,
+      id,
       title: newInvoice.title,
       issuer: newInvoice.sender || 'Inconnu',
-      amount: parseFloat(newInvoice.amount),
+      amount,
       currency: 'CHF',
       dueDate: newInvoice.dueDate || undefined,
       status: 'pending',
@@ -118,6 +124,15 @@ export default function InvoicesScreen() {
       source: 'manual',
       createdAt: Date.now(),
     });
+    // Schedule deadline reminders (J-30 + J-1) if dueDate present
+    if (newInvoice.dueDate) {
+      scheduleDeadlineReminders({
+        type: 'invoice',
+        name: newInvoice.title,
+        dueDate: newInvoice.dueDate,
+        amount,
+      }).catch(() => {});
+    }
     setNewInvoice({ title: '', sender: '', amount: '', dueDate: '', category: 'autre', recurring: false });
     setShowAdd(false);
   };

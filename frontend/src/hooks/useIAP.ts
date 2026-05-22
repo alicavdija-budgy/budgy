@@ -59,6 +59,9 @@ export interface IapResult {
   /** When backend missing but native receipt obtained — UI can choose to
    *  show a "preview unlock" message. Pro is NOT activated in this case. */
   pendingValidation?: boolean;
+  /** Provisional Pro granted locally (Apple receipt OK but backend not yet
+   *  confirmed). Will be re-validated automatically. */
+  provisional?: boolean;
   state?: 'PRO' | 'EXPIRED' | 'GRACE_PERIOD' | 'REFUNDED' | 'FREE';
 }
 
@@ -75,6 +78,8 @@ async function getCurrentUserId(): Promise<string | undefined> {
 
 export function useIAP() {
   const setPro = usePremiumStore((s) => s.purchase);
+  const confirmPro = usePremiumStore((s) => s.confirmPro);
+  const grantProvisional = usePremiumStore((s) => s.grantProvisionalPro);
   const cancelPro = usePremiumStore((s) => s.cancel);
 
   const [state, setState] = useState<UseIapState>({
@@ -194,25 +199,52 @@ export function useIAP() {
         });
 
         if (verdict.not_configured) {
-          // Don't unlock Pro yet — backend missing keys.
+          // Backend missing keys, but Apple receipt is valid — user PAID.
+          // Grant 48h of provisional Pro and queue for later re-validation.
+          grantProvisional(plan, 48, {
+            transactionId: receipt.transactionId,
+            productId: receipt.productId,
+            receiptData: receipt.transactionReceipt,
+          });
           setState((s) => ({
             ...s,
             phase: 'idle',
             notConfigured: true,
             missingEnv: verdict.missing || [],
-            error: 'iap_not_configured',
+            error: null,
           }));
-          // Clear native queue (avoid duplicate prompts on relaunch).
           await finishTransaction(receipt);
           return {
-            success: false,
-            notConfigured: true,
+            success: true,
+            provisional: true,
             pendingValidation: true,
-            error: 'iap_not_configured',
+            notConfigured: true,
+            state: 'PRO',
           };
         }
 
         if (!verdict.valid) {
+          const isTransient =
+            verdict.error === 'transaction_not_found' ||
+            verdict.error === 'network_error' ||
+            verdict.error?.includes('timeout');
+          if (isTransient) {
+            // Apple Sandbox/TestFlight propagation lag — receipt is real,
+            // give the user provisional access immediately while we re-try.
+            grantProvisional(plan, 48, {
+              transactionId: receipt.transactionId,
+              productId: receipt.productId,
+              receiptData: receipt.transactionReceipt,
+            });
+            setPhase('idle');
+            await finishTransaction(receipt);
+            return {
+              success: true,
+              provisional: true,
+              pendingValidation: true,
+              state: 'PRO',
+            };
+          }
           setPhase('idle', {
             error: verdict.error || 'Reçu invalide',
           });
@@ -227,7 +259,7 @@ export function useIAP() {
         }
 
         // Server confirmed Pro → unlock locally and finish native txn.
-        setPro(plan);
+        confirmPro(plan);
         await finishTransaction(receipt);
         setPhase('idle');
         return {
@@ -239,7 +271,7 @@ export function useIAP() {
         return { success: false, error: e?.message || 'Achat échoué' };
       }
     },
-    [setPhase, setPro]
+    [setPhase, confirmPro, grantProvisional]
   );
 
   // ── Restore ─────────────────────────────────────────────────────────────
@@ -280,7 +312,7 @@ export function useIAP() {
         if (verdict.valid) {
           const plan: IapPlan =
             r.productId === IAP_PRODUCT_IDS.annual ? 'annual' : 'monthly';
-          setPro(plan);
+          confirmPro(plan);
           restored += 1;
           lastState = 'PRO';
         } else if (verdict.subscription_state === 'EXPIRED' || verdict.subscription_state === 'REFUNDED') {
@@ -314,7 +346,7 @@ export function useIAP() {
       setPhase('idle', { error: e?.message || 'Restore failed' });
       return { success: false, error: e?.message || 'Restore failed' };
     }
-  }, [setPhase, setPro, cancelPro]);
+  }, [setPhase, confirmPro, cancelPro]);
 
   // ── Silent sync (called at app boot / on auth change) ───────────────────
   const syncFromBackend = useCallback(async (): Promise<void> => {
@@ -331,7 +363,7 @@ export function useIAP() {
       if (remote.is_pro && remote.subscription_state === 'PRO') {
         const plan: IapPlan =
           remote.apple_product_id === IAP_PRODUCT_IDS.annual ? 'annual' : 'monthly';
-        setPro(plan);
+        confirmPro(plan);
       } else if (
         remote.subscription_state === 'EXPIRED' ||
         remote.subscription_state === 'REFUNDED'
@@ -342,7 +374,7 @@ export function useIAP() {
     } catch {
       setPhase('idle');
     }
-  }, [setPhase, setPro, cancelPro]);
+  }, [setPhase, confirmPro, cancelPro]);
 
   return useMemo(
     () => ({
@@ -369,13 +401,52 @@ export async function syncSubscriptionFromBackendOnce(): Promise<void> {
     if (remote.is_pro && remote.subscription_state === 'PRO') {
       const plan: IapPlan =
         remote.apple_product_id === IAP_PRODUCT_IDS.annual ? 'annual' : 'monthly';
-      store.purchase(plan);
+      store.confirmPro(plan);
     } else if (
       remote.subscription_state === 'EXPIRED' ||
       remote.subscription_state === 'REFUNDED'
     ) {
       store.cancel();
     }
+  } catch {}
+}
+
+/**
+ * Re-validate any pending receipt against the backend. Called on app
+ * foreground / launch to upgrade a provisional Pro to a confirmed Pro once
+ * Apple's App Store Server API has propagated the transaction.
+ *
+ * Never throws. No-op if there's no pending validation.
+ */
+export async function retryPendingValidationOnce(): Promise<void> {
+  try {
+    const store = usePremiumStore.getState();
+    const pending = store.pendingValidation;
+    if (!pending) return;
+    // Skip if provisional expired (Apple sandbox usually propagates in <5min)
+    if (store.provisionalProUntil && store.provisionalProUntil < Date.now()) {
+      store.clearProvisional();
+      return;
+    }
+    const userId = await getCurrentUserId();
+    const verdict = await validateOnBackend({
+      transaction_id: pending.transactionId,
+      product_id: pending.productId,
+      user_id: userId,
+      receipt_data: pending.receiptData,
+    });
+    if (verdict.valid) {
+      const plan: IapPlan =
+        pending.productId === IAP_PRODUCT_IDS.annual ? 'annual' : 'monthly';
+      store.confirmPro(plan);
+    } else if (
+      verdict.subscription_state === 'EXPIRED' ||
+      verdict.subscription_state === 'REFUNDED'
+    ) {
+      // Real refusal — revoke provisional access (e.g. refund).
+      store.cancel();
+    }
+    // Otherwise leave provisional in place; we'll try again next foreground.
   } catch {}
 }
 

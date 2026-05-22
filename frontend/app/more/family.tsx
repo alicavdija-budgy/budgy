@@ -16,6 +16,7 @@ import { useTheme } from '../../src/hooks/useTheme';
 import type { ThemePalette } from '../../src/constants/palettes';
 import { useStore } from '../../src/stores/useStore';
 import { Card, Button } from '../../src/components/ui';
+import { safeFetchJson } from '../../src/lib/network';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 
@@ -50,34 +51,60 @@ export default function FamilyScreen() {
     if (!familyName.trim()) { Alert.alert('Erreur', 'Entrez un nom de famille'); return; }
     setLoading(true);
     try {
-      const res = await fetch(`${BACKEND_URL}/api/family/create`, {
+      const r = await safeFetchJson<any>(`${BACKEND_URL}/api/family/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ owner_id: user?.id || 'anon', owner_name: user?.name || 'User', family_name: familyName.trim() }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || 'Erreur');
-      setFamily(data.family);
+        body: JSON.stringify({
+          owner_id: user?.id || 'anon',
+          owner_name: user?.name || 'User',
+          family_name: familyName.trim(),
+        }),
+      }, { timeoutMs: 10000, retries: 1, silent: true });
+      if (!r.ok || !r.data) {
+        const human = r.offline
+          ? 'Mode hors-ligne. Connectez-vous à Internet pour créer une famille.'
+          : r.status >= 500
+            ? 'Le service famille est momentanément indisponible. Réessayez dans quelques minutes.'
+            : 'Création impossible. Vérifiez votre connexion et réessayez.';
+        Alert.alert('Création impossible', human);
+        return;
+      }
+      setFamily(r.data.family);
       setMode('home');
-    } catch (e: any) { Alert.alert('Erreur', e.message); }
-    finally { setLoading(false); }
+    } catch (e: any) {
+      Alert.alert('Erreur', e?.message || 'Une erreur est survenue');
+    } finally { setLoading(false); }
   };
 
   const handleJoin = async () => {
     if (joinCode.length !== 8) { Alert.alert('Erreur', 'Le code doit faire 8 caractères'); return; }
     setLoading(true);
     try {
-      const res = await fetch(`${BACKEND_URL}/api/family/join`, {
+      const r = await safeFetchJson<any>(`${BACKEND_URL}/api/family/join`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: user?.id || 'anon', user_name: user?.name || 'User', code: joinCode.toUpperCase() }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || 'Erreur');
-      setFamily(data.family);
+        body: JSON.stringify({
+          user_id: user?.id || 'anon',
+          user_name: user?.name || 'User',
+          code: joinCode.toUpperCase(),
+        }),
+      }, { timeoutMs: 10000, retries: 1, silent: true });
+      if (!r.ok || !r.data) {
+        const human = r.offline
+          ? 'Mode hors-ligne. Connectez-vous à Internet pour rejoindre une famille.'
+          : r.status === 404
+            ? 'Code d\'invitation invalide.'
+            : r.status === 400
+              ? (r.data?.detail || 'Impossible de rejoindre cette famille.')
+              : 'Le service famille est momentanément indisponible.';
+        Alert.alert('Connexion impossible', human);
+        return;
+      }
+      setFamily(r.data.family);
       setMode('home');
-    } catch (e: any) { Alert.alert('Erreur', e.message); }
-    finally { setLoading(false); }
+    } catch (e: any) {
+      Alert.alert('Erreur', e?.message || 'Une erreur est survenue');
+    } finally { setLoading(false); }
   };
 
   const handleShare = async () => {

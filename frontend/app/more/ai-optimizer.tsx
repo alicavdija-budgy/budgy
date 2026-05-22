@@ -185,11 +185,20 @@ export default function AIOptimizerScreen() {
     } catch (e: any) {
       const isAbort = e?.name === 'AbortError';
       const isNet = isAbort || /Network|fetch failed/i.test(e?.message || '');
+      const isStatus = /code (\d+)/i.test(e?.message || '');
+      const statusMatch = (e?.message || '').match(/code (\d+)/i);
+      const status = statusMatch ? parseInt(statusMatch[1]) : 0;
       const msg = isAbort
         ? 'Le serveur met trop de temps à répondre. Réessayez dans quelques secondes.'
         : isNet
           ? 'Connexion impossible. Vérifiez votre Internet et réessayez.'
-          : (e?.message || 'Une erreur est survenue.');
+          : status === 404
+            ? 'Service d\'optimisation momentanément indisponible. Réessayez dans quelques minutes.'
+            : status >= 500
+              ? 'Le serveur a rencontré un problème. Nos équipes ont été notifiées.'
+              : isStatus
+                ? `Le serveur a refusé la demande (${status}). Réessayez plus tard.`
+                : (e?.message || 'Une erreur est survenue.');
       console.error(`${TAG} fatal:`, e);
       setError(msg);
       Alert.alert('Analyse impossible', msg);

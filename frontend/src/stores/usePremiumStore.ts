@@ -48,6 +48,21 @@ export interface PremiumState {
   trialEndsAt: number | null;
   subscriptionStartedAt: number | null;
 
+  // PROVISIONAL Pro grant — used when Apple StoreKit returns a valid receipt
+  // but the backend cannot validate immediately (e.g. transaction_not_found
+  // because Apple Sandbox/TestFlight takes a few minutes to propagate the
+  // transaction to the App Store Server API). We grant 48h of provisional
+  // access so the user gets the value he paid for instantly; a background
+  // job re-validates on next foreground / app launch and upgrades to real Pro.
+  provisionalProUntil: number | null;
+  /** Receipt details we need to re-validate later. */
+  pendingValidation: {
+    transactionId: string;
+    productId: string;
+    receiptData?: string;
+    queuedAt: number;
+  } | null;
+
   // Usage tracking
   installedAt: number;
   transactionCount: number;
@@ -62,6 +77,17 @@ export interface PremiumState {
   // Actions
   startTrial: () => void;
   purchase: (plan: Plan) => void;
+  /** Grant temporary Pro after a valid Apple receipt while waiting for
+   *  backend confirmation. Pass the receipt info so we can retry later. */
+  grantProvisionalPro: (
+    plan: Plan,
+    hours: number,
+    receipt?: { transactionId: string; productId: string; receiptData?: string }
+  ) => void;
+  /** Clear provisional state once backend has confirmed real Pro. */
+  confirmPro: (plan: Plan) => void;
+  /** Remove provisional access (called after explicit refund/expiry). */
+  clearProvisional: () => void;
   restore: () => void;
   cancel: () => void;
   incrementTx: () => void;
@@ -71,6 +97,8 @@ export interface PremiumState {
   shouldShowPaywall: (trigger: PaywallTrigger) => boolean;
   isTrialActive: () => boolean;
   hasPremiumAccess: () => boolean;
+  /** True when access is granted only via provisional / pending state. */
+  isProvisional: () => boolean;
 
   // Feature gating with free preview
   canUseFeature: (f: ProFeature) => boolean;       // true si Pro OU quota dispo
@@ -111,6 +139,8 @@ export const usePremiumStore = create<PremiumState>()(
       trialStartedAt: null,
       trialEndsAt: null,
       subscriptionStartedAt: null,
+      provisionalProUntil: null,
+      pendingValidation: null,
 
       installedAt: Date.now(),
       transactionCount: 0,
@@ -138,7 +168,42 @@ export const usePremiumStore = create<PremiumState>()(
           plan,
           subscriptionStartedAt: now,
           trialEndsAt: null,
+          // Clear any provisional state once a real Pro purchase is confirmed
+          provisionalProUntil: null,
+          pendingValidation: null,
         });
+      },
+
+      grantProvisionalPro: (plan, hours, receipt) => {
+        const now = Date.now();
+        set({
+          plan,
+          provisionalProUntil: now + Math.max(1, hours) * 60 * 60 * 1000,
+          pendingValidation: receipt
+            ? {
+                transactionId: receipt.transactionId,
+                productId: receipt.productId,
+                receiptData: receipt.receiptData,
+                queuedAt: now,
+              }
+            : null,
+        });
+      },
+
+      confirmPro: (plan) => {
+        const now = Date.now();
+        set({
+          isPro: true,
+          plan,
+          subscriptionStartedAt: now,
+          trialEndsAt: null,
+          provisionalProUntil: null,
+          pendingValidation: null,
+        });
+      },
+
+      clearProvisional: () => {
+        set({ provisionalProUntil: null, pendingValidation: null });
       },
 
       restore: () => {
@@ -152,6 +217,8 @@ export const usePremiumStore = create<PremiumState>()(
           trialStartedAt: null,
           trialEndsAt: null,
           subscriptionStartedAt: null,
+          provisionalProUntil: null,
+          pendingValidation: null,
         });
       },
 
@@ -171,10 +238,18 @@ export const usePremiumStore = create<PremiumState>()(
         return !!trialEndsAt && trialEndsAt > Date.now();
       },
 
+      isProvisional: () => {
+        const s = get();
+        if (s.isPro) return false;
+        return !!s.provisionalProUntil && s.provisionalProUntil > Date.now();
+      },
+
       hasPremiumAccess: () => {
         const s = get();
         if (s.isPro) return true;
-        return !!s.trialEndsAt && s.trialEndsAt > Date.now();
+        if (s.trialEndsAt && s.trialEndsAt > Date.now()) return true;
+        if (s.provisionalProUntil && s.provisionalProUntil > Date.now()) return true;
+        return false;
       },
 
       canUseFeature: (f: ProFeature) => {
@@ -239,6 +314,8 @@ export const usePremiumStore = create<PremiumState>()(
         trialStartedAt: s.trialStartedAt,
         trialEndsAt: s.trialEndsAt,
         subscriptionStartedAt: s.subscriptionStartedAt,
+        provisionalProUntil: s.provisionalProUntil,
+        pendingValidation: s.pendingValidation,
         installedAt: s.installedAt,
         transactionCount: s.transactionCount,
         budgetCount: s.budgetCount,

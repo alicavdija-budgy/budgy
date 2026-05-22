@@ -16,6 +16,7 @@ import {
 } from '../src/services/notifications';
 import { startSyncMonitor, bootstrapSession } from '../src/services/sync';
 import { pullAllFromCloud, pushAllToCloud, isSignedInToSupabase } from '../src/services/cloudSync';
+import { retryPendingValidationOnce, syncSubscriptionFromBackendOnce } from '../src/hooks/useIAP';
 import { useStore } from '../src/stores/useStore';
 import LockScreen from './lock';
 import ShareIntentRouter from '../src/components/ShareIntentRouter';
@@ -86,6 +87,8 @@ export default function RootLayout() {
           const r = await pullAllFromCloud();
           if (r.ok) console.log(`[bootstrap-sync] pulled ${r.pulled} items from cloud`);
         }
+        // Re-validate any pending Apple receipt (provisional Pro → confirmed)
+        retryPendingValidationOnce().catch(() => {});
       } catch (e) {
         console.warn('[bootstrap-sync] failed:', e);
       }
@@ -108,6 +111,9 @@ export default function RootLayout() {
           const now = Date.now();
           if (now - lastForegroundSync.current < 30_000) return; // throttle
           lastForegroundSync.current = now;
+          // Re-validate any pending Apple receipt + sync premium state
+          retryPendingValidationOnce().catch(() => {});
+          syncSubscriptionFromBackendOnce().catch(() => {});
           const r = await pullAllFromCloud();
           if (r.ok) console.log(`[foreground-sync] pulled ${r.pulled} items`);
         } else if (state === 'background' || state === 'inactive') {

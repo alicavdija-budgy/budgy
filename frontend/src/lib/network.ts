@@ -22,7 +22,7 @@ export interface NetworkState {
 }
 
 export interface SafeFetchOptions {
-  timeoutMs?: number;         // default 8000
+  timeoutMs?: number;         // default 20000 (covers cold-starts on serverless preview backends)
   retries?: number;           // default 1
   retryBackoffMs?: number;    // default 600
   silent?: boolean;           // suppress console.warn
@@ -170,7 +170,7 @@ export async function safeFetch<T = any>(
   opts?: SafeFetchOptions
 ): Promise<SafeFetchResult<T>> {
   const {
-    timeoutMs = 8000,
+    timeoutMs = 20000,
     retries = 1,
     retryBackoffMs = 600,
     silent = false,
@@ -308,4 +308,46 @@ export function describeError(
   if (r.status >= 500) return 'errors.serverError';
   if (r.error === 'invalid_json' || r.error?.includes('JSON')) return 'errors.invalidResponse';
   return 'errors.generic';
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// API base URL — centralized accessor used by every fetch in the app.
+// In dev: uses the .env value. In TestFlight/production: uses the value
+// embedded in the EAS build profile (`eas.json > build.production.env.EXPO_PUBLIC_BACKEND_URL`).
+//
+// Fallback: empty string → caller should detect missing config rather than
+// silently hit localhost:8001 (which doesn't exist on iPhone).
+// ──────────────────────────────────────────────────────────────────────────
+export function getApiBaseUrl(): string {
+  const url = (process.env.EXPO_PUBLIC_BACKEND_URL as string | undefined) || '';
+  return url.replace(/\/$/, ''); // strip trailing slash
+}
+
+/** Returns true if a base URL is configured at runtime. */
+export function hasApiBaseUrl(): boolean {
+  return getApiBaseUrl().length > 0;
+}
+
+/**
+ * Convenience: full apiFetchJson(path, init?) — relative path is appended to
+ * the configured base URL, and uses safeFetchJson defaults (20s timeout, 2
+ * retries, AbortController, NetInfo gating). Use this for ALL backend calls
+ * to eliminate URL-string-concat bugs.
+ */
+export async function apiFetchJson<T = unknown>(
+  path: string,
+  init?: RequestInit,
+  options?: SafeFetchOptions
+): Promise<SafeFetchResult<T>> {
+  const base = getApiBaseUrl();
+  if (!base) {
+    return {
+      ok: false,
+      status: 0,
+      offline: false,
+      error: 'API base URL not configured (EXPO_PUBLIC_BACKEND_URL is empty in this build).',
+    } as SafeFetchResult<T>;
+  }
+  const url = path.startsWith('http') ? path : `${base}${path.startsWith('/') ? '' : '/'}${path}`;
+  return safeFetchJson<T>(url, init, options);
 }

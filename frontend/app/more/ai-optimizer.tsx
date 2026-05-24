@@ -188,20 +188,77 @@ export default function AIOptimizerScreen() {
       const isStatus = /code (\d+)/i.test(e?.message || '');
       const statusMatch = (e?.message || '').match(/code (\d+)/i);
       const status = statusMatch ? parseInt(statusMatch[1]) : 0;
-      const msg = isAbort
-        ? 'Le serveur met trop de temps à répondre. Réessayez dans quelques secondes.'
-        : isNet
-          ? 'Connexion impossible. Vérifiez votre Internet et réessayez.'
-          : status === 404
-            ? 'Service d\'optimisation momentanément indisponible. Réessayez dans quelques minutes.'
-            : status >= 500
-              ? 'Le serveur a rencontré un problème. Nos équipes ont été notifiées.'
-              : isStatus
-                ? `Le serveur a refusé la demande (${status}). Réessayez plus tard.`
-                : (e?.message || 'Une erreur est survenue.');
       console.error(`${TAG} fatal:`, e);
-      setError(msg);
-      Alert.alert('Analyse impossible', msg);
+      // ── Local fallback: never show the user a dead end ────────────────────
+      // Compute simple heuristic savings ideas from their actual data so the
+      // screen always has value even when the backend is unreachable.
+      const monthlyIncome = (store.incomes || [])
+        .filter((i: any) => i.type === 'recurring')
+        .reduce((s: number, i: any) => {
+          const f = i.frequency;
+          const factor = f === 'monthly' ? 1 : f === 'quarterly' ? 1 / 3 : f === 'yearly' ? 1 / 12 : 1;
+          return s + (i.amount || 0) * factor;
+        }, 0);
+      const subsTotal = (store.recurringExpenses || []).filter((r: any) => r.active).reduce((s: number, r: any) => s + (r.amount || 0), 0);
+      const restoTotal = (store.transactions || []).filter((t: any) => t.category === 'restaurants').reduce((s: number, t: any) => s + (t.amount || 0), 0);
+      const proposals: any[] = [];
+      if (subsTotal > 0) {
+        proposals.push({
+          title: 'Audit de vos abonnements',
+          category: 'abonnements',
+          monthly_potential: Math.round(subsTotal * 0.20 * 100) / 100,
+          annual_potential: Math.round(subsTotal * 0.20 * 12 * 100) / 100,
+          effort: 'low',
+          action: `Vous avez environ CHF ${subsTotal.toFixed(0)}/mois en abonnements actifs. Annuler ceux non utilisés peut économiser ~20%.`,
+        });
+      }
+      if (monthlyIncome > 0) {
+        proposals.push({
+          title: 'Pilier 3a — Optimisation fiscale',
+          category: 'fiscal',
+          monthly_potential: Math.round((Math.min(monthlyIncome * 0.10, 588)) * 100) / 100,
+          annual_potential: 7056,
+          effort: 'medium',
+          action: 'Maximisez votre 3e pilier (max CHF 7056/an) pour économiser sur vos impôts (~CHF 1500-2500 selon canton).',
+        });
+      }
+      if (restoTotal > 100) {
+        proposals.push({
+          title: 'Sorties restaurant',
+          category: 'restaurants',
+          monthly_potential: Math.round(restoTotal * 0.30 * 100) / 100,
+          annual_potential: Math.round(restoTotal * 0.30 * 12 * 100) / 100,
+          effort: 'low',
+          action: `CHF ${restoTotal.toFixed(0)} ce mois au restaurant — cuisiner 1 jour de plus par semaine ferait économiser ~30%.`,
+        });
+      }
+      proposals.push({
+        title: 'Assurance maladie LAMal',
+        category: 'sante',
+        monthly_potential: 60,
+        annual_potential: 720,
+        effort: 'medium',
+        action: 'Comparez les caisses sur priminfo.admin.ch. Économie moyenne CHF 50-80/mois en changeant pour un modèle alternatif (HMO / médecin de famille).',
+      });
+      proposals.push({
+        title: 'Télécoms — Sunrise/Salt/Yallo',
+        category: 'telecoms',
+        monthly_potential: 25,
+        annual_potential: 300,
+        effort: 'low',
+        action: 'Passer d\'un forfait premium à un opérateur low-cost suisse (Yallo, Aldi mobile) économise CHF 20-30/mois pour les mêmes services.',
+      });
+      const fallbackMonthly = proposals.reduce((s, p) => s + (p.monthly_potential || 0), 0);
+      const fallbackAnnual = proposals.reduce((s, p) => s + (p.annual_potential || 0), 0);
+      setResult({
+        success: true,
+        summary: 'Suggestions locales — basées sur vos données. Pour une analyse IA personnalisée plus précise, vérifiez votre connexion Internet ou réessayez plus tard.',
+        proposals,
+        total_monthly_potential: fallbackMonthly,
+        total_annual_potential: fallbackAnnual,
+        _local: true,
+      } as any);
+      // Don't show alert — the screen now displays useful content
     } finally {
       setLoading(false);
     }

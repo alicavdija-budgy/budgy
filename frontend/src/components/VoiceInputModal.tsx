@@ -49,6 +49,8 @@ import {
 import { useUsageQuota, useIsPremium } from '../services/featureFlags';
 import { useTranslation } from '../hooks/useTranslation';
 import SoftPaywall from './SoftPaywall';
+import { safeFetchJson } from '../lib/network';
+import { parseVoiceLocally } from '../lib/voiceLocalParser';
 
 const ACCENT = '#16E0C6';
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
@@ -348,25 +350,65 @@ export default function VoiceInputModal({ visible, onClose }: Props) {
       return;
     }
     setPhase('parsing');
+
+    // Helper: convert local parser output to ParsedTxn shape
+    const useLocalFallback = (raw: string): ParsedTxn => {
+      const p = parseVoiceLocally(raw);
+      if (p.intent === 'unknown' || !p.amount) {
+        return { success: false, error: t('voice.errNotUnderstoodMsg') } as ParsedTxn;
+      }
+      return {
+        success: true,
+        type: p.intent === 'income' ? 'income' : p.intent === 'recurring' ? 'subscription' : 'expense',
+        amount: p.amount,
+        currency: 'CHF',
+        merchant: p.merchant || p.source || p.title,
+        category: p.category || 'autre',
+        recurring: p.intent === 'recurring',
+        date: new Date().toISOString().slice(0, 10),
+        _local: true,
+      } as ParsedTxn;
+    };
+
     try {
-      const res = await fetch(`${BACKEND_URL}/api/voice/parse`, {
+      const r = await safeFetchJson<ParsedTxn>(`${BACKEND_URL}/api/voice/parse`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: input, locale: sttLocale }),
-      });
-      const data: ParsedTxn = await res.json();
+      }, { timeoutMs: 15000, retries: 1, silent: true });
+
+      const data: ParsedTxn = r.ok && r.data
+        ? r.data
+        : useLocalFallback(input); // Backend unreachable → use local parser
+
       setParsed(data);
       if (data.success) {
         mediumHaptic();
         setPhase('preview');
       } else {
-        setPhase('idle');
-        Alert.alert(t('voice.errNotUnderstood'), data.error || t('voice.errNotUnderstoodMsg'));
+        // Even the local fallback couldn't parse — try one more time locally before giving up
+        const fallback = useLocalFallback(input);
+        if (fallback.success) {
+          setParsed(fallback);
+          mediumHaptic();
+          setPhase('preview');
+        } else {
+          setPhase('idle');
+          Alert.alert(t('voice.errNotUnderstood'), data.error || t('voice.errNotUnderstoodMsg'));
+        }
       }
     } catch (e: any) {
-      console.error('[voice] error:', e);
-      setPhase('idle');
-      Alert.alert(t('voice.errNetwork'), t('voice.errNetworkMsg'));
+      // Last-resort: local parser always works offline
+      console.warn('[voice] backend unreachable, using local parser:', e?.message);
+      const fallback = useLocalFallback(input);
+      if (fallback.success) {
+        setParsed(fallback);
+        mediumHaptic();
+        setPhase('preview');
+      } else {
+        setPhase('idle');
+        Alert.alert(t('voice.errNetwork'), t('voice.errNetworkMsg'));
+      }
     }
   };
 

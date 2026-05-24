@@ -176,7 +176,7 @@ export default function ReceiptsScreen() {
         <View style={styles.quickActions}>
           <TouchableOpacity
             style={[styles.quickBtn, styles.quickBtnPrimary]}
-            onPress={() => router.push('/scanner-modal')}
+            onPress={() => router.push({ pathname: '/scanner-modal', params: { forceType: 'ticket' } })}
           >
             <Ionicons name="scan" size={20} color="#FFF" />
             <Text style={styles.quickBtnTxtPrimary}>Scanner</Text>
@@ -205,22 +205,6 @@ export default function ReceiptsScreen() {
             </Text>
           </Card>
         </View>
-
-        {/* Import IA Banner */}
-        <TouchableOpacity
-          style={styles.importBanner}
-          onPress={() => router.push('/more/email-import')}
-          activeOpacity={0.85}
-        >
-          <View style={styles.importBannerIcon}>
-            <Ionicons name="sparkles" size={22} color={theme.primary} />
-          </View>
-          <View style={styles.importBannerContent}>
-            <Text style={styles.importBannerTitle}>Import IA</Text>
-            <Text style={styles.importBannerSub}>Photo · Fichier · Partage email</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color={theme.textTertiary} />
-        </TouchableOpacity>
 
         {/* Search */}
         <View style={styles.searchBox}>

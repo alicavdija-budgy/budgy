@@ -28,6 +28,7 @@ import { useTheme } from '../../src/hooks/useTheme';
 import type { ThemePalette } from '../../src/constants/palettes';
 import { useStore } from '../../src/stores/useStore';
 import { Card, Button } from '../../src/components/ui';
+import { humanizeError } from '../../src/lib/errorSanitizer';
 
 // expo-share-intent is a native module — guarded import for web/Expo Go
 let useShareIntent: any = null;
@@ -140,30 +141,72 @@ export default function ImportInvoiceScreen() {
     setResult(null);
     try {
       let base64 = '';
+      let mime = 'image/jpeg';
       if (uriOrPath.startsWith('data:')) {
         base64 = uriOrPath.split(',')[1] || '';
-      } else {
-        console.log('[email-import] reading file', uriOrPath);
+        const m = /^data:([^;]+);/.exec(uriOrPath);
+        if (m) mime = m[1];
+      } else if (uriOrPath.toLowerCase().endsWith('.pdf') || uriOrPath.includes('application/pdf')) {
+        // PDF — for now send the raw PDF bytes; backend can OCR first page.
+        // Original PDF stays as attachment in the user's filesystem cache.
         base64 = await readAsBase64(uriOrPath);
+        mime = 'application/pdf';
+        console.log('[email-import] PDF detected, sending raw bytes for OCR');
+      } else {
+        // ALWAYS normalize images (HEIC/HEIF → JPEG, resize, quality)
+        // This fixes the "unsupported image format" error from gpt-4o-mini
+        // on HEIC photos taken on iPhone (default iOS format).
+        console.log('[email-import] normalizing image', uriOrPath);
+        try {
+          const norm = await normalizeImageForUpload(uriOrPath, {
+            includeBase64: true,
+            quality: 0.85,
+          });
+          base64 = norm.base64 || '';
+        } catch (normErr) {
+          // Fallback to raw read if normalize fails
+          console.warn('[email-import] normalize failed, using raw:', normErr);
+          base64 = await readAsBase64(uriOrPath);
+        }
       }
-      console.log('[email-import] OCR call, b64 length:', base64.length);
+      if (!base64) {
+        Alert.alert(
+          'Fichier vide',
+          'Impossible de lire ce fichier. Réessayez avec un autre.'
+        );
+        return;
+      }
+      console.log('[email-import] OCR call, b64 length:', base64.length, 'mime:', mime);
       const r = await safeFetchJson<any>(`${BACKEND_URL}/api/scanner/ocr`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image_base64: `data:image/jpeg;base64,${base64}` }),
+        body: JSON.stringify({ image_base64: `data:${mime};base64,${base64}` }),
       }, { timeoutMs: 25000, retries: 1, silent: true });
       const data = r.data || { success: false, error: r.error };
-      if (data.success) setResult({ ...data, _source: 'photo' });
-      else Alert.alert(
-        'Échec de l\'analyse',
-        data.error || 'Impossible d\'analyser l\'image. Réessayez avec une autre photo.'
-      );
+      if (data.success) {
+        // Keep the original URI as attachment for later preview
+        setResult({ ...data, _source: 'photo', _originalUri: uriOrPath, _mime: mime });
+      } else {
+        // Humanize the error message — never show "gpt-4o-mini" / "litellm" to user
+        const h = humanizeError(data.error || 'unknown', {
+          title: 'Échec de l\'analyse',
+          message: 'Ce fichier n\'a pas pu être analysé. Vous pouvez l\'ajouter manuellement.',
+        });
+        Alert.alert(h.title, h.message, [
+          { text: 'OK', style: 'cancel' },
+          {
+            text: h.fallback || 'Saisir manuellement',
+            onPress: () => router.push('/more/invoices' as any),
+          },
+        ]);
+      }
     } catch (e: any) {
       console.error('[email-import] parseImageFile error:', e);
-      Alert.alert(
-        'Impossible d\'importer',
-        e?.message || 'Vérifiez votre connexion Internet et réessayez.'
-      );
+      const h = humanizeError(e, {
+        title: 'Import impossible',
+        message: 'Vérifiez votre connexion Internet et réessayez.',
+      });
+      Alert.alert(h.title, h.message);
     } finally {
       setBusy(false);
     }
@@ -203,30 +246,14 @@ export default function ImportInvoiceScreen() {
         mediaTypes: ['images'],
         allowsEditing: false,
         quality: 0.85,
-        base64: true,
       });
       if (res.canceled) return;
       const a = res.assets[0];
-      if (a.base64) {
-        setBusy(true);
-        setBusyLabel('OCR + IA en cours...');
-        try {
-          const r = await safeFetchJson<any>(`${BACKEND_URL}/api/scanner/ocr`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ image_base64: `data:image/jpeg;base64,${a.base64}` }),
-          }, { timeoutMs: 25000, retries: 1, silent: true });
-          const data = r.data || { success: false, error: r.error };
-          if (data.success) setResult({ ...data, _source: 'photo' });
-          else Alert.alert('Échec OCR', data.error || 'Impossible d\'analyser.');
-        } finally {
-          setBusy(false);
-        }
-      } else {
-        await parseImageFile(a.uri);
-      }
+      // ALWAYS normalize through imageUpload — converts HEIC/HEIF → JPEG, resizes
+      await parseImageFile(a.uri);
     } catch (e: any) {
-      Alert.alert('Erreur', e?.message || 'Sélection annulée');
+      const h = humanizeError(e, { title: 'Import impossible' });
+      Alert.alert(h.title, h.message);
     }
   };
 
@@ -240,28 +267,14 @@ export default function ImportInvoiceScreen() {
       const res = await ImagePicker.launchCameraAsync({
         allowsEditing: false,
         quality: 0.85,
-        base64: true,
       });
       if (res.canceled) return;
       const a = res.assets[0];
-      if (a.base64) {
-        setBusy(true);
-        setBusyLabel('OCR + IA en cours...');
-        try {
-          const r = await safeFetchJson<any>(`${BACKEND_URL}/api/scanner/ocr`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ image_base64: `data:image/jpeg;base64,${a.base64}` }),
-          }, { timeoutMs: 25000, retries: 1, silent: true });
-          const data = r.data || { success: false, error: r.error };
-          if (data.success) setResult({ ...data, _source: 'photo' });
-          else Alert.alert('Échec OCR', data.error || 'Impossible d\'analyser.');
-        } finally {
-          setBusy(false);
-        }
-      }
+      // ALWAYS normalize (HEIC → JPEG) before sending to OCR
+      await parseImageFile(a.uri);
     } catch (e: any) {
-      Alert.alert('Erreur', e?.message || 'Capture annulée');
+      const h = humanizeError(e, { title: 'Capture impossible' });
+      Alert.alert(h.title, h.message);
     }
   };
 

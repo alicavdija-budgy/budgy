@@ -18,6 +18,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useStore } from '../stores/useStore';
+import { usePremiumStore } from '../stores/usePremiumStore';
 
 // ── Catalogue ──────────────────────────────────────────────────────────────
 export type FeatureFlag =
@@ -81,10 +82,28 @@ async function writeUsage(u: UsageState) {
 
 // ── Public hooks ───────────────────────────────────────────────────────────
 
-/** Returns true if the user has Pro / Premium status. */
+/** Returns true if the user has Pro / Premium status.
+ *  Source of truth: usePremiumStore.hasPremiumAccess() — includes:
+ *   - confirmed Pro (after Apple validation OK)
+ *   - active trial (trialEndsAt > now)
+ *   - PROVISIONAL Pro (provisionalProUntil > now — granted after Apple
+ *     receipt OK but backend still pending). This is what fixes the bug
+ *     "Voice paywall affiché malgré essai gratuit 7 jours actif". */
 export function useIsPremium(): boolean {
-  // Both `user.isPro` (set on demo / after IAP) and store-level `isPro` work.
-  return useStore((s) => Boolean(s.user?.isPro || s.isPro));
+  // Subscribe to the primitive fields so that we re-render when ANY of them
+  // change (Zustand selector returning the result of hasPremiumAccess() with
+  // dependencies on multiple slices needs explicit subscription).
+  const isPro = usePremiumStore((s) => s.isPro);
+  const trialEndsAt = usePremiumStore((s) => s.trialEndsAt);
+  const provisionalProUntil = usePremiumStore((s) => s.provisionalProUntil);
+  const legacyPro = useStore((s) => Boolean(s.user?.isPro || s.isPro));
+  const now = Date.now();
+  return (
+    isPro ||
+    (!!trialEndsAt && trialEndsAt > now) ||
+    (!!provisionalProUntil && provisionalProUntil > now) ||
+    legacyPro
+  );
 }
 
 /**

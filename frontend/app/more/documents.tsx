@@ -701,22 +701,6 @@ ${pageDataUrls.map((src, i) => `
       </View>
 
       <ScrollView contentContainerStyle={{ padding: Spacing.lg, paddingBottom: insets.bottom + 80 }}>
-        {/* Import IA Banner */}
-        <TouchableOpacity
-          style={styles.importBanner}
-          onPress={() => router.push('/more/email-import')}
-          activeOpacity={0.85}
-        >
-          <View style={styles.importBannerIcon}>
-            <Ionicons name="sparkles" size={22} color={theme.primary} />
-          </View>
-          <View style={styles.importBannerContent}>
-            <Text style={styles.importBannerTitle}>Import IA</Text>
-            <Text style={styles.importBannerSub}>Photo · Fichier · Partage email</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color={theme.textTertiary} />
-        </TouchableOpacity>
-
         <TextInput
           style={styles.search}
           value={search}

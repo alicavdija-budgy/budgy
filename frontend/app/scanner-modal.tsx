@@ -29,7 +29,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { CameraView, useCameraPermissions, type CameraType } from 'expo-camera';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../src/constants/theme';
 import { useTheme } from '../src/hooks/useTheme';
@@ -55,6 +55,11 @@ export default function ScannerModal() {
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const params = useLocalSearchParams<{ forceType?: string }>();
+  const lockedType: ReceiptType | null =
+    params.forceType === 'ticket' || params.forceType === 'invoice' || params.forceType === 'contract' || params.forceType === 'remboursement'
+      ? (params.forceType as ReceiptType)
+      : null;
   const { t } = useTranslation();
   const { addTransaction, addReceipt, addInvoice } = useStore();
 
@@ -73,7 +78,7 @@ export default function ScannerModal() {
   const [category, setCategory] = useState('courses');
   const [paymentMethod, setPaymentMethod] = useState('card');
   const [note, setNote] = useState('Ajouté via scan');
-  const [receiptType, setReceiptType] = useState<ReceiptType>('ticket');
+  const [receiptType, setReceiptType] = useState<ReceiptType>(lockedType || 'ticket');
   const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
   const [ocrError, setOcrError] = useState<string | null>(null);
 
@@ -139,7 +144,7 @@ export default function ScannerModal() {
           if (merged.merchant) setTitle(merged.merchant);
           if (merged.total_amount) setAmount(String(merged.total_amount));
           if (merged.category) setCategory(merged.category);
-          if (data.receipt_type) setReceiptType(data.receipt_type as ReceiptType);
+          if (data.receipt_type && !lockedType) setReceiptType(data.receipt_type as ReceiptType);
           setOcrConfidence(data.confidence || (merged.rescued ? 0.5 : null));
           if (data.items && data.items.length) {
             setNote(`Articles: ${data.items.slice(0, 3).join(', ')}`);

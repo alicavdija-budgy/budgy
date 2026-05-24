@@ -28,6 +28,7 @@ import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src
 import { useTheme } from '../../src/hooks/useTheme';
 import type { ThemePalette } from '../../src/constants/palettes';
 import { useStore } from '../../src/stores/useStore';
+import { apiFetchJson } from '../../src/lib/network';
 import { CategoryIcon, getCategoryName } from '../../src/components/CategoryIcon';
 import { formatNumber, pct, predictMonthlyExpenses } from '../../src/utils/calculations';
 
@@ -134,7 +135,7 @@ Alertes actives: ${alerts.length}`;
     setIsLoading(true);
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
     try {
-      const response = await fetch(`${BACKEND_URL}/api/coach/chat`, {
+      const r = await apiFetchJson<{ response: string }>('/api/coach/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -142,13 +143,12 @@ Alertes actives: ${alerts.length}`;
           message: userMsg,
           financial_context: financialContext,
         }),
-      });
-      if (!response.ok) throw new Error('API error');
-      const data = await response.json();
+      }, { timeoutMs: 35000, retries: 1, silent: true });
+      if (!r.ok || !r.data?.response) throw new Error('API error');
       addChatMessage({
         id: `msg_${Date.now()}_ai`,
         role: 'assistant',
-        content: data.response,
+        content: r.data.response,
         timestamp: Date.now(),
       });
     } catch {

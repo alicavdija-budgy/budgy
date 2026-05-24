@@ -16,20 +16,9 @@ import { BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constan
 import { useTheme } from '../../src/hooks/useTheme';
 import { useStore } from '../../src/stores/useStore';
 import { Card, Button } from '../../src/components/ui';
+import { apiFetchJson, hasApiBaseUrl } from '../../src/lib/network';
 
-const API = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 const TAG = '[ai-optimizer]';
-
-// Fetch with timeout helper
-async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs = 30000): Promise<Response> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, { ...options, signal: controller.signal });
-  } finally {
-    clearTimeout(timer);
-  }
-}
 
 type Effort = 'easy' | 'medium' | 'hard';
 type Category =
@@ -104,7 +93,7 @@ export default function AIOptimizerScreen() {
   const yearlyIncome = monthlyIncome * 12;
 
   const analyze = async () => {
-    if (!API) {
+    if (!hasApiBaseUrl()) {
       setError('URL backend manquante');
       return;
     }
@@ -147,44 +136,28 @@ export default function AIOptimizerScreen() {
         })),
       };
 
-      console.log(`${TAG} POST ${API}/api/optimizer/analyze (signals=${(body.transactions||[]).length} txns)`);
-      if (!API) {
+      console.log(`${TAG} POST /api/optimizer/analyze (signals=${(body.transactions||[]).length} txns)`);
+      if (!hasApiBaseUrl()) {
         throw new Error('Configuration manquante : EXPO_PUBLIC_BACKEND_URL n\'est pas définie.');
       }
 
-      // Up to 2 attempts (1 retry on network failure)
-      let resp: Response | null = null;
-      let lastErr: any = null;
-      for (let attempt = 1; attempt <= 2; attempt++) {
-        try {
-          resp = await fetchWithTimeout(`${API}/api/optimizer/analyze`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
-          }, 35000);
-          console.log(`${TAG} attempt ${attempt} → HTTP ${resp.status}`);
-          if (resp.ok) break;
-          // Server returned an error code → don't retry
-          throw new Error(`Le serveur a retourné le code ${resp.status}.`);
-        } catch (err: any) {
-          lastErr = err;
-          const isNet = err?.name === 'AbortError' || /Network|fetch failed/i.test(err?.message || '');
-          console.warn(`${TAG} attempt ${attempt} failed:`, err?.message);
-          if (attempt === 1 && isNet) {
-            await new Promise((r) => setTimeout(r, 1500));
-            continue;
-          }
-          throw err;
-        }
+      // Centralized fetch with timeout + retry (35s, 1 retry) — never throws raw network errors
+      const r = await apiFetchJson<OptimizerResult>('/api/optimizer/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }, { timeoutMs: 35000, retries: 1, silent: true });
+      console.log(`${TAG} apiFetchJson → ok=${r.ok} status=${r.status} offline=${r.offline}`);
+      if (!r.ok || !r.data) {
+        throw new Error(r.offline ? 'offline' : `Le serveur a retourné le code ${r.status}.`);
       }
-      if (!resp) throw lastErr || new Error('Aucune réponse du serveur.');
-      const data: OptimizerResult = await resp.json();
+      const data = r.data;
       console.log(`${TAG} parsed result, ${data.proposals?.length || 0} proposals`);
       if (!data.success) throw new Error(data.error || 'Analyse échouée');
       setResult(data);
     } catch (e: any) {
       const isAbort = e?.name === 'AbortError';
-      const isNet = isAbort || /Network|fetch failed/i.test(e?.message || '');
+      const isNet = isAbort || /Network|fetch failed|offline/i.test(e?.message || '');
       const isStatus = /code (\d+)/i.test(e?.message || '');
       const statusMatch = (e?.message || '').match(/code (\d+)/i);
       const status = statusMatch ? parseInt(statusMatch[1]) : 0;

@@ -107,6 +107,14 @@ export interface Contract {
   urgent: boolean;
   category: string;
   createdAt: number;
+  // Optional rich fields (post-scan / wizard)
+  issuer?: string;
+  startDate?: string;
+  autoRenew?: boolean;
+  noticePeriod?: number;       // months
+  notes?: string;
+  photoUri?: string;            // local URI or data URL of scanned doc
+  documentId?: string;          // linked PersonalDocument id (Mon Classeur)
 }
 
 export interface Debt {
@@ -283,6 +291,7 @@ export interface ExpenseGroup {
   members: GroupMember[];
   currency: string;
   createdAt: number;
+  inviteCode?: string;          // 8-char invite code (local, optional)
 }
 
 // ─── Security ──────────────────────────────────────────

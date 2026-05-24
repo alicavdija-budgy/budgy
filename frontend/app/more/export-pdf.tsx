@@ -17,8 +17,7 @@ import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src
 import { useStore } from '../../src/stores/useStore';
 import { Card, Button, Badge } from '../../src/components/ui';
 import { formatNumber } from '../../src/utils/calculations';
-
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
+import { apiFetchJson, hasApiBaseUrl } from '../../src/lib/network';
 
 const periodLabel = (p: 'month' | 'quarter' | 'year' | 'all') => {
   const m = new Date().toLocaleDateString('fr-CH', { month: 'long', year: 'numeric' });
@@ -133,23 +132,16 @@ export default function ExportPDFScreen() {
 
       // ── 2. Try to enrich via backend if available (better template) ──
       // Non-blocking: if backend fails or is slow, we keep the local HTML.
-      if (BACKEND_URL) {
+      if (hasApiBaseUrl()) {
         try {
-          const ctrl = new AbortController();
-          const t = setTimeout(() => ctrl.abort(), 6000); // 6s budget
-          const resp = await fetch(`${BACKEND_URL}/api/export/pdf`, {
+          const r = await apiFetchJson<{ html?: string }>('/api/export/pdf', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
-            signal: ctrl.signal,
-          });
-          clearTimeout(t);
-          if (resp.ok) {
-            const data = await resp.json();
-            if (data?.html && data.html.length > 200) {
-              html = data.html;
-              console.log(`${TAG} backend HTML used (${html.length} chars)`);
-            }
+          }, { timeoutMs: 8000, retries: 0, silent: true });
+          if (r.ok && r.data?.html && r.data.html.length > 200) {
+            html = r.data.html;
+            console.log(`${TAG} backend HTML used (${html.length} chars)`);
           }
         } catch (netErr: any) {
           console.warn(`${TAG} backend unreachable, keeping local HTML:`, netErr?.message);

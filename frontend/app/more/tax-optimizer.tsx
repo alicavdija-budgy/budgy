@@ -18,8 +18,8 @@ import { useTheme } from '../../src/hooks/useTheme';
 import type { ThemePalette } from '../../src/constants/palettes';
 import { Card, Button } from '../../src/components/ui';
 import { useStore } from '../../src/stores/useStore';
-
-const API = process.env.EXPO_PUBLIC_BACKEND_URL || '';
+import { apiFetchJson } from '../../src/lib/network';
+import { humanErrorMessage } from '../../src/lib/errorSanitizer';
 
 const CANTONS = ['GE','VD','ZH','BE','FR','NE','VS','JU','TI','BS','LU','SG','AG','SO','GR','SH','ZG','SZ'];
 const FRANCHISES = [300, 500, 1000, 1500, 2000, 2500];
@@ -79,15 +79,20 @@ export default function TaxOptimizerScreen() {
         pillar_3a: parseFloat(form.pillar_3a) || 0,
         transport_costs: parseFloat(form.transport_costs) || 0,
       };
-      const r = await fetch(`${API}/api/tax/simulate`, {
+      const r = await apiFetchJson<any>('/api/tax/simulate', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-      });
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const data = await r.json();
-      setResult(data);
+      }, { timeoutMs: 35000, retries: 1, silent: true });
+      if (!r.ok || !r.data) {
+        const msg = r.offline
+          ? 'Mode hors-ligne. Connectez-vous à Internet pour simuler vos impôts.'
+          : 'Le simulateur est momentanément indisponible. Réessayez dans quelques instants.';
+        Alert.alert('Calcul impossible', msg);
+        return;
+      }
+      setResult(r.data);
       setStep('result');
     } catch (e: any) {
-      Alert.alert('Erreur', e?.message || 'Impossible de calculer');
+      Alert.alert('Erreur', humanErrorMessage(e, 'Impossible de calculer'));
     } finally {
       setLoading(false);
     }

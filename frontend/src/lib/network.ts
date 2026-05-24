@@ -22,7 +22,7 @@ export interface NetworkState {
 }
 
 export interface SafeFetchOptions {
-  timeoutMs?: number;         // default 20000 (covers cold-starts on serverless preview backends)
+  timeoutMs?: number;         // default 35000 (covers cold-starts on serverless preview backends)
   retries?: number;           // default 1
   retryBackoffMs?: number;    // default 600
   silent?: boolean;           // suppress console.warn
@@ -170,7 +170,7 @@ export async function safeFetch<T = any>(
   opts?: SafeFetchOptions
 ): Promise<SafeFetchResult<T>> {
   const {
-    timeoutMs = 20000,
+    timeoutMs = 35000,
     retries = 1,
     retryBackoffMs = 600,
     silent = false,

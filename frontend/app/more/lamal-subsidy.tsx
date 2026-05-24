@@ -26,8 +26,7 @@ import { useStore } from '../../src/stores/useStore';
 import { CANTONS, type CantonCode } from '../../src/data/swiss-data';
 import { Card, Button } from '../../src/components/ui';
 import { formatNumber } from '../../src/utils/calculations';
-
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:8001';
+import { apiFetchJson } from '../../src/lib/network';
 
 const HOUSEHOLD_OPTIONS = [
   { id: 'single', emoji: '👤', label: 'Célibataire' },
@@ -60,7 +59,7 @@ export default function LamalSubsidyScreen() {
     setLoading(true);
     setResult(null);
     try {
-      const res = await fetch(`${BACKEND_URL}/api/lamal/subsidy`, {
+      const r = await apiFetchJson<any>('/api/lamal/subsidy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -70,9 +69,8 @@ export default function LamalSubsidyScreen() {
           children,
           monthly_premium: prem,
         }),
-      });
-      const data = await res.json();
-      setResult(data);
+      }, { timeoutMs: 35000, retries: 1, silent: true });
+      if (r.ok && r.data) setResult(r.data);
     } catch (e) {
       // ignore
     } finally {

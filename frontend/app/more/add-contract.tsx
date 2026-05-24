@@ -26,6 +26,7 @@ import { useStore } from '../../src/stores/useStore';
 import { Button } from '../../src/components/ui';
 import { EXPENSE_CATEGORIES } from '../../src/data/swiss-data';
 import { scheduleDeadlineRemindersForEntity } from '../../src/services/notifications';
+import type { DocumentCategory } from '../../src/types';
 
 const CONTRACT_TYPES = [
   { id: 'abonnements', label: 'Téléphone / Internet', emoji: '📱' },
@@ -63,7 +64,7 @@ export default function AddContractScreen() {
     source?: string; // 'scan' | 'pdf' | 'manual' | 'email'
   }>();
 
-  const { addContract } = useStore();
+  const { addContract, addDocument } = useStore();
   const source = params.source || 'manual';
   const hasExtractedData = source !== 'manual' && (
     !!params.title || !!params.issuer || !!params.amount || !!params.dueDate
@@ -97,6 +98,31 @@ export default function AddContractScreen() {
     try {
       const id = `ct_${Date.now()}`;
       const expirationDate = dueDate.trim() || '—';
+      const noticeP = parseInt(noticePeriod) || 0;
+
+      // Save linked document into Mon Classeur if we have a photo
+      let documentId: string | undefined;
+      if (params.photoUri) {
+        documentId = `doc_${Date.now()}`;
+        const docCategory: DocumentCategory =
+          category === 'sante' ? 'health'
+          : category === 'assurances' ? 'insurance'
+          : category === 'logement' ? 'other'
+          : 'contracts';
+        addDocument({
+          id: documentId,
+          title: t,
+          category: docCategory,
+          imageBase64: params.photoUri,
+          pages: [params.photoUri],
+          tags: [issuer.trim(), category, 'contrat'].filter(Boolean),
+          note: notes.trim() || undefined,
+          expiresAt: toISODate(expirationDate) || undefined,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        });
+      }
+
       addContract({
         id,
         title: t,
@@ -105,7 +131,15 @@ export default function AddContractScreen() {
         urgent: false,
         category,
         createdAt: Date.now(),
+        issuer: issuer.trim() || undefined,
+        startDate: startDate.trim() || undefined,
+        autoRenew,
+        noticePeriod: noticeP > 0 ? noticeP : undefined,
+        notes: notes.trim() || undefined,
+        photoUri: params.photoUri,
+        documentId,
       });
+
       // Schedule J-90/J-30/J-7/J-1 reminders if a valid due date is detected
       const iso = toISODate(expirationDate);
       if (iso) {
@@ -117,12 +151,20 @@ export default function AddContractScreen() {
         }).catch(() => {});
       }
       try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
+      const msg = documentId
+        ? (iso
+            ? 'Document ajouté à Mon Classeur. Rappels d\'échéance programmés (J-90, J-30, J-7 et J-1).'
+            : 'Document ajouté à Mon Classeur et à vos contrats.')
+        : (iso
+            ? 'Rappels d\'échéance programmés (J-90, J-30, J-7 et J-1).'
+            : 'Contrat ajouté à votre classeur.');
       Alert.alert(
         'Contrat ajouté ✓',
-        iso
-          ? 'Rappels d\'échéance programmés (J-90, J-30, J-7 et J-1).'
-          : 'Contrat ajouté à votre classeur.',
-        [{ text: 'OK', onPress: () => router.back() }]
+        msg,
+        [{
+          text: 'Voir dans Mon Classeur',
+          onPress: () => router.replace('/more/documents' as any),
+        }]
       );
     } catch (e: any) {
       Alert.alert('Erreur', e?.message || 'Sauvegarde impossible.');

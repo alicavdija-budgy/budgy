@@ -16,9 +16,9 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_BACKEND_URL": "https://chf-guardian-wallet.preview.emergentagent.com",
-        "EXPO_PUBLIC_SUPABASE_URL": "https://supabase.delami.online",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc3NzQwNzEyMCwiZXhwIjo0OTMzMDgwNzIwLCJyb2xlIjoiYW5vbiJ9.rW1RZgd-Pq77gotKPXhdQeILhTUxB2kWsyVAMx6m39M"
+        "EXPO_PUBLIC_BACKEND_URL": "https://api.budgy.ch",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://supabase.budgy.ch",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "REPLACE_WITH_SUPABASE_BUDGY_CH_ANON_JWT"
       }
     },
     "preview": {
@@ -32,9 +32,9 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_BACKEND_URL": "https://chf-guardian-wallet.preview.emergentagent.com",
-        "EXPO_PUBLIC_SUPABASE_URL": "https://supabase.delami.online",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc3NzQwNzEyMCwiZXhwIjo0OTMzMDgwNzIwLCJyb2xlIjoiYW5vbiJ9.rW1RZgd-Pq77gotKPXhdQeILhTUxB2kWsyVAMx6m39M"
+        "EXPO_PUBLIC_BACKEND_URL": "https://api.budgy.ch",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://supabase.budgy.ch",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "REPLACE_WITH_SUPABASE_BUDGY_CH_ANON_JWT"
       }
     },
     "production": {
@@ -49,9 +49,9 @@
         "buildType": "app-bundle"
       },
       "env": {
-        "EXPO_PUBLIC_BACKEND_URL": "https://chf-guardian-wallet.preview.emergentagent.com",
-        "EXPO_PUBLIC_SUPABASE_URL": "https://supabase.delami.online",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc3NzQwNzEyMCwiZXhwIjo0OTMzMDgwNzIwLCJyb2xlIjoiYW5vbiJ9.rW1RZgd-Pq77gotKPXhdQeILhTUxB2kWsyVAMx6m39M"
+        "EXPO_PUBLIC_BACKEND_URL": "https://api.budgy.ch",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://supabase.budgy.ch",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "REPLACE_WITH_SUPABASE_BUDGY_CH_ANON_JWT"
       }
     }
   },

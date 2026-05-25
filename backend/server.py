@@ -1,12 +1,20 @@
 """
-GUARDIAN MONEY CHF - Backend API
-Coach IA, PDF Export, Family Mode, Notifications
+BUDGY — Backend API (self-hosted production)
+
+Runs on Coolify behind an HTTPS reverse proxy at https://api.budgy.ch.
+Uses LiteLLM (OpenAI / Anthropic / Gemini) directly — no Emergent-hosted
+services. Persists IAP state in self-hosted Supabase at supabase.budgy.ch.
+
+Endpoints prefixed with /api/* for backwards-compat with the mobile app.
+A `/health` endpoint (no /api prefix) is also exposed for Coolify health
+checks and uptime monitoring.
 """
 
 import os
 import uuid
 import random
 import string
+import logging
 from datetime import datetime, timezone
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
@@ -16,35 +24,101 @@ from typing import Optional
 import json
 import re
 import base64
-from emergentintegrations.llm.chat import ImageContent
-from emergentintegrations.llm.chat import LlmChat, UserMessage
 
+# Load .env BEFORE importing modules that read os.getenv at import time
 load_dotenv()
 
-EMERGENT_LLM_KEY = os.getenv("EMERGENT_LLM_KEY", "")
+# Self-hosted LLM client (LiteLLM under the hood, no Emergent proxy)
+from llm_client import ImageContent, LlmChat, UserMessage  # noqa: E402
 
-app = FastAPI(title="Budgy API")
+# ─────────────────────────────────────────────────────────────
+# Logging — structured, prod-friendly
+# ─────────────────────────────────────────────────────────────
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+logging.basicConfig(
+    level=LOG_LEVEL,
+    format="%(asctime)s [%(name)s] %(levelname)s %(message)s",
+)
+log = logging.getLogger("budgy")
+
+# ─────────────────────────────────────────────────────────────
+# Env / Config
+# ─────────────────────────────────────────────────────────────
+APP_VERSION = os.getenv("APP_VERSION", "3.7.16")
+APP_ENV = os.getenv("APP_ENV", "production")  # production | staging | dev
+
+# LLM key kept for backwards-compat with code paths that still check it.
+# `llm_client` resolves provider-specific keys (OPENAI_API_KEY etc.) directly.
+EMERGENT_LLM_KEY = (
+    os.getenv("OPENAI_API_KEY")
+    or os.getenv("ANTHROPIC_API_KEY")
+    or os.getenv("GEMINI_API_KEY")
+    or os.getenv("GOOGLE_API_KEY")
+    or os.getenv("EMERGENT_LLM_KEY")  # legacy dev fallback
+    or ""
+)
+
+# Comma-separated list of allowed origins, e.g.
+# "https://budgy.ch,https://www.budgy.ch,https://api.budgy.ch,budgy://,capacitor://localhost"
+_DEFAULT_ORIGINS = (
+    "https://budgy.ch,"
+    "https://www.budgy.ch,"
+    "https://api.budgy.ch,"
+    "budgy://,"
+    "capacitor://localhost,"
+    "http://localhost:3000,"
+    "http://localhost:8081"
+)
+_CORS_ENV = os.getenv("CORS_ALLOWED_ORIGINS", _DEFAULT_ORIGINS)
+ALLOWED_ORIGINS = [o.strip() for o in _CORS_ENV.split(",") if o.strip()]
+
+# Mobile schemes / arbitrary native bundle IDs can't be matched by a literal
+# string. We allow them via regex so the WKWebView / native scheme works.
+_CORS_REGEX = os.getenv(
+    "CORS_ALLOWED_ORIGIN_REGEX",
+    r"^(https://([a-z0-9-]+\.)*budgy\.ch|budgy://.*|capacitor://.*)$",
+)
+
+app = FastAPI(title="Budgy API", version=APP_VERSION)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=_CORS_REGEX,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["X-Request-Id"],
+    max_age=3600,
 )
 
-# In-memory stores (production would use MongoDB/Supabase)
+log.info("[startup] Budgy API v%s env=%s", APP_VERSION, APP_ENV)
+log.info("[startup] CORS origins: %s", ALLOWED_ORIGINS)
+log.info("[startup] CORS regex: %s", _CORS_REGEX)
+
+# In-memory stores (chat history; family/alerts persist via Supabase when configured)
 chat_sessions: dict[str, LlmChat] = {}
 family_groups: dict[str, dict] = {}  # code -> { owner, members, name }
 alerts_store: dict[str, list] = {}   # user_id -> [alerts]
 
 
 # ──────────────────────────────────────────────────
-# Health Check
+# Health Checks
 # ──────────────────────────────────────────────────
+@app.get("/health")
+async def health_root():
+    """Coolify / uptime probe — kept under root path (no /api prefix)."""
+    return {
+        "status": "ok",
+        "service": "budgy-api",
+        "version": APP_VERSION,
+        "env": APP_ENV,
+    }
+
+
 @app.get("/api/health")
 async def health_check():
-    return {"status": "ok", "version": "3.4", "app": "Budgy"}
+    return {"status": "ok", "version": APP_VERSION, "app": "Budgy", "env": APP_ENV}
 
 
 # ──────────────────────────────────────────────────

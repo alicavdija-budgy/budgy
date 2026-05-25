@@ -1,0 +1,19 @@
+# Nixpacks build manifest — used when Coolify falls back to Nixpacks
+# instead of the Dockerfile. The Dockerfile remains the canonical build.
+[phases.setup]
+nixPkgs = ["python311", "gcc", "libffi", "openssl"]
+
+[phases.install]
+cmds = [
+  "python -m venv /opt/venv",
+  ". /opt/venv/bin/activate && pip install --upgrade pip wheel setuptools",
+  ". /opt/venv/bin/activate && pip install -r requirements.txt",
+]
+
+[start]
+cmd = ". /opt/venv/bin/activate && uvicorn server:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1 --proxy-headers --forwarded-allow-ips='*'"
+
+[variables]
+PYTHONUNBUFFERED = "1"
+PORT = "8000"
+HOST = "0.0.0.0"

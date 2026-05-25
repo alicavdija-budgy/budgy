@@ -15,6 +15,12 @@ export interface HumanizedError {
 }
 
 const TECH_PATTERNS: { match: RegExp; out: HumanizedError }[] = [
+  // Coolify mis-routing (api.budgy.ch pointing to Coolify dashboard instead of the app)
+  { match: /coolify\.io|coolify_dashboard|"docs":"https?:\/\/coolify\.io/i,
+    out: {
+      title: 'Service indisponible',
+      message: 'Notre service est en cours de redémarrage. Réessayez dans quelques minutes. Si le problème persiste, contactez le support.',
+    } },
   // LLM / OpenAI errors
   { match: /unsupported image format|invalid_image_format|image format.*not supported/i,
     out: {
@@ -22,10 +28,10 @@ const TECH_PATTERNS: { match: RegExp; out: HumanizedError }[] = [
       message: 'Ce fichier n\'a pas pu être analysé. Le PDF original a été conservé et vous pouvez ajouter manuellement.',
       fallback: 'Saisir manuellement',
     } },
-  { match: /litellm|openai\.|openaiexception|model_not_found|rate_?limit|insufficient_quota|api[\s_-]?key/i,
+  { match: /litellm|openai\.|openaiexception|model_not_found|rate_?limit|insufficient_quota|api[\s_-]?key|authentication.?error/i,
     out: {
       title: 'Service IA momentanément indisponible',
-      message: 'Le service d\'analyse IA est temporairement saturé. Réessayez dans quelques minutes ou ajoutez manuellement.',
+      message: 'L\'analyse IA n\'a pas pu aboutir. Réessayez dans quelques instants ou saisissez manuellement les informations.',
       fallback: 'Saisir manuellement',
     } },
   // Network / HTTP

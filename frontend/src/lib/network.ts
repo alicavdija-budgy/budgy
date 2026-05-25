@@ -315,23 +315,27 @@ export function describeError(
 // In dev: uses the .env value. In TestFlight/production: uses the value
 // embedded in the EAS build profile (`eas.json > build.production.env.EXPO_PUBLIC_BACKEND_URL`).
 //
-// Fallback: empty string → caller should detect missing config rather than
-// silently hit localhost:8001 (which doesn't exist on iPhone).
+// Safety net: if EXPO_PUBLIC_BACKEND_URL is missing at runtime (which should
+// never happen in EAS builds), default to the production VPS. This guarantees
+// no native build ever silently hits localhost.
 // ──────────────────────────────────────────────────────────────────────────
+const DEFAULT_PRODUCTION_API = 'https://api.budgy.ch';
+
 export function getApiBaseUrl(): string {
-  const url = (process.env.EXPO_PUBLIC_BACKEND_URL as string | undefined) || '';
+  const raw = (process.env.EXPO_PUBLIC_BACKEND_URL as string | undefined) || '';
+  const url = raw.trim() || DEFAULT_PRODUCTION_API;
   return url.replace(/\/$/, ''); // strip trailing slash
 }
 
-/** Returns true if a base URL is configured at runtime. */
+/** Returns true if a base URL is configured at runtime. Always true now (fallback). */
 export function hasApiBaseUrl(): boolean {
   return getApiBaseUrl().length > 0;
 }
 
 /**
  * Convenience: full apiFetchJson(path, init?) — relative path is appended to
- * the configured base URL, and uses safeFetchJson defaults (20s timeout, 2
- * retries, AbortController, NetInfo gating). Use this for ALL backend calls
+ * the configured base URL, and uses safeFetchJson defaults (35s timeout, 1
+ * retry, AbortController, NetInfo gating). Use this for ALL backend calls
  * to eliminate URL-string-concat bugs.
  */
 export async function apiFetchJson<T = unknown>(
@@ -340,14 +344,6 @@ export async function apiFetchJson<T = unknown>(
   options?: SafeFetchOptions
 ): Promise<SafeFetchResult<T>> {
   const base = getApiBaseUrl();
-  if (!base) {
-    return {
-      ok: false,
-      status: 0,
-      offline: false,
-      error: 'API base URL not configured (EXPO_PUBLIC_BACKEND_URL is empty in this build).',
-    } as SafeFetchResult<T>;
-  }
   const url = path.startsWith('http') ? path : `${base}${path.startsWith('/') ? '' : '/'}${path}`;
   return safeFetchJson<T>(url, init, options);
 }

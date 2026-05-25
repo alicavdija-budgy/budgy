@@ -199,7 +199,7 @@ export async function getAvailableReceipts(): Promise<IapPurchaseReceipt[]> {
 import { safeFetch } from '../lib/network';
 
 const BACKEND_URL =
-  process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:8001';
+  process.env.EXPO_PUBLIC_BACKEND_URL || 'https://api.budgy.ch';
 
 export type SubscriptionState =
   | 'FREE'

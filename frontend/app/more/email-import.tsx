@@ -37,7 +37,7 @@ try {
   useShareIntent = require('expo-share-intent').useShareIntent;
 } catch {}
 
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:8001';
+const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://api.budgy.ch';
 
 type ImportMethod = 'share' | 'file' | 'photo' | 'paste';
 

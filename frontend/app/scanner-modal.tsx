@@ -46,7 +46,7 @@ import { useTranslation } from '../src/hooks/useTranslation';
 import { mergeOcrWithFallback } from '../src/lib/ocrFallback';
 
 const BACKEND_URL =
-  process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:8001';
+  process.env.EXPO_PUBLIC_BACKEND_URL || 'https://api.budgy.ch';
 
 type Stage = 'permission' | 'camera' | 'ocr' | 'edit' | 'saving';
 

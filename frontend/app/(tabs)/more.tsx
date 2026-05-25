@@ -77,10 +77,9 @@ export default function MoreScreen() {
     },
     {
       title: t('more.sectionShare'),
-      emoji: '👥',
+      emoji: '👨‍👩‍👧‍👦',
       items: [
-        { id: 'groups', title: t('more.groups'), subtitle: t('more.groupsSub'), icon: 'people', color: C.cyan, route: '/more/groups' },
-        { id: 'family', title: t('more.family'), icon: 'home', color: C.pink, route: '/more/family' },
+        { id: 'family', title: 'LaFamille', subtitle: 'Partagez dépenses, budgets et objectifs', icon: 'home', color: C.pink, route: '/more/family' },
       ],
     },
     {
@@ -97,7 +96,7 @@ export default function MoreScreen() {
       items: [
         { id: 'subscription', title: t('more.subscription'), subtitle: isPro ? (isTrial ? t('more.subscriptionTrial', { d: new Date(trialEndsAt!).toLocaleDateString() }) : t('more.subscriptionActive')) : t('more.subscriptionFree'), icon: 'flash', color: C.secondary, route: '/paywall', badge: isPro ? 'PRO' : undefined },
         { id: 'settings', title: t('more.preferences'), subtitle: t('more.preferencesSub'), icon: 'settings', color: C.textSecondary, route: '/more/settings' },
-        { id: 'debug-network', title: 'Diagnostic réseau', subtitle: 'Vérifier la connexion backend', icon: 'pulse', color: C.warning, route: '/more/debug-network' },
+        ...(__DEV__ ? [{ id: 'debug-network', title: 'Diagnostic réseau', subtitle: 'Vérifier la connexion backend', icon: 'pulse' as const, color: C.warning, route: '/more/debug-network' }] : []),
         { id: 'legal', title: t('more.legal'), subtitle: t('more.legalSub'), icon: 'shield-half', color: C.info, route: '/more/legal' },
       ],
     },

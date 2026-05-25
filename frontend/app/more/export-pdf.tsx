@@ -153,15 +153,15 @@ export default function ExportPDFScreen() {
       const { uri } = await Print.printToFileAsync({ html, base64: false });
       console.log(`${TAG} PDF generated at`, uri);
 
-      // ── 4. Native share ──
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(uri, {
-          mimeType: 'application/pdf',
-          dialogTitle: titleOverride,
-          UTI: 'com.adobe.pdf',
-        });
-      } else {
-        Alert.alert('PDF généré', `Fichier sauvegardé : ${uri}`);
+      // ── 4. Native share (safeShareFile copies to documentDirectory first) ──
+      const { safeShareFile } = await import('../../src/lib/safeShare');
+      const r = await safeShareFile(uri, {
+        mime: 'application/pdf',
+        dialogTitle: titleOverride,
+        name: titleOverride,
+      });
+      if (!r.ok && r.error) {
+        Alert.alert('Partage impossible', r.error);
       }
 
       setPdfReady(true);

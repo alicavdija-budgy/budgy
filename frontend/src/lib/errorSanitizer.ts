@@ -15,6 +15,13 @@ export interface HumanizedError {
 }
 
 const TECH_PATTERNS: { match: RegExp; out: HumanizedError }[] = [
+  // iOS share / file access
+  { match: /shareasync.?failed|no access to provided file|file does not exist|cannot read property.*path/i,
+    out: {
+      title: 'Fichier inaccessible',
+      message: 'Impossible d\'accéder au fichier partagé. Réessayez depuis Fichiers ou Mail.',
+      fallback: 'Réessayer',
+    } },
   // Coolify mis-routing (api.budgy.ch pointing to Coolify dashboard instead of the app)
   { match: /coolify\.io|coolify_dashboard|"docs":"https?:\/\/coolify\.io/i,
     out: {

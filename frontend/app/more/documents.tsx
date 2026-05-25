@@ -348,9 +348,14 @@ ${pageDataUrls.map((src, i) => `
       return;
     }
     try {
-      const ok = await Sharing.isAvailableAsync();
-      if (!ok) { Alert.alert('Partage indisponible'); return; }
-      await Sharing.shareAsync(doc.pdfUri, { mimeType: 'application/pdf', dialogTitle: doc.title });
+      const { safeShareFile } = await import('../../src/lib/safeShare');
+      const r = await safeShareFile(doc.pdfUri, {
+        mimeType: 'application/pdf' as any,
+        mime: 'application/pdf',
+        name: doc.title || 'document',
+        dialogTitle: doc.title,
+      } as any);
+      if (!r.ok && r.error) Alert.alert('Partage impossible', r.error);
     } catch (e: any) {
       Alert.alert('Erreur', e?.message || 'Partage impossible');
     }

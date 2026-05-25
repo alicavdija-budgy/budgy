@@ -76,18 +76,29 @@ export default function ImportInvoiceScreen() {
       // Files / images shared
       else if (intent.files && intent.files.length > 0) {
         const f = intent.files[0];
+        // CRITICAL: iOS Share Sheet hands us a tmp URI that may be revoked
+        // any second. Copy to documentDirectory before doing anything else.
+        const { persistIncomingFile } = await import('../../src/lib/safeShare');
+        const localUri = await persistIncomingFile(f.path, {
+          name: f.fileName || undefined,
+          mime: f.mimeType || undefined,
+        });
         if (f.mimeType?.startsWith('image/')) {
-          await parseImageFile(f.path);
+          await parseImageFile(localUri);
         } else if (f.mimeType === 'application/pdf') {
-          // For PDFs we treat them like images (OCR first page) — quick MVP path
           Alert.alert(
             'Fichier PDF reçu',
-            `${f.fileName || 'Document'}.pdf — Le PDF sera traité par OCR sur la première page.`,
-            [{ text: 'Continuer', onPress: () => parseImageFile(f.path) }],
+            `${f.fileName || 'Document'} — Le PDF sera traité par OCR sur la première page.`,
+            [{ text: 'Continuer', onPress: () => parseImageFile(localUri) }],
           );
         } else if (f.mimeType?.startsWith('text/')) {
-          const text = await readAsText(f.path);
+          const text = await readAsText(localUri);
           await parseEmailText(text, f.fileName || '');
+        } else {
+          Alert.alert(
+            'Format non reconnu',
+            'Ce fichier n\'a pas pu être analysé. Essayez avec une photo ou un PDF.',
+          );
         }
       }
       // URL shared
@@ -98,7 +109,11 @@ export default function ImportInvoiceScreen() {
         );
       }
     } catch (e: any) {
-      Alert.alert('Import partagé', e?.message || 'Impossible de traiter le contenu.');
+      const { humanErrorMessage } = await import('../../src/lib/errorSanitizer');
+      Alert.alert(
+        'Import partagé',
+        humanErrorMessage(e, 'Impossible d\'accéder au fichier partagé. Réessayez depuis Fichiers ou Mail.'),
+      );
     } finally {
       shareIntent?.resetShareIntent?.();
     }

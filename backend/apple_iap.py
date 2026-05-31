@@ -63,17 +63,22 @@ class IAPConfig:
     @classmethod
     def from_env(cls) -> "IAPConfig":
         c = cls()
-        c.bundle_id = _env("APPLE_BUNDLE_ID")
+        # Bundle ID — fallback to the canonical Budgy bundle if not set,
+        # since the value is public anyway (it's in the App Store).
+        c.bundle_id = _env("APPLE_BUNDLE_ID") or "com.budgy.ch.budgy"
         c.issuer_id = _env("APPLE_ISSUER_ID")
         c.key_id = _env("APPLE_KEY_ID")
-        # Accept both literal newlines and escaped \n in the .env value
-        raw = _env("APPLE_PRIVATE_KEY_P8")
+        # Accept both names: APPLE_PRIVATE_KEY_P8 (canonical) and
+        # APPLE_PRIVATE_KEY (shorter, sometimes used in Coolify dashboards).
+        raw = _env("APPLE_PRIVATE_KEY_P8") or _env("APPLE_PRIVATE_KEY")
         if raw and "\\n" in raw and "BEGIN" in raw and "\n" not in raw.split("BEGIN", 1)[1][:50]:
             raw = raw.replace("\\n", "\n")
         c.private_key_pem = raw
-        c.product_monthly = _env("APPLE_PRODUCT_ID_MONTHLY")
-        c.product_yearly = _env("APPLE_PRODUCT_ID_YEARLY")
-        c.use_sandbox = _env("APPLE_USE_SANDBOX", "true").lower() in ("1", "true", "yes")
+        # Product IDs — fallback to canonical IDs to keep IAP usable even if
+        # the operator forgot to set these (still overridable from Coolify).
+        c.product_monthly = _env("APPLE_PRODUCT_ID_MONTHLY") or "com.budgy.ch.budgy.monthly"
+        c.product_yearly = _env("APPLE_PRODUCT_ID_YEARLY") or "com.budgy.ch.budgy.annual"
+        c.use_sandbox = _env("APPLE_USE_SANDBOX", "false").lower() in ("1", "true", "yes")
         c.webhook_secret = _env("IAP_WEBHOOK_SECRET")
         c.shared_secret = _env("APPLE_SHARED_SECRET")
         return c

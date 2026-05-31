@@ -121,6 +121,38 @@ async def health_check():
     return {"status": "ok", "version": APP_VERSION, "app": "Budgy", "env": APP_ENV}
 
 
+@app.get("/api/config/status")
+async def config_status():
+    """
+    Non-secret env diagnostic — confirms which optional integrations are
+    configured WITHOUT ever exposing the actual values. Used by the operator
+    to validate Coolify deployment without grepping logs.
+    """
+    def state(name: str, *aliases: str) -> str:
+        for n in (name, *aliases):
+            if os.getenv(n):
+                return "configured"
+        return "missing"
+
+    return {
+        "app_env": APP_ENV,
+        "version": APP_VERSION,
+        "openai": state("OPENAI_API_KEY"),
+        "anthropic": state("ANTHROPIC_API_KEY"),
+        "gemini": state("GEMINI_API_KEY", "GOOGLE_API_KEY"),
+        "supabase_url": state("SUPABASE_URL"),
+        "supabase_service_role": state("SUPABASE_SERVICE_ROLE_KEY"),
+        "apple_bundle_id": state("APPLE_BUNDLE_ID"),
+        "apple_issuer_id": state("APPLE_ISSUER_ID"),
+        "apple_key_id": state("APPLE_KEY_ID"),
+        "apple_private_key": state("APPLE_PRIVATE_KEY_P8", "APPLE_PRIVATE_KEY"),
+        "apple_shared_secret": state("APPLE_SHARED_SECRET"),
+        "apple_product_monthly": state("APPLE_PRODUCT_ID_MONTHLY"),
+        "apple_product_yearly": state("APPLE_PRODUCT_ID_YEARLY"),
+        "cors_origins_count": len(ALLOWED_ORIGINS),
+    }
+
+
 # ──────────────────────────────────────────────────
 # COACH IA - GPT-4o-mini powered financial advisor
 # ──────────────────────────────────────────────────

@@ -1,0 +1,41 @@
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local dev artefacts
+.metro-cache/
+.expo/
+.expo-shared/
+node_modules/
+dist/
+web-build/
+build/
+
+# Logs
+*.log
+logs/
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Secrets
+.env
+.env.*
+
+# Yarn artefacts (we are npm-only)
+yarn.lock
+.yarn/
+.yarnrc.yml
+
+# Tests
+__snapshots__/
+*.spec.ts
+*.test.ts
+
+# Docs
+README.md
+DEPLOYMENT.md

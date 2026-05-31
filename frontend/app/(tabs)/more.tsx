@@ -79,7 +79,7 @@ export default function MoreScreen() {
       title: t('more.sectionShare'),
       emoji: '👨‍👩‍👧‍👦',
       items: [
-        { id: 'family', title: 'LaFamille', subtitle: 'Partagez dépenses, budgets et objectifs', icon: 'home', color: C.pink, route: '/more/family' },
+        { id: 'family', title: 'Famille & Amis', subtitle: 'Dépenses, budgets, objectifs et contrats partagés', icon: 'people-circle', color: C.pink, route: '/more/family' },
       ],
     },
     {

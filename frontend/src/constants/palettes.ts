@@ -68,6 +68,11 @@ export interface ThemePalette {
   orange: string;
   teal: string;
   cyan: string;
+  // Premium gold tokens — used ONLY on Pro / Premium / paid surfaces
+  gold: string;
+  goldSoft: string;
+  goldDark: string;
+  goldGlow: string;
   // Gradients
   gradientPrimary: readonly [string, string, ...string[]];
   gradientSuccess: readonly [string, string];
@@ -127,6 +132,12 @@ export const darkColors: ThemePalette = {
   textTertiary: '#6B7280',
   textMuted: '#4B5563',
   placeholder: '#6B7280',
+
+  // Premium gold — used ONLY on Pro / paid surfaces (badges, prices, borders)
+  gold: '#D4AF37',
+  goldSoft: '#F2D16B',
+  goldDark: '#8C6A1F',
+  goldGlow: 'rgba(212, 175, 55, 0.22)',
 
   purple: '#8B5CF6',
   pink: '#EC4899',
@@ -206,6 +217,12 @@ export const lightColors: ThemePalette = {
   orange: '#EA580C',
   teal: '#0D9488',
   cyan: '#0891B2',
+
+  // Premium gold — used ONLY on Pro / paid surfaces
+  gold: '#B8860B',         // slightly darker for AA contrast on light
+  goldSoft: '#D4AF37',
+  goldDark: '#8C6A1F',
+  goldGlow: 'rgba(184, 134, 11, 0.18)',
 
   // Gradients — preserve Budgy identity, tuned for light bg
   gradientPrimary: ['#10B981', '#06B6D4'],

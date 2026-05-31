@@ -167,6 +167,11 @@ export default function RootLayout() {
               gestureEnabled: true,
             }}
           />
+          <Stack.Screen
+            name="quick-add"
+            options={{ headerShown: false, presentation: 'modal', animation: 'slide_from_bottom' }}
+          />
+
         </Stack>
       </LockGate>
     </SafeAreaProvider>

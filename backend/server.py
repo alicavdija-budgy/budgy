@@ -44,7 +44,7 @@ log = logging.getLogger("budgy")
 # ─────────────────────────────────────────────────────────────
 # Env / Config
 # ─────────────────────────────────────────────────────────────
-APP_VERSION = os.getenv("APP_VERSION", "3.7.23")
+APP_VERSION = os.getenv("APP_VERSION", "3.7.24")
 APP_ENV = os.getenv("APP_ENV", "production")  # production | staging | dev
 
 # LLM key kept for backwards-compat with code paths that still check it.

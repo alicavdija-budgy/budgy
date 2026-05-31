@@ -51,6 +51,7 @@ export default function MoreScreen() {
         { id: 'ai-optimizer', title: t('more.aiOptimizer'), subtitle: t('more.aiOptimizerSub'), icon: 'sparkles', color: C.pink, route: '/more/ai-optimizer', badge: 'NEW', pro: true, feature: 'ai' },
         { id: 'savings-radar', title: 'Radar d\'économies', subtitle: 'Identifiez les postes où économiser, sans pub ni partenaire', icon: 'radio', color: C.gold, route: '/more/savings-radar', badge: 'GOLD' },
         { id: 'calendar', title: 'Calendrier financier', subtitle: 'Tous vos flux futurs, revenus et échéances', icon: 'calendar', color: C.info, route: '/more/financial-calendar' },
+        { id: 'budgy-score', title: 'Score Budgy', subtitle: 'Mesurez et améliorez votre santé financière', icon: 'speedometer', color: C.gold, route: '/more/budgy-score', badge: 'NEW' },
         { id: 'predict', title: t('more.predict'), subtitle: t('more.predictSub'), icon: 'analytics', color: C.secondary, route: '/more/predict', pro: true, feature: 'predict' },
         { id: 'tax', title: t('more.taxOpt'), subtitle: t('more.taxOptSub'), icon: 'calculator', color: C.primaryLight, route: '/more/tax-optimizer', pro: true, feature: 'tax' },
       ],

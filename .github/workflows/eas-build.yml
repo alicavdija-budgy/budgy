@@ -1,0 +1,85 @@
+name: EAS Build (iOS & Android)
+
+# Build native binaries directly from GitHub — no Mac required.
+# Trigger manually via the "Actions" tab > "Run workflow" with the desired
+# platform and profile.
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 'Platform to build'
+        required: true
+        default: 'ios'
+        type: choice
+        options: [ios, android, all]
+      profile:
+        description: 'EAS build profile'
+        required: true
+        default: 'production'
+        type: choice
+        options: [development, preview, production]
+      submit:
+        description: 'Auto-submit to TestFlight / Play Store after build'
+        required: true
+        default: 'false'
+        type: choice
+        options: ['true', 'false']
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/app.json'   # only re-build on version bumps
+
+jobs:
+  build:
+    name: "EAS Build (${{ github.event.inputs.platform || 'ios' }}, ${{ github.event.inputs.profile || 'production' }})"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./frontend
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Setup EAS CLI
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Verify EAS / Expo project
+        run: |
+          npx expo --version
+          npx eas --version
+          npx eas whoami
+
+      - name: EAS build
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          npx eas build \
+            --platform "${{ github.event.inputs.platform || 'ios' }}" \
+            --profile "${{ github.event.inputs.profile || 'production' }}" \
+            --non-interactive \
+            --no-wait
+
+      - name: EAS submit (optional)
+        if: ${{ github.event.inputs.submit == 'true' }}
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          npx eas submit \
+            --platform "${{ github.event.inputs.platform || 'ios' }}" \
+            --latest \
+            --non-interactive

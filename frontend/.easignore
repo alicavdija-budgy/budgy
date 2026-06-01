@@ -1,0 +1,51 @@
+# .easignore — controls what `eas build` uploads to the cloud.
+# Path is relative to the *project root* configured in EAS dashboard.
+# Since we set "Base directory" = `frontend`, this file lives in `frontend/`
+# and only needs to exclude things INSIDE `frontend/`.
+
+# Local dev artefacts
+node_modules/
+.expo/
+.expo-shared/
+.metro-cache/
+dist/
+web-build/
+ios/build/
+android/build/
+android/.gradle/
+android/app/build/
+
+# Coverage / tests
+coverage/
+__snapshots__/
+*.test.ts
+*.spec.ts
+
+# Documentation
+DEPLOY_COOLIFY.md
+
+# Web-only build artefacts (irrelevant for native iOS/Android builds)
+serve.json
+public/serve.json
+Dockerfile
+.dockerignore
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Secrets — never upload local .env to EAS (use EAS Secrets instead)
+.env
+.env.local
+.env.*.local
+
+# Yarn (we are npm-only)
+yarn.lock
+.yarn/
+.yarnrc.yml
+
+# Logs
+*.log
+logs/

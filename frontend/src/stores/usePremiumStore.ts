@@ -27,17 +27,22 @@ export type ProFeature =
   | 'predict'
   | 'investments';
 
-// Quotas gratuits par feature (0 = bloqué immédiatement)
+// Quotas gratuits par feature (0 = bloqué immédiatement, 999999 = illimité free)
+// MAJ Budget v3.7.25 — Plan officiel TestFlight :
+//   PRO : ai (Économiseur + Radar), predict (Coach + Prévisions),
+//         tax (Optimisation fiscale avancée), export (PDF Premium / Excel).
+//   FREE : invoices, recurring, analytics, investments (qu'on libère
+//          intégralement), cloud (reste Pro / activé via session Supabase).
 export const FREE_QUOTAS: Record<ProFeature, number> = {
-  ai: 1,          // 1 analyse IA gratuite
-  tax: 1,         // 1 simulation fiscale gratuite
-  export: 1,      // 1 export PDF gratuit
-  cloud: 0,       // Cloud sync = Pro dès le départ
-  invoices: 2,    // 2 factures gratuites puis paywall
-  recurring: 2,   // 2 charges récurrentes gratuites
-  analytics: 2,   // 2 accès analytics
-  predict: 1,     // 1 prédiction gratuite
-  investments: 1, // 1 vue investissement
+  ai: 1,          // 1 analyse IA gratuite (Économiseur + Radar)
+  tax: 1,         // 1 simulation fiscale avancée gratuite
+  export: 1,      // 1 export PDF/Excel gratuit
+  cloud: 0,       // Cloud sync = Pro
+  invoices: 999999,    // FREE — illimité (Factures dans le plan gratuit)
+  recurring: 999999,   // FREE — illimité (Charges récurrentes gratuites)
+  analytics: 999999,   // FREE — illimité (Analytics basiques)
+  predict: 1,     // 1 prédiction Coach gratuite
+  investments: 999999, // FREE — illimité (vue Investissements)
 };
 
 export interface PremiumState {

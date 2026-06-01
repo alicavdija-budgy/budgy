@@ -211,15 +211,15 @@ export default function AIOptimizerScreen() {
         monthly_potential: 60,
         annual_potential: 720,
         effort: 'medium',
-        action: 'Comparez les caisses sur priminfo.admin.ch. Économie moyenne CHF 50-80/mois en changeant pour un modèle alternatif (HMO / médecin de famille).',
+        action: 'Comparez les caisses maladie sur priminfo.admin.ch (site officiel OFSP). Une économie moyenne de CHF 50-80/mois est possible en changeant pour un modèle alternatif (HMO, médecin de famille, télémédecine).',
       });
       proposals.push({
-        title: 'Télécoms — Sunrise/Salt/Yallo',
+        title: 'Forfait télécom',
         category: 'telecoms',
         monthly_potential: 25,
         annual_potential: 300,
         effort: 'low',
-        action: 'Passer d\'un forfait premium à un opérateur low-cost suisse (Yallo, Aldi mobile) économise CHF 20-30/mois pour les mêmes services.',
+        action: 'Passer d\'un forfait premium à un forfait moins cher (opérateur secondaire) économise CHF 20-30/mois pour des services équivalents (4G/5G illimité, SMS illimités).',
       });
       const fallbackMonthly = proposals.reduce((s, p) => s + (p.monthly_potential || 0), 0);
       const fallbackAnnual = proposals.reduce((s, p) => s + (p.annual_potential || 0), 0);
@@ -346,6 +346,16 @@ export default function AIOptimizerScreen() {
               <View style={styles.errorBox}>
                 <Ionicons name="alert-circle" size={20} color={C.error} />
                 <Text style={styles.errorText}>{error}</Text>
+              </View>
+            )}
+
+            {/* Empty-state pédagogique quand pas assez de données */}
+            {(store.transactions.length < 5 && store.recurringExpenses.length < 2) && (
+              <View style={[styles.errorBox, { backgroundColor: `${C.info}15`, marginTop: Spacing.md, marginBottom: 0 }]}>
+                <Ionicons name="information-circle" size={20} color={C.info} />
+                <Text style={[styles.errorText, { color: C.info }]}>
+                  Nous analysons actuellement vos données. Ajoutez davantage de dépenses pour obtenir des recommandations personnalisées.
+                </Text>
               </View>
             )}
 

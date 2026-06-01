@@ -49,11 +49,18 @@ export default function MoreScreen() {
       emoji: '🧠',
       items: [
         { id: 'ai-optimizer', title: t('more.aiOptimizer'), subtitle: t('more.aiOptimizerSub'), icon: 'sparkles', color: C.pink, route: '/more/ai-optimizer', badge: 'NEW', pro: true, feature: 'ai' },
-        { id: 'savings-radar', title: 'Radar d\'économies', subtitle: 'Identifiez les postes où économiser, sans pub ni partenaire', icon: 'radio', color: C.gold, route: '/more/savings-radar', badge: 'GOLD' },
-        { id: 'calendar', title: 'Calendrier financier', subtitle: 'Tous vos flux futurs, revenus et échéances', icon: 'calendar', color: C.info, route: '/more/financial-calendar' },
+        { id: 'savings-radar', title: 'Radar d\'économies', subtitle: 'Identifiez les postes où économiser, sans pub ni partenaire', icon: 'radio', color: C.gold, route: '/more/savings-radar', badge: 'PRO', pro: true, feature: 'ai' },
         { id: 'budgy-score', title: 'Score Budgy', subtitle: 'Mesurez et améliorez votre santé financière', icon: 'speedometer', color: C.gold, route: '/more/budgy-score', badge: 'NEW' },
         { id: 'predict', title: t('more.predict'), subtitle: t('more.predictSub'), icon: 'analytics', color: C.secondary, route: '/more/predict', pro: true, feature: 'predict' },
+        { id: 'calendar', title: 'Calendrier financier', subtitle: 'Tous vos flux futurs, revenus et échéances', icon: 'calendar', color: C.info, route: '/more/financial-calendar' },
+      ],
+    },
+    {
+      title: 'Fiscalité & Santé',
+      emoji: '🏛️',
+      items: [
         { id: 'tax', title: t('more.taxOpt'), subtitle: t('more.taxOptSub'), icon: 'calculator', color: C.primaryLight, route: '/more/tax-optimizer', pro: true, feature: 'tax' },
+        { id: 'lamal', title: 'LAMal & Subsides', subtitle: 'Comparer mes primes, vérifier mes subsides, optimiser ma franchise', icon: 'shield-checkmark', color: C.cyan, route: '/more/lamal-comparator' },
       ],
     },
     {
@@ -62,11 +69,10 @@ export default function MoreScreen() {
       items: [
         { id: 'incomes', title: t('more.incomes'), subtitle: t('more.incomesSub'), icon: 'cash', color: C.success, route: '/more/incomes' },
         { id: 'budgets', title: t('more.budgets'), subtitle: t('more.budgetsSub'), icon: 'wallet', color: C.warning, route: '/more/budgets' },
-        { id: 'recurring', title: t('more.recurring'), subtitle: t('more.recurringSub'), icon: 'refresh', color: C.purple, route: '/more/recurring', pro: true, feature: 'recurring' },
-        { id: 'investments', title: t('more.investments'), icon: 'trending-up', color: C.success, route: '/more/investments', pro: true, feature: 'investments' },
+        { id: 'recurring', title: t('more.recurring'), subtitle: t('more.recurringSub'), icon: 'refresh', color: C.purple, route: '/more/recurring' },
+        { id: 'investments', title: t('more.investments'), icon: 'trending-up', color: C.success, route: '/more/investments' },
         { id: 'debts', title: t('more.debts'), icon: 'card', color: C.error, route: '/more/debts' },
-        { id: 'invoices', title: t('more.invoices'), subtitle: t('more.invoicesSub'), icon: 'receipt', color: C.orange, route: '/more/invoices', pro: true, feature: 'invoices' },
-        { id: 'lamal', title: t('more.lamal'), subtitle: t('more.lamalSub'), icon: 'shield-checkmark', color: C.cyan, route: '/more/lamal-comparator' },
+        { id: 'invoices', title: t('more.invoices'), subtitle: t('more.invoicesSub'), icon: 'receipt', color: C.orange, route: '/more/invoices' },
       ],
     },
     {

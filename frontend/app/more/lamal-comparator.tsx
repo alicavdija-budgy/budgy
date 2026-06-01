@@ -1,6 +1,10 @@
 /**
- * GUARDIAN MONEY CHF - Comparateur LAMal Priminfo 2026
- * Vrais noms d'assureurs · Données OFSP · Aucune publicité
+ * BUDGY - Comparateur LAMal 2026 — NEUTRE (aucun nom commercial visible)
+ * Données primes : OFSP Priminfo 2026 · Aucune publicité, aucun partenaire.
+ *
+ * App Store Compliance : les noms commerciaux des assureurs sont anonymisés
+ * en "Assureur A", "Assureur B"... à l'affichage. Les données restent réelles
+ * pour le calcul des écarts de prix et des subsides — Budgy reste neutre.
  */
 
 import React, { useState, useMemo } from 'react';
@@ -72,11 +76,18 @@ export default function LamalComparatorScreen() {
   const cantonChange = PRIMINFO_PREMIUMS_2026[canton]?.change || 0;
   const cheapest = insurerList[0];
 
+  /**
+   * Anonymisation des noms d'assureurs (App Store compliance / neutralité Budgy).
+   * Les données réelles servent uniquement aux calculs internes ;
+   * l'utilisateur ne voit jamais de nom commercial.
+   */
+  const anonInsurer = (idx: number) => `Assureur ${String.fromCharCode(65 + (idx % 26))}`;
+
   const tabs: { key: Tab; label: string; icon: string }[] = [
-    { key: 'compare', label: t('lamal.insurers'), icon: 'list' },
-    { key: 'optimize', label: t('lamal.optimize'), icon: 'flash' },
-    { key: 'subsidy', label: t('lamal.subsidy'), icon: 'heart' },
-    { key: 'ranking', label: t('lamal.ranking'), icon: 'map' },
+    { key: 'compare', label: 'Comparer mes primes', icon: 'list' },
+    { key: 'subsidy', label: 'Vérifier mon droit aux subsides', icon: 'heart' },
+    { key: 'optimize', label: 'Optimiser ma franchise', icon: 'flash' },
+    { key: 'ranking', label: 'Économie potentielle', icon: 'trending-down' },
   ];
 
   return (
@@ -140,7 +151,7 @@ export default function LamalComparatorScreen() {
           <View style={styles.heroAmtRow}>
             <Text style={styles.heroAmt}>{cheapest ? formatNumber(cheapest.premium) : '—'}</Text>
             <View>
-              <Text style={styles.heroInsurer}>{cheapest?.insurer.name}</Text>
+              <Text style={styles.heroInsurer}>{cheapest ? anonInsurer(0) : '—'}</Text>
               <Text style={styles.heroUnit}>{t('lamal.perMonth')}</Text>
             </View>
           </View>
@@ -191,7 +202,7 @@ export default function LamalComparatorScreen() {
                       <Text style={[styles.rankNum, isFirst && { color: theme.success }]}>#{idx + 1}</Text>
                     </View>
                     <View style={styles.insurerInfo}>
-                      <Text style={styles.insurerName}>{item.insurer.name}</Text>
+                      <Text style={styles.insurerName}>{anonInsurer(idx)}</Text>
                       {item.savingsVsAvg > 0 && (
                         <Text style={styles.savingsTxt}>
                           {t('lamal.savingsVs', { n: formatNumber(item.savingsVsAvg) })}

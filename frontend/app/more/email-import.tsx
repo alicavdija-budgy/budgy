@@ -1,27 +1,28 @@
 /**
- * BUDGY - Importer une facture (3 méthodes)
+ * BUDGY - Importer un document (4 méthodes, AUCUNE dépendance Gmail/Mail/Share)
  *
- * 1) Partager depuis votre messagerie (Share Extension iOS / Intent Android)
- * 2) Choisir un fichier (DocumentPicker → PDF / image / texte)
- * 3) Photographier (Camera ou Galerie photo)
+ * 1) Scanner document       (caméra OCR — pour facture papier / ticket)
+ * 2) Choisir PDF            (DocumentPicker filtré PDF)
+ * 3) Importer depuis Fichiers (DocumentPicker — image/PDF/texte)
+ * 4) Prendre une photo      (galerie photo + OCR)
  *
- * Tous les chemins convergent vers /api/email/parse (texte) ou /api/scanner/ocr (image).
+ * Tous les chemins convergent vers /api/email/parse (texte) ou /api/scanner/ocr (image/PDF).
+ * AUCUN partage depuis Gmail, AUCUNE intent Mail, AUCUNE adresse email à configurer.
  */
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  TextInput, Alert, Platform, KeyboardAvoidingView, ActivityIndicator,
+  Alert, Platform, KeyboardAvoidingView, ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
 import { safeFetchJson } from '../../src/lib/network';
 import { normalizeImageForUpload } from '../../src/lib/imageUpload';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
 import { readAsBase64, readAsText } from '../../src/utils/fsCompat';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
 import { useTheme } from '../../src/hooks/useTheme';
@@ -31,16 +32,9 @@ import type { Contract } from '../../src/types';
 import { Card, Button } from '../../src/components/ui';
 import { humanizeError } from '../../src/lib/errorSanitizer';
 
-// expo-share-intent is a native module — guarded import for web/Expo Go
-let useShareIntent: any = null;
-try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  useShareIntent = require('expo-share-intent').useShareIntent;
-} catch {}
-
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://api.budgy.ch';
 
-type ImportMethod = 'share' | 'file' | 'photo' | 'paste';
+type ImportMethod = 'scan' | 'pdf' | 'file' | 'photo';
 
 export default function ImportInvoiceScreen() {
   const theme = useTheme();
@@ -52,73 +46,6 @@ export default function ImportInvoiceScreen() {
   const [busy, setBusy] = useState(false);
   const [busyLabel, setBusyLabel] = useState('Analyse...');
   const [result, setResult] = useState<any>(null);
-  const [pasteOpen, setPasteOpen] = useState(false);
-  const [pasteContent, setPasteContent] = useState('');
-
-  // ── Share intent listener (mobile only) ──
-  const shareIntent = useShareIntent ? useShareIntent({
-    debug: false,
-    resetOnBackground: true,
-  }) : { hasShareIntent: false, shareIntent: null, resetShareIntent: () => {} };
-
-  useFocusEffect(useCallback(() => {
-    if (shareIntent?.hasShareIntent && shareIntent.shareIntent) {
-      processSharedContent(shareIntent.shareIntent);
-    }
-  }, [shareIntent?.hasShareIntent]));
-
-  // ── Process whatever the user shared (text, file, image, web URL) ──
-  const processSharedContent = async (intent: any) => {
-    try {
-      // Text shared (e.g., copy/paste from Mail body)
-      if (intent.text && intent.text.length > 10) {
-        await parseEmailText(intent.text, intent.meta?.title || '');
-      }
-      // Files / images shared
-      else if (intent.files && intent.files.length > 0) {
-        const f = intent.files[0];
-        // CRITICAL: iOS Share Sheet hands us a tmp URI that may be revoked
-        // any second. Copy to documentDirectory before doing anything else.
-        const { persistIncomingFile } = await import('../../src/lib/safeShare');
-        const localUri = await persistIncomingFile(f.path, {
-          name: f.fileName || undefined,
-          mime: f.mimeType || undefined,
-        });
-        if (f.mimeType?.startsWith('image/')) {
-          await parseImageFile(localUri);
-        } else if (f.mimeType === 'application/pdf') {
-          Alert.alert(
-            'Fichier PDF reçu',
-            `${f.fileName || 'Document'} — Le PDF sera traité par OCR sur la première page.`,
-            [{ text: 'Continuer', onPress: () => parseImageFile(localUri) }],
-          );
-        } else if (f.mimeType?.startsWith('text/')) {
-          const text = await readAsText(localUri);
-          await parseEmailText(text, f.fileName || '');
-        } else {
-          Alert.alert(
-            'Format non reconnu',
-            'Ce fichier n\'a pas pu être analysé. Essayez avec une photo ou un PDF.',
-          );
-        }
-      }
-      // URL shared
-      else if (intent.webUrl) {
-        Alert.alert(
-          'Lien reçu',
-          `${intent.webUrl}\n\nOuvrez la page de facture dans votre navigateur, faites Partager → Budgy avec le contenu/PDF.`,
-        );
-      }
-    } catch (e: any) {
-      const { humanErrorMessage } = await import('../../src/lib/errorSanitizer');
-      Alert.alert(
-        'Import partagé',
-        humanErrorMessage(e, 'Impossible d\'accéder au fichier partagé. Réessayez depuis Fichiers ou Mail.'),
-      );
-    } finally {
-      shareIntent?.resetShareIntent?.();
-    }
-  };
 
   // ── Backend calls ──
   const parseEmailText = async (content: string, subject = '') => {
@@ -229,6 +156,27 @@ export default function ImportInvoiceScreen() {
   };
 
   // ── Action handlers ──
+  const handleScanner = () => {
+    // Scanner caméra (OCR direct sans passer par cette page)
+    router.push('/scanner-modal');
+  };
+
+  const handlePdfPicker = async () => {
+    try {
+      const res = await DocumentPicker.getDocumentAsync({
+        type: 'application/pdf',
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+      if (res.canceled) return;
+      const file = res.assets[0];
+      await parseImageFile(file.uri);
+    } catch (e: any) {
+      const h = humanizeError(e, { title: 'Import PDF impossible' });
+      Alert.alert(h.title, h.message);
+    }
+  };
+
   const handleFilePicker = async () => {
     try {
       const res = await DocumentPicker.getDocumentAsync({
@@ -238,16 +186,15 @@ export default function ImportInvoiceScreen() {
       });
       if (res.canceled) return;
       const file = res.assets[0];
-      console.log('[email-import] picked file:', file.name, file.mimeType, file.size);
       if (file.mimeType?.startsWith('text/')) {
         const text = await readAsText(file.uri);
         await parseEmailText(text, file.name);
       } else {
-        // image or pdf → OCR (PDF: first page)
         await parseImageFile(file.uri);
       }
     } catch (e: any) {
-      Alert.alert('Erreur', e?.message || 'Sélection annulée');
+      const h = humanizeError(e, { title: 'Import impossible' });
+      Alert.alert(h.title, h.message);
     }
   };
 
@@ -265,31 +212,9 @@ export default function ImportInvoiceScreen() {
       });
       if (res.canceled) return;
       const a = res.assets[0];
-      // ALWAYS normalize through imageUpload — converts HEIC/HEIF → JPEG, resizes
       await parseImageFile(a.uri);
     } catch (e: any) {
       const h = humanizeError(e, { title: 'Import impossible' });
-      Alert.alert(h.title, h.message);
-    }
-  };
-
-  const handleCameraCapture = async () => {
-    try {
-      const perm = await ImagePicker.requestCameraPermissionsAsync();
-      if (!perm.granted) {
-        Alert.alert('Permission requise', 'Autorisez l\'accès à la caméra.');
-        return;
-      }
-      const res = await ImagePicker.launchCameraAsync({
-        allowsEditing: false,
-        quality: 0.85,
-      });
-      if (res.canceled) return;
-      const a = res.assets[0];
-      // ALWAYS normalize (HEIC → JPEG) before sending to OCR
-      await parseImageFile(a.uri);
-    } catch (e: any) {
-      const h = humanizeError(e, { title: 'Capture impossible' });
       Alert.alert(h.title, h.message);
     }
   };
@@ -388,42 +313,40 @@ export default function ImportInvoiceScreen() {
   // Method cards
   const methods: { key: ImportMethod; icon: string; gradient: [string, string]; title: string; subtitle: string; onPress: () => void; tip: string }[] = [
     {
-      key: 'share',
-      icon: 'share-social',
+      key: 'scan',
+      icon: 'scan',
       gradient: ['#34D399', '#22D3EE'],
-      title: 'Partager depuis votre mail',
-      subtitle: 'Le plus rapide · 0 configuration',
-      onPress: () => Alert.alert(
-        'Comment ça marche ?',
-        '1. Ouvrez votre email (Mail, Gmail, Outlook…)\n2. Appuyez sur l\'icône Partager\n3. Choisissez "Budgy"\n\nLa facture sera importée automatiquement ici.',
-      ),
-      tip: 'iOS et Android · Nécessite l\'app installée sur votre appareil',
+      title: 'Scanner un document',
+      subtitle: 'Caméra · OCR IA · Le plus rapide',
+      onPress: handleScanner,
+      tip: 'Idéal pour facture papier, ticket, contrat',
+    },
+    {
+      key: 'pdf',
+      icon: 'document',
+      gradient: ['#A78BFA', '#7C3AED'],
+      title: 'Choisir un PDF',
+      subtitle: 'Facture ou contrat reçu en PDF',
+      onPress: handlePdfPicker,
+      tip: 'Files iOS, Drive, Dropbox, téléchargement web',
     },
     {
       key: 'file',
-      icon: 'document-attach',
-      gradient: ['#A78BFA', '#7C3AED'],
-      title: 'Choisir un fichier',
+      icon: 'folder-open',
+      gradient: ['#60A5FA', '#3B82F6'],
+      title: 'Importer depuis Fichiers',
       subtitle: 'PDF · Image · Texte',
       onPress: handleFilePicker,
-      tip: 'Compatible avec Files iOS, Drive, OneDrive, Dropbox',
+      tip: 'Toutes vos sources cloud et locales',
     },
     {
       key: 'photo',
-      icon: 'camera',
+      icon: 'images',
       gradient: ['#FBBF24', '#F59E0B'],
-      title: 'Photographier l\'email',
-      subtitle: 'Capture ou galerie · OCR IA',
-      onPress: () => Alert.alert(
-        'Importer une image',
-        'Comment voulez-vous procéder ?',
-        [
-          { text: 'Annuler', style: 'cancel' },
-          { text: '📸 Caméra', onPress: handleCameraCapture },
-          { text: '🖼️ Galerie', onPress: handlePhotoPicker },
-        ],
-      ),
-      tip: 'Idéal pour un screenshot d\'email ou une facture papier',
+      title: 'Prendre depuis la galerie',
+      subtitle: 'Photo déjà prise · OCR IA',
+      onPress: handlePhotoPicker,
+      tip: 'Pratique pour une photo déjà dans vos pellicules',
     },
   ];
 
@@ -436,7 +359,7 @@ export default function ImportInvoiceScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
           <Ionicons name="chevron-back" size={24} color={theme.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>Importer une facture</Text>
+        <Text style={styles.title}>Importer un document</Text>
         <View style={{ width: 36 }} />
       </View>
 
@@ -453,9 +376,9 @@ export default function ImportInvoiceScreen() {
           <View style={styles.heroIcon}>
             <Ionicons name="sparkles" size={26} color="#FBBF24" />
           </View>
-          <Text style={styles.heroTitle}>L'IA importe vos factures en 1 tap</Text>
+          <Text style={styles.heroTitle}>Importer un document en 1 tap</Text>
           <Text style={styles.heroSub}>
-            Aucune adresse email à configurer. Choisissez la méthode qui vous convient :
+            Scanner, PDF, fichier ou galerie photo — l'IA détecte automatiquement s'il s'agit d'une facture ou d'un contrat.
           </Text>
         </LinearGradient>
 
@@ -478,36 +401,6 @@ export default function ImportInvoiceScreen() {
             </View>
           </TouchableOpacity>
         ))}
-
-        {/* Mode avancé : coller du texte */}
-        <TouchableOpacity onPress={() => setPasteOpen(o => !o)} style={styles.advancedToggle}>
-          <Ionicons name={pasteOpen ? 'chevron-up' : 'chevron-down'} size={16} color={theme.textSecondary} />
-          <Text style={styles.advancedToggleTxt}>
-            Mode avancé · Coller le contenu d'un email
-          </Text>
-        </TouchableOpacity>
-
-        {pasteOpen && (
-          <View style={styles.pasteCard}>
-            <TextInput
-              style={[styles.input, { height: 160 }]}
-              value={pasteContent}
-              onChangeText={setPasteContent}
-              placeholder="Collez ici le contenu complet de l'email (montant, IBAN, échéance, référence...)"
-              placeholderTextColor={theme.textTertiary}
-              multiline
-              textAlignVertical="top"
-            />
-            <Button
-              title="🔍 Analyser le texte"
-              onPress={() => parseEmailText(pasteContent)}
-              fullWidth
-              size="lg"
-              disabled={busy || pasteContent.trim().length < 20}
-              style={{ marginTop: Spacing.md }}
-            />
-          </View>
-        )}
 
         {/* Result preview */}
         {result && (() => {
@@ -558,10 +451,10 @@ export default function ImportInvoiceScreen() {
         <Card style={styles.tipsCard}>
           <Text style={styles.tipsTitle}>💡 Astuces</Text>
           <Text style={styles.tipsText}>
-            • Sur iOS : depuis Mail, appuyez sur ⤴ Partager → Budgy{'\n'}
-            • Pour un PDF : sauvegardez-le dans Files puis « Choisir un fichier »{'\n'}
-            • Pour un email visuel : prenez un screenshot et utilisez « Photographier »{'\n'}
-            • Tous les contenus sont analysés par notre IA suisse en 2 secondes
+            • Scanner caméra : meilleure qualité OCR pour les tickets papier{'\n'}
+            • PDF : recommandé pour les factures et contrats électroniques{'\n'}
+            • L'IA détecte automatiquement Facture vs Contrat et range au bon endroit{'\n'}
+            • Tout reste en local sur votre appareil — aucune donnée vendue
           </Text>
         </Card>
       </ScrollView>

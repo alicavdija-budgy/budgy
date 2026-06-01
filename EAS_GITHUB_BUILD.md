@@ -110,19 +110,73 @@ npx eas build:configure  # (idempotent) vérifie eas.json
 | `expo.extra.eas.projectId` | `cf75668b-71ba-4bfb-9169-8ad2f572e982` |
 | `expo.newArchEnabled` | `true` |
 
+### Le workflow GitHub vérifie ces champs automatiquement
+
+L'étape `Verify monorepo structure` du workflow `.github/workflows/eas-build.yml`
+échoue **fail-fast** si :
+
+- un `package.json` est trouvé à la racine du repo (interdit en monorepo),
+- l'un des fichiers `frontend/package.json`, `frontend/package-lock.json`,
+  `frontend/app.json` ou `frontend/eas.json` est manquant.
+
+L'étape `Print app version info from frontend/app.json` affiche dans les
+logs GitHub Actions la version, buildNumber, versionCode, bundleId et le
+projectId EAS effectivement utilisés pour ce build — pratique pour vérifier
+en un coup d'œil avant de soumettre à TestFlight.
+
 ---
 
-## 6 · Variables secrètes (EAS Secrets)
+## 6 · Commandes exactes (rappel) pour la prochaine release
 
-Les secrets coté mobile (anon key Supabase, clefs analytics, etc.) doivent
-vivre **uniquement** dans EAS Secrets, jamais dans le repo :
+### Bump version (uniquement si Apple/EAS demande un nouveau build)
 
-```bash
-cd frontend
-npx eas secret:create --name EXPO_PUBLIC_SUPABASE_ANON_KEY --value '<JWT>' --scope project
+Édite `frontend/app.json` :
+
+```diff
+- "version": "3.7.24",
++ "version": "3.7.25",
+  "ios": {
+-   "buildNumber": "64"
++   "buildNumber": "65"
+  },
+  "android": {
+-   "versionCode": 64
++   "versionCode": 65
+  }
 ```
 
-Une fois créés, ils sont automatiquement injectés au build.
+Commit + push → le workflow GitHub Actions se lance automatiquement (trigger
+`paths: frontend/app.json`).
+
+### Lancement manuel d'un build (sans bump)
+
+```bash
+# Depuis GitHub UI → Actions → "EAS Build (iOS & Android)" → Run workflow
+#   - platform : ios
+#   - profile  : production
+#   - submit   : false  (laisser false pour tester, true pour TestFlight)
+
+# OU depuis ton Mac (alternative legacy, si nécessaire)
+cd frontend
+npx eas build --platform ios --profile production --non-interactive
+npx eas submit --platform ios --latest --non-interactive
+```
+
+### Vérifier l'IAP en production
+
+```bash
+# Diagnostic non-secret de la config Coolify
+curl https://api.budgy.ch/api/config/status
+# → expected: openai=configured, apple_*=configured, supabase_*=configured
+
+# Diagnostic In-App Purchase
+curl https://api.budgy.ch/api/iap/health
+# → expected: { "iap_ready": true, "supabase_ready": true, "missing": [],
+#                "sandbox": false (en prod), "products": ["...monthly", "...annual"] }
+
+# Vérifier qu'un user est bien persisté après achat
+curl "https://api.budgy.ch/api/iap/me?user_id=<USER_UUID>"
+```
 
 ---
 

@@ -149,6 +149,29 @@ export default function ScannerModal() {
           if (data.items && data.items.length) {
             setNote(`Articles: ${data.items.slice(0, 3).join(', ')}`);
           }
+          // 🛡️ Strict separation — if backend detected a CONTRACT, alert the
+          // user and offer to redirect to Mon Classeur instead of creating
+          // a ticket-de-caisse entry. We never auto-classify a contract as
+          // a receipt.
+          const docType = String(data.document_type || '').toLowerCase();
+          if (docType === 'contract') {
+            Alert.alert(
+              'Contrat détecté',
+              'Ce document semble être un contrat (assurance, leasing, bail, abonnement…). Il sera mieux rangé dans Mon Classeur.',
+              [
+                { text: 'Continuer en ticket', style: 'cancel' },
+                {
+                  text: 'Ouvrir Mon Classeur',
+                  onPress: () => {
+                    try { router.back(); } catch {}
+                    router.push('/more/contracts' as any);
+                  },
+                },
+              ],
+            );
+          } else if (data.needs_user_confirmation) {
+            setOcrError('Type de document à confirmer — vérifiez avant d\'enregistrer');
+          }
           if (!data.success && merged.rescued) {
             // Tell user we did our best — saisie manuelle still possible
             setOcrError('Extraction partielle — vérifiez les champs ci-dessous');

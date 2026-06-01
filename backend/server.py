@@ -576,33 +576,66 @@ class OCRResponse(BaseModel):
     date: Optional[str] = None
     category: Optional[str] = None
     receipt_type: Optional[str] = None  # "ticket" or "remboursement"
+    # Classification stricte requise pour router dans la bonne section :
+    #   "invoice"  → Factures (à payer / payée)
+    #   "receipt"  → Ticket de caisse / dépense déjà réglée
+    #   "contract" → Contrat (assurance, leasing, bail, abonnement signé) → Mon Classeur
+    #   "unknown"  → Demander confirmation à l'utilisateur (ne rien créer auto)
+    document_type: Optional[str] = "unknown"
+    needs_user_confirmation: Optional[bool] = False
     items: Optional[list] = None
     raw_text: Optional[str] = None
     confidence: Optional[float] = None
     error: Optional[str] = None
 
 
-OCR_SYSTEM_PROMPT = """Tu es un assistant OCR expert pour les tickets de caisse et factures suisses.
-Analyse l'image fournie et extrais les informations dans un JSON STRICT (rien d'autre).
+OCR_SYSTEM_PROMPT = """Tu es un assistant OCR expert pour les documents financiers suisses
+(tickets, factures, contrats). Analyse l'image et extrais en JSON STRICT (rien d'autre).
 
-CHAMPS À RETOURNER:
+CHAMPS À RETOURNER (obligatoire) :
 {
-  "merchant": "nom du commerçant",
-  "total_amount": montant TTC en nombre (sans devise),
+  "merchant": "nom du commerçant ou émetteur",
+  "total_amount": montant TTC en nombre (sans devise) ou null,
   "currency": "CHF" | "EUR" | "USD",
-  "date": "YYYY-MM-DD",
-  "category": une de ["courses", "restaurant", "transport", "sante", "loisirs", "shopping", "abonnements", "telecoms", "autre"],
-  "receipt_type": "ticket" si c'est un ticket de caisse classique (Migros, Coop, Denner, restaurant, station-service, pharmacie, etc.) OU "remboursement" si c'est une facture professionnelle, frais médicaux, hôtel, taxi-pro, formation, ou justificatif pour remboursement employeur/assurance,
+  "date": "YYYY-MM-DD" ou null,
+  "category": une de ["courses", "restaurant", "transport", "sante", "loisirs", "shopping", "abonnements", "telecoms", "assurance", "loyer", "autre"],
+  "receipt_type": "ticket" si ticket de caisse classique, "remboursement" si facture pro/médicale/employeur (utilisé uniquement si document_type = "receipt" ou "invoice"),
+  "document_type": "invoice" | "receipt" | "contract" | "unknown",
   "items": ["item1", "item2", ...] (max 5),
   "confidence": 0.0 à 1.0
 }
 
-RÈGLES:
-- Si tu ne peux pas lire un champ, mets null.
-- total_amount doit être le TOTAL FINAL (pas un sous-total).
-- Pour la catégorie: Migros/Coop/Denner = "courses", McDonald's/restaurant = "restaurant", CFF/SBB/Uber = "transport", pharmacie = "sante".
-- Pour receipt_type: pharmacie/médecin/hôpital = "remboursement"; courses/restos perso = "ticket"; déplacement pro/hôtel/repas affaires = "remboursement".
-- Réponds UNIQUEMENT avec le JSON, sans markdown, sans commentaire."""
+RÈGLES STRICTES POUR document_type (DO OR DIE — NE JAMAIS SE TROMPER) :
+- "receipt"  = ticket de caisse / reçu d'un achat ponctuel déjà payé
+              (Migros, Coop, Denner, Aldi, Lidl, restaurant, station-service,
+              pharmacie sans facture, café, Uber, Migrolino, kiosque…).
+- "invoice"  = facture nominative à payer ou récemment payée
+              (facture médecin, hôpital, dentiste, facture telecom mensuelle,
+              électricité, eau, gaz, ChargeFlow, BVR/QR-bill, mention "à payer
+              avant le …", "Rechnung", "Zahlungsfrist", "due date", "à régler").
+- "contract" = DOCUMENT CONTRACTUEL signé, plurianneuel ou récurrent
+              (police d'assurance LAMal / RC / ménage / vie, contrat de
+              leasing voiture, contrat de bail / location appartement,
+              contrat de travail, abonnement signé pluriannuel CFF AG/
+              demi-tarif, contrat télécom Swisscom/Salt/Sunrise avec durée,
+              mots-clés "police d'assurance", "Versicherungspolice", "contrat",
+              "Vertrag", "Mietvertrag", "Leasingvertrag", "durée", "résiliable",
+              "abonnement annuel", "renouvellement tacite").
+- "unknown"  = doute réel entre 2 catégories. Mets aussi confidence < 0.6.
+
+INTERDICTIONS :
+- NE JAMAIS retourner "receipt" ou "invoice" pour un contrat clairement signé.
+- NE JAMAIS retourner "contract" pour un simple ticket de caisse.
+- En cas d'hésitation entre invoice et contract → "unknown".
+
+RÈGLES MONTANT / CATÉGORIE :
+- total_amount = TOTAL FINAL TTC (pas un sous-total).
+- Pour un contrat : total_amount = prime / loyer / mensualité indiqué.
+- Migros/Coop/Denner = "courses", restaurant = "restaurant",
+  CFF/SBB/Uber = "transport", pharmacie/médecin = "sante",
+  assurance = "assurance", loyer/bail = "loyer".
+
+Réponds UNIQUEMENT avec le JSON, sans markdown, sans commentaire."""
 
 
 def parse_json_loose(text: str) -> dict:
@@ -670,6 +703,13 @@ async def scanner_ocr(req: OCRRequest):
         except Exception:
             amt = None
 
+        # Strict routing classification
+        doc_type = (data.get("document_type") or "unknown").lower().strip()
+        if doc_type not in ("invoice", "receipt", "contract", "unknown"):
+            doc_type = "unknown"
+        conf = float(data.get("confidence", 0.7)) if data.get("confidence") is not None else 0.7
+        needs_conf = (doc_type == "unknown") or (conf < 0.6)
+
         return OCRResponse(
             success=True,
             merchant=data.get("merchant"),
@@ -678,8 +718,10 @@ async def scanner_ocr(req: OCRRequest):
             date=data.get("date"),
             category=data.get("category") or "autre",
             receipt_type=data.get("receipt_type") or "ticket",
+            document_type=doc_type,
+            needs_user_confirmation=needs_conf,
             items=data.get("items") or [],
-            confidence=float(data.get("confidence", 0.7)) if data.get("confidence") is not None else 0.7,
+            confidence=conf,
             raw_text=response,
         )
     except Exception as e:
@@ -707,23 +749,57 @@ class EmailParseResponse(BaseModel):
     reference: Optional[str] = None
     qr_reference: Optional[str] = None
     category: Optional[str] = None
+    # Classification stricte requise pour router dans la bonne section :
+    #   "invoice"  → Factures (à payer / payée)
+    #   "contract" → Contrat (assurance, leasing, bail, abonnement signé) → Mon Classeur
+    #   "unknown"  → Demander confirmation à l'utilisateur (ne rien créer auto)
+    document_type: Optional[str] = "unknown"
+    needs_user_confirmation: Optional[bool] = False
+    confidence: Optional[float] = None
     error: Optional[str] = None
 
 
-EMAIL_PARSE_PROMPT = """Tu es un assistant qui extrait les données d'une facture suisse à partir d'un email.
+EMAIL_PARSE_PROMPT = """Tu es un assistant qui analyse un email ou un PDF de
+document financier suisse. Tu dois IMPÉRATIVEMENT distinguer trois cas :
 
-Réponds UNIQUEMENT avec un JSON STRICT:
+1. FACTURE (invoice)  → document avec un montant TTC à régler ou déjà payé
+   à une date précise. Mots-clés : "facture", "Rechnung", "à payer avant",
+   "Zahlungsfrist", "due date", "BVR", "QR-bill", "IBAN", "montant à
+   payer", numéro de référence à 27 chiffres, montant unique.
+
+2. CONTRAT (contract) → document contractuel signé, plurianneuel,
+   à renouvellement tacite ou avec durée explicite. Mots-clés :
+   "police d'assurance", "contrat", "Vertrag", "Versicherungspolice",
+   "leasing", "Leasingvertrag", "bail", "Mietvertrag", "abonnement
+   annuel CFF AG", "demi-tarif", "contrat de travail", "résiliable
+   au …", "renouvellement tacite", "durée du contrat". Une police
+   LAMal, RC, ménage, vie ou complémentaire est TOUJOURS un contrat
+   (PAS une facture), même si elle indique une prime mensuelle.
+
+3. UNKNOWN → doute réel entre invoice et contract.
+
+Réponds UNIQUEMENT avec un JSON STRICT :
 {
-  "title": "objet court de la facture",
+  "document_type": "invoice" | "contract" | "unknown",
+  "title": "objet court du document",
   "issuer": "émetteur (entreprise)",
-  "amount": montant TTC en CHF,
+  "amount": montant TTC en nombre,
   "currency": "CHF" | "EUR",
-  "due_date": "YYYY-MM-DD",
-  "invoice_date": "YYYY-MM-DD",
-  "iban": "IBAN si visible",
-  "reference": "numéro de référence/BVR",
-  "category": une de ["telecoms", "abonnements", "loyer", "assurance", "sante", "autre"]
+  "due_date": "YYYY-MM-DD" ou null (seulement si invoice),
+  "invoice_date": "YYYY-MM-DD" ou null,
+  "iban": "IBAN si visible" ou null,
+  "reference": "numéro de référence/BVR" ou null,
+  "category": une de ["telecoms", "abonnements", "loyer", "assurance", "sante", "leasing", "energie", "autre"],
+  "confidence": 0.0 à 1.0
 }
+
+INTERDICTIONS STRICTES :
+- NE JAMAIS retourner "invoice" pour une police d'assurance, un contrat
+  de bail, un contrat de leasing ou un contrat télécom signé.
+- NE JAMAIS retourner "contract" pour une facture mensuelle isolée
+  (ex: facture Swisscom d'un mois) — seulement pour le contrat signé.
+- Si tu hésites, retourne "unknown" et baisse confidence < 0.6.
+
 Mets null pour les champs manquants. Pas de markdown, pas de commentaire."""
 
 
@@ -757,6 +833,16 @@ async def email_parse(req: EmailParseRequest):
         except Exception:
             amt = None
 
+        # Strict routing classification (DO OR DIE — Factures ≠ Contrats)
+        doc_type = (data.get("document_type") or "unknown").lower().strip()
+        if doc_type not in ("invoice", "contract", "unknown"):
+            doc_type = "unknown"
+        try:
+            conf = float(data.get("confidence")) if data.get("confidence") is not None else 0.7
+        except Exception:
+            conf = 0.7
+        needs_conf = (doc_type == "unknown") or (conf < 0.6)
+
         return EmailParseResponse(
             success=True,
             title=data.get("title"),
@@ -768,6 +854,9 @@ async def email_parse(req: EmailParseRequest):
             iban=data.get("iban"),
             reference=data.get("reference"),
             category=data.get("category") or "autre",
+            document_type=doc_type,
+            needs_user_confirmation=needs_conf,
+            confidence=conf,
         )
     except Exception as e:
         return EmailParseResponse(success=False, error=str(e))

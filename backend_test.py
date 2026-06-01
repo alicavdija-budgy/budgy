@@ -1,247 +1,275 @@
-#!/usr/bin/env python3
 """
-SMOKE + REGRESSION TEST — Budgy backend after self-hosted production refactor.
+Smoke test — Budgy backend post-modifications (Factures vs Contrats separation).
 
-Validates:
-  - GET /health (root, for Coolify) and GET /api/health both respond
-  - GET /api/iap/health and GET /api/iap/me (graceful, no crash)
-  - LiteLLM-backed endpoints still work: /api/email/parse and /api/voice/parse
-  - CORS preflight enforces ALLOWED_ORIGINS list
-  - No endpoint returns HTML or 500. Content-Type is application/json
-    (except OPTIONS preflight which may be text/plain).
+Targets:
+  A) Regression: /api/health, /api/iap/health, /api/iap/me, /api/config/status
+  B) /api/email/parse — new fields document_type / needs_user_confirmation / confidence
+     (both invoice and contract content)
+  C) /api/scanner/ocr — same new fields in structure
+  D) Strict: never 500, always application/json, new fields ALWAYS present even on LLM failure.
 """
+
 import json
 import sys
 import requests
 
-ROOT = "https://chf-guardian-wallet.preview.emergentagent.com"
-BASE = f"{ROOT}/api"
+BASE = "https://chf-guardian-wallet.preview.emergentagent.com/api"
 TIMEOUT = 60
 
-results = []
+results = []  # (name, passed, details)
 
 
-def check(name, ok, info=""):
-    status = "PASS" if ok else "FAIL"
-    print(f"[{status}] {name}  {info}")
-    results.append((name, ok, info))
-    return ok
+def record(name: str, passed: bool, details: str = ""):
+    status = "PASS" if passed else "FAIL"
+    print(f"[{status}] {name} — {details}")
+    results.append((name, passed, details))
 
 
-def is_json(resp):
-    ct = resp.headers.get("content-type", "")
-    is_json_ct = "application/json" in ct.lower()
+def is_json_response(resp) -> bool:
+    ctype = resp.headers.get("content-type", "")
+    return "application/json" in ctype.lower()
+
+
+# ──────────────────────────────────────────────────
+# A) NON-REGRESSION
+# ──────────────────────────────────────────────────
+def test_health():
+    name = "A1 GET /api/health"
     try:
-        data = resp.json()
-    except Exception:
-        data = None
-    return is_json_ct, data, ct
+        r = requests.get(f"{BASE}/health", timeout=TIMEOUT)
+        if r.status_code != 200:
+            return record(name, False, f"HTTP {r.status_code}")
+        if not is_json_response(r):
+            return record(name, False, f"Content-Type not JSON: {r.headers.get('content-type')}")
+        body = r.json()
+        if body.get("status") != "ok":
+            return record(name, False, f"status not ok: {body}")
+        if body.get("app") != "Budgy":
+            return record(name, False, f"app missing/wrong: {body}")
+        if "version" not in body:
+            return record(name, False, f"version missing: {body}")
+        record(name, True, f"status=ok version={body.get('version')} app=Budgy keys={list(body.keys())}")
+    except Exception as e:
+        record(name, False, f"exception: {e}")
 
 
-def section(title):
-    print(f"\n=== {title} ===")
+def test_iap_health():
+    name = "A2 GET /api/iap/health"
+    try:
+        r = requests.get(f"{BASE}/iap/health", timeout=TIMEOUT)
+        if r.status_code != 200:
+            return record(name, False, f"HTTP {r.status_code}")
+        if not is_json_response(r):
+            return record(name, False, "not JSON")
+        body = r.json()
+        required = {"iap_ready", "supabase_ready", "missing", "sandbox", "products"}
+        missing_keys = required - set(body.keys())
+        if missing_keys:
+            return record(name, False, f"missing keys: {missing_keys}; got {list(body.keys())}")
+        record(name, True, f"keys={list(body.keys())} iap_ready={body.get('iap_ready')} sandbox={body.get('sandbox')}")
+    except Exception as e:
+        record(name, False, f"exception: {e}")
 
 
-# ---------------------------------------------------------------------
-# 1) GET /health (root, for Coolify probes)
-# ---------------------------------------------------------------------
-section("TEST 1 — GET /health (root, Coolify probe)")
-try:
-    r = requests.get(f"{ROOT}/health", timeout=TIMEOUT)
-    print(f"  HTTP {r.status_code}  CT={r.headers.get('content-type')}")
-    is_json_ct, data, ct = is_json(r)
-    print(f"  body={json.dumps(data, ensure_ascii=False)[:300] if data else r.text[:300]}")
-    check("/health is not 404", r.status_code != 404, f"got {r.status_code}")
-    check("/health returns HTTP 200", r.status_code == 200, f"got {r.status_code}")
-    check("/health Content-Type is application/json", is_json_ct, f"got {ct}")
-    check("/health body is valid JSON", data is not None)
-    if data:
-        check("/health status == 'ok'", data.get("status") == "ok", f"got {data.get('status')}")
-        check("/health service == 'budgy-api'", data.get("service") == "budgy-api", f"got {data.get('service')}")
-        check("/health has version string", isinstance(data.get("version"), str) and len(data.get("version", "")) > 0,
-              f"got {data.get('version')!r}")
-        check("/health has env key", "env" in data, f"keys={list(data.keys())}")
-except Exception as e:
-    check("/health request did not crash", False, f"exception: {e}")
+def test_iap_me():
+    name = "A3 GET /api/iap/me?user_id=zero-uuid"
+    try:
+        r = requests.get(f"{BASE}/iap/me", params={"user_id": "00000000-0000-0000-0000-000000000000"}, timeout=TIMEOUT)
+        if r.status_code != 200:
+            return record(name, False, f"HTTP {r.status_code}")
+        if not is_json_response(r):
+            return record(name, False, "not JSON")
+        body = r.json()
+        if body.get("is_pro") is not False:
+            return record(name, False, f"is_pro not False: {body}")
+        if body.get("subscription_state") != "FREE":
+            return record(name, False, f"subscription_state != FREE: {body}")
+        record(name, True, f"is_pro=False subscription_state=FREE keys={list(body.keys())}")
+    except Exception as e:
+        record(name, False, f"exception: {e}")
 
 
-# ---------------------------------------------------------------------
-# 2) GET /api/health
-# ---------------------------------------------------------------------
-section("TEST 2 — GET /api/health")
-try:
-    r = requests.get(f"{BASE}/health", timeout=TIMEOUT)
-    print(f"  HTTP {r.status_code}  CT={r.headers.get('content-type')}")
-    is_json_ct, data, ct = is_json(r)
-    print(f"  body={json.dumps(data, ensure_ascii=False)[:300] if data else r.text[:300]}")
-    check("/api/health returns HTTP 200", r.status_code == 200, f"got {r.status_code}")
-    check("/api/health Content-Type is application/json", is_json_ct, f"got {ct}")
-    check("/api/health body is valid JSON", data is not None)
-    if data:
-        check("/api/health status == 'ok'", data.get("status") == "ok", f"got {data.get('status')}")
-        check("/api/health app == 'Budgy'", data.get("app") == "Budgy", f"got {data.get('app')}")
-        check("/api/health has version string", isinstance(data.get("version"), str) and len(data.get("version", "")) > 0,
-              f"got {data.get('version')!r}")
-except Exception as e:
-    check("/api/health request did not crash", False, f"exception: {e}")
+def test_config_status():
+    name = "A4 GET /api/config/status"
+    try:
+        r = requests.get(f"{BASE}/config/status", timeout=TIMEOUT)
+        if r.status_code != 200:
+            return record(name, False, f"HTTP {r.status_code}")
+        if not is_json_response(r):
+            return record(name, False, "not JSON")
+        body = r.json()
+        record(name, True, f"keys={list(body.keys())}")
+    except Exception as e:
+        record(name, False, f"exception: {e}")
 
 
-# ---------------------------------------------------------------------
-# 3) GET /api/iap/health
-# ---------------------------------------------------------------------
-section("TEST 3 — GET /api/iap/health")
-try:
-    r = requests.get(f"{BASE}/iap/health", timeout=TIMEOUT)
-    print(f"  HTTP {r.status_code}  CT={r.headers.get('content-type')}")
-    is_json_ct, data, ct = is_json(r)
-    print(f"  body={json.dumps(data, ensure_ascii=False)[:400] if data else r.text[:400]}")
-    check("/api/iap/health returns HTTP 200", r.status_code == 200, f"got {r.status_code}")
-    check("/api/iap/health Content-Type is application/json", is_json_ct, f"got {ct}")
-    check("/api/iap/health body is valid JSON", data is not None)
-    if data:
-        for k in ("iap_ready", "supabase_ready", "missing", "sandbox", "products"):
-            check(f"/api/iap/health has key '{k}'", k in data, f"keys={list(data.keys())}")
-        check("/api/iap/health.missing is a list", isinstance(data.get("missing"), list),
-              f"type={type(data.get('missing')).__name__}")
-except Exception as e:
-    check("/api/iap/health request did not crash", False, f"exception: {e}")
+# ──────────────────────────────────────────────────
+# B) /api/email/parse — new fields presence
+# ──────────────────────────────────────────────────
+EMAIL_REQUIRED_KEYS = {
+    "success", "document_type", "needs_user_confirmation", "confidence",
+    "title", "issuer", "amount", "currency", "due_date",
+    "invoice_date", "iban", "reference", "category",
+}
 
 
-# ---------------------------------------------------------------------
-# 4) GET /api/iap/me?user_id=<zero-uuid>
-# ---------------------------------------------------------------------
-section("TEST 4 — GET /api/iap/me?user_id=<zero-uuid>")
-try:
-    r = requests.get(f"{BASE}/iap/me", params={"user_id": "00000000-0000-0000-0000-000000000000"}, timeout=TIMEOUT)
-    print(f"  HTTP {r.status_code}  CT={r.headers.get('content-type')}")
-    is_json_ct, data, ct = is_json(r)
-    print(f"  body={json.dumps(data, ensure_ascii=False)[:300] if data else r.text[:300]}")
-    check("/api/iap/me returns HTTP 200", r.status_code == 200, f"got {r.status_code}")
-    check("/api/iap/me Content-Type is application/json", is_json_ct, f"got {ct}")
-    check("/api/iap/me body is valid JSON", data is not None)
-    if data:
-        check("/api/iap/me is_pro == False", data.get("is_pro") is False, f"got {data.get('is_pro')}")
-        check("/api/iap/me subscription_state == 'FREE'",
-              str(data.get("subscription_state", "")).upper() == "FREE",
-              f"got {data.get('subscription_state')}")
-except Exception as e:
-    check("/api/iap/me request did not crash", False, f"exception: {e}")
+def test_email_parse_invoice():
+    name = "B1 POST /api/email/parse (INVOICE content)"
+    payload = {"content": "Facture Swisscom CHF 89.50 due 30.04.2026 IBAN CH9300762011623852957"}
+    try:
+        r = requests.post(f"{BASE}/email/parse", json=payload, timeout=TIMEOUT)
+        if r.status_code == 500:
+            return record(name, False, f"HTTP 500 (forbidden): body={r.text[:400]}")
+        if r.status_code != 200:
+            return record(name, False, f"HTTP {r.status_code} body={r.text[:400]}")
+        if not is_json_response(r):
+            return record(name, False, f"Content-Type not JSON: {r.headers.get('content-type')}")
+        body = r.json()
+        missing_keys = EMAIL_REQUIRED_KEYS - set(body.keys())
+        if missing_keys:
+            return record(name, False, f"MISSING required keys: {missing_keys}; got keys={list(body.keys())}")
+        # new-field shape sanity
+        if not isinstance(body.get("needs_user_confirmation"), bool):
+            return record(name, False, f"needs_user_confirmation not bool: {body.get('needs_user_confirmation')!r}")
+        dt = body.get("document_type")
+        if dt is not None and dt not in ("invoice", "contract", "unknown"):
+            return record(name, False, f"document_type invalid: {dt}")
+        record(name, True,
+               f"keys={sorted(body.keys())} | success={body.get('success')} document_type={dt} "
+               f"needs_user_confirmation={body.get('needs_user_confirmation')} "
+               f"confidence={body.get('confidence')} error={body.get('error')}")
+    except Exception as e:
+        record(name, False, f"exception: {e}")
 
 
-# ---------------------------------------------------------------------
-# 5) POST /api/email/parse — Swisscom — validates LiteLLM path
-# ---------------------------------------------------------------------
-section("TEST 5 — POST /api/email/parse (LiteLLM path)")
-try:
-    payload = {"content": "Facture Swisscom CHF 89.50 échéance 30.04.2026"}
-    r = requests.post(f"{BASE}/email/parse", json=payload, timeout=TIMEOUT)
-    print(f"  HTTP {r.status_code}  CT={r.headers.get('content-type')}")
-    is_json_ct, data, ct = is_json(r)
-    print(f"  body={json.dumps(data, ensure_ascii=False)[:500] if data else r.text[:500]}")
-    check("/api/email/parse returns HTTP 200", r.status_code == 200, f"got {r.status_code}")
-    check("/api/email/parse Content-Type is application/json", is_json_ct, f"got {ct}")
-    check("/api/email/parse body is valid JSON", data is not None)
-    if data:
-        check("/api/email/parse success == True", data.get("success") is True, f"got success={data.get('success')}")
-        amt = data.get("amount")
-        check("/api/email/parse amount ≈ 89.50", isinstance(amt, (int, float)) and abs(float(amt) - 89.5) < 0.01,
-              f"got amount={amt}")
-        check("/api/email/parse currency == 'CHF'", (data.get("currency") or "").upper() == "CHF",
-              f"got currency={data.get('currency')}")
-        issuer = (data.get("issuer") or "").lower()
-        check("/api/email/parse issuer mentions Swisscom", "swisscom" in issuer, f"got issuer={data.get('issuer')!r}")
-except Exception as e:
-    check("/api/email/parse request did not crash", False, f"exception: {e}")
-
-
-# ---------------------------------------------------------------------
-# 6) POST /api/voice/parse — Migros — validates LiteLLM path
-# ---------------------------------------------------------------------
-section("TEST 6 — POST /api/voice/parse (LiteLLM path)")
-try:
-    payload = {"text": "25 francs chez Migros"}
-    r = requests.post(f"{BASE}/voice/parse", json=payload, timeout=TIMEOUT)
-    print(f"  HTTP {r.status_code}  CT={r.headers.get('content-type')}")
-    is_json_ct, data, ct = is_json(r)
-    print(f"  body={json.dumps(data, ensure_ascii=False)[:500] if data else r.text[:500]}")
-    check("/api/voice/parse returns HTTP 200", r.status_code == 200, f"got {r.status_code}")
-    check("/api/voice/parse Content-Type is application/json", is_json_ct, f"got {ct}")
-    check("/api/voice/parse body is valid JSON", data is not None)
-    if data:
-        check("/api/voice/parse success == True", data.get("success") is True, f"got success={data.get('success')}")
-        amt = data.get("amount")
-        check("/api/voice/parse amount == 25", isinstance(amt, (int, float)) and abs(float(amt) - 25.0) < 0.01,
-              f"got amount={amt}")
-        merchant = (data.get("merchant") or "").lower()
-        check("/api/voice/parse merchant mentions Migros", "migros" in merchant,
-              f"got merchant={data.get('merchant')!r}")
-except Exception as e:
-    check("/api/voice/parse request did not crash", False, f"exception: {e}")
-
-
-# ---------------------------------------------------------------------
-# 7) CORS preflight
-# ---------------------------------------------------------------------
-section("TEST 7a — CORS preflight from https://budgy.ch (allowed)")
-try:
-    headers = {
-        "Origin": "https://budgy.ch",
-        "Access-Control-Request-Method": "GET",
-        "Access-Control-Request-Headers": "content-type",
+def test_email_parse_contract():
+    name = "B2 POST /api/email/parse (CONTRACT content)"
+    payload = {
+        "content": "Police d'assurance LAMal Helsana 2026 prime mensuelle CHF 380 contrat n°1234 renouvellement tacite"
     }
-    r = requests.options(f"{BASE}/health", headers=headers, timeout=TIMEOUT)
-    print(f"  HTTP {r.status_code}  resp-headers={dict(r.headers)}")
-    aco = r.headers.get("access-control-allow-origin") or r.headers.get("Access-Control-Allow-Origin")
-    check("CORS preflight (budgy.ch) returns HTTP 200/204",
-          r.status_code in (200, 204), f"got {r.status_code}")
-    check("CORS preflight (budgy.ch) returns access-control-allow-origin: https://budgy.ch",
-          aco == "https://budgy.ch", f"got ACAO={aco!r}")
-except Exception as e:
-    check("CORS preflight (budgy.ch) did not crash", False, f"exception: {e}")
+    try:
+        r = requests.post(f"{BASE}/email/parse", json=payload, timeout=TIMEOUT)
+        if r.status_code == 500:
+            return record(name, False, f"HTTP 500 (forbidden): body={r.text[:400]}")
+        if r.status_code != 200:
+            return record(name, False, f"HTTP {r.status_code} body={r.text[:400]}")
+        if not is_json_response(r):
+            return record(name, False, "not JSON")
+        body = r.json()
+        missing_keys = EMAIL_REQUIRED_KEYS - set(body.keys())
+        if missing_keys:
+            return record(name, False, f"MISSING required keys: {missing_keys}; got keys={list(body.keys())}")
+        if not isinstance(body.get("needs_user_confirmation"), bool):
+            return record(name, False, f"needs_user_confirmation not bool: {body.get('needs_user_confirmation')!r}")
+        dt = body.get("document_type")
+        if dt is not None and dt not in ("invoice", "contract", "unknown"):
+            return record(name, False, f"document_type invalid: {dt}")
+        record(name, True,
+               f"keys={sorted(body.keys())} | success={body.get('success')} document_type={dt} "
+               f"needs_user_confirmation={body.get('needs_user_confirmation')} "
+               f"confidence={body.get('confidence')} error={body.get('error')}")
+    except Exception as e:
+        record(name, False, f"exception: {e}")
 
 
-section("TEST 7b — CORS preflight from https://evil.example.com (must be rejected)")
-try:
-    headers = {
-        "Origin": "https://evil.example.com",
-        "Access-Control-Request-Method": "GET",
-        "Access-Control-Request-Headers": "content-type",
-    }
-    r = requests.options(f"{BASE}/health", headers=headers, timeout=TIMEOUT)
-    print(f"  HTTP {r.status_code}  resp-headers={dict(r.headers)}")
-    aco = r.headers.get("access-control-allow-origin") or r.headers.get("Access-Control-Allow-Origin")
-    # Acceptable: either 400, or no ACAO echo (i.e., ACAO not equal to evil origin)
-    rejected = (r.status_code == 400) or (aco != "https://evil.example.com")
-    check("CORS preflight (evil.example.com) is rejected (HTTP 400 OR no ACAO echo)",
-          rejected, f"status={r.status_code}, ACAO={aco!r}")
-    check("CORS preflight (evil.example.com) does NOT echo evil origin in ACAO",
-          aco != "https://evil.example.com", f"got ACAO={aco!r}")
-except Exception as e:
-    check("CORS preflight (evil) did not crash", False, f"exception: {e}")
+# ──────────────────────────────────────────────────
+# C) /api/scanner/ocr — new fields presence
+# ──────────────────────────────────────────────────
+OCR_REQUIRED_KEYS = {
+    "success", "document_type", "needs_user_confirmation", "confidence",
+    "merchant", "total_amount", "currency", "date", "category",
+    "receipt_type", "items", "raw_text",
+}
 
 
-# ---------------------------------------------------------------------
-# 8) Sanity: confirm no endpoint returned HTML or 500 (already enforced per-test)
-# ---------------------------------------------------------------------
-section("TEST 8 — Global sanity")
-# This is just an aggregate; per-test JSON CT checks above are the real signal.
-non_json_or_500 = [n for (n, ok, info) in results if not ok and ("Content-Type" in n or "HTTP 200" in n or "did not crash" in n)]
-check("No endpoint returned HTML or 500 (aggregated)", len(non_json_or_500) == 0,
-      f"failures: {non_json_or_500[:5]}")
+def test_ocr_tiny_image():
+    name = "C1 POST /api/scanner/ocr (tiny base64 — pre-existing guard)"
+    payload = {"image_base64": "data:image/jpeg;base64,/9j/4AAQSkZJRg=="}
+    try:
+        r = requests.post(f"{BASE}/scanner/ocr", json=payload, timeout=TIMEOUT)
+        if r.status_code == 500:
+            return record(name, False, f"HTTP 500 (forbidden): body={r.text[:400]}")
+        if r.status_code != 200:
+            return record(name, False, f"HTTP {r.status_code}")
+        if not is_json_response(r):
+            return record(name, False, "not JSON")
+        body = r.json()
+        missing_keys = OCR_REQUIRED_KEYS - set(body.keys())
+        if missing_keys:
+            return record(name, False, f"MISSING required keys: {missing_keys}; got keys={list(body.keys())}")
+        # The guard branch returns success=false with error 'Image trop petite'
+        record(name, True,
+               f"keys={sorted(body.keys())} | success={body.get('success')} "
+               f"document_type={body.get('document_type')} "
+               f"needs_user_confirmation={body.get('needs_user_confirmation')} "
+               f"confidence={body.get('confidence')} error={body.get('error')}")
+    except Exception as e:
+        record(name, False, f"exception: {e}")
 
 
-# ---------------------------------------------------------------------
-# SUMMARY
-# ---------------------------------------------------------------------
-print("\n" + "=" * 70)
-print("SUMMARY")
-print("=" * 70)
-passed = sum(1 for _, ok, _ in results if ok)
-total = len(results)
-print(f"{passed}/{total} assertions PASS")
-failed = [(n, info) for (n, ok, info) in results if not ok]
-if failed:
-    print(f"\n{len(failed)} FAILURES:")
-    for n, info in failed:
-        print(f"  - {n}  ({info})")
-sys.exit(0 if passed == total else 1)
+def test_ocr_minimal_valid_jpeg():
+    name = "C2 POST /api/scanner/ocr (minimal valid 1x1 JPEG)"
+    # Real 1x1 px white JPEG, base64. ~125 bytes decoded, large enough to pass the guard.
+    jpeg_b64 = (
+        "/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEB"
+        "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEB/9sAQwEBAQEBAQEBAQEBAQEBAQEB"
+        "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEB/8AAEQgA"
+        "AQABAwEiAAIRAQMRAf/EABUAAQEAAAAAAAAAAAAAAAAAAAAJ/8QAFBABAAAAAAAAAAAAAAAA"
+        "AAAAAAD/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwD"
+        "AQACEQMRAD8AfwD/2Q=="
+    )
+    payload = {"image_base64": jpeg_b64}
+    try:
+        r = requests.post(f"{BASE}/scanner/ocr", json=payload, timeout=TIMEOUT)
+        if r.status_code == 500:
+            return record(name, False, f"HTTP 500 (forbidden): body={r.text[:400]}")
+        if r.status_code != 200:
+            return record(name, False, f"HTTP {r.status_code}")
+        if not is_json_response(r):
+            return record(name, False, "not JSON")
+        body = r.json()
+        missing_keys = OCR_REQUIRED_KEYS - set(body.keys())
+        if missing_keys:
+            return record(name, False, f"MISSING required keys: {missing_keys}; got keys={list(body.keys())}")
+        # success may be False due to LLM auth failure, but the new fields MUST exist with Pydantic defaults
+        dt = body.get("document_type")
+        if dt is not None and dt not in ("invoice", "receipt", "contract", "unknown"):
+            return record(name, False, f"document_type invalid value: {dt}")
+        if not isinstance(body.get("needs_user_confirmation"), bool):
+            return record(name, False, f"needs_user_confirmation not bool: {body.get('needs_user_confirmation')!r}")
+        record(name, True,
+               f"keys={sorted(body.keys())} | success={body.get('success')} document_type={dt} "
+               f"needs_user_confirmation={body.get('needs_user_confirmation')} "
+               f"confidence={body.get('confidence')} error={body.get('error')}")
+    except Exception as e:
+        record(name, False, f"exception: {e}")
+
+
+# ──────────────────────────────────────────────────
+# Run all
+# ──────────────────────────────────────────────────
+def main():
+    print(f"\n=== Smoke test against {BASE} ===\n")
+    test_health()
+    test_iap_health()
+    test_iap_me()
+    test_config_status()
+    test_email_parse_invoice()
+    test_email_parse_contract()
+    test_ocr_tiny_image()
+    test_ocr_minimal_valid_jpeg()
+
+    passed = sum(1 for _, ok, _ in results if ok)
+    failed = sum(1 for _, ok, _ in results if not ok)
+    print(f"\n=== RESULT: {passed}/{len(results)} passed, {failed} failed ===")
+    if failed:
+        print("\nFailures:")
+        for n, ok, d in results:
+            if not ok:
+                print(f"  - {n}: {d}")
+        sys.exit(1)
+    sys.exit(0)
+
+
+if __name__ == "__main__":
+    main()

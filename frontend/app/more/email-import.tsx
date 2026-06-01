@@ -27,6 +27,7 @@ import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src
 import { useTheme } from '../../src/hooks/useTheme';
 import type { ThemePalette } from '../../src/constants/palettes';
 import { useStore } from '../../src/stores/useStore';
+import type { Contract } from '../../src/types';
 import { Card, Button } from '../../src/components/ui';
 import { humanizeError } from '../../src/lib/errorSanitizer';
 
@@ -46,7 +47,7 @@ export default function ImportInvoiceScreen() {
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { addInvoice } = useStore();
+  const { addInvoice, addContract } = useStore();
 
   const [busy, setBusy] = useState(false);
   const [busyLabel, setBusyLabel] = useState('Analyse...');
@@ -293,14 +294,15 @@ export default function ImportInvoiceScreen() {
     }
   };
 
-  const saveInvoice = () => {
+  /** Save as Invoice (Factures section) */
+  const persistAsInvoice = () => {
     if (!result) return;
     const isPhoto = result._source === 'photo';
     addInvoice({
       id: `inv_${Date.now()}`,
       title: result.title || result.merchant || 'Facture',
       issuer: result.issuer || result.merchant || 'Inconnu',
-      amount: Number(result.amount) || Number(result.total) || 0,
+      amount: Number(result.amount) || Number(result.total) || Number(result.total_amount) || 0,
       currency: result.currency || 'CHF',
       dueDate: result.due_date || undefined,
       invoiceDate: result.invoice_date || result.date || undefined,
@@ -313,6 +315,72 @@ export default function ImportInvoiceScreen() {
     });
     Alert.alert('Facture importée ✓', 'Retrouvez-la dans Plus → Factures.');
     setResult(null);
+  };
+
+  /** Save as Contract (Mon Classeur) */
+  const persistAsContract = () => {
+    if (!result) return;
+    const today = new Date();
+    const oneYearLater = new Date(today.getTime());
+    oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
+    const contract: Contract = {
+      id: `ct_${Date.now()}`,
+      title: result.title || result.merchant || result.issuer || 'Contrat',
+      issuer: result.issuer || result.merchant || undefined,
+      amount: Number(result.amount) || Number(result.total_amount) || 0,
+      // Default to 1 year from today if no explicit expiration parsed
+      expirationDate: oneYearLater.toISOString().split('T')[0],
+      startDate: result.invoice_date || result.date || today.toISOString().split('T')[0],
+      urgent: false,
+      autoRenew: true,
+      category: result.category || 'assurance',
+      createdAt: Date.now(),
+      notes: 'Importé automatiquement (IA). Vérifiez les dates et la prime.',
+    };
+    addContract(contract);
+    Alert.alert(
+      'Contrat ajouté à Mon Classeur ✓',
+      'Vérifiez la date d\'expiration et la prime dans Plus → Mon Classeur.',
+      [
+        { text: 'OK', style: 'cancel' },
+        { text: 'Ouvrir Mon Classeur', onPress: () => router.push('/more/contracts' as any) },
+      ],
+    );
+    setResult(null);
+  };
+
+  /**
+   * Strict routing — DO OR DIE :
+   *   - document_type = "contract" → Mon Classeur
+   *   - document_type = "invoice" / "receipt" → Factures
+   *   - document_type = "unknown" OR needs_user_confirmation → Demander à l'user
+   */
+  const saveInvoice = () => {
+    if (!result) return;
+    const docType: string = (result.document_type || '').toLowerCase();
+    const needsConfirm: boolean = !!result.needs_user_confirmation;
+
+    if (docType === 'contract' && !needsConfirm) {
+      persistAsContract();
+      return;
+    }
+    if ((docType === 'invoice' || docType === 'receipt') && !needsConfirm) {
+      persistAsInvoice();
+      return;
+    }
+
+    // Ambigu : on demande EXPLICITEMENT à l'utilisateur — jamais d'auto-classement.
+    Alert.alert(
+      'Type de document à confirmer',
+      'L\'IA n\'est pas certaine du type de document. Où souhaitez-vous l\'enregistrer ?\n\n' +
+        '• Facture → à payer ou déjà payée\n' +
+        '• Contrat → assurance, leasing, bail, abonnement signé',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        { text: 'Contrat (Mon Classeur)', onPress: persistAsContract },
+        { text: 'Facture', onPress: persistAsInvoice },
+      ],
+    );
   };
 
   const dismissResult = () => setResult(null);
@@ -442,25 +510,49 @@ export default function ImportInvoiceScreen() {
         )}
 
         {/* Result preview */}
-        {result && (
-          <View style={styles.resultCard}>
-            <View style={styles.resultHeader}>
-              <Ionicons name="checkmark-circle" size={22} color={theme.success} />
-              <Text style={styles.resultTitle}>Facture détectée</Text>
-              <TouchableOpacity onPress={dismissResult} style={{ marginLeft: 'auto' }}>
-                <Ionicons name="close" size={20} color={theme.textTertiary} />
-              </TouchableOpacity>
+        {result && (() => {
+          const dt: string = (result.document_type || '').toLowerCase();
+          const isContract = dt === 'contract';
+          const needsConfirm = !!result.needs_user_confirmation;
+          const detectedLabel =
+            needsConfirm ? '❓ Type incertain — à confirmer'
+            : isContract ? '📁 Contrat détecté (Mon Classeur)'
+            : dt === 'receipt' ? '🧾 Ticket détecté (Dépense)'
+            : '📄 Facture détectée';
+          const detectedColor =
+            needsConfirm ? '#FBBF24'
+            : isContract ? '#A78BFA'
+            : '#34D399';
+          const ctaLabel =
+            needsConfirm ? '✓ Confirmer et enregistrer'
+            : isContract ? '✓ Ajouter au Classeur'
+            : '✓ Enregistrer la facture';
+          return (
+            <View style={styles.resultCard}>
+              <View style={styles.resultHeader}>
+                <Ionicons name="checkmark-circle" size={22} color={theme.success} />
+                <Text style={styles.resultTitle}>Document analysé</Text>
+                <TouchableOpacity onPress={dismissResult} style={{ marginLeft: 'auto' }}>
+                  <Ionicons name="close" size={20} color={theme.textTertiary} />
+                </TouchableOpacity>
+              </View>
+              <View style={[styles.docTypeBadge, { borderColor: detectedColor + '55', backgroundColor: detectedColor + '15' }]}>
+                <Text style={[styles.docTypeBadgeText, { color: detectedColor }]}>{detectedLabel}</Text>
+                {typeof result.confidence === 'number' ? (
+                  <Text style={styles.docTypeConfidence}>{Math.round((result.confidence || 0) * 100)}% conf.</Text>
+                ) : null}
+              </View>
+              {result.merchant || result.issuer ? <Row label="Émetteur" value={result.merchant || result.issuer} /> : null}
+              {result.title ? <Row label="Sujet" value={result.title} /> : null}
+              {result.amount || result.total || result.total_amount ? <Row label="Montant" value={`${result.currency || 'CHF'} ${result.amount || result.total || result.total_amount}`} highlight /> : null}
+              {result.due_date ? <Row label="Échéance" value={result.due_date} /> : null}
+              {result.invoice_date || result.date ? <Row label="Date" value={result.invoice_date || result.date} /> : null}
+              {result.iban ? <Row label="IBAN" value={result.iban} /> : null}
+              {result.reference ? <Row label="Référence" value={result.reference} /> : null}
+              <Button title={ctaLabel} onPress={saveInvoice} fullWidth size="lg" style={{ marginTop: Spacing.md }} />
             </View>
-            {result.merchant || result.issuer ? <Row label="Émetteur" value={result.merchant || result.issuer} /> : null}
-            {result.title ? <Row label="Sujet" value={result.title} /> : null}
-            {result.amount || result.total ? <Row label="Montant" value={`${result.currency || 'CHF'} ${result.amount || result.total}`} highlight /> : null}
-            {result.due_date ? <Row label="Échéance" value={result.due_date} /> : null}
-            {result.invoice_date || result.date ? <Row label="Date" value={result.invoice_date || result.date} /> : null}
-            {result.iban ? <Row label="IBAN" value={result.iban} /> : null}
-            {result.reference ? <Row label="Référence" value={result.reference} /> : null}
-            <Button title="✓ Enregistrer la facture" onPress={saveInvoice} fullWidth size="lg" style={{ marginTop: Spacing.md }} />
-          </View>
-        )}
+          );
+        })()}
 
         {/* Tips card */}
         <Card style={styles.tipsCard}>
@@ -527,6 +619,9 @@ const makeStyles = (Colors: ThemePalette) => StyleSheet.create({
   resultCard: { backgroundColor: 'rgba(52,211,153,0.08)', borderRadius: BorderRadius.xl, borderWidth: 1, borderColor: 'rgba(52,211,153,0.3)', padding: Spacing.lg, marginTop: Spacing.lg },
   resultHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: Spacing.md },
   resultTitle: { color: Colors.text, fontSize: FontSizes.md, fontWeight: FontWeights.bold },
+  docTypeBadge: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, borderWidth: 1, borderRadius: BorderRadius.md, paddingHorizontal: Spacing.md, paddingVertical: 8, marginBottom: Spacing.sm },
+  docTypeBadgeText: { fontSize: FontSizes.sm, fontWeight: FontWeights.bold as any },
+  docTypeConfidence: { color: Colors.textSecondary, fontSize: 11, fontWeight: FontWeights.semibold as any },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)' },
   rowLabel: { color: Colors.textSecondary, fontSize: FontSizes.sm },
   rowValue: { color: Colors.text, fontSize: FontSizes.sm, fontWeight: FontWeights.semibold, flex: 1, textAlign: 'right' },

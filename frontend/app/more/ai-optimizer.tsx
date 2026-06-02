@@ -59,44 +59,60 @@ function enrichWithLocalProposals(
     const base = subsTotal > 0 ? subsTotal : recurringTotal;
     candidates.push({
       title: 'Audit de vos abonnements',
-      category: 'abonnements',
+      category: 'subscription',
+      potential_saving_monthly: Math.round(base * 0.20 * 100) / 100,
+      potential_saving_yearly: Math.round(base * 0.20 * 12 * 100) / 100,
       monthly_potential: Math.round(base * 0.20 * 100) / 100,
       annual_potential: Math.round(base * 0.20 * 12 * 100) / 100,
-      effort: 'low',
+      current_monthly: base,
+      effort: 'easy',
       action: `Vous avez environ CHF ${base.toFixed(0)}/mois en charges récurrentes. Annulez celles qu'on n'utilise plus depuis 60 jours pour économiser ~20%.`,
+      explanation: '',
     });
   }
   // 2. LAMal / santé
   if (!existingCats.has('sante') && !existingCats.has('insurance')) {
     candidates.push({
       title: 'Assurance maladie LAMal',
-      category: 'sante',
+      category: 'insurance',
+      potential_saving_monthly: 60,
+      potential_saving_yearly: 720,
       monthly_potential: 60,
       annual_potential: 720,
+      current_monthly: 0,
       effort: 'medium',
       action: 'Comparez les caisses maladie sur priminfo.admin.ch (OFSP). Économie moyenne CHF 50-80/mois en modèle alternatif (HMO, médecin de famille).',
+      explanation: '',
     });
   }
   // 3. 3e pilier / fiscal
   if (!existingCats.has('fiscal') && !existingCats.has('tax') && monthlyIncome > 1000) {
     candidates.push({
       title: 'Pilier 3a — Optimisation fiscale',
-      category: 'fiscal',
+      category: 'tax',
+      potential_saving_monthly: Math.round((Math.min(monthlyIncome * 0.10, 588)) * 100) / 100,
+      potential_saving_yearly: 7056,
       monthly_potential: Math.round((Math.min(monthlyIncome * 0.10, 588)) * 100) / 100,
       annual_potential: 7056,
+      current_monthly: 0,
       effort: 'medium',
       action: 'Maximisez votre 3e pilier (plafond CHF 7056/an salarié). Économie d\'impôt typique : CHF 1500-2500 selon canton.',
+      explanation: '',
     });
   }
   // 4. Télécoms
   if (!existingCats.has('telecoms') && !existingCats.has('telco')) {
     candidates.push({
       title: 'Forfait télécom',
-      category: 'telecoms',
+      category: 'telco',
+      potential_saving_monthly: 25,
+      potential_saving_yearly: 300,
       monthly_potential: 25,
       annual_potential: 300,
-      effort: 'low',
+      current_monthly: 0,
+      effort: 'easy',
       action: 'Passez d\'un forfait premium à un opérateur low-cost suisse. Économie typique CHF 20-30/mois pour des services équivalents.',
+      explanation: '',
     });
   }
   // 5. Alimentation / restaurants
@@ -104,33 +120,45 @@ function enrichWithLocalProposals(
     const base = restoTotal > 100 ? restoTotal : coursesTotal;
     candidates.push({
       title: 'Alimentation — réduire les sorties',
-      category: 'alimentation',
+      category: 'food',
+      potential_saving_monthly: Math.round(base * 0.25 * 100) / 100,
+      potential_saving_yearly: Math.round(base * 0.25 * 12 * 100) / 100,
       monthly_potential: Math.round(base * 0.25 * 100) / 100,
       annual_potential: Math.round(base * 0.25 * 12 * 100) / 100,
-      effort: 'low',
+      current_monthly: base,
+      effort: 'easy',
       action: `CHF ${base.toFixed(0)} ce mois — cuisiner 1 jour de plus/semaine et planifier les courses (liste, marques distributeur) économise ~25%.`,
+      explanation: '',
     });
   }
-  // 6. Logement / loyer (si une dépense loyer existe dans recurring)
-  if (!existingCats.has('logement') && (store.recurringExpenses || []).some((r: any) => /loyer|logement|rent/i.test(String(r.title || '')))) {
+  // 6. Logement / loyer
+  if (!existingCats.has('logement') && !existingCats.has('other') && (store.recurringExpenses || []).some((r: any) => /loyer|logement|rent/i.test(String(r.title || '')))) {
     candidates.push({
       title: 'Logement — renégocier loyer ou charges',
-      category: 'logement',
+      category: 'other',
+      potential_saving_monthly: 50,
+      potential_saving_yearly: 600,
       monthly_potential: 50,
       annual_potential: 600,
+      current_monthly: 0,
       effort: 'medium',
       action: 'Vérifiez sur asloca.ch que votre loyer correspond au taux hypothécaire actuel. Beaucoup de bailleurs ne répercutent pas les baisses.',
+      explanation: '',
     });
   }
   // 7. Contrats à renégocier
   if (!existingCats.has('contrats') && hasContracts) {
     candidates.push({
       title: 'Renégocier vos contrats',
-      category: 'contrats',
+      category: 'insurance',
+      potential_saving_monthly: 40,
+      potential_saving_yearly: 480,
       monthly_potential: 40,
       annual_potential: 480,
+      current_monthly: 0,
       effort: 'medium',
       action: `Vous avez ${store.contracts.length} contrat(s) actif(s). Renégocier 1 fois par an (assurance ménage/RC, télécom) génère 10-20% d'économie.`,
+      explanation: '',
     });
   }
   // 8. Frais bancaires
@@ -138,10 +166,14 @@ function enrichWithLocalProposals(
     candidates.push({
       title: 'Frais bancaires',
       category: 'bank',
+      potential_saving_monthly: 8,
+      potential_saving_yearly: 96,
       monthly_potential: 8,
       annual_potential: 96,
-      effort: 'low',
+      current_monthly: 0,
+      effort: 'easy',
       action: 'Comparez votre banque (UBS, Raiffeisen, PostFinance) avec Yuh / Neon / Zak. Souvent 0 frais de tenue + meilleur change.',
+      explanation: '',
     });
   }
 
@@ -152,8 +184,16 @@ function enrichWithLocalProposals(
     existing.push(c);
   }
 
-  const total_monthly = existing.reduce((s, p) => s + (p.monthly_potential || p.potential_saving_monthly || 0), 0);
-  const total_annual = existing.reduce((s, p) => s + (p.annual_potential || p.potential_saving_yearly || 0), 0);
+  const total_monthly = existing.reduce((s, p) => s + (p.potential_saving_monthly || p.monthly_potential || 0), 0);
+  const total_annual = existing.reduce((s, p) => s + (p.potential_saving_yearly || p.annual_potential || 0), 0);
+
+  // Si on a dû enrichir (backend a rendu 0 ou peu de propos), on remplace
+  // le résumé trompeur "0 pistes détectées" par un résumé honnête.
+  const enriched = existing.length > (data?.proposals?.length || 0);
+  let summary = data?.summary;
+  if (enriched || !summary || /0 pistes|aucune piste|no proposals?/i.test(summary)) {
+    summary = `${existing.length} pistes d'économies identifiées${enriched ? ' (analyse locale enrichie)' : ''}.`;
+  }
 
   return {
     ...data,
@@ -162,8 +202,8 @@ function enrichWithLocalProposals(
     total_annual_potential: total_annual,
     monthly_potential: total_monthly,
     yearly_potential: total_annual,
-    summary: data.summary || `${existing.length} pistes d'économies détectées à partir de vos données.`,
-    _enriched: existing.length > (data?.proposals?.length || 0),
+    summary,
+    _enriched: enriched,
   };
 }
 

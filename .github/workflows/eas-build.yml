@@ -120,30 +120,26 @@ jobs:
         run: npm ci --legacy-peer-deps --no-audit --no-fund
 
       # ────────────────────────────────────────────────────────
-      # 6. Affiche les versions présentes (transparence build)
+      # 6. Affiche les versions présentes (PUR Node, aucun npx).
+      #    Ce step est volontairement minimal pour ne JAMAIS faire échouer
+      #    le workflow avant le build : il ne fait que lire frontend/app.json.
       # ────────────────────────────────────────────────────────
       - name: Print app version info from frontend/app.json
         run: |
-          echo "── frontend/app.json (version, buildNumber, versionCode) ──"
-          node -e "
-            const a = require('./app.json').expo;
-            console.log('Name             :', a.name);
-            console.log('Slug             :', a.slug);
-            console.log('Owner            :', a.owner);
-            console.log('Version          :', a.version);
-            console.log('iOS buildNumber  :', a.ios && a.ios.buildNumber);
-            console.log('Android verCode  :', a.android && a.android.versionCode);
-            console.log('iOS bundleId     :', a.ios && a.ios.bundleIdentifier);
-            console.log('Android package  :', a.android && a.android.package);
-            console.log('EAS projectId    :', a.extra && a.extra.eas && a.extra.eas.projectId);
-          "
-          echo ""
+          node -e "const a = require('./app.json').expo; console.log('Name             :', a.name); console.log('Slug             :', a.slug); console.log('Owner            :', a.owner); console.log('Version          :', a.version); console.log('iOS buildNumber  :', a.ios && a.ios.buildNumber); console.log('Android verCode  :', a.android && a.android.versionCode); console.log('iOS bundleId     :', a.ios && a.ios.bundleIdentifier); console.log('Android package  :', a.android && a.android.package); console.log('EAS projectId    :', a.extra && a.extra.eas && a.extra.eas.projectId);"
+
+      # ────────────────────────────────────────────────────────
+      # 6b. Diagnostic EAS (non bloquant — continue-on-error si pb)
+      # ────────────────────────────────────────────────────────
+      - name: EAS CLI sanity (whoami)
+        continue-on-error: true
+        run: |
           echo "── EAS / Expo CLI versions ──"
-          npx --no-install expo --version || npx expo --version
-          npx --no-install eas --version || npx eas --version
+          eas --version || true
+          expo --version || true
           echo ""
           echo "── Compte EAS connecté ──"
-          npx eas whoami
+          eas whoami || true
 
       # ────────────────────────────────────────────────────────
       # 7. Lancement du build EAS
@@ -158,12 +154,12 @@ jobs:
 
           echo "Lancement EAS build  platform=$PLATFORM  profile=$PROFILE  submit=$SUBMIT"
           if [ "$SUBMIT" = "true" ]; then
-            npx eas build \
+            eas build \
               --platform "$PLATFORM" \
               --profile "$PROFILE" \
               --non-interactive
           else
-            npx eas build \
+            eas build \
               --platform "$PLATFORM" \
               --profile "$PROFILE" \
               --non-interactive \
@@ -178,7 +174,7 @@ jobs:
         run: |
           PLATFORM="${{ github.event.inputs.platform || 'ios' }}"
           echo "Submitting latest $PLATFORM build to store …"
-          npx eas submit \
+          eas submit \
             --platform "$PLATFORM" \
             --latest \
             --non-interactive

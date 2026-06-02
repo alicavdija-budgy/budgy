@@ -18,7 +18,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
 import { safeFetchJson } from '../../src/lib/network';
 import { normalizeImageForUpload } from '../../src/lib/imageUpload';
@@ -41,11 +41,23 @@ export default function ImportInvoiceScreen() {
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const params = useLocalSearchParams<{ mode?: string }>();
   const { addInvoice, addContract } = useStore();
+
+  // Mode = invoice|contract|null (choisi explicitement par l'utilisateur via
+  // les CTAs depuis Factures/Dépenses ou Contrats/Mon Classeur).
+  // Si null → afficher d'abord un sélecteur de type.
+  const initialMode: 'invoice' | 'contract' | null = useMemo(() => {
+    const m = String(params.mode || '').toLowerCase();
+    return m === 'invoice' || m === 'contract' ? m : null;
+  }, [params.mode]);
+  const [mode, setMode] = useState<'invoice' | 'contract' | null>(initialMode);
 
   const [busy, setBusy] = useState(false);
   const [busyLabel, setBusyLabel] = useState('Analyse...');
   const [result, setResult] = useState<any>(null);
+  // Pour la fallback "OCR a échoué mais on garde le fichier"
+  const [pendingFile, setPendingFile] = useState<{ uri: string; mime: string } | null>(null);
 
   // ── Backend calls ──
   const parseEmailText = async (content: string, subject = '') => {
@@ -130,18 +142,17 @@ export default function ImportInvoiceScreen() {
         // Keep the original URI as attachment for later preview
         setResult({ ...data, _source: 'photo', _originalUri: uriOrPath, _mime: mime });
       } else {
-        // Humanize the error message — never show "gpt-4o-mini" / "litellm" to user
-        const h = humanizeError(data.error || 'unknown', {
-          title: 'Échec de l\'analyse',
-          message: 'Ce fichier n\'a pas pu être analysé. Vous pouvez l\'ajouter manuellement.',
+        // OCR a échoué — on PRÉSERVE le fichier et on permet une saisie
+        // manuelle ; jamais d'écran cul-de-sac (DO OR DIE v3.7.26).
+        setPendingFile({ uri: uriOrPath, mime });
+        setResult({
+          success: false,
+          _source: 'photo',
+          _originalUri: uriOrPath,
+          _mime: mime,
+          _failedOcr: true,
+          _errorMessage: data.error || 'OCR indisponible',
         });
-        Alert.alert(h.title, h.message, [
-          { text: 'OK', style: 'cancel' },
-          {
-            text: h.fallback || 'Saisir manuellement',
-            onPress: () => router.push('/more/invoices' as any),
-          },
-        ]);
       }
     } catch (e: any) {
       console.error('[email-import] parseImageFile error:', e);
@@ -275,31 +286,25 @@ export default function ImportInvoiceScreen() {
   };
 
   /**
-   * Strict routing — DO OR DIE :
-   *   - document_type = "contract" → Mon Classeur
-   *   - document_type = "invoice" / "receipt" → Factures
-   *   - document_type = "unknown" OR needs_user_confirmation → Demander à l'user
+   * Routage par CONTEXTE UTILISATEUR (mode), pas par IA.
+   * v3.7.26 — DO OR DIE :
+   *   mode=invoice → toujours une facture, jamais un contrat
+   *   mode=contract → toujours un contrat, jamais une facture
+   *   mode=null → fallback rétro-compat (très rare en v3.7.26)
    */
   const saveInvoice = () => {
     if (!result) return;
+    if (mode === 'contract') return persistAsContract();
+    if (mode === 'invoice') return persistAsInvoice();
+
+    // Fallback : si pas de mode, on retombe sur l'IA (legacy)
     const docType: string = (result.document_type || '').toLowerCase();
-    const needsConfirm: boolean = !!result.needs_user_confirmation;
+    if (docType === 'contract') return persistAsContract();
+    if (docType === 'invoice' || docType === 'receipt') return persistAsInvoice();
 
-    if (docType === 'contract' && !needsConfirm) {
-      persistAsContract();
-      return;
-    }
-    if ((docType === 'invoice' || docType === 'receipt') && !needsConfirm) {
-      persistAsInvoice();
-      return;
-    }
-
-    // Ambigu : on demande EXPLICITEMENT à l'utilisateur — jamais d'auto-classement.
     Alert.alert(
       'Type de document à confirmer',
-      'L\'IA n\'est pas certaine du type de document. Où souhaitez-vous l\'enregistrer ?\n\n' +
-        '• Facture → à payer ou déjà payée\n' +
-        '• Contrat → assurance, leasing, bail, abonnement signé',
+      'Où souhaitez-vous l\'enregistrer ?',
       [
         { text: 'Annuler', style: 'cancel' },
         { text: 'Contrat (Mon Classeur)', onPress: persistAsContract },
@@ -359,9 +364,69 @@ export default function ImportInvoiceScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
           <Ionicons name="chevron-back" size={24} color={theme.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>Importer un document</Text>
+        <Text style={styles.title}>
+          {mode === 'invoice' ? 'Importer une facture'
+            : mode === 'contract' ? 'Importer un contrat'
+            : 'Importer un document'}
+        </Text>
         <View style={{ width: 36 }} />
       </View>
+
+      {/* Type selector (si mode pas fixé) — DO OR DIE v3.7.26 :
+          le type est décidé par le contexte (clic depuis Factures vs Contrats),
+          PAS par l'IA. */}
+      {mode === null && (
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ padding: Spacing.lg }}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.hero}>
+            <Text style={styles.heroTitle}>Que voulez-vous importer ?</Text>
+            <Text style={styles.heroSub}>
+              Choisissez d'abord le type — Budgy le rangera au bon endroit.
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.methodCard, { marginBottom: Spacing.md }]}
+            onPress={() => setMode('invoice')}
+          >
+            <LinearGradient
+              colors={['#FBBF24', '#F59E0B']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.methodIcon}
+            >
+              <Ionicons name="receipt" size={26} color="#FFF" />
+            </LinearGradient>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.methodTitle}>Importer une facture</Text>
+              <Text style={styles.methodSubtitle}>À payer ou déjà payée — Devient une dépense</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={theme.textTertiary} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.methodCard}
+            onPress={() => setMode('contract')}
+          >
+            <LinearGradient
+              colors={['#A78BFA', '#7C3AED']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.methodIcon}
+            >
+              <Ionicons name="document-text" size={26} color="#FFF" />
+            </LinearGradient>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.methodTitle}>Importer un contrat</Text>
+              <Text style={styles.methodSubtitle}>Assurance, bail, leasing, abonnement signé — Va dans Mon Classeur</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={theme.textTertiary} />
+          </TouchableOpacity>
+        </ScrollView>
+      )}
+
+      {mode !== null && (<>
 
       <ScrollView
         style={{ flex: 1 }}
@@ -468,6 +533,7 @@ export default function ImportInvoiceScreen() {
           </View>
         </View>
       )}
+      </>)}
     </KeyboardAvoidingView>
   );
 }

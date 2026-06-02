@@ -1,6 +1,10 @@
 /**
- * GUARDIAN MONEY CHF - Expenses Screen
- * Daily expenses, Pro expenses, Contracts
+ * BUDGY - Expenses Screen (v3.7.26)
+ * 2 tabs uniquement : Quotidien · Pro
+ * (Les contrats vivent dans /more/contracts — alias /more/classeur)
+ *
+ * Pro gating : source canonique = usePremiumStore.hasPremiumAccess()
+ * (couvre isPro + trial actif + provisional après achat).
  */
 
 import React, { useState, useMemo } from 'react';
@@ -18,9 +22,11 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
 import { useTheme } from '../../src/hooks/useTheme';
 import { useStore } from '../../src/stores/useStore';
+import { usePremiumStore } from '../../src/stores/usePremiumStore';
 import { Card, Button, EmptyState, Badge } from '../../src/components/ui';
 import { CategoryIcon, getCategoryName, getCategoryColor } from '../../src/components/CategoryIcon';
 import BrandLogo from '../../src/components/BrandLogo';
@@ -29,36 +35,29 @@ import { EXPENSE_CATEGORIES, PAYMENT_METHODS } from '../../src/data/swiss-data';
 import { useTranslation } from '../../src/hooks/useTranslation';
 import { EntityActionsSheet, type EntityActionsContext } from '../../src/components/EntityActionsSheet';
 import { EntityEditModal, type EditField } from '../../src/components/EntityEditModal';
-import {
-  scheduleDeadlineRemindersForEntity,
-  cancelDeadlineRemindersForEntity,
-} from '../../src/services/notifications';
 
-type Tab = 'daily' | 'pro' | 'contracts';
+type Tab = 'daily' | 'pro';
 
 export default function ExpensesScreen() {
   const insets = useSafeAreaInsets();
   const theme = useTheme();
+  const router = useRouter();
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const {
     preferences,
     transactions,
     proExpenses,
-    contracts,
     addTransaction,
     deleteTransaction,
     addProExpense,
     deleteProExpense,
-    addContract,
-    updateContract,
-    deleteContract,
     updateTransaction,
-    isPro,
   } = useStore();
+  // ✅ Pro gating canonique (couvre isPro + trial + provisional Pro)
+  const isPro = usePremiumStore((s) => s.hasPremiumAccess());
 
   const [activeTab, setActiveTab] = useState<Tab>('daily');
   const [showAddModal, setShowAddModal] = useState(false);
-  const [showContractModal, setShowContractModal] = useState(false);
   const { t } = useTranslation();
   const [newExpense, setNewExpense] = useState({
     title: '',
@@ -67,17 +66,6 @@ export default function ExpensesScreen() {
     justification: '',
     paymentMethod: 'card',
   });
-  const [newContract, setNewContract] = useState({
-    title: '',
-    amount: '',
-    expirationDate: '',
-    category: 'abonnements',
-    urgent: false,
-  });
-
-  // CRUD action sheet & edit modal state (contracts)
-  const [actionsCtx, setActionsCtx] = useState<EntityActionsContext | null>(null);
-  const [editingContractId, setEditingContractId] = useState<string | null>(null);
 
   // CRUD for transactions (daily expenses)
   const [txActionsCtx, setTxActionsCtx] = useState<EntityActionsContext | null>(null);
@@ -108,21 +96,6 @@ export default function ExpensesScreen() {
       synced: false,
     });
     setEditingTxId(null);
-  };
-
-  const editingContract = useMemo(
-    () => contracts.find((c) => c.id === editingContractId) || null,
-    [editingContractId, contracts]
-  );
-
-  // ISO date conversion helper for notifs (accepts DD.MM.YYYY or YYYY-MM-DD)
-  const toISODate = (s: string): string | null => {
-    if (!s) return null;
-    const a = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (a) return s;
-    const b = s.match(/^(\d{1,2})[./](\d{1,2})[./](\d{4})$/);
-    if (b) return `${b[3]}-${b[2].padStart(2, '0')}-${b[1].padStart(2, '0')}`;
-    return null;
   };
 
   const CUR = preferences.currency;
@@ -168,84 +141,6 @@ export default function ExpensesScreen() {
     setShowAddModal(false);
   };
 
-  const handleAddContract = () => {
-    if (!newContract.title.trim() || !newContract.amount) {
-      Alert.alert(t('common.error'), t('common.requiredFields'));
-      return;
-    }
-    const id = `ct_${Date.now()}`;
-    const amount = parseFloat(newContract.amount.replace(',', '.')) || 0;
-    const expirationDate = newContract.expirationDate || '—';
-    addContract({
-      id,
-      title: newContract.title.trim(),
-      amount,
-      expirationDate,
-      urgent: newContract.urgent,
-      category: newContract.category,
-      createdAt: Date.now(),
-    });
-    // Schedule deadline reminders (J-90, J-30, J-7, J-1) if a valid date is set
-    const iso = toISODate(expirationDate);
-    if (iso) {
-      scheduleDeadlineRemindersForEntity(id, {
-        type: 'contract',
-        name: newContract.title.trim(),
-        dueDate: iso,
-        amount,
-      }).catch(() => {});
-    }
-    setNewContract({ title: '', amount: '', expirationDate: '', category: 'abonnements', urgent: false });
-    setShowContractModal(false);
-  };
-
-  const handleDeleteContract = (id: string) => {
-    cancelDeadlineRemindersForEntity(id).catch(() => {});
-    deleteContract(id);
-  };
-
-  const handleEditContractSubmit = (values: Record<string, any>) => {
-    if (!editingContract) return;
-    const amount = parseFloat(String(values.amount).replace(',', '.')) || 0;
-    const newExpiration = values.expirationDate || editingContract.expirationDate;
-    updateContract(editingContract.id, {
-      title: String(values.title || '').trim() || editingContract.title,
-      amount,
-      expirationDate: newExpiration,
-      category: values.category || editingContract.category,
-      urgent: !!values.urgent,
-    });
-    // Reschedule reminders cleanly (cancel old → re-schedule)
-    const iso = toISODate(newExpiration);
-    if (iso) {
-      scheduleDeadlineRemindersForEntity(editingContract.id, {
-        type: 'contract',
-        name: String(values.title || editingContract.title),
-        dueDate: iso,
-        amount,
-      }).catch(() => {});
-    } else {
-      cancelDeadlineRemindersForEntity(editingContract.id).catch(() => {});
-    }
-    setEditingContractId(null);
-  };
-
-  const CONTRACT_CATEGORIES_OPTIONS = useMemo(
-    () => EXPENSE_CATEGORIES.map((c) => ({ value: c.id, label: c.name, color: c.color })),
-    []
-  );
-
-  const CONTRACT_EDIT_FIELDS: EditField[] = useMemo(
-    () => [
-      { key: 'title', label: 'Nom du contrat', type: 'text', placeholder: 'Sunrise mobile…', icon: 'document-text-outline', required: true },
-      { key: 'amount', label: `Montant (${CUR})`, type: 'number', placeholder: '49.90', icon: 'cash-outline', required: true },
-      { key: 'expirationDate', label: 'Date d\'échéance', type: 'text', placeholder: '31.12.2026', icon: 'calendar-outline' },
-      { key: 'category', label: 'Catégorie', type: 'select', options: CONTRACT_CATEGORIES_OPTIONS },
-      { key: 'urgent', label: 'Marquer comme urgent', type: 'switch' },
-    ],
-    [CONTRACT_CATEGORIES_OPTIONS, CUR]
-  );
-
   const handleDelete = (id: string) => {
     Alert.alert(
       t('expenses.deleteTitle'),
@@ -270,7 +165,6 @@ export default function ExpensesScreen() {
   const tabs: { key: Tab; label: string; icon: string }[] = [
     { key: 'daily', label: t('expenses.daily'), icon: 'cart' },
     { key: 'pro', label: t('expenses.pro'), icon: 'briefcase' },
-    { key: 'contracts', label: t('expenses.contracts'), icon: 'document-text' },
   ];
 
   return (
@@ -280,7 +174,7 @@ export default function ExpensesScreen() {
         <Text style={styles.title}>{t('expenses.title')}</Text>
         <TouchableOpacity
           style={styles.addButton}
-          onPress={() => activeTab === 'contracts' ? setShowContractModal(true) : setShowAddModal(true)}
+          onPress={() => setShowAddModal(true)}
         >
           <Ionicons name="add" size={24} color={theme.text} />
         </TouchableOpacity>
@@ -319,16 +213,33 @@ export default function ExpensesScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
+        {/* Import facture banner — direct route vers le flow facture forcé */}
+        {activeTab === 'daily' && (
+          <TouchableOpacity
+            style={styles.importBanner}
+            onPress={() => router.push('/more/email-import?mode=invoice' as any)}
+          >
+            <View style={[styles.importBannerIcon, { backgroundColor: `${theme.primary}25` }]}>
+              <Ionicons name="scan" size={22} color={theme.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.importBannerTitle}>Importer une facture</Text>
+              <Text style={styles.importBannerSub}>Scanner · PDF · Photo — Devient une dépense</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={theme.textTertiary} />
+          </TouchableOpacity>
+        )}
+
         {/* Summary */}
         <Card style={styles.summaryCard}>
           <Text style={styles.summaryLabel}>
-            {activeTab === 'daily' ? t('expenses.summaryDaily') : activeTab === 'pro' ? t('expenses.summaryPro') : t('expenses.summaryContracts')}
+            {activeTab === 'daily' ? t('expenses.summaryDaily') : t('expenses.summaryPro')}
           </Text>
           <Text style={styles.summaryAmount}>
-            {CUR} {formatNumber(activeTab === 'daily' ? totalDaily : activeTab === 'pro' ? totalPro : contracts.reduce((s, c) => s + c.amount, 0))}
+            {CUR} {formatNumber(activeTab === 'daily' ? totalDaily : totalPro)}
           </Text>
           <Text style={styles.summaryCount}>
-            {activeTab === 'daily' ? transactions.length : activeTab === 'pro' ? proExpenses.length : contracts.length} {t('common.items')}
+            {activeTab === 'daily' ? transactions.length : proExpenses.length} {t('common.items')}
           </Text>
         </Card>
 
@@ -427,65 +338,6 @@ export default function ExpensesScreen() {
                     </View>
                   </View>
                 </Card>
-              ))
-            )}
-          </>
-        )}
-
-        {/* Contracts */}
-        {activeTab === 'contracts' && (
-          <>
-            {contracts.length === 0 ? (
-              <EmptyState
-                icon="document-text-outline"
-                title={t('expenses.noContracts')}
-                subtitle={t('expenses.addContractsSub')}
-                action={{ label: t('common.add'), onPress: () => setShowContractModal(true) }}
-              />
-            ) : (
-              contracts.map((contract) => (
-                <TouchableOpacity
-                  key={contract.id}
-                  activeOpacity={0.7}
-                  onLongPress={() => setActionsCtx({
-                    id: contract.id,
-                    title: contract.title,
-                    subtitle: `${CUR} ${formatNumber(contract.amount)} · ${contract.expirationDate}`,
-                    accent: contract.urgent ? theme.error : theme.primary,
-                  })}
-                >
-                <Card
-                  style={styles.contractCard}
-                  borderColor={contract.urgent ? theme.error : undefined}
-                >
-                  {contract.urgent && (
-                    <Badge text="Urgent" color={theme.error} />
-                  )}
-                  <View style={styles.contractRow}>
-                    <Ionicons name="document-text" size={24} color={theme.primary} />
-                    <View style={styles.contractInfo}>
-                      <Text style={styles.contractTitle}>{contract.title}</Text>
-                      <Text style={styles.contractExpire}>
-                        Expire le {contract.expirationDate}
-                      </Text>
-                    </View>
-                    <Text style={styles.contractAmount}>
-                      {CUR} {formatNumber(contract.amount)}/mois
-                    </Text>
-                    <TouchableOpacity
-                      onPress={() => setActionsCtx({
-                        id: contract.id,
-                        title: contract.title,
-                        subtitle: `${CUR} ${formatNumber(contract.amount)} · ${contract.expirationDate}`,
-                        accent: contract.urgent ? theme.error : theme.primary,
-                      })}
-                      style={styles.contractDelBtn}
-                    >
-                      <Ionicons name="ellipsis-horizontal" size={18} color={theme.textTertiary} />
-                    </TouchableOpacity>
-                  </View>
-                </Card>
-                </TouchableOpacity>
               ))
             )}
           </>
@@ -606,138 +458,6 @@ export default function ExpensesScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Add Contract Modal */}
-      <Modal
-        visible={showContractModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowContractModal(false)}
-      >
-        <KeyboardAvoidingView
-          style={styles.modalOverlay}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Nouveau contrat</Text>
-              <TouchableOpacity onPress={() => setShowContractModal(false)}>
-                <Ionicons name="close" size={24} color={theme.text} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={{ maxHeight: 480 }} keyboardShouldPersistTaps="handled">
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>{t('common.title')}</Text>
-                <TextInput
-                  style={styles.input}
-                  value={newContract.title}
-                  onChangeText={(t) => setNewContract((p) => ({ ...p, title: t }))}
-                  placeholder="ex: Sunrise mobile, Salt Internet, Helsana..."
-                  placeholderTextColor={theme.textTertiary}
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Montant mensuel ({CUR})</Text>
-                <TextInput
-                  style={styles.input}
-                  value={newContract.amount}
-                  onChangeText={(t) => setNewContract((p) => ({ ...p, amount: t }))}
-                  placeholder="49.90"
-                  placeholderTextColor={theme.textTertiary}
-                  keyboardType="decimal-pad"
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Date d'expiration</Text>
-                <TextInput
-                  style={styles.input}
-                  value={newContract.expirationDate}
-                  onChangeText={(t) => setNewContract((p) => ({ ...p, expirationDate: t }))}
-                  placeholder="31.12.2026"
-                  placeholderTextColor={theme.textTertiary}
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>{t('common.category')}</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 4 }}>
-                  <View style={styles.categoryGrid}>
-                    {EXPENSE_CATEGORIES.map((cat) => (
-                      <TouchableOpacity
-                        key={cat.id}
-                        style={[
-                          styles.categoryItem,
-                          newContract.category === cat.id && styles.categoryItemSelected,
-                        ]}
-                        onPress={() => setNewContract((p) => ({ ...p, category: cat.id }))}
-                      >
-                        <CategoryIcon category={cat.id} size="sm" />
-                        <Text style={styles.categoryLabel}>{cat.name}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </ScrollView>
-              </View>
-
-              <TouchableOpacity
-                style={[styles.urgentToggle, newContract.urgent && styles.urgentToggleActive]}
-                onPress={() => setNewContract((p) => ({ ...p, urgent: !p.urgent }))}
-              >
-                <Ionicons
-                  name={newContract.urgent ? 'alert-circle' : 'alert-circle-outline'}
-                  size={20}
-                  color={newContract.urgent ? theme.error : theme.textTertiary}
-                />
-                <Text style={[styles.urgentToggleTxt, newContract.urgent && { color: theme.error }]}>
-                  {newContract.urgent ? '⚠️ Marqué comme urgent' : 'Marquer comme urgent'}
-                </Text>
-              </TouchableOpacity>
-
-              <Button
-                title="Ajouter le contrat"
-                onPress={handleAddContract}
-                fullWidth
-                size="lg"
-                style={{ marginTop: Spacing.lg }}
-              />
-            </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
-      {/* Generic CRUD: actions sheet + edit modal for contracts */}
-      <EntityActionsSheet
-        ctx={actionsCtx}
-        onClose={() => setActionsCtx(null)}
-        onEdit={() => {
-          const id = actionsCtx?.id;
-          setActionsCtx(null);
-          if (id) setEditingContractId(id);
-        }}
-        onDelete={() => {
-          const id = actionsCtx?.id;
-          setActionsCtx(null);
-          if (id) handleDeleteContract(id);
-        }}
-        deleteConfirmTitle="Supprimer ce contrat ?"
-        deleteConfirmMessage="Les rappels d'échéance seront aussi annulés."
-      />
-      <EntityEditModal
-        visible={!!editingContract}
-        onClose={() => setEditingContractId(null)}
-        title="Modifier le contrat"
-        fields={CONTRACT_EDIT_FIELDS}
-        initialValues={{
-          title: editingContract?.title || '',
-          amount: editingContract?.amount?.toString() || '',
-          expirationDate: editingContract?.expirationDate || '',
-          category: editingContract?.category || 'abonnements',
-          urgent: !!editingContract?.urgent,
-        }}
-        onSubmit={handleEditContractSubmit}
-      />
-
       {/* CRUD for daily transactions */}
       <EntityActionsSheet
         ctx={txActionsCtx}
@@ -831,6 +551,23 @@ const makeStyles = (theme: any) => StyleSheet.create({
   content: {
     padding: Spacing.lg,
   },
+  importBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    backgroundColor: theme.card,
+    borderWidth: 1,
+    borderColor: theme.cardBorder,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  importBannerIcon: {
+    width: 40, height: 40, borderRadius: 12,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  importBannerTitle: { color: theme.text, fontSize: FontSizes.md, fontWeight: FontWeights.bold },
+  importBannerSub: { color: theme.textSecondary, fontSize: FontSizes.xs, marginTop: 2 },
   summaryCard: {
     alignItems: 'center',
     marginBottom: Spacing.lg,
@@ -897,32 +634,6 @@ const makeStyles = (theme: any) => StyleSheet.create({
     fontSize: FontSizes.sm,
     textAlign: 'center',
     marginTop: Spacing.sm,
-  },
-  contractCard: {
-    marginBottom: Spacing.md,
-  },
-  contractRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.md,
-    marginTop: Spacing.sm,
-  },
-  contractInfo: {
-    flex: 1,
-  },
-  contractTitle: {
-    color: theme.text,
-    fontSize: FontSizes.md,
-    fontWeight: FontWeights.semibold,
-  },
-  contractExpire: {
-    color: theme.textSecondary,
-    fontSize: FontSizes.sm,
-  },
-  contractAmount: {
-    color: theme.text,
-    fontSize: FontSizes.md,
-    fontWeight: FontWeights.bold,
   },
   modalOverlay: {
     flex: 1,
@@ -997,30 +708,5 @@ const makeStyles = (theme: any) => StyleSheet.create({
   paymentBadgeText: {
     color: theme.textSecondary,
     fontSize: 10,
-  },
-  contractDelBtn: {
-    padding: 8,
-    marginLeft: 4,
-  },
-  urgentToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.md,
-    marginTop: Spacing.md,
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1.5,
-    borderColor: theme.cardBorder,
-    backgroundColor: theme.card,
-  },
-  urgentToggleActive: {
-    borderColor: theme.error,
-    backgroundColor: `${theme.error}10`,
-  },
-  urgentToggleTxt: {
-    color: theme.textSecondary,
-    fontSize: FontSizes.sm,
-    fontWeight: FontWeights.semibold,
   },
 });

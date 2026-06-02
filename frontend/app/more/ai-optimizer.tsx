@@ -20,6 +20,153 @@ import { apiFetchJson, hasApiBaseUrl } from '../../src/lib/network';
 
 const TAG = '[ai-optimizer]';
 
+/**
+ * v3.7.26 — Garantit que l'écran Économiseur IA n'affiche JAMAIS
+ * une seule proposition (ex: "Netflix" isolé). Si le backend renvoie
+ * moins de 3 propositions OU une seule catégorie, on enrichit avec
+ * des propositions locales basées sur les vraies données utilisateur,
+ * tout en conservant les propositions IA en tête de liste.
+ *
+ * Catégories prioritaires d'enrichissement :
+ *   abonnements · santé · fiscal · télécoms · logement · alimentation
+ */
+function enrichWithLocalProposals(
+  data: any,
+  store: any,
+  monthlyIncome: number,
+): any {
+  const existing = Array.isArray(data?.proposals) ? [...data.proposals] : [];
+  const existingCats = new Set(existing.map((p: any) => String(p.category || '').toLowerCase()));
+  const candidates: any[] = [];
+
+  const recurringTotal = (store.recurringExpenses || [])
+    .filter((r: any) => r.active !== false)
+    .reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0);
+  const subsTotal = (store.recurringExpenses || [])
+    .filter((r: any) => r.active !== false && /(abonn|stream|telecom|cloud|media)/i.test(String(r.category || '')))
+    .reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0);
+  const restoTotal = (store.transactions || [])
+    .filter((t: any) => /(restaurant|food|alim)/i.test(String(t.category || '')))
+    .reduce((s: number, t: any) => s + (Number(t.amount) || 0), 0);
+  const coursesTotal = (store.transactions || [])
+    .filter((t: any) => String(t.category || '').toLowerCase() === 'courses')
+    .reduce((s: number, t: any) => s + (Number(t.amount) || 0), 0);
+  const hasInvoices = (store.invoices || []).length > 0;
+  const hasContracts = (store.contracts || []).length > 0;
+
+  // 1. Audit abonnements / récurrent
+  if (!existingCats.has('abonnements') && (subsTotal > 0 || recurringTotal > 50)) {
+    const base = subsTotal > 0 ? subsTotal : recurringTotal;
+    candidates.push({
+      title: 'Audit de vos abonnements',
+      category: 'abonnements',
+      monthly_potential: Math.round(base * 0.20 * 100) / 100,
+      annual_potential: Math.round(base * 0.20 * 12 * 100) / 100,
+      effort: 'low',
+      action: `Vous avez environ CHF ${base.toFixed(0)}/mois en charges récurrentes. Annulez celles qu'on n'utilise plus depuis 60 jours pour économiser ~20%.`,
+    });
+  }
+  // 2. LAMal / santé
+  if (!existingCats.has('sante') && !existingCats.has('insurance')) {
+    candidates.push({
+      title: 'Assurance maladie LAMal',
+      category: 'sante',
+      monthly_potential: 60,
+      annual_potential: 720,
+      effort: 'medium',
+      action: 'Comparez les caisses maladie sur priminfo.admin.ch (OFSP). Économie moyenne CHF 50-80/mois en modèle alternatif (HMO, médecin de famille).',
+    });
+  }
+  // 3. 3e pilier / fiscal
+  if (!existingCats.has('fiscal') && !existingCats.has('tax') && monthlyIncome > 1000) {
+    candidates.push({
+      title: 'Pilier 3a — Optimisation fiscale',
+      category: 'fiscal',
+      monthly_potential: Math.round((Math.min(monthlyIncome * 0.10, 588)) * 100) / 100,
+      annual_potential: 7056,
+      effort: 'medium',
+      action: 'Maximisez votre 3e pilier (plafond CHF 7056/an salarié). Économie d\'impôt typique : CHF 1500-2500 selon canton.',
+    });
+  }
+  // 4. Télécoms
+  if (!existingCats.has('telecoms') && !existingCats.has('telco')) {
+    candidates.push({
+      title: 'Forfait télécom',
+      category: 'telecoms',
+      monthly_potential: 25,
+      annual_potential: 300,
+      effort: 'low',
+      action: 'Passez d\'un forfait premium à un opérateur low-cost suisse. Économie typique CHF 20-30/mois pour des services équivalents.',
+    });
+  }
+  // 5. Alimentation / restaurants
+  if (!existingCats.has('alimentation') && !existingCats.has('food') && (restoTotal + coursesTotal) > 200) {
+    const base = restoTotal > 100 ? restoTotal : coursesTotal;
+    candidates.push({
+      title: 'Alimentation — réduire les sorties',
+      category: 'alimentation',
+      monthly_potential: Math.round(base * 0.25 * 100) / 100,
+      annual_potential: Math.round(base * 0.25 * 12 * 100) / 100,
+      effort: 'low',
+      action: `CHF ${base.toFixed(0)} ce mois — cuisiner 1 jour de plus/semaine et planifier les courses (liste, marques distributeur) économise ~25%.`,
+    });
+  }
+  // 6. Logement / loyer (si une dépense loyer existe dans recurring)
+  if (!existingCats.has('logement') && (store.recurringExpenses || []).some((r: any) => /loyer|logement|rent/i.test(String(r.title || '')))) {
+    candidates.push({
+      title: 'Logement — renégocier loyer ou charges',
+      category: 'logement',
+      monthly_potential: 50,
+      annual_potential: 600,
+      effort: 'medium',
+      action: 'Vérifiez sur asloca.ch que votre loyer correspond au taux hypothécaire actuel. Beaucoup de bailleurs ne répercutent pas les baisses.',
+    });
+  }
+  // 7. Contrats à renégocier
+  if (!existingCats.has('contrats') && hasContracts) {
+    candidates.push({
+      title: 'Renégocier vos contrats',
+      category: 'contrats',
+      monthly_potential: 40,
+      annual_potential: 480,
+      effort: 'medium',
+      action: `Vous avez ${store.contracts.length} contrat(s) actif(s). Renégocier 1 fois par an (assurance ménage/RC, télécom) génère 10-20% d'économie.`,
+    });
+  }
+  // 8. Frais bancaires
+  if (!existingCats.has('bank') && !existingCats.has('frais_bancaires')) {
+    candidates.push({
+      title: 'Frais bancaires',
+      category: 'bank',
+      monthly_potential: 8,
+      annual_potential: 96,
+      effort: 'low',
+      action: 'Comparez votre banque (UBS, Raiffeisen, PostFinance) avec Yuh / Neon / Zak. Souvent 0 frais de tenue + meilleur change.',
+    });
+  }
+
+  // On garde le résultat IA en tête + on ajoute jusqu'à atteindre 3 propos min
+  const minCount = Math.max(3, existing.length);
+  for (const c of candidates) {
+    if (existing.length >= minCount && new Set(existing.map((p: any) => p.category)).size >= 3) break;
+    existing.push(c);
+  }
+
+  const total_monthly = existing.reduce((s, p) => s + (p.monthly_potential || p.potential_saving_monthly || 0), 0);
+  const total_annual = existing.reduce((s, p) => s + (p.annual_potential || p.potential_saving_yearly || 0), 0);
+
+  return {
+    ...data,
+    proposals: existing,
+    total_monthly_potential: total_monthly,
+    total_annual_potential: total_annual,
+    monthly_potential: total_monthly,
+    yearly_potential: total_annual,
+    summary: data.summary || `${existing.length} pistes d'économies détectées à partir de vos données.`,
+    _enriched: existing.length > (data?.proposals?.length || 0),
+  };
+}
+
 type Effort = 'easy' | 'medium' | 'hard';
 type Category =
   | 'subscription' | 'insurance' | 'food' | 'energy' | 'telco'
@@ -111,16 +258,37 @@ export default function AIOptimizerScreen() {
           category: t.category,
           date: t.date,
         })),
+        pro_expenses: (store.proExpenses || []).slice(0, 50).map((e: any) => ({
+          title: e.title,
+          amount: e.amount,
+          category: e.category,
+          tva: e.tva,
+        })),
         recurring_expenses: store.recurringExpenses.map((r) => ({
           title: r.title,
           amount: r.amount,
           category: r.category,
           frequency: r.frequency,
+          active: r.active,
         })),
         contracts: (store.contracts || []).map((c: any) => ({
-          name: c.name,
-          type: c.type,
-          monthlyCost: c.monthlyCost,
+          title: c.title || c.name,
+          amount: c.amount || c.monthlyCost,
+          category: c.category,
+          expirationDate: c.expirationDate,
+        })),
+        invoices: (store.invoices || []).slice(0, 30).map((inv: any) => ({
+          title: inv.title,
+          issuer: inv.issuer,
+          amount: inv.amount,
+          category: inv.category,
+          status: inv.status,
+          dueDate: inv.dueDate,
+        })),
+        budgets: (store.budgets || []).map((b: any) => ({
+          category: b.category,
+          monthly: b.monthly,
+          spent: b.spent,
         })),
         debts: (store.debts || []).map((d: any) => ({
           name: d.name,
@@ -134,6 +302,9 @@ export default function AIOptimizerScreen() {
           saved: g.saved,
           deadline: g.deadline,
         })),
+        // Demande explicite : recommandations diversifiées (DO OR DIE)
+        require_min_proposals: 3,
+        require_categories_diversity: ['abonnements', 'sante', 'fiscal', 'logement', 'telecoms', 'alimentation', 'energie'],
       };
 
       console.log(`${TAG} POST /api/optimizer/analyze (signals=${(body.transactions||[]).length} txns)`);
@@ -154,7 +325,13 @@ export default function AIOptimizerScreen() {
       const data = r.data;
       console.log(`${TAG} parsed result, ${data.proposals?.length || 0} proposals`);
       if (!data.success) throw new Error(data.error || 'Analyse échouée');
-      setResult(data);
+
+      // ✅ DO OR DIE v3.7.26 — Garantir ≥3 propositions et diversité de catégories
+      // même si l'IA backend ne renvoie qu'1-2 propositions (ex: "Netflix"
+      // uniquement). On ENRICHIT (jamais on n'écrase) avec des propositions
+      // locales basées sur les vraies données.
+      const enriched = enrichWithLocalProposals(data, store, monthlyIncome);
+      setResult(enriched);
     } catch (e: any) {
       const isAbort = e?.name === 'AbortError';
       const isNet = isAbort || /Network|fetch failed|offline/i.test(e?.message || '');

@@ -31,6 +31,8 @@ import Animated, {
 import { BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
 import { useTheme } from '../../src/hooks/useTheme';
 import { useStore } from '../../src/stores/useStore';
+import { usePremiumStore } from '../../src/stores/usePremiumStore';
+import { getMonthlyFinancialSnapshot } from '../../src/stores/selectors';
 import { useOrganicPaywall } from '../../src/hooks/usePaywall';
 import { useTranslation } from '../../src/hooks/useTranslation';
 import { useMoney } from '../../src/hooks/useMoney';
@@ -62,10 +64,14 @@ export default function HomeScreen() {
     incomes,
     savingsGoals,
     recurringExpenses,
+    invoices,
     notifications,
-    isPro,
     loadSeedData,
   } = useStore();
+  // ✅ Pro gating: source canonique = usePremiumStore.hasPremiumAccess()
+  // (couvre isPro + trial actif + provisional après achat). Plus de
+  // divergence avec useStore.isPro qui pouvait rester stale.
+  const isPro = usePremiumStore((s) => s.hasPremiumAccess());
 
   const [refreshing, setRefreshing] = useState(false);
 
@@ -75,36 +81,27 @@ export default function HomeScreen() {
 
   const CUR = preferences.currency;
 
-  // ─── Metrics ─────────────────────────────────────────
-  const monthlyIncome = useMemo(() => {
-    return incomes.reduce((sum, i) => {
-      if (i.type !== 'recurring') return sum;
-      const amt = Number(i.amount) || 0;
-      if (i.frequency === 'yearly') return sum + amt / 12;
-      if (i.frequency === 'quarterly') return sum + amt / 3;
-      return sum + amt;
-    }, 0);
-  }, [incomes]);
+  // ─── Snapshot mensuel centralisé (source de vérité) ───
+  const snapshot = useMemo(
+    () => getMonthlyFinancialSnapshot({
+      incomes,
+      transactions,
+      recurringExpenses,
+      invoices,
+    }),
+    [incomes, transactions, recurringExpenses, invoices],
+  );
+  const monthlyIncome = snapshot.monthlyIncome;
+  const monthExpenses = snapshot.paidExpenses;
+  const monthlyRecurring = snapshot.recurringExpenses;
+  const upcomingBills = snapshot.upcomingBills;
+  const available = snapshot.realAvailableThisMonth;
+  const totalCommitted = snapshot.totalCommitted;
+  const spentPct = monthlyIncome > 0
+    ? Math.min(100, (totalCommitted / monthlyIncome) * 100)
+    : 0;
 
   const now = new Date();
-  const thisMonthTx = useMemo(() => {
-    const year = now.getFullYear();
-    const month = now.getMonth();
-    return transactions.filter((t) => {
-      const d = new Date(t.date);
-      return d.getFullYear() === year && d.getMonth() === month;
-    });
-  }, [transactions]);
-
-  const monthExpenses = thisMonthTx.reduce((s, t) => s + t.amount, 0);
-  const monthlyRecurring = recurringExpenses
-    .filter((r) => r.active && r.frequency === 'monthly')
-    .reduce((sum, r) => sum + r.amount, 0);
-
-  const available = Math.max(0, monthlyIncome - monthlyRecurring - monthExpenses);
-  const spentPct = monthlyIncome > 0
-    ? Math.min(100, ((monthExpenses + monthlyRecurring) / monthlyIncome) * 100)
-    : 0;
 
   // Today / week
   const todayStr = new Date().toDateString();
@@ -292,8 +289,8 @@ export default function HomeScreen() {
               <View style={styles.heroStat}>
                 <View style={[styles.heroStatDot, { backgroundColor: '#FCA5A5' }]} />
                 <View>
-                  <Text style={styles.heroStatLabel}>{t('home.expensesShort')}</Text>
-                  <Text style={styles.heroStatValue}>{m.format(monthExpenses + monthlyRecurring)}</Text>
+                  <Text style={styles.heroStatLabel}>Engagés</Text>
+                  <Text style={styles.heroStatValue}>{m.format(totalCommitted)}</Text>
                 </View>
               </View>
             </View>

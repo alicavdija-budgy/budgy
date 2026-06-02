@@ -734,9 +734,9 @@ ${pageDataUrls.map((src, i) => `
             <Ionicons name="scan" size={18} color="#FFF" />
             <Text style={styles.qaTxtPrimary}>Scanner</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.qaBtn} onPress={() => router.push('/more/email-import')} activeOpacity={0.85}>
+          <TouchableOpacity style={styles.qaBtn} onPress={() => router.push('/more/email-import?mode=contract' as any)} activeOpacity={0.85}>
             <Ionicons name="document-attach" size={18} color={theme.primary} />
-            <Text style={styles.qaTxt}>Importer PDF</Text>
+            <Text style={styles.qaTxt}>Importer un contrat</Text>
           </TouchableOpacity>
         </View>
 
@@ -772,10 +772,10 @@ ${pageDataUrls.map((src, i) => `
                 <Text style={styles.emptyCtaTitle}>Scanner</Text>
                 <Text style={styles.emptyCtaSub}>Multi-pages PDF</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.emptyCta} onPress={() => router.push('/more/email-import')} activeOpacity={0.85}>
+              <TouchableOpacity style={styles.emptyCta} onPress={() => router.push('/more/email-import?mode=contract' as any)} activeOpacity={0.85}>
                 <Ionicons name="cloud-upload" size={28} color={theme.primary} />
-                <Text style={[styles.emptyCtaTitle, { color: theme.primary }]}>Importer</Text>
-                <Text style={styles.emptyCtaSub}>PDF · Email · Photo</Text>
+                <Text style={[styles.emptyCtaTitle, { color: theme.primary }]}>Importer un contrat</Text>
+                <Text style={styles.emptyCtaSub}>PDF · Photo · Fichier</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.emptyCta} onPress={() => router.push('/more/add-contract' as any)} activeOpacity={0.85}>
                 <Ionicons name="document-text" size={28} color={theme.success} />
@@ -787,7 +787,7 @@ ${pageDataUrls.map((src, i) => `
             {/* Pro tip */}
             <View style={styles.emptyTipRow}>
               <Ionicons name="sparkles" size={16} color={theme.warning} />
-              <Text style={styles.emptyTip}>Astuce — Scannez vos contrats Sunrise / Salt / Swisscom dès aujourd'hui pour activer les rappels d'échéance.</Text>
+              <Text style={styles.emptyTip}>Astuce — Scannez vos contrats (assurance, télécom, leasing) dès aujourd'hui pour activer les rappels d'échéance.</Text>
             </View>
           </View>
         ) : (

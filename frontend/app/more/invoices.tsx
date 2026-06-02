@@ -248,13 +248,13 @@ export default function InvoicesScreen() {
         </Card>
 
         {/* Import banner — generic, no mail/Gmail reference */}
-        <TouchableOpacity style={styles.emailBanner} onPress={() => router.push('/more/email-import')}>
+        <TouchableOpacity style={styles.emailBanner} onPress={() => router.push('/more/email-import?mode=invoice')}>
           <View style={styles.emailBannerIcon}>
             <Ionicons name="scan" size={24} color={theme.primary} />
           </View>
           <View style={styles.emailBannerContent}>
-            <Text style={styles.emailBannerTitle}>Importer un document</Text>
-            <Text style={styles.emailBannerSub}>Scanner, PDF, photo — Budgy détecte facture ou contrat</Text>
+            <Text style={styles.emailBannerTitle}>Importer une facture</Text>
+            <Text style={styles.emailBannerSub}>Scanner · PDF · Photo — Devient une dépense</Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color={theme.textTertiary} />
         </TouchableOpacity>

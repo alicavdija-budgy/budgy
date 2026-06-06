@@ -61,14 +61,22 @@ export default function ForgotPasswordScreen() {
         redirectTo,
       });
       if (e) {
-        // Don't leak whether the account exists — always show success in UI.
-        // But still log a generic error if it's a connectivity / config issue.
-        console.warn('[forgot-password] resetPasswordForEmail error:', e.message);
+        // v3.7.27 — On affiche un message UX clair. On n'expose JAMAIS
+        // le code Supabase brut ("Unauthorized" / "401" / "SMTP" / etc.).
+        // On garde la confidentialité (pas de "ce compte n'existe pas")
+        // en utilisant des messages génériques côté UX.
+        const { humanizeAuthError } = await import('../src/lib/authErrors');
+        const h = humanizeAuthError(e, 'resetPassword');
+        setError(h.hint ? `${h.message}\n\n${h.hint}` : h.message);
+        try { if (Platform.OS !== 'web') await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error); } catch {}
+        return;
       }
       try { if (Platform.OS !== 'web') await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
       setSent(true);
     } catch (e: any) {
-      setError(e?.message || t('forgot.errGeneric'));
+      const { humanizeAuthError } = await import('../src/lib/authErrors');
+      const h = humanizeAuthError(e, 'resetPassword');
+      setError(h.hint ? `${h.message}\n\n${h.hint}` : h.message);
     } finally {
       setLoading(false);
     }

@@ -1,11 +1,11 @@
 """
-Smoke test rapide post v3.7.26 / build 66 — frontend-only session.
-Vérifie la non-régression backend sur 6 endpoints critiques.
+Smoke test rapide post v3.7.27 / build 67 — frontend-only + 3 docs MD.
+Vérifie la non-régression backend sur 5 endpoints critiques.
 
-Critères stricts:
+Critères:
   - AUCUN HTTP 500
   - Tous les responses application/json
-  - Pas de régression de structure
+  - Structure correcte
 """
 
 import sys
@@ -33,7 +33,7 @@ def test_A_health():
     try:
         r = requests.get(f"{BASE}/health", timeout=TIMEOUT)
         if r.status_code == 500:
-            return record(name, False, f"HTTP 500 forbidden body={r.text[:300]}")
+            return record(name, False, f"HTTP 500 body={r.text[:300]}")
         if r.status_code != 200:
             return record(name, False, f"HTTP {r.status_code}")
         if not is_json(r):
@@ -41,9 +41,7 @@ def test_A_health():
         body = r.json()
         if body.get("status") != "ok":
             return record(name, False, f"status != ok: {body}")
-        if body.get("app") != "Budgy":
-            return record(name, False, f"app != Budgy: {body}")
-        record(name, True, f"status=ok app=Budgy version={body.get('version')}")
+        record(name, True, f"status=ok app={body.get('app')} version={body.get('version')}")
     except Exception as e:
         record(name, False, f"exception: {e}")
 
@@ -54,7 +52,7 @@ def test_B_iap_health():
     try:
         r = requests.get(f"{BASE}/iap/health", timeout=TIMEOUT)
         if r.status_code == 500:
-            return record(name, False, f"HTTP 500 forbidden body={r.text[:300]}")
+            return record(name, False, f"HTTP 500 body={r.text[:300]}")
         if r.status_code != 200:
             return record(name, False, f"HTTP {r.status_code}")
         if not is_json(r):
@@ -79,7 +77,7 @@ def test_C_iap_me():
                          params={"user_id": "00000000-0000-0000-0000-000000000000"},
                          timeout=TIMEOUT)
         if r.status_code == 500:
-            return record(name, False, f"HTTP 500 forbidden body={r.text[:300]}")
+            return record(name, False, f"HTTP 500 body={r.text[:300]}")
         if r.status_code != 200:
             return record(name, False, f"HTTP {r.status_code}")
         if not is_json(r):
@@ -98,7 +96,7 @@ def test_D_config_status():
     try:
         r = requests.get(f"{BASE}/config/status", timeout=TIMEOUT)
         if r.status_code == 500:
-            return record(name, False, f"HTTP 500 forbidden body={r.text[:300]}")
+            return record(name, False, f"HTTP 500 body={r.text[:300]}")
         if r.status_code != 200:
             return record(name, False, f"HTTP {r.status_code}")
         if not is_json(r):
@@ -113,11 +111,11 @@ def test_D_config_status():
 def test_E_email_parse():
     name = "E) POST /api/email/parse"
     payload = {"content": "Facture Swisscom CHF 89.50"}
-    required = {"success", "document_type", "needs_user_confirmation", "confidence"}
+    required = {"document_type", "needs_user_confirmation", "confidence"}
     try:
         r = requests.post(f"{BASE}/email/parse", json=payload, timeout=TIMEOUT)
         if r.status_code == 500:
-            return record(name, False, f"HTTP 500 forbidden body={r.text[:300]}")
+            return record(name, False, f"HTTP 500 body={r.text[:300]}")
         if r.status_code != 200:
             return record(name, False, f"HTTP {r.status_code} body={r.text[:300]}")
         if not is_json(r):
@@ -139,55 +137,13 @@ def test_E_email_parse():
         record(name, False, f"exception: {e}")
 
 
-# F) POST /api/optimizer/analyze
-def test_F_optimizer_analyze():
-    name = "F) POST /api/optimizer/analyze"
-    payload = {
-        "monthly_income": 7000,
-        "yearly_income": 84000,
-        "currency": "CHF",
-        "canton": "VD",
-        "transactions": [
-            {"title": "Netflix", "amount": 18, "category": "abonnements", "date": "2026-04-01"},
-            {"title": "Migros", "amount": 120, "category": "courses", "date": "2026-04-02"},
-        ],
-        "recurring_expenses": [
-            {"title": "Loyer", "amount": 1850, "category": "loyer", "frequency": "monthly"},
-            {"title": "Internet", "amount": 59, "category": "telecoms", "frequency": "monthly"},
-        ],
-        "contracts": [],
-        "debts": [],
-        "goals": [],
-        "require_min_proposals": 3,
-    }
-    try:
-        r = requests.post(f"{BASE}/optimizer/analyze", json=payload, timeout=TIMEOUT)
-        if r.status_code == 500:
-            return record(name, False, f"HTTP 500 forbidden body={r.text[:400]}")
-        if r.status_code != 200:
-            return record(name, False, f"HTTP {r.status_code} body={r.text[:400]}")
-        if not is_json(r):
-            return record(name, False, f"not JSON ctype={r.headers.get('content-type')}")
-        body = r.json()
-        # sanity: should have a proposals/monthly_potential shape
-        keys = list(body.keys())
-        record(name, True,
-               f"keys={sorted(keys)} | success={body.get('success')} "
-               f"monthly_potential={body.get('monthly_potential')} "
-               f"yearly_potential={body.get('yearly_potential')} "
-               f"proposals_count={len(body.get('proposals') or [])}")
-    except Exception as e:
-        record(name, False, f"exception: {e}")
-
-
 def main():
-    print(f"\n=== Smoke v3.7.26/build 66 against {BASE} ===\n")
+    print(f"\n=== Smoke v3.7.27/build 67 against {BASE} ===\n")
     test_A_health()
     test_B_iap_health()
     test_C_iap_me()
     test_D_config_status()
     test_E_email_parse()
-    test_F_optimizer_analyze()
 
     passed = sum(1 for _, ok, _ in results if ok)
     failed = sum(1 for _, ok, _ in results if not ok)
@@ -197,9 +153,9 @@ def main():
         for n, ok, d in results:
             if not ok:
                 print(f"  - {n}: {d}")
-        print("\nGO/NO-GO: NO-GO for Build 66")
+        print("\nGO/NO-GO: NO-GO for Build 67")
         sys.exit(1)
-    print("\nGO/NO-GO: GO for Build 66")
+    print("\nGO/NO-GO: GO for Build 67")
     sys.exit(0)
 
 

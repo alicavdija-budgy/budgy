@@ -16,6 +16,7 @@ import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../src/co
 import { useStore } from '../src/stores/useStore';
 import { Button } from '../src/components/ui';
 import { supabase, isSupabaseConfigured } from '../src/lib/supabase';
+import { humanizeAuthError } from '../src/lib/authErrors';
 import { useTranslation } from '../src/hooks/useTranslation';
 import { pullAllFromCloud, pushAllToCloud } from '../src/services/cloudSync';
 
@@ -154,8 +155,15 @@ export default function AuthScreen() {
         loginAsLocalUser(`local_${Date.now()}`, emailClean, mode === 'register' ? name.trim() : emailClean.split('@')[0], false, mode === 'register');
       }
     } catch (error: any) {
-      const msg = error?.message || 'Une erreur est survenue';
-      Alert.alert('Erreur', msg);
+      const h = humanizeAuthError(error, mode === 'register' ? 'signUp' : 'signIn');
+      const buttons: any[] = [{ text: 'OK', style: 'default' }];
+      if (mode === 'login' && (h._code === 'AUTH_SIGNIN_UNAUTHORIZED' || h._code === 'AUTH_INVALID_CREDENTIALS' || h._code === 'AUTH_SIGNIN_GENERIC')) {
+        buttons.unshift({
+          text: 'Mot de passe oublié',
+          onPress: () => router.push('/forgot-password' as any),
+        });
+      }
+      Alert.alert(h.title, h.hint ? `${h.message}\n\n${h.hint}` : h.message, buttons);
     } finally {
       setLoading(false);
     }

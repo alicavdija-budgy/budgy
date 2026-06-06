@@ -44,7 +44,7 @@ log = logging.getLogger("budgy")
 # ─────────────────────────────────────────────────────────────
 # Env / Config
 # ─────────────────────────────────────────────────────────────
-APP_VERSION = os.getenv("APP_VERSION", "3.7.24")
+APP_VERSION = os.getenv("APP_VERSION", "3.7.27")
 APP_ENV = os.getenv("APP_ENV", "production")  # production | staging | dev
 
 # LLM key kept for backwards-compat with code paths that still check it.
@@ -147,8 +147,19 @@ async def config_status():
         "apple_key_id": state("APPLE_KEY_ID"),
         "apple_private_key": state("APPLE_PRIVATE_KEY_P8", "APPLE_PRIVATE_KEY"),
         "apple_shared_secret": state("APPLE_SHARED_SECRET"),
-        "apple_product_monthly": state("APPLE_PRODUCT_ID_MONTHLY"),
-        "apple_product_yearly": state("APPLE_PRODUCT_ID_YEARLY"),
+        "apple_product_monthly": state(
+            "APPLE_PRODUCT_ID_MONTHLY",
+            "APPLE_PRODUCT_MONTHLY",
+            "IAP_PRODUCT_MONTHLY",
+        ),
+        "apple_product_yearly": state(
+            "APPLE_PRODUCT_ID_YEARLY",
+            "APPLE_PRODUCT_YEARLY",
+            "APPLE_PRODUCT_ID_ANNUAL",
+            "APPLE_PRODUCT_ANNUAL",
+            "IAP_PRODUCT_YEARLY",
+            "IAP_PRODUCT_ANNUAL",
+        ),
         "cors_origins_count": len(ALLOWED_ORIGINS),
     }
 

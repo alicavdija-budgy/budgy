@@ -76,8 +76,26 @@ class IAPConfig:
         c.private_key_pem = raw
         # Product IDs — fallback to canonical IDs to keep IAP usable even if
         # the operator forgot to set these (still overridable from Coolify).
-        c.product_monthly = _env("APPLE_PRODUCT_ID_MONTHLY") or "com.budgy.ch.budgy.monthly"
-        c.product_yearly = _env("APPLE_PRODUCT_ID_YEARLY") or "com.budgy.ch.budgy.annual"
+        # v3.7.27 — Accepte les 2 conventions de noms d'env pour
+        # ne plus dépendre du seul nommage historique. Coolify expose
+        # par défaut APPLE_PRODUCT_MONTHLY / APPLE_PRODUCT_YEARLY ;
+        # certaines instances ont APPLE_PRODUCT_ID_MONTHLY/_YEARLY ;
+        # certaines ont la convention IAP_*.
+        c.product_monthly = (
+            _env("APPLE_PRODUCT_ID_MONTHLY")
+            or _env("APPLE_PRODUCT_MONTHLY")
+            or _env("IAP_PRODUCT_MONTHLY")
+            or "com.budgy.ch.budgy.monthly"
+        )
+        c.product_yearly = (
+            _env("APPLE_PRODUCT_ID_YEARLY")
+            or _env("APPLE_PRODUCT_YEARLY")
+            or _env("APPLE_PRODUCT_ID_ANNUAL")
+            or _env("APPLE_PRODUCT_ANNUAL")
+            or _env("IAP_PRODUCT_YEARLY")
+            or _env("IAP_PRODUCT_ANNUAL")
+            or "com.budgy.ch.budgy.annual"
+        )
         c.use_sandbox = _env("APPLE_USE_SANDBOX", "false").lower() in ("1", "true", "yes")
         c.webhook_secret = _env("IAP_WEBHOOK_SECRET")
         c.shared_secret = _env("APPLE_SHARED_SECRET")

@@ -1,0 +1,46 @@
+{
+  "summary": "BUDGY v3.7.28 / Build 68 — Cloud Sync E2E retest (iteration 5) = PASS. All 5 criteria validated after main agent applied the TABLE_FIELDS whitelist + TABLE_CONFLICT map + safeUpsert(conflictCol) fix in cloudSync.ts. Login OK, transaction 'E2E-TEST-SYNC-V2 42.50 / Courses' added and visible, observed `[auto-sync] pushed 2 items` (prefs + transaction), tx persists after window.location.reload(), and observed `[bootstrap-sync] pulled 2 items from cloud` confirming bidirectional sync. ZERO occurrences of the schema/RLS error codes 42501, 42P01, 42703, 23503, PGRST204, PGRST301 across the entire run. Two non-blocking RN-Web warnings remain (already reported in iter4): `Unexpected text node` and `Received false for non-boolean attribute collapsable`.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      { "component": "RN Web text node warning", "issue": "Recurring console error 'Unexpected text node: . A text node cannot be a child of a <View>.' on expenses screen. Non-blocking. Reference: /app/frontend/app/(tabs)/expenses.tsx" },
+      { "component": "RN Web non-boolean attr", "issue": "Console error 'Received `false` for a non-boolean attribute `collapsable`'. Multiple occurrences. RN Web compat — non-blocking." }
+    ]
+  },
+  "test_report_links": [
+    "/tmp/i5_11_after_lang.png",
+    "/tmp/i5_12_after_login.png",
+    "/tmp/i5_20_expenses.png",
+    "/tmp/i5_21_add_modal.png",
+    "/tmp/i5_22_filled.png",
+    "/tmp/i5_23_after_save.png",
+    "/tmp/i5_30_expenses_pull.png",
+    "/tmp/i5_31_after_reload.png",
+    "/tmp/i5_32_final.png"
+  ],
+  "action_items": [
+    "None for cloud sync — feature is functional end-to-end.",
+    "OPTIONAL (carry-over from iter4, non-blocking): clean the 'Unexpected text node' warning on expenses screen.",
+    "OPTIONAL (carry-over from iter4, non-blocking): sweep View collapsable={false} → undefined/string to silence RN-Web warning."
+  ],
+  "critical_code_review_comments": [
+    "cloudSync.ts:62-89 — upsertTable now accepts conflictCol with safe default 'id'. Error logging enriched with hint for PGRST204/42703 → good.",
+    "cloudSync.ts:96-117 — TABLE_FIELDS strict whitelist + TABLE_CONFLICT map. Comments are clear about acting as schema-drift guardrail. Aligns with docs/SUPABASE_SCHEMA.sql.",
+    "cloudSync.ts:119-128 — pickFields() correctly filters undefined-only keys, keeping null/false/empty strings as legitimate values.",
+    "cloudSync.ts:152-163 — safeUpsert isolates per-table failures (already verified iter4) and now also picks fields + correct PK. Idempotent and resilient.",
+    "Minor suggestion (not required): TABLE_FIELDS could be derived/checked at build time against docs/SUPABASE_SCHEMA.sql to catch future drift in CI."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "n/a (frontend-only scope)",
+    "frontend": "PASS — 5/5 criteria: (1) Login OK, (2) Tx added & visible pre-reload, (3) `[auto-sync] pushed 2 items` observed (N>=2), (4) Tx 'E2E-TEST-SYNC-V2 42.50' persists after reload + `[bootstrap-sync] pulled 2 items from cloud`, (5) ZERO occurrences of 42501/42P01/42703/23503/PGRST204/PGRST301."
+  },
+  "seed_data_creation": "Created one transaction in Supabase for user e2e-test@budgy.ch: title='E2E-TEST-SYNC-V2' amount=42.50 category='courses' (Carte). Also wrote user_preferences row. Can be deleted by user from Supabase dashboard if cleanup desired.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Cloud sync is now fully working. Test creds e2e-test@budgy.ch / Test1234! confirmed. Login: language onboarding shows on fresh localStorage — select Français then click Continuer, then fill email/password and CLICK 'Se connecter' (not Enter). Expenses tab → click '+' or 'Ajouter' to open Nouvelle dépense modal; modal has 2 inputs (Titre placeholder 'ex: Migros', Montant '0.00'). Wait ≥7s after save for debounce push. Observed sync logs are: '[auto-sync] started — debounce 4000ms', '[auto-sync] pushed N items', '[bootstrap-sync] pulled N items from cloud'.",
+  "rca_of_issue": "n/a (no bug). Iteration 5 confirms the fix chain works: TABLE_FIELDS whitelist + per-table TABLE_CONFLICT PK ('user_id' for user_preferences, default 'id' elsewhere) + pickFields filter inside safeUpsert. The transactions payload no longer leaks 'synced' (client-only field), and user_preferences no longer hits 42703 because onConflict is correctly set to 'user_id'. Verified end-to-end: push (2 items) → reload → pull (2 items) → tx visible."
+}

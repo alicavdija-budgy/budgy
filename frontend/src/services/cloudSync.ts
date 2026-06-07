@@ -59,30 +59,72 @@ const cleanCamel = (row: any) => {
 };
 
 // ─── Push: send local data to cloud ───────────────────────────
-async function upsertTable(table: string, rows: any[]) {
+async function upsertTable(table: string, rows: any[], conflictCol: string = 'id') {
   const sb = getSupabase();
   if (!sb || rows.length === 0) return;
-  const { error } = await sb.from(table).upsert(rows as any, { onConflict: 'id' });
+  const { error } = await sb.from(table).upsert(rows as any, { onConflict: conflictCol });
   if (error) {
     // v3.7.28 — log enrichi pour diagnostiquer RLS / schéma / etc.
     // Codes Supabase fréquents :
     //   42501  → RLS policy bloque l'INSERT/UPDATE (manque "Users can manage their own data")
     //   42P01  → Table inexistante (schéma non appliqué — voir docs/SUPABASE_SCHEMA.sql)
+    //   42703  → Colonne inexistante (PK mismatch ou onConflict invalide)
     //   23503  → Foreign key viol. (user_id ne référence pas auth.users)
+    //   PGRST204 → Colonne du payload absente du schéma (drift TS ↔ SQL)
     //   PGRST301 → Row not visible (RLS SELECT manquant côté pull)
     const code = (error as any).code || (error as any).status || '?';
     const hint = (error as any).hint || (error as any).details || '';
     console.warn(
       `[sync] upsert ${table} failed (code=${code}) — ${error.message}${hint ? ' | ' + hint : ''}`,
     );
-    // Hint clair pour les 2 cas les plus probables :
     if (String(code) === '42501') {
       console.warn(`[sync] → RLS POLICY manquante sur "${table}". Appliquer docs/SUPABASE_SCHEMA.sql.`);
     } else if (String(code) === '42P01') {
       console.warn(`[sync] → Table "${table}" n'existe pas dans Supabase. Appliquer docs/SUPABASE_SCHEMA.sql.`);
+    } else if (String(code) === 'PGRST204' || String(code) === '42703') {
+      console.warn(`[sync] → Schema drift sur "${table}" : une colonne du payload n'existe pas en DB. Vérifier TABLE_FIELDS dans cloudSync.ts.`);
     }
     throw error;
   }
+}
+
+// v3.7.28 — STRICT per-table column whitelist.
+// Doit correspondre à docs/SUPABASE_SCHEMA.sql. Toute colonne du payload qui
+// n'est pas dans cette liste est SILENCIEUSEMENT FILTRÉE avant l'upsert, ce
+// qui évite les erreurs PGRST204 / 42703 dues au drift TS ↔ SQL (ex: champs
+// client-only comme `synced`, `receipt` base64, `color`, `icon`, etc.).
+const TABLE_FIELDS: Record<string, string[]> = {
+  user_preferences: ['user_id', 'currency', 'language', 'canton', 'onboarded', 'is_pro'],
+  transactions:       ['id', 'user_id', 'title', 'amount', 'category', 'date', 'payment_method', 'note', 'created_at', 'updated_at'],
+  incomes:            ['id', 'user_id', 'title', 'amount', 'frequency', 'type', 'category', 'created_at'],
+  savings_goals:      ['id', 'user_id', 'title', 'emoji', 'color', 'target', 'saved', 'deadline', 'category', 'created_at'],
+  budgets:            ['id', 'user_id', 'category', 'monthly', 'spent', 'created_at'],
+  recurring_expenses: ['id', 'user_id', 'title', 'amount', 'category', 'frequency', 'active', 'next_date', 'created_at'],
+  contracts:          ['id', 'user_id', 'title', 'issuer', 'amount', 'category', 'expiration_date', 'start_date', 'urgent', 'auto_renew', 'notes', 'created_at'],
+  debts:              ['id', 'user_id', 'title', 'color', 'total', 'paid', 'interest_rate', 'monthly_payment', 'created_at'],
+  investments:        ['id', 'user_id', 'symbol', 'shares', 'avg_cost', 'current_price', 'name', 'type', 'created_at'],
+  receipts:           ['id', 'user_id', 'merchant', 'amount', 'date', 'category', 'image_uri', 'created_at'],
+  invoices:           ['id', 'user_id', 'title', 'issuer', 'amount', 'currency', 'due_date', 'invoice_date', 'iban', 'reference', 'category', 'status', 'source', 'created_at'],
+  documents:          ['id', 'user_id', 'title', 'category', 'data_uri', 'notes', 'created_at'],
+  expense_groups:     ['id', 'user_id', 'name', 'members', 'created_at'],
+  group_expenses:     ['id', 'user_id', 'group_id', 'title', 'amount', 'paid_by', 'split', 'date', 'created_at'],
+};
+
+// PK column for upsert conflict resolution. Most tables use 'id' (default),
+// but user_preferences is keyed on user_id (1 row par user).
+const TABLE_CONFLICT: Record<string, string> = {
+  user_preferences: 'user_id',
+};
+
+function pickFields(table: string, row: any): any {
+  const allowed = TABLE_FIELDS[table];
+  if (!allowed) return row;
+  const out: any = {};
+  for (const f of allowed) {
+    const v = row[f];
+    if (v !== undefined) out[f] = v;
+  }
+  return out;
 }
 
 export async function pushAllToCloud(): Promise<{
@@ -110,7 +152,10 @@ export async function pushAllToCloud(): Promise<{
   const safeUpsert = async (table: string, rows: any[]) => {
     if (rows.length === 0) return;
     try {
-      await upsertTable(table, rows);
+      // Strict per-table column whitelist + correct PK for upsert conflict
+      const filtered = rows.map((r) => pickFields(table, r));
+      const conflictCol = TABLE_CONFLICT[table] || 'id';
+      await upsertTable(table, filtered, conflictCol);
       total += rows.length;
     } catch (e: any) {
       errors.push(`${table}: ${e?.message || String(e)}`);

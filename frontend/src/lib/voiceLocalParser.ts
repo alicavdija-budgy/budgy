@@ -39,7 +39,7 @@ const CATEGORY_KEYWORDS: { cat: string; words: string[] }[] = [
 ];
 
 const INCOME_KEYWORDS = ['salaire', 'reçu', 'paie', 'paye', 'remboursement', 'bonus', 'prime', 'dividende', 'loyer reçu'];
-const RECURRING_KEYWORDS = ['par mois', 'mensuel', 'tous les mois', 'chaque mois', 'abonnement'];
+const RECURRING_KEYWORDS = ['par mois', 'mensuel', 'tous les mois', 'chaque mois', 'abonnement', 'contrat', 'police d\'assurance', 'leasing'];
 
 function extractAmount(text: string): number | undefined {
   // CHF 25.50 / 25.50 CHF / 25 francs / fr. 25 / 25.- / 25,50

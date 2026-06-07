@@ -53,6 +53,7 @@ export default function MoreScreen() {
         { id: 'budgy-score', title: 'Score Budgy', subtitle: 'Mesurez et améliorez votre santé financière', icon: 'speedometer', color: C.gold, route: '/more/budgy-score', badge: 'NEW' },
         { id: 'predict', title: t('more.predict'), subtitle: t('more.predictSub'), icon: 'analytics', color: C.secondary, route: '/more/predict', pro: true, feature: 'predict' },
         { id: 'calendar', title: 'Calendrier financier', subtitle: 'Tous vos flux futurs, revenus et échéances', icon: 'calendar', color: C.info, route: '/more/financial-calendar' },
+        { id: 'siri-assistant', title: 'Siri & Assistant', subtitle: 'Compatible avec Siri et Google Assistant via raccourcis', icon: 'mic', color: C.cyan, route: '/more/siri-assistant' },
       ],
     },
     {

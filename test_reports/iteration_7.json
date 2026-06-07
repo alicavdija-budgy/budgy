@@ -1,0 +1,141 @@
+{
+  "summary": "BUDGY v3.7.29 / Build 69 — SMOKE TEST POST-CORRECTIONS. 3/4 tests PASS, 1 FAIL. Test 1 (écran Siri & Assistant NOUVEAU): PASS — écran s'ouvre, 16/16 vérifications de contenu OK (header, hero 'Compatible avec Siri via Raccourcis iOS', liens siri+google_assistant, 2 boutons copier, 5 exemples avec phrases exactes, 2 boutons d'action rapide, note v3.8 App Intents, AUCUNE mention 'Siri natif'). Le clic sur le 1er exemple ouvre bien /quick-add avec preview 'Migros / −25 CHF / alimentation'. Boutons Copier ne crashent pas. Test 2 (Contrat → recurring): FAIL — la phrase 'Contrat assurance voiture 95 CHF' est toujours classifiée 'DÉPENSE' (−95 CHF, sans catégorie) au lieu de 'ABONNEMENT/RÉCURRENT'. Cause RACINE: l'IA serveur (confidence 60%) est appelée AVANT le fallback local — la modification de RECURRING_KEYWORDS dans voiceLocalParser.ts n'est utilisée que si le backend est indisponible. Test 3 (Cloud Sync régression): PASS — E2E-TEST-SYNC-V2 (CHF -42.50, 07.06.2026) toujours visible dans /expenses, aucun code 42501/42P01/42703/PGRST204/PGRST301. Test 4 (Version): PASS — /more/settings affiche 'Version: 3.7.0 · App Store Ready' (label hardcodé court), AUCUNE occurrence de '3.7.28' ni 'Build 68' dans l'UI testée; /more footer affiche 'Budgy v3.7'.",
+
+  "verdict_global": "NO GO BUILD 69 (mineur) — Test 2 FAIL: le classifier 'Contrat' → recurring fonctionne uniquement en fallback local. Tous les autres tests PASS, aucun crash, aucune régression Cloud Sync.",
+
+  "tests": {
+    "T1_siri_assistant_screen": {
+      "status": "PASS",
+      "details": {
+        "menu_entry_present": "PASS (item 'Siri & Assistant' dans section IA & Optimisation, sous Calendrier financier, icône micro)",
+        "screen_opens_no_crash": "PASS — URL: /more/siri-assistant",
+        "header_title": "PASS",
+        "hero_text_Compatible_avec_Siri_via_Raccourcis_iOS": "PASS",
+        "google_assistant_mention": "PASS",
+        "siri_link_budgy_source_siri": "PASS",
+        "google_link_source_google_assistant": "PASS",
+        "btn_Copier_le_lien_Siri": "PASS (clic sans crash)",
+        "btn_Copier_le_lien_Google_Assistant": "PASS (clic sans crash)",
+        "5_exemples_phrases_exactes": "PASS — Ajoute 25 CHF chez Migros / Salaire 3200 CHF / Netflix 18 CHF chaque mois / Facture Swisscom 89 CHF / Contrat assurance voiture 95 CHF",
+        "btn_Ouvrir_Ajout_Intelligent": "PASS",
+        "btn_Tester_un_exemple": "PASS",
+        "note_v3.8_App_Intents": "PASS",
+        "NO_mention_Siri_natif_active": "PASS (chaîne 'Siri natif' absente)",
+        "clic_1er_exemple_ouvre_quick_add": "PASS — /quick-add?text=Ajoute%2025%20CHF%20chez%20Migros&source=text → preview 'Migros / −25 CHF / alimentation / IA serveur · 60%' + bouton Ajouter"
+      }
+    },
+    "T2_voice_parser_contrat_recurring": {
+      "status": "FAIL",
+      "details": "URL: /quick-add?text=Contrat%20assurance%20voiture%2095%20CHF&source=siri. Résultat preview affiché: badge 'Siri Shortcut' → 'DÉPENSE | — | −95 CHF | IA serveur · 60%'. AUCUNE catégorie, AUCUN merchant détecté. AUCUNE mention 'Abonnement' / 'Récurrent' / 'abonnements'. La modification de voiceLocalParser.ts (ajout de 'contrat', 'police d'assurance', 'leasing' dans RECURRING_KEYWORDS) est correcte et fonctionnera en mode offline, MAIS sur cette route /quick-add le backend IA serveur est appelé avec succès (confidence 60%) et retourne une classification DÉPENSE — le fallback local n'est jamais activé.",
+      "rca": "Voir section rca_of_issue ci-dessous."
+    },
+    "T3_cloud_sync_regression": {
+      "status": "PASS",
+      "details": "/expenses affiche 'E2E-TEST-SYNC-V2 | 07.06.2026 | -42,50 | Carte' — la transaction seed d'iter5 est toujours persistée après login e2e-test@budgy.ch sans aucun re-login (session active). Aucune erreur RLS/schéma observable: les codes 42501, 42P01, 42703, PGRST204, PGRST301 sont absents du DOM. Note: AUDIT-69 non créé (le FAB '+' du header /expenses n'a toujours pas de testID — voir action_items iter6)."
+    },
+    "T4_version_build_69": {
+      "status": "PASS",
+      "details": "/more/settings affiche dans la card Données: 'Version: 3.7.0 · App Store Ready' (label semble être un raccourci de marketing hardcodé court, pas une version sémantique précise). AUCUNE occurrence de '3.7.28' ni 'Build 68' ni 'Build 69' dans /more/legal ou /more/settings. Footer /more affiche 'Budgy v3.7'. app.json bien à jour: version='3.7.29', iOS buildNumber='69', Android versionCode=69. Critère respecté (pas de 3.7.28 / Build 68 stale dans l'UI)."
+    }
+  },
+
+  "backend_issues": { "critical": [], "minor": [] },
+
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "quick-add classifier (Contrat / police d'assurance / leasing)",
+        "issue": "Sur /quick-add?source=siri (ou autre source), le backend IA serveur (confidence 60%) est invoqué et retourne 'DÉPENSE' pour 'Contrat assurance voiture 95 CHF'. La whitelist locale RECURRING_KEYWORDS récemment enrichie dans voiceLocalParser.ts (ligne 42) ne s'applique QUE quand le backend est indisponible. Solution recommandée: (a) appliquer aussi le keyword override 'contrat|police d'assurance|leasing' APRÈS la réponse backend si confidence < 70%, OU (b) forcer le re-classement en récurrent côté UI quand le texte input contient ces mots, OU (c) corriger le classifier backend lui-même. Reference: /app/frontend/app/quick-add.tsx + /app/frontend/src/lib/voiceLocalParser.ts:42",
+        "testID": "n/a",
+        "priority": "MEDIUM"
+      },
+      {
+        "component": "/more/settings — étiquette 'Version'",
+        "issue": "La card Données affiche 'Version: 3.7.0 · App Store Ready' au lieu de la vraie version (3.7.29 / Build 69) ou de Constants.expoConfig.version. C'est un libellé marketing hardcodé qui peut induire en erreur lors d'un audit. Recommandation: afficher `Constants.expoConfig.version + ' · build ' + Constants.expoConfig.ios.buildNumber`. Reference: /app/frontend/app/more/settings.tsx (chercher '3.7.0' ou 'App Store Ready').",
+        "testID": "n/a",
+        "priority": "LOW"
+      },
+      {
+        "component": "Footer /more — 'Budgy v3.7'",
+        "issue": "Le footer affiche 'Budgy v3.7' (hardcodé, ligne 256 de /app/frontend/app/(tabs)/more.tsx). Devrait lire la version depuis Constants pour rester à jour automatiquement.",
+        "testID": "n/a",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Quick-add IA classifier (server vs local fallback)",
+        "issue": "La modification de RECURRING_KEYWORDS dans voiceLocalParser.ts est correcte mais n'a aucun effet observable sur le test demandé tant que le backend IA répond — il faut soit ajuster le backend, soit ajouter une post-correction côté client.",
+        "affected_testIDs": []
+      }
+    ],
+    "design_issues": [],
+    "react_native_issues": [
+      {
+        "component": "Console error 'Unexpected text node'",
+        "issue": "Erreur récurrente: 'Unexpected text node: . A text node cannot be a child of a <View>.' — observée sur /expenses (déjà notée iter4/5/6). Non bloquant."
+      },
+      {
+        "component": "Console warning shadow* deprecated",
+        "issue": "'shadow*' style props are deprecated. Use 'boxShadow'. Migration recommandée (RN 0.76+/RN-Web)."
+      },
+      {
+        "component": "Console error 'collapsable' non-boolean attr",
+        "issue": "Received `false` for a non-boolean attribute `collapsable`. À nettoyer (View collapsable={false} → undefined ou {String}). Non bloquant."
+      },
+      {
+        "component": "Console warning props.pointerEvents deprecated",
+        "issue": "'props.pointerEvents is deprecated. Use style.pointerEvents'. Migration douce."
+      },
+      {
+        "component": "useNativeDriver web preview",
+        "issue": "'Animated: useNativeDriver is not supported' — attendu en web preview, pas un bug applicatif."
+      }
+    ]
+  },
+
+  "test_report_links": [
+    "/tmp/b69_01.png (after login)",
+    "/tmp/b69_02_more.png (More menu with Siri & Assistant item visible)",
+    "/tmp/b69_03_siri.png (écran Siri & Assistant ouvert)",
+    "/tmp/b69_04_qa_migros.png (1er exemple → quick-add Migros 25 CHF preview)",
+    "/tmp/b69_05_contrat.png (Test 2 FAIL — Contrat classifié DÉPENSE)",
+    "/tmp/b69_settings.png (settings affiche '3.7.0 · App Store Ready')",
+    "/tmp/b69_06_expenses.png (Cloud Sync OK — E2E-TEST-SYNC-V2 visible)"
+  ],
+
+  "action_items": [
+    "HIGH (T2 FAIL): Faire en sorte que 'Contrat assurance voiture 95 CHF' soit classifié récurrent/abonnement. 3 pistes — (1) côté backend IA (route /api/voice/parse ou équivalent appelé par /quick-add): ajouter 'contrat', 'police d'assurance', 'leasing' aux mots-clés de classification recurring; (2) côté UI /quick-add.tsx: après réception du résultat IA, faire un post-check sur le texte input et override en recurring si l'un de ces mots est présent; (3) baisser le seuil ou désactiver l'appel serveur quand source=siri/google_assistant et confiance attendue basse. La modification déjà appliquée à voiceLocalParser.ts est correcte mais inactive tant que le backend répond.",
+    "LOW: /more/settings affiche 'Version: 3.7.0 · App Store Ready' (hardcodé). Remplacer par `${Constants.expoConfig?.version} · build ${Constants.expoConfig?.ios?.buildNumber ?? Constants.expoConfig?.android?.versionCode}`.",
+    "LOW: footer /more 'Budgy v3.7' (ligne 256 de /app/frontend/app/(tabs)/more.tsx) — idem, lire depuis Constants.",
+    "LOW (legacy iter6): testID='expenses-add-fab' toujours manquant sur le FAB de /expenses — bloque le test E2E AUDIT-69.",
+    "OPTIONAL (RN-Web): nettoyer warnings 'Unexpected text node', 'collapsable={false}', 'shadow*', 'pointerEvents' (issues déjà notées iter4/5/6)."
+  ],
+
+  "critical_code_review_comments": [
+    "✓ /app/frontend/app/more/siri-assistant.tsx (NOUVEAU, 469 lignes): écran propre, wording 100% honnête (PAS de 'Siri natif activé'), copy claire, 6 étapes iPhone + 2 étapes Android, 5 exemples cliquables, 2 boutons d'action rapide, note v3.8. Linear gradient hero, design cohérent avec le reste de l'app. Bonne séparation Step component. Excellente réalisation.",
+    "✓ /app/frontend/app/(tabs)/more.tsx ligne 56: nouvel item siri-assistant correctement intégré dans la section IA & Optimisation avec icon mic + couleur cyan.",
+    "✓ /app/frontend/src/lib/voiceLocalParser.ts ligne 42: ajout de 'contrat', 'police d'assurance', 'leasing' dans RECURRING_KEYWORDS — correct syntaxiquement, mais n'a PAS d'impact observable sur la route /quick-add tant que le backend IA répond. La logique de fallback (lignes 88-129) reste correcte.",
+    "✓ /app/frontend/app.json: version='3.7.29', iOS buildNumber='69', Android versionCode=69 — bump cohérent.",
+    "⚠️ /app/frontend/app/quick-add.tsx: il manque un post-check de classification côté UI pour appliquer le keyword override 'Contrat/leasing/police' quand le backend retourne 'expense' avec confidence basse.",
+    "⚠️ /app/frontend/app/more/settings.tsx: étiquette 'Version: 3.7.0' hardcodée — recommandation lire depuis Constants.expoConfig.",
+    "⚠️ /app/frontend/app/(tabs)/more.tsx:256: footer 'Budgy v3.7' hardcodé."
+  ],
+
+  "updated_files": [],
+
+  "success_rate": {
+    "backend": "n/a (smoke test frontend uniquement)",
+    "frontend": "3/4 = 75% PASS (Test 2 FAIL non bloquant côté UI mais bloquant côté UX classifier)"
+  },
+
+  "seed_data_creation": "Aucune nouvelle donnée seed créée. La transaction E2E-TEST-SYNC-V2 (CHF -42.50 / Courses, 07.06.2026) persistée depuis iter5 reste visible pour e2e-test@budgy.ch — valide la régression Cloud Sync.",
+
+  "retest_needed": true,
+
+  "should_main_agent_self_test": true,
+
+  "context_for_next_testing_agent": "Build 69 GLOBALEMENT OK avec 1 FAIL ciblé sur le classifier 'Contrat'. Pour retest après fix: rejouer SEULEMENT Test 2 → /quick-add?text=Contrat%20assurance%20voiture%2095%20CHF&source=siri et vérifier que le preview affiche bien 'ABONNEMENT' ou 'RÉCURRENT' (pas 'DÉPENSE'). Tests 1/3/4 sont stables. Credentials: e2e-test@budgy.ch / Test1234!. Sélection langue: Français + Continuer. Login: bouton 'Se connecter' (pas Enter). Nouveau test: l'écran /more/siri-assistant est correctement intégré et fonctionnel.",
+
+  "rca_of_issue": "**Test 2 FAIL — RCA (mise à jour après inspection logs backend)**: La phrase 'Contrat assurance voiture 95 CHF' est traitée comme suit: (1) UI /quick-add lit text+source=siri depuis URL; (2) UI appelle backend `POST /api/voice/parse` (confirmé dans logs: `[voice] parsing: Contrat assurance voiture 95 CHF`); (3) Backend tente OpenAI gpt-4o-mini mais ÉCHEC AUTH: `litellm.AuthenticationError: Incorrect API key provided: sk-emerg******d346`; (4) Backend bascule vers SON PROPRE regex fallback côté serveur: `[voice] LLM failed, falling back to regex`; (5) Le regex fallback BACKEND classifie en 'expense' (95 CHF) car il n'a PAS la liste de keywords récurrents enrichie ('contrat', 'police d'assurance', 'leasing'); (6) UI affiche 'DÉPENSE · IA serveur · 60%'. **Cause racine**: la modification de E1 a été appliquée UNIQUEMENT à /app/frontend/src/lib/voiceLocalParser.ts (côté client) — alors que c'est le PARSER BACKEND (route /api/voice/parse, code Python côté serveur) qui produit le résultat affiché. Le voiceLocalParser frontend est utilisé uniquement quand le backend /api/voice/parse est INJOIGNABLE (network error), pas quand le backend répond avec un fallback regex côté serveur. **Action requise**: répliquer la modification (ajout 'contrat', 'police d\\'assurance', 'leasing' dans RECURRING_KEYWORDS) dans le backend, fichier /app/backend/*.py qui implémente la route /api/voice/parse → chercher le mapping recurring/expense dans le regex fallback. **Note annexe**: l'auth OpenAI échoue depuis plusieurs heures (sk-emerg****d346 invalide) — séparément du test 2, c'est aussi un sujet à traiter si l'objectif est d'avoir le parsing IA pleinement opérationnel en production. **Reproduction**: capture /tmp/b69_05_contrat.png + logs backend `[voice] parsing: Contrat assurance voiture 95 CHF` suivi de `[voice] LLM failed, falling back to regex` puis HTTP 200 OK."
+}

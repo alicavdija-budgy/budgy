@@ -1,0 +1,55 @@
+{
+  "summary": "RETEST FINAL Phase 4 Build 69 — All 4 focused tests PASS. Backend fix verified: 'contrat' keyword now triggers subscription/recurring classification in _parse_voice_local() fallback. UI preview shows correct type/amount/category for all 3 voice parse scenarios. Cloud sync working — logged-in user sees persisted E2E-TEST-SYNC-V2 transaction.",
+  "tests_executed": {
+    "test_A_contrat_assurance": {
+      "url": "/quick-add?text=Contrat%20assurance%20voiture%2095%20CHF&source=siri",
+      "backend_api": {"type": "subscription", "amount": 95.0, "recurring": true, "category": "abonnement"},
+      "ui_preview": "ABONNEMENT / −95 CHF / abonnement (Siri Shortcut source)",
+      "result": "PASS"
+    },
+    "test_B_netflix_regression": {
+      "url": "/quick-add?text=Netflix%2018%20CHF&source=text",
+      "backend_api": {"type": "subscription", "amount": 18.0, "merchant": "Netflix", "recurring": true},
+      "ui_preview": "ABONNEMENT / Netflix / −18 CHF / abonnement",
+      "result": "PASS"
+    },
+    "test_C_migros_regression": {
+      "url": "/quick-add?text=Ajoute%2025%20CHF%20chez%20Migros&source=text",
+      "backend_api": {"type": "expense", "amount": 25.0, "merchant": "Migros", "recurring": false, "category": "alimentation"},
+      "ui_preview": "DÉPENSE / Migros / −25 CHF / alimentation (correctly NOT subscription)",
+      "result": "PASS"
+    },
+    "test_D_cloud_sync_persistence": {
+      "login": "e2e-test@budgy.ch / Test1234! — successful",
+      "console_logs": "[bootstrap-sync] pulled 2 items from cloud, [auto-sync] pushed 2 items",
+      "visible_transactions": "E2E-TEST-SYNC-V2 (-42.50 CHF, 07.06.2026) visible in /expenses Quotidien tab",
+      "result": "PASS"
+    }
+  },
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "shadow* style", "issue": "Console warning: 'shadow*' style props are deprecated. Use 'boxShadow'. (pre-existing, non-blocking)"},
+      {"component": "props.pointerEvents", "issue": "Console warning: props.pointerEvents is deprecated. Use style.pointerEvents. (pre-existing, non-blocking)"},
+      {"component": "View text node", "issue": "Console warning after login: 'Unexpected text node: . A text node cannot be a child of a <View>.' — minor, pre-existing"}
+    ]
+  },
+  "test_report_links": [
+    "/app/test_reports/test_A_contrat.png",
+    "/app/test_reports/test_B_netflix.png",
+    "/app/test_reports/test_C_migros.png",
+    "/app/test_reports/test_D_expenses_loggedin.png"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "None — used existing e2e-test@budgy.ch account with pre-existing cloud transactions",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "verdict": "GO BUILD 69",
+  "context_for_next_testing_agent": "Build 69 RETEST complete. Backend fix at /app/backend/server.py:1433 (extended sub_kw list with 'contrat', 'police d''assurance', 'leasing' etc.) is working correctly. All 4 focused tests PASS."
+}

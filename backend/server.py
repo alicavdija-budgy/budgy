@@ -1430,7 +1430,9 @@ def _parse_voice_local(text: str) -> dict:
 
     # Type
     income_kw = ["salaire", "reçu", "revenu", "j'ai reçu", "remboursement"]
-    sub_kw = ["abonnement", "netflix", "spotify", "icloud", "youtube", "prime", "disney"]
+    sub_kw = ["abonnement", "netflix", "spotify", "icloud", "youtube", "prime", "disney",
+              "chaque mois", "tous les mois", "mensuel", "par mois",
+              "contrat", "police d'assurance", "police assurance", "leasing"]
     is_income = any(k in t for k in income_kw)
     is_sub = any(k in t for k in sub_kw)
     typ = "income" if is_income else ("subscription" if is_sub else "expense")

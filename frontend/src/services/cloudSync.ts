@@ -100,39 +100,65 @@ export async function pushAllToCloud(): Promise<{
 
   const s = useStore.getState();
   let total = 0;
-  try {
-    // 1. preferences (single row)
-    const prefsRow: any = { user_id: userId, ...snake(s.preferences) };
-    delete prefsRow.theme; // theme is local
-    await upsertTable('user_preferences', [prefsRow]);
-    total++;
+  const errors: string[] = [];
 
-    // 2-9 collections
-    const collections: [string, any[]][] = [
-      ['transactions', s.transactions],
-      ['incomes', s.incomes],
-      ['savings_goals', s.savingsGoals],
-      ['budgets', s.budgets],
-      ['recurring_expenses', s.recurringExpenses],
-      ['contracts', s.contracts],
-      ['debts', s.debts],
-      ['investments', s.investments],
-      ['receipts', s.receipts],
-      ['invoices', s.invoices],
-      ['documents', s.documents],
-      ['expense_groups', s.groups],
-      ['group_expenses', s.groupExpenses],
-    ];
-    for (const [table, items] of collections) {
-      if (items.length === 0) continue;
-      const rows = items.map((it) => toRow(snake(it), userId));
+  // v3.7.28 — Defensive per-table try/catch: a single failing table MUST NOT
+  // block subsequent tables. Previously, an error on user_preferences (e.g.
+  // schema drift like extra columns rejected by PGRST204) threw and aborted
+  // the whole push, causing transactions to never reach the cloud and the
+  // user's data to "disappear" on reload.
+  const safeUpsert = async (table: string, rows: any[]) => {
+    if (rows.length === 0) return;
+    try {
       await upsertTable(table, rows);
       total += rows.length;
+    } catch (e: any) {
+      errors.push(`${table}: ${e?.message || String(e)}`);
     }
-    return { ok: true, pushed: total };
-  } catch (e: any) {
-    return { ok: false, pushed: total, error: e?.message || String(e) };
+  };
+
+  // 1. preferences (single row) — STRICT column whitelist to avoid PGRST204
+  //    on schema drift (client may have many local-only fields like
+  //    languagePicked, themeMode, biometricEnabled, etc. that don't exist
+  //    in the Supabase user_preferences table).
+  const p: any = s.preferences || {};
+  const prefsRow = {
+    user_id: userId,
+    currency: p.currency ?? 'CHF',
+    language: p.language ?? 'fr',
+    canton: p.canton ?? null,
+    onboarded: !!p.onboarded,
+    is_pro: !!(s as any).isPro,
+  };
+  await safeUpsert('user_preferences', [prefsRow]);
+
+  // 2-N collections
+  const collections: [string, any[]][] = [
+    ['transactions', s.transactions],
+    ['incomes', s.incomes],
+    ['savings_goals', s.savingsGoals],
+    ['budgets', s.budgets],
+    ['recurring_expenses', s.recurringExpenses],
+    ['contracts', s.contracts],
+    ['debts', s.debts],
+    ['investments', s.investments],
+    ['receipts', s.receipts],
+    ['invoices', s.invoices],
+    ['documents', s.documents],
+    ['expense_groups', s.groups],
+    ['group_expenses', s.groupExpenses],
+  ];
+  for (const [table, items] of collections) {
+    if (!items || items.length === 0) continue;
+    const rows = items.map((it) => toRow(snake(it), userId));
+    await safeUpsert(table, rows);
   }
+
+  if (errors.length > 0) {
+    // Partial success: we still pushed what we could.
+    return { ok: total > 0, pushed: total, error: errors.join(' | ') };
+  }
+  return { ok: true, pushed: total };
 }
 
 // ─── Pull: fetch cloud data and replace local store ───────────

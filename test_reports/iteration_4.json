@@ -1,0 +1,58 @@
+{
+  "summary": "BUDGY v3.7.28 Cloud Sync E2E retest — FAIL. The fix in cloudSync.ts (whitelist + safeUpsert) was correctly applied and DID solve the original PGRST204/language_picked issue. The per-table try/catch is also working as designed (transactions push attempt now happens independently of user_preferences failure). HOWEVER, two NEW errors are surfaced that still block end-to-end sync: (A) user_preferences upsert now fails with code 42703 'column id does not exist' because upsertTable() uses { onConflict: 'id' } for ALL tables, but the user_preferences SQL table has user_id as its PRIMARY KEY (no id column). (B) transactions upsert fails with PGRST204 'Could not find the synced column of transactions' — the Transaction TypeScript interface contains a 'synced' field that is not present in the Supabase transactions table schema. Net result: pushed=0 every cycle, transaction lives only in local AsyncStorage, lost after reload (bootstrap-sync pulled 0 items). Criteria (3), (5), (7) FAIL.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Cloud Sync — push user_preferences (onConflict mismatch)",
+        "issue": "After whitelist fix, user_preferences push fails with Postgres code 42703 'column \"id\" does not exist'. Root cause: cloudSync.ts:65 calls sb.from(table).upsert(rows, { onConflict: 'id' }) for EVERY table including user_preferences. But the user_preferences table (docs/SUPABASE_SCHEMA.sql line 33-41) has user_id as its primary key — there is NO id column. Either change to { onConflict: 'user_id' } for user_preferences specifically, or restructure upsertTable to accept a per-table conflict column.",
+        "affected_testIDs": [],
+        "priority": "CRITICAL",
+        "evidence_logs": [
+          "[sync] upsert user_preferences failed (code=42703) — column \"id\" does not exist",
+          "[auto-sync] push failed: user_preferences: column \"id\" does not exist"
+        ]
+      },
+      {
+        "flow": "Cloud Sync — push transactions (schema drift on 'synced')",
+        "issue": "transactions upsert fails with PGRST204 'Could not find the synced column of transactions in the schema cache'. The Transaction TS interface has a 'synced' boolean field used by the local store; snake() leaks it into the upsert payload. Same pattern that originally affected user_preferences — applies to ALL collection tables that may have client-only fields. Recommended fix: whitelist columns per-collection (mirror the user_preferences fix) OR add a stripUnknown(table, row) helper that removes keys not in a SCHEMA map, OR add 'synced' as a column in docs/SUPABASE_SCHEMA.sql transactions table.",
+        "affected_testIDs": [],
+        "priority": "CRITICAL",
+        "evidence_logs": [
+          "[sync] upsert transactions failed (code=PGRST204) — Could not find the 'synced' column of 'transactions' in the schema cache",
+          "[auto-sync] push failed: transactions: Could not find the 'synced' column of 'transactions' in the schema cache"
+        ]
+      }
+    ],
+    "design_issues": [],
+    "react_native_issues": [
+      { "component": "RN Web text node warning", "issue": "Recurring console error 'Unexpected text node: . A text node cannot be a child of a <View>.' appears on expenses screen. Non-blocking but indicates a stray text node (likely a JS expression returning empty string or a whitespace) inside a View. Reference: /app/frontend/app/(tabs)/expenses.tsx" },
+      { "component": "RN Web non-boolean attr", "issue": "Console error 'Received `false` for a non-boolean attribute `collapsable`'. Multiple occurrences. RN Web compatibility issue — non-blocking but worth a sweep on View collapsable={false} → collapsable={undefined or 'false'}." }
+    ]
+  },
+  "test_report_links": ["/tmp/r6h_01_after_save.png", "/tmp/r6h_02_final.png", "/tmp/r6g_04_after_save.png"],
+  "action_items": [
+    "CRITICAL FIX #1 (onConflict mismatch on user_preferences): In /app/frontend/src/services/cloudSync.ts, change upsertTable signature to accept a conflictCol (default 'id') and pass 'user_id' when upserting user_preferences. Quick patch: `async function upsertTable(table: string, rows: any[], conflict: string = 'id') { ... .upsert(rows, { onConflict: conflict }) ... }` then `await safeUpsert('user_preferences', [prefsRow], 'user_id');`. Update safeUpsert accordingly.",
+    "CRITICAL FIX #2 (transactions/synced schema drift): The Transaction interface has a client-only 'synced' field. Either: (A) strip it from the payload in pushAllToCloud — e.g. `const rows = items.map(it => { const r = toRow(snake(it), userId); delete r.synced; return r; });` for the transactions case, OR (B) introduce a per-table column whitelist (mirroring the user_preferences fix). Audit ALL other TS entity interfaces (Income, SavingsGoal, Budget, RecurringExpense, Contract, Debt, Investment, Receipt, Invoice, PersonalDocument, ExpenseGroup, GroupExpense) for similar client-only fields and either strip or whitelist.",
+    "After both fixes, retest the same E2E scenario — expect: `[auto-sync] pushed N items` with N>=2, transaction visible after reload, `[bootstrap-sync] pulled M items from cloud` with M>=1.",
+    "MINOR: investigate 'Unexpected text node' warning on expenses screen and 'non-boolean collapsable' warning (RN Web compat sweep). Non-blocking.",
+    "MINOR (positive): the per-table safeUpsert defensive pattern IS working — verified that the transactions upsert is now attempted even when user_preferences fails. Keep it."
+  ],
+  "critical_code_review_comments": [
+    "cloudSync.ts:62-86 — upsertTable hardcodes { onConflict: 'id' } for all tables. user_preferences has user_id as PK → 42703 immediately. Make conflict column configurable.",
+    "cloudSync.ts:153 — `items.map((it) => toRow(snake(it), userId))` leaks every client-only field of each entity (e.g. Transaction.synced) into the upsert. Same root cause as user_preferences originally. Either generic stripUnknown helper or per-table whitelist.",
+    "Positive: the fix in v3.7.28 for user_preferences whitelist (lines 124-133) is correctly applied and works. The defensive safeUpsert wrapper (lines 110-118) correctly isolates failures per table — verified empirically.",
+    "supabase.ts:185 — upsertPreferences helper exists but is unused; harmless dead code."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "n/a (frontend-only scope)",
+    "frontend": "FAIL — 3/5 PASS — (1) login OK, (2) tx added & visible OK, (3) auto-sync pushed N items NOT FOUND, (5) PGRST204 still present on transactions (and new 42703 on user_preferences), (7) tx NOT visible after reload (cloud pull returns 0)"
+  },
+  "seed_data_creation": "None.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Two remaining fixes are needed before this E2E will pass: (1) user_preferences upsert needs onConflict: 'user_id' (currently 'id', causes 42703); (2) transactions (and likely other collections) need a column whitelist or .synced stripped (currently PGRST204 on 'synced'). After both, expect `[auto-sync] pushed N items` (N>=2) and tx persistence after reload. Test creds: e2e-test@budgy.ch / Test1234!. Always clear localStorage before retest to avoid stale persisted store masking Supabase session state. Login flow: must CLICK the 'Se connecter' / 'Sign in' button (Enter key does NOT submit; use `page.get_by_text('Se connecter', exact=True).last.click(force=True)`).",
+  "rca_of_issue": "ITERATION 4 RCA: The main agent's fix correctly addressed the iteration-3 root cause (language_picked / extra prefs columns) via a strict 6-column whitelist on user_preferences and added a defensive per-table safeUpsert. Both are verified working. However, two adjacent issues are now exposed: (A) upsertTable() at cloudSync.ts:65 unconditionally uses { onConflict: 'id' } but user_preferences uses user_id as PK → Postgres 42703 'column id does not exist'. (B) The transactions table push uses snake(it) which leaks the client-only Transaction.synced field → PGRST204. Because safeUpsert no longer throws, the test was able to confirm both errors occur in parallel on every sync cycle. Pull returns 0 rows (cloud is empty), so after reload the local AsyncStorage is also wiped by the pull (or never had the data) → tx disappears. Reproduction: clear localStorage, login as e2e-test@budgy.ch, add transaction via Expenses → Ajouter modal, wait 8s, observe both 42703 and PGRST204 in console. Mitigation: per action items #1 and #2."
+}

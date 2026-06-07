@@ -16,6 +16,7 @@ import {
 } from '../src/services/notifications';
 import { startSyncMonitor, bootstrapSession } from '../src/services/sync';
 import { pullAllFromCloud, pushAllToCloud, isSignedInToSupabase } from '../src/services/cloudSync';
+import { startAutoSync } from '../src/lib/autoSync';
 import { retryPendingValidationOnce, syncSubscriptionFromBackendOnce } from '../src/hooks/useIAP';
 import { useStore } from '../src/stores/useStore';
 import LockScreen from './lock';
@@ -78,6 +79,8 @@ export default function RootLayout() {
     }
     // Start offline sync monitor
     startSyncMonitor();
+    // Start auto cloud-sync (v3.7.28 — debounced push after every Zustand mutation)
+    startAutoSync();
 
     // Restore Supabase session and pull latest data
     (async () => {

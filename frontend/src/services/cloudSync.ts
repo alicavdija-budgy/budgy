@@ -64,7 +64,23 @@ async function upsertTable(table: string, rows: any[]) {
   if (!sb || rows.length === 0) return;
   const { error } = await sb.from(table).upsert(rows as any, { onConflict: 'id' });
   if (error) {
-    console.warn(`[sync] upsert ${table} failed`, error.message);
+    // v3.7.28 — log enrichi pour diagnostiquer RLS / schéma / etc.
+    // Codes Supabase fréquents :
+    //   42501  → RLS policy bloque l'INSERT/UPDATE (manque "Users can manage their own data")
+    //   42P01  → Table inexistante (schéma non appliqué — voir docs/SUPABASE_SCHEMA.sql)
+    //   23503  → Foreign key viol. (user_id ne référence pas auth.users)
+    //   PGRST301 → Row not visible (RLS SELECT manquant côté pull)
+    const code = (error as any).code || (error as any).status || '?';
+    const hint = (error as any).hint || (error as any).details || '';
+    console.warn(
+      `[sync] upsert ${table} failed (code=${code}) — ${error.message}${hint ? ' | ' + hint : ''}`,
+    );
+    // Hint clair pour les 2 cas les plus probables :
+    if (String(code) === '42501') {
+      console.warn(`[sync] → RLS POLICY manquante sur "${table}". Appliquer docs/SUPABASE_SCHEMA.sql.`);
+    } else if (String(code) === '42P01') {
+      console.warn(`[sync] → Table "${table}" n'existe pas dans Supabase. Appliquer docs/SUPABASE_SCHEMA.sql.`);
+    }
     throw error;
   }
 }

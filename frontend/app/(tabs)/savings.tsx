@@ -30,6 +30,8 @@ import AnimatedProgressBar from '../../src/components/AnimatedProgressBar';
 import ConfettiBurst from '../../src/components/ConfettiBurst';
 import { useTranslation } from '../../src/hooks/useTranslation';
 import { DATE_LOCALES } from '../../src/i18n/translations';
+import { EntityActionsSheet, type EntityActionsContext } from '../../src/components/EntityActionsSheet';
+import { EntityEditModal, type EditField } from '../../src/components/EntityEditModal';
 
 export default function SavingsScreen() {
   const theme = useTheme();
@@ -50,6 +52,28 @@ export default function SavingsScreen() {
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState<string | null>(null);
+  // v3.7.28 — actions sheet + edit modal (réutilise composants existants)
+  const [actionsCtx, setActionsCtx] = useState<EntityActionsContext | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const editingGoal = useMemo(() => savingsGoals.find((g) => g.id === editingId) || null, [savingsGoals, editingId]);
+  const EDIT_GOAL_FIELDS: EditField[] = useMemo(() => [
+    { key: 'title', label: 'Titre', type: 'text', icon: 'flag-outline', placeholder: 'ex: Voyage Japon', required: true },
+    { key: 'target', label: `Montant cible (${preferences.currency})`, type: 'number', icon: 'flag-outline', placeholder: '5000', required: true, decimal: true },
+    { key: 'saved', label: `Déjà épargné (${preferences.currency})`, type: 'number', icon: 'wallet-outline', placeholder: '0', decimal: true },
+    { key: 'deadline', label: 'Date cible (YYYY-MM-DD)', type: 'text', icon: 'calendar-outline', placeholder: '2026-12-31' },
+  ], [preferences.currency]);
+  const handleEditGoalSubmit = (values: Record<string, any>) => {
+    if (!editingGoal) return;
+    const target = parseFloat(String(values.target).replace(',', '.')) || editingGoal.target;
+    const saved = Math.max(0, parseFloat(String(values.saved).replace(',', '.')) || 0);
+    updateSavingsGoal(editingGoal.id, {
+      title: String(values.title || '').trim() || editingGoal.title,
+      target,
+      saved,
+      deadline: values.deadline || editingGoal.deadline,
+    });
+    setEditingId(null);
+  };
   const [depositAmount, setDepositAmount] = useState('');
   const [step, setStep] = useState<'templates' | 'custom'>('templates');
   const [newGoal, setNewGoal] = useState({
@@ -223,8 +247,17 @@ export default function SavingsScreen() {
             // Trigger is handled by the useEffect above to avoid render-phase setState
 
             return (
-              <Card
+              <TouchableOpacity
                 key={goal.id}
+                activeOpacity={0.85}
+                onLongPress={() => setActionsCtx({
+                  id: goal.id,
+                  title: goal.title,
+                  subtitle: `${preferences.currency} ${formatNumber(goal.saved)} / ${formatNumber(goal.target)}`,
+                  accent: goal.color,
+                })}
+              >
+              <Card
                 style={styles.goalCard}
                 borderColor={isComplete ? `${goal.color}50` : undefined}
               >
@@ -303,6 +336,7 @@ export default function SavingsScreen() {
                   </TouchableOpacity>
                 </View>
               </Card>
+              </TouchableOpacity>
             );
           })
         )}
@@ -494,6 +528,38 @@ export default function SavingsScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* v3.7.28 — Long-press actions + Edit goal */}
+      <EntityActionsSheet
+        ctx={actionsCtx}
+        onClose={() => setActionsCtx(null)}
+        onEdit={() => {
+          const id = actionsCtx?.id;
+          setActionsCtx(null);
+          if (id) setEditingId(id);
+        }}
+        onDelete={() => {
+          const id = actionsCtx?.id;
+          setActionsCtx(null);
+          if (id) deleteSavingsGoal(id);
+        }}
+        deleteConfirmTitle="Supprimer cet objectif ?"
+        deleteConfirmMessage="L'historique de progression sera perdu."
+      />
+      <EntityEditModal
+        visible={!!editingGoal}
+        onClose={() => setEditingId(null)}
+        title="Modifier l'objectif"
+        fields={EDIT_GOAL_FIELDS}
+        initialValues={{
+          title: editingGoal?.title || '',
+          target: editingGoal?.target?.toString() || '',
+          saved: editingGoal?.saved?.toString() || '0',
+          deadline: editingGoal?.deadline || '',
+        }}
+        onSubmit={handleEditGoalSubmit}
+        submitLabel="Enregistrer"
+      />
     </View>
   );
 }

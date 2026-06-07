@@ -18,6 +18,8 @@ import type { ThemePalette } from '../../src/constants/palettes';
 import { Card, Button, ProgressBar, EmptyState } from '../../src/components/ui';
 import { useStore } from '../../src/stores/useStore';
 import { formatNumber, pct } from '../../src/utils/calculations';
+import { EntityActionsSheet, type EntityActionsContext } from '../../src/components/EntityActionsSheet';
+import { EntityEditModal, type EditField } from '../../src/components/EntityEditModal';
 
 const DEBT_TYPES = [
   { id: 'card',     label: 'Carte de crédit', icon: 'card',         color: '#EF4444' },
@@ -39,6 +41,30 @@ export default function DebtsScreen() {
   const [showAdd, setShowAdd] = useState(false);
   const [showPay, setShowPay] = useState<string | null>(null);
   const [payAmount, setPayAmount] = useState('');
+  // v3.7.28 — Edit / Actions sheet (réutilise les composants existants)
+  const [actionsCtx, setActionsCtx] = useState<EntityActionsContext | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const editingDebt = useMemo(() => debts.find((d) => d.id === editingId) || null, [debts, editingId]);
+  const EDIT_FIELDS: EditField[] = useMemo(() => [
+    { key: 'title', label: 'Titre', type: 'text', icon: 'document-text-outline', placeholder: 'ex: Carte UBS', required: true },
+    { key: 'total', label: `Montant total (${CUR})`, type: 'number', icon: 'cash-outline', placeholder: '10000', required: true, decimal: true },
+    { key: 'paid', label: `Déjà remboursé (${CUR})`, type: 'number', icon: 'checkmark-circle-outline', placeholder: '0', decimal: true },
+    { key: 'interestRate', label: 'Taux d\'intérêt (%)', type: 'number', icon: 'trending-up-outline', placeholder: '9.9', decimal: true },
+    { key: 'monthlyPayment', label: `Mensualité (${CUR})`, type: 'number', icon: 'calendar-outline', placeholder: '250', decimal: true },
+  ], [CUR]);
+  const handleEditSubmit = (values: Record<string, any>) => {
+    if (!editingDebt) return;
+    const total = parseFloat(String(values.total).replace(',', '.')) || editingDebt.total;
+    const paid = Math.max(0, Math.min(total, parseFloat(String(values.paid).replace(',', '.')) || 0));
+    updateDebt(editingDebt.id, {
+      title: String(values.title || '').trim() || editingDebt.title,
+      total,
+      paid,
+      interestRate: parseFloat(String(values.interestRate).replace(',', '.')) || 0,
+      monthlyPayment: parseFloat(String(values.monthlyPayment).replace(',', '.')) || 0,
+    });
+    setEditingId(null);
+  };
   const [form, setForm] = useState({
     title: '', total: '', paid: '0', interestRate: '0',
     monthlyPayment: '', typeId: 'card',
@@ -171,6 +197,15 @@ export default function DebtsScreen() {
             const isComplete = remaining <= 0;
             return (
               <Animated.View key={d.id} entering={FadeInDown.duration(300).delay(idx * 50)}>
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onLongPress={() => setActionsCtx({
+                    id: d.id,
+                    title: d.title,
+                    subtitle: `Reste ${CUR} ${formatNumber(d.total - d.paid)} · ${pct(d.paid, d.total).toFixed(0)}%`,
+                    accent: d.color,
+                  })}
+                >
                 <Card style={styles.debtCard}>
                   <View style={styles.debtHeader}>
                     <View style={[styles.debtIcon, { backgroundColor: `${d.color}25` }]}>
@@ -182,8 +217,13 @@ export default function DebtsScreen() {
                         Taux {d.interestRate}% · {months > 0 ? `${months} mois restants` : 'Aucune mensualité'}
                       </Text>
                     </View>
-                    <TouchableOpacity onPress={() => handleDelete(d.id, d.title)} style={styles.delIcon}>
-                      <Ionicons name="trash-outline" size={18} color={theme.textTertiary} />
+                    <TouchableOpacity onPress={() => setActionsCtx({
+                      id: d.id,
+                      title: d.title,
+                      subtitle: `Reste ${CUR} ${formatNumber(d.total - d.paid)}`,
+                      accent: d.color,
+                    })} style={styles.delIcon}>
+                      <Ionicons name="ellipsis-horizontal" size={18} color={theme.textTertiary} />
                     </TouchableOpacity>
                   </View>
 
@@ -225,6 +265,7 @@ export default function DebtsScreen() {
                     )}
                   </View>
                 </Card>
+                </TouchableOpacity>
               </Animated.View>
             );
           })
@@ -327,30 +368,75 @@ export default function DebtsScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Add Payment Modal */}
+      {/* Add Payment Modal — v3.7.28 : KeyboardAvoidingView pour que le
+          bouton "Confirmer" reste accessible quand le clavier est ouvert. */}
       <Modal visible={!!showPay} animationType="fade" transparent onRequestClose={() => setShowPay(null)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Ajouter un versement</Text>
-              <TouchableOpacity onPress={() => setShowPay(null)}>
-                <Ionicons name="close" size={24} color={theme.text} />
-              </TouchableOpacity>
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <ScrollView
+            contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }}
+            keyboardShouldPersistTaps="handled"
+          >
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Ajouter un versement</Text>
+                <TouchableOpacity onPress={() => setShowPay(null)}>
+                  <Ionicons name="close" size={24} color={theme.text} />
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.label}>Montant ({CUR})</Text>
+              <TextInput
+                style={styles.input}
+                value={payAmount}
+                onChangeText={setPayAmount}
+                placeholder="100"
+                placeholderTextColor={theme.textTertiary}
+                keyboardType="decimal-pad"
+                autoFocus
+                returnKeyType="done"
+                onSubmitEditing={handleAddPayment}
+              />
+              <Button title="Confirmer" onPress={handleAddPayment} fullWidth size="lg" style={{ marginTop: Spacing.lg }} />
             </View>
-            <Text style={styles.label}>Montant ({CUR})</Text>
-            <TextInput
-              style={styles.input}
-              value={payAmount}
-              onChangeText={setPayAmount}
-              placeholder="100"
-              placeholderTextColor={theme.textTertiary}
-              keyboardType="decimal-pad"
-              autoFocus
-            />
-            <Button title="Confirmer" onPress={handleAddPayment} fullWidth size="lg" style={{ marginTop: Spacing.lg }} />
-          </View>
-        </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
+
+      {/* Edit / Delete actions sheet (long-press sur une carte dette) */}
+      <EntityActionsSheet
+        ctx={actionsCtx}
+        onClose={() => setActionsCtx(null)}
+        onEdit={() => {
+          const id = actionsCtx?.id;
+          setActionsCtx(null);
+          if (id) setEditingId(id);
+        }}
+        onDelete={() => {
+          const id = actionsCtx?.id;
+          setActionsCtx(null);
+          if (id) deleteDebt(id);
+        }}
+        deleteConfirmTitle="Supprimer cette dette ?"
+        deleteConfirmMessage="Cette action est irréversible. La progression et l'historique seront perdus."
+      />
+
+      <EntityEditModal
+        visible={!!editingDebt}
+        onClose={() => setEditingId(null)}
+        title="Modifier la dette"
+        fields={EDIT_FIELDS}
+        initialValues={{
+          title: editingDebt?.title || '',
+          total: editingDebt?.total?.toString() || '',
+          paid: editingDebt?.paid?.toString() || '0',
+          interestRate: editingDebt?.interestRate?.toString() || '0',
+          monthlyPayment: editingDebt?.monthlyPayment?.toString() || '0',
+        }}
+        onSubmit={handleEditSubmit}
+        submitLabel="Enregistrer"
+      />
     </View>
   );
 }

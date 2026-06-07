@@ -1,0 +1,57 @@
+{
+  "summary": "BUDGY v3.7.28 Cloud Sync E2E test — FAIL. Login succeeded, transaction added & visible in UI, and NO RLS errors (42501/42P01/23503/PGRST301) appeared. However, cloud push fails with PGRST204 schema-cache error on user_preferences table: column 'language_picked' (and likely several other client-only preference fields) is MISSING from the production Supabase schema. Because pushAllToCloud() upserts user_preferences FIRST and throws on error, ALL subsequent table pushes (transactions, incomes, etc.) are aborted → data is never persisted to cloud → after reload the transaction is lost. This IS the root cause of the originally reported 'data disappears after disconnect/reconnect' bug. The autoSync.ts subscriber works correctly (it fires); the failure is downstream in the schema/payload mismatch.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Cloud Sync — push user_preferences",
+        "issue": "PGRST204 — Could not find the 'language_picked' column of 'user_preferences' in the schema cache. The client snake-cases ALL fields of preferences (UserPreferences interface contains languagePicked, themeMode, biometricEnabled, monthlyIncome, household, children, goals, employmentType, etc.), but docs/SUPABASE_SCHEMA.sql user_preferences table only has: currency, language, canton, onboarded, is_pro. Every extra field triggers PGRST204 and aborts the entire push (throw at /app/frontend/src/services/cloudSync.ts:84) BEFORE transactions are pushed.",
+        "affected_testIDs": ["auth-email-input"],
+        "priority": "CRITICAL",
+        "evidence_logs": [
+          "[sync] upsert user_preferences failed (code=PGRST204) — Could not find the 'language_picked' column of 'user_preferences' in the schema cache",
+          "[auto-sync] push failed: Could not find the 'language_picked' column of 'user_preferences' in the schema cache"
+        ]
+      }
+    ],
+    "design_issues": [],
+    "react_native_issues": [
+      {
+        "component": "RN Web text rendering",
+        "issue": "Console warning: 'Unexpected text node: . A text node cannot be a child of a <View>.' — appears when modal opens. Non-blocking but should be reviewed. Likely a stray whitespace/text inside a View in the expenses Add modal."
+      }
+    ]
+  },
+  "test_report_links": [
+    "/tmp/r5_01_modal.png",
+    "/tmp/r5_02_filled.png",
+    "/tmp/r5_03_after.png",
+    "/tmp/r5_04_reloaded.png"
+  ],
+  "action_items": [
+    "CRITICAL FIX (recommended option A — client-side, no Supabase migration needed): In /app/frontend/src/services/cloudSync.ts pushAllToCloud(), whitelist ONLY the columns that exist in the SQL schema before upserting user_preferences. Replace the current `const prefsRow: any = { user_id: userId, ...snake(s.preferences) }; delete prefsRow.theme;` with an explicit pick: `const prefsRow = { user_id: userId, currency: s.preferences.currency, language: s.preferences.language, canton: s.preferences.canton, onboarded: !!s.preferences.onboarded, is_pro: !!s.isPro };`. This keeps client-only flags (languagePicked, themeMode, biometricEnabled, monthlyIncome, household, children, goals, employmentType) local-only.",
+    "CRITICAL FIX (option B — schema migration): Extend docs/SUPABASE_SCHEMA.sql user_preferences with: language_picked boolean default false, theme_mode text, biometric_enabled boolean default false, monthly_income numeric, household text, children int, goals text[], employment_type text. Then re-apply on Supabase prod.",
+    "DEFENSIVE FIX (independent of A/B): In cloudSync.ts upsertTable, do NOT `throw error` on PGRST204 for user_preferences — fall through to the collection loop so an unrelated prefs schema drift never blocks transaction sync (the user's reported data-loss bug).",
+    "Investigate stray 'Unexpected text node' warning in expenses Add modal (non-blocking).",
+    "After applying the fix, re-run this exact E2E scenario to confirm [auto-sync] pushed N items appears with N>=2 (1 prefs row + 1 transaction) and that the transaction persists after reload."
+  ],
+  "critical_code_review_comments": [
+    "cloudSync.ts:105-107 — prefsRow is built via `snake(s.preferences)` which leaks every client-only UI flag (languagePicked, themeMode, biometricEnabled, household, children, goals, employmentType, monthlyIncome) into the upsert payload. PostgREST rejects with PGRST204 because those columns don't exist in the SQL schema. Only `theme` is currently stripped — insufficient.",
+    "cloudSync.ts:84 — `throw error` inside upsertTable propagates to pushAllToCloud catch which returns ok:false. Since user_preferences is upserted FIRST (line 107), a single missing prefs column blocks ALL collection pushes. Consider per-table try/catch with partial-success reporting.",
+    "autoSync.ts works as intended: subscriber fires on every store mutation, debounce 4s, push attempted. The fix in this version DID solve the 'no push on web' problem; what remains is a payload/schema mismatch."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "n/a (frontend-only test scope per request)",
+    "frontend": "3/5 PASS — Login OK, Tx added OK, NO RLS errors OK. PUSH FAIL, PERSISTENCE FAIL."
+  },
+  "seed_data_creation": "None.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "After main agent applies fix in cloudSync.ts (column whitelist for user_preferences), re-run this exact scenario. Expect: [auto-sync] pushed N items with N>=2, [bootstrap-sync] pulled M items from cloud with M>=1 on reload, and E2E-TEST-SYNC transaction visible after reload. Credentials: e2e-test@budgy.ch / Test1234!. Public Supabase: https://supabase.budgy.ch. Note: there's a recurring 'Unexpected text node' RN warning that appears unrelated but worth flagging.",
+  "rca_of_issue": "ROOT CAUSE (definitive): The Supabase user_preferences table schema (docs/SUPABASE_SCHEMA.sql line 33-41) defines only 7 columns (user_id, currency, language, canton, onboarded, is_pro, updated_at). The TypeScript UserPreferences interface (frontend/src/types/index.ts:18-32) contains 13+ fields. pushAllToCloud (cloudSync.ts:105) snake_cases ALL of them into the upsert payload. PostgREST returns 400 PGRST204 'Could not find the language_picked column'. upsertTable throws (line 84). pushAllToCloud catch returns ok:false, total=1. Because user_preferences is the FIRST upsert (line 107, before transactions loop at line 111), NO transactions are ever sent. Bootstrap on reload finds 0 rows in Supabase → 'pulled 0 items' → local data lost. This explains EXACTLY the user report 'data disappears after disconnect/reconnect'. The autoSync subscriber introduced in v3.7.28 is firing correctly; the bug is in the payload shape. REPRODUCTION: login as e2e-test@budgy.ch on web preview → add tx → wait 5s → observe '[sync] upsert user_preferences failed (code=PGRST204)' and '[auto-sync] push failed'. MITIGATION: explicit column whitelist in cloudSync.ts for prefsRow (recommended; no DB change required)."
+}

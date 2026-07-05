@@ -1,0 +1,77 @@
+{
+  "summary": "BUDGY v3.8.0 E2E Famille Cloud — HARD BLOCKER: the SUPABASE_FAMILY.sql migration is NOT applied on prod Supabase (https://supabase.budgy.ch). Direct REST probes confirm: table public.group_invites → PGRST205 (missing), column expense_groups.member_user_ids → 42703 (missing), RPC join_group_by_code → PGRST202 (missing), RPC leave_group → PGRST202 (missing). Consequently scenarios 2-9 are impossible to execute (User B cannot join, cross-account RLS cannot be tested, leave_group throws, etc.). Additional web-preview UX bug: React Native Share.share() throws an uncaught 'Share is not supported in this browser' error overlay when generating the invite code (family.tsx:280). Local-only scenarios that could still be tested (S1 partial creation, S10 UI validation, S11 persistence) PASS. Verdict: FIX_NEEDED — user must run /app/docs/SUPABASE_FAMILY.sql in Supabase SQL editor BEFORE Build 70.",
+  "scenarios": {
+    "1_create_group_and_code": {
+      "status": "PARTIAL_PASS",
+      "notes": "Group AUDIT-GROUP-A created locally (id g_<ts>), 8-char code 67PX4P76 generated and displayed in hero ('Code: 67PX4P76'). BUT: (a) publishInviteCode() failed with 'Could not find the table public.group_invites in the schema cache' (PGRST205) — code is NOT usable by other accounts. (b) Share.share() threw 'Share is not supported in this browser' → uncaught Error overlay shown in web preview (dev only, but should be try/catch)."
+    },
+    "2_userB_join": {"status": "BLOCKED", "reason": "Cannot join: RPC join_group_by_code(p_code) missing (PGRST202) AND group_invites table missing (PGRST205). Even if RPC existed, publishInviteCode never wrote the code to the DB."},
+    "3_userB_add_expense": {"status": "SKIPPED", "reason": "Blocked by S2"},
+    "4_rls_userA_sees_B_expense": {"status": "BLOCKED", "reason": "expense_groups.member_user_ids column missing (42703) → RLS cross-user policy from SUPABASE_FAMILY.sql not deployed. User A cannot see User B expenses."},
+    "5_rls_negative_userC": {"status": "SKIPPED", "reason": "Blocked by S2"},
+    "6_userC_join": {"status": "BLOCKED", "reason": "Same as S2"},
+    "7_userB_leave": {"status": "BLOCKED", "reason": "RPC leave_group(p_group_id) missing (PGRST202)"},
+    "8_owner_cannot_leave": {"status": "BLOCKED", "reason": "RPC leave_group missing — server-side owner check unreachable. Client would receive an error but not 'owner_cannot_leave' → wrong alert copy shown to user."},
+    "9_owner_delete_cascade": {"status": "SKIPPED", "reason": "No shared members to observe cascade — SUPABASE_FAMILY.sql infra missing"},
+    "10_invalid_code_ui": {
+      "status": "PARTIAL_PASS",
+      "notes": "UI length gate works: Rejoindre button is disabled when code length ≠ 8 (verified with 'ABC'). With valid 8-char format 'ZZZZZZZZ', button enables. Full join failure alert copy could not be captured because RN Alert.alert() renders as an in-app <Modal>/notification that our page.on('dialog') hook does not catch, but the underlying joinByCode returns error='Could not find the function join_group_by_code' → user would see 'Impossible de rejoindre : Could not find the function ...' (not the intended 'Code introuvable ou expiré'). Recommend mapping PGRST202 / PGRST205 error codes to a friendlier message in familyCloud.ts joinByCode."
+    },
+    "11_persistence_reload": {
+      "status": "PASS",
+      "notes": "AUDIT-GROUP-A persists across full page navigation / new browser context (Zustand AsyncStorage persist works)."
+    },
+    "12_cleanup": {
+      "status": "PARTIAL",
+      "notes": "AUDIT-GROUP-A is still present locally in the e2e-test@budgy.ch session. It has NOT been pushed to Supabase (group_invites/member_user_ids missing → publishInviteCode failed → no cross-account artefact). Nothing to clean server-side. Main agent may want to prompt user to delete AUDIT-GROUP-A from their local device before Build 70 shipping — or leave it as a harmless leftover."
+    }
+  },
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "Supabase table public.group_invites", "issue": "PGRST205 — table does not exist. SUPABASE_FAMILY.sql migration NOT applied.", "priority": "CRITICAL"},
+      {"endpoint": "Supabase column public.expense_groups.member_user_ids", "issue": "42703 — column does not exist. RLS extension for cross-user access impossible.", "priority": "CRITICAL"},
+      {"endpoint": "Supabase RPC public.join_group_by_code(p_code)", "issue": "PGRST202 — function not found.", "priority": "CRITICAL"},
+      {"endpoint": "Supabase RPC public.leave_group(p_group_id)", "issue": "PGRST202 — function not found.", "priority": "CRITICAL"}
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "family.tsx handleShareCode", "issue": "Uncaught 'Share is not supported in this browser' when Share.share() is invoked on web preview. Wrap the call in try/catch so it degrades to Clipboard.setStringAsync on web. Reference: /app/frontend/app/more/family.tsx:280.", "testID": "n/a", "priority": "HIGH"},
+      {"component": "family.tsx handleJoinByCode", "issue": "Raw Supabase error string ('Could not find the function ...') is surfaced verbatim in the Alert when the RPC is missing. Should be mapped to the same 'invite_not_found' branch to show the localised message.", "testID": "n/a", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [
+      {"flow": "publishInviteCode → group_invites upsert", "issue": "Silent warn-log-only failure means the user thinks they successfully generated a shareable code, but it is unusable on any other device/account. Suggest surfacing a non-blocking banner when publish fails with a schema error.", "affected_testIDs": ["family-leave-group (indirectly)"]}
+    ],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "Share (react-native)", "issue": "Share module has no web fallback; throws unhandled on Expo Web preview. Reference: /app/frontend/app/more/family.tsx:280."},
+      {"component": "shadow* / props.pointerEvents", "issue": "Pre-existing deprecation warnings (non-blocking, already noted in iteration_8)."}
+    ]
+  },
+  "test_report_links": [
+    "/tmp/s1_created.png",
+    "/tmp/s1_code.png",
+    "/tmp/s1_list_final.png",
+    "/tmp/s10a_short.png",
+    "/tmp/s10b_invalid.png"
+  ],
+  "action_items": [
+    "USER (owner of Supabase project) MUST run /app/docs/SUPABASE_FAMILY.sql in the Supabase SQL editor on https://supabase.budgy.ch. Verify with: SELECT to_regclass('public.group_invites'); SELECT column_name FROM information_schema.columns WHERE table_name='expense_groups' AND column_name='member_user_ids'; SELECT proname FROM pg_proc WHERE proname IN ('join_group_by_code','leave_group'). All must return non-null.",
+    "MAIN AGENT: wrap Share.share(...) in /app/frontend/app/more/family.tsx:280 with try { await Share.share(...) } catch(e) { if(Platform.OS==='web'){ await Clipboard.setStringAsync(shareBase+suffix); Alert.alert('Code copié','Le message a été copié dans le presse-papier.'); } }",
+    "MAIN AGENT: in /app/frontend/src/services/familyCloud.ts joinByCode(), map any error containing 'Could not find' / PGRST202 / PGRST205 to error='invite_not_found' so the UI shows 'Code introuvable ou expiré' instead of the raw SQL message.",
+    "AFTER migration applied → re-run this test suite (scenarios 2–9) to fully validate cross-device Family cloud."
+  ],
+  "critical_code_review_comments": [
+    "publishInviteCode currently swallows schema errors as a console.warn only. Consider bubbling schema errors (PGRST20x) as a distinct 'schema_missing' status so the UI can show 'Fonctionnalité indisponible — mettez à jour l'app'.",
+    "The absence of a client-side pre-flight (e.g., a lightweight SELECT 1 FROM group_invites LIMIT 0) means the family feature silently degrades on prod when infra is missing. A one-shot health check at app boot would surface migration drift immediately."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "0% (4/4 Supabase family objects missing)", "frontend": "70% (local group create/persist/UI validation OK, cloud publish/join blocked)"},
+  "seed_data_creation": "One local group 'AUDIT-GROUP-A' with code 67PX4P76 exists in the e2e-test@budgy.ch device profile. No server-side rows were created (publishInviteCode failed). Nothing to clean on Supabase.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Once the user applies /app/docs/SUPABASE_FAMILY.sql on https://supabase.budgy.ch, verify with the curl block in this report, then rerun scenarios 2-9. The scenarios 1/10/11 local behaviour is already green. Users e2e-user-b@budgy.ch and e2e-user-c@budgy.ch have NOT been created yet (signup step was skipped after the S1 blocker was identified) — create them via /auth 'Créer un compte' at retest time (Auto Confirm ACTIF in Supabase means immediate login).",
+  "rca_of_issue": "Root cause: SUPABASE_FAMILY.sql was NOT executed on the live Supabase project despite the request text claiming otherwise. Direct REST verification (see backend_issues.critical) confirms: (1) table public.group_invites → PGRST205, (2) column expense_groups.member_user_ids → 42703, (3) function public.join_group_by_code → PGRST202, (4) function public.leave_group → PGRST202. Reproduction: `curl https://supabase.budgy.ch/rest/v1/group_invites?select=code&limit=1 -H 'apikey: <anon>'` returns 404 PGRST205. Mitigation: open Supabase Studio → SQL Editor → paste /app/docs/SUPABASE_FAMILY.sql → Run. Additional secondary bug: React Native Share.share() has no web fallback and throws uncaught in web preview (family.tsx:280); this does NOT affect iOS/Android runtime but should be wrapped for a clean Expo Web dev experience.",
+  "verdict": "FIX_NEEDED"
+}

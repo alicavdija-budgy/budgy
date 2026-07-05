@@ -28,7 +28,7 @@ import type { ThemePalette } from '../../src/constants/palettes';
 import { useStore } from '../../src/stores/useStore';
 import { Card, Button } from '../../src/components/ui';
 import type { ExpenseGroup, GroupMember, GroupExpense } from '../../src/types';
-import { publishInviteCode, joinByCode, makeSelfMember } from '../../src/services/familyCloud';
+import { publishInviteCode, joinByCode, makeSelfMember, leaveGroupCloud } from '../../src/services/familyCloud';
 import { isSupabaseConfigured } from '../../src/lib/supabase';
 
 // ─────────────────── Helpers ───────────────────
@@ -229,6 +229,40 @@ export default function FamilyScreen() {
     );
   };
 
+  const handleLeaveGroup = (group: ExpenseGroup) => {
+    Alert.alert(
+      'Quitter ce groupe ?',
+      "Vous n'apparaîtrez plus dans ce groupe partagé. Vous pourrez le rejoindre à nouveau avec un nouveau code d'invitation.",
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Quitter',
+          style: 'destructive',
+          onPress: async () => {
+            const res = await leaveGroupCloud(group.id);
+            if (!res.ok && res.error === 'owner_cannot_leave') {
+              Alert.alert(
+                'Impossible de quitter',
+                "Vous êtes le propriétaire de ce groupe. Utilisez « Supprimer » depuis l'en-tête pour le fermer définitivement pour tous les membres.",
+              );
+              return;
+            }
+            if (!res.ok) {
+              Alert.alert('Erreur', `Impossible de quitter : ${res.error || 'erreur inconnue'}`);
+              return;
+            }
+            // Success — clean up locally
+            deleteGroup(group.id);
+            try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
+            setSelectedGroupId(null);
+            setMode('list');
+            Alert.alert('Groupe quitté', `Vous ne faites plus partie de « ${group.name} ».`);
+          },
+        },
+      ]
+    );
+  };
+
   const handleShareCode = async (group: ExpenseGroup) => {
     let code = group.inviteCode;
     if (!code) {
@@ -397,9 +431,9 @@ export default function FamilyScreen() {
           </TouchableOpacity>
 
           <Card style={styles.tipCard}>
-            <Ionicons name="information-circle" size={18} color={theme.info} />
+            <Ionicons name="cloud-done" size={18} color={theme.success} />
             <Text style={styles.tipTxt}>
-              Les groupes fonctionnent en mode local. Le partage de groupes entre appareils sera activé prochainement avec la synchronisation cloud.
+              Le partage de groupes entre appareils est activé : générez un code depuis un groupe et invitez vos proches à le saisir sur leur propre compte Budgy.
             </Text>
           </Card>
         </ScrollView>
@@ -675,6 +709,17 @@ export default function FamilyScreen() {
               })}
             </View>
           )}
+
+          {/* Leave group (for joined members). Owner sees an inline hint. */}
+          <TouchableOpacity
+            style={styles.leaveBtn}
+            onPress={() => handleLeaveGroup(selectedGroup)}
+            activeOpacity={0.8}
+            testID="family-leave-group"
+          >
+            <Ionicons name="exit-outline" size={18} color={theme.error} />
+            <Text style={styles.leaveBtnTxt}>Quitter le groupe</Text>
+          </TouchableOpacity>
         </ScrollView>
 
         {/* FAB */}
@@ -727,6 +772,15 @@ const makeStyles = (Colors: ThemePalette) => StyleSheet.create({
   primaryCta: { marginTop: Spacing.lg, borderRadius: BorderRadius.xl, overflow: 'hidden' },
   primaryCtaGrad: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: Spacing.md },
   primaryCtaTxt: { color: '#FFF', fontSize: FontSizes.md, fontWeight: FontWeights.bold },
+
+  leaveBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, marginTop: Spacing.xl, paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1, borderColor: Colors.errorLight || Colors.error,
+    backgroundColor: `${Colors.error}10`,
+  },
+  leaveBtnTxt: { color: Colors.error, fontSize: FontSizes.sm, fontWeight: FontWeights.semibold },
 
   secondaryCta: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,

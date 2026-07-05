@@ -28,6 +28,8 @@ import type { ThemePalette } from '../../src/constants/palettes';
 import { useStore } from '../../src/stores/useStore';
 import { Card, Button } from '../../src/components/ui';
 import type { ExpenseGroup, GroupMember, GroupExpense } from '../../src/types';
+import { publishInviteCode, joinByCode, makeSelfMember } from '../../src/services/familyCloud';
+import { isSupabaseConfigured } from '../../src/lib/supabase';
 
 // ─────────────────── Helpers ───────────────────
 const MEMBER_COLORS = ['#34D399', '#60A5FA', '#A78BFA', '#FBBF24', '#F87171', '#F472B6', '#22D3EE', '#FB923C'];
@@ -233,21 +235,88 @@ export default function FamilyScreen() {
       code = genCode();
       updateGroup(group.id, { inviteCode: code });
     }
-    await Share.share({
-      message: `Rejoignez "${group.name}" sur Budgy 🎉\n\nCode d'invitation: ${code}\n\n(Saisissez ce code dans Plus › Famille & Groupes › Rejoindre)`,
-    });
+    // v3.8.0 — publish the code to Supabase so other devices can join.
+    // Fails silently if offline: the code is still shareable, will be
+    // re-published on the next foreground sync.
+    const pub = await publishInviteCode(group, code);
+    const shareBase = `Rejoignez "${group.name}" sur Budgy 🎉\n\nCode d'invitation : ${code}\nLien : budgy://join/${code}\n\n(Ouvrir Budgy → Plus → Famille & Groupes → Rejoindre)`;
+    const suffix = pub.ok
+      ? ''
+      : "\n\nℹ️ Vous êtes hors ligne : le code sera activé automatiquement à votre prochaine connexion.";
+    await Share.share({ message: shareBase + suffix });
   };
 
-  const handleJoinByCode = () => {
+  const handleJoinByCode = async () => {
     const code = joinCodeInput.trim().toUpperCase();
-    if (code.length !== 8) { Alert.alert('Code invalide', 'Le code doit faire 8 caractères.'); return; }
-    // Local mode: code-based join is informational only (no backend). Confirm to user.
+    if (code.length !== 8) {
+      Alert.alert('Code invalide', 'Le code doit faire 8 caractères.');
+      return;
+    }
+    if (!isSupabaseConfigured()) {
+      Alert.alert(
+        'Connexion requise',
+        "Pour rejoindre un groupe partagé, connectez-vous à votre compte Budgy dans les réglages.",
+      );
+      return;
+    }
+
     setShowJoinModal(false);
+    const res = await joinByCode(code);
     setJoinCodeInput('');
+
+    if (!res.ok || !res.data) {
+      const msg =
+        res.error === 'invite_not_found' || res.error === 'not_found'
+          ? "Code introuvable ou expiré. Demandez au propriétaire de partager un nouveau code."
+          : res.error === 'not_authenticated'
+          ? "Vous devez être connecté pour rejoindre un groupe."
+          : `Impossible de rejoindre : ${res.error || 'erreur inconnue'}`;
+      Alert.alert('Rejoindre le groupe', msg);
+      return;
+    }
+
+    const { group: cloudGroup, expenses: cloudExpenses, alreadyMember } = res.data;
+
+    // Add self as GroupMember if we're not already listed
+    const self = await makeSelfMember(MEMBER_COLORS[cloudGroup.members.length % MEMBER_COLORS.length]);
+    const meAlreadyInMembers =
+      self && cloudGroup.members.some((m) => m.id === self.id || m.email === self.email);
+    const finalGroup: ExpenseGroup = {
+      ...cloudGroup,
+      inviteCode: code,
+      members: self && !meAlreadyInMembers
+        ? [...cloudGroup.members, self]
+        : cloudGroup.members,
+    };
+
+    // Merge into local store (updateGroup upserts by id in Zustand)
+    const existing = groups.find((g) => g.id === finalGroup.id);
+    if (existing) {
+      updateGroup(finalGroup.id, {
+        name: finalGroup.name,
+        emoji: finalGroup.emoji,
+        color: finalGroup.color,
+        currency: finalGroup.currency,
+        members: finalGroup.members,
+        inviteCode: finalGroup.inviteCode,
+      });
+    } else {
+      addGroup(finalGroup);
+    }
+    // Bring shared expenses locally (dedupe by id)
+    for (const e of cloudExpenses) {
+      const alreadyLocal = groupExpenses.some((x) => x.id === e.id);
+      if (!alreadyLocal) addGroupExpense(e);
+    }
+
+    try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
+    setSelectedGroupId(finalGroup.id);
+    setMode('detail');
     Alert.alert(
-      'Code enregistré',
-      `Le code ${code} a été enregistré. Le partage de groupe entre appareils nécessite une connexion (synchronisation à venir). En attendant, vous pouvez créer un nouveau groupe local et inviter les membres manuellement.`,
-      [{ text: 'OK' }]
+      alreadyMember ? 'Groupe déjà rejoint' : 'Groupe rejoint 🎉',
+      alreadyMember
+        ? `Vous êtes déjà membre de « ${finalGroup.name} ». Ses ${cloudExpenses.length} dépenses partagées sont maintenant synchronisées sur cet appareil.`
+        : `Bienvenue dans « ${finalGroup.name} » ! ${cloudExpenses.length} dépense${cloudExpenses.length > 1 ? 's' : ''} partagée${cloudExpenses.length > 1 ? 's' : ''} synchronisée${cloudExpenses.length > 1 ? 's' : ''}.`,
     );
   };
 

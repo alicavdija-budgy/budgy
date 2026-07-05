@@ -22,6 +22,16 @@ create table if not exists public.group_invites (
   expires_at     timestamptz not null
 );
 
+-- v3.8.0 iter_10 : ajouter CASCADE si la contrainte a été créée sans (idempotent)
+alter table public.group_invites drop constraint if exists group_invites_group_id_fkey;
+alter table public.group_invites
+  add constraint group_invites_group_id_fkey
+  foreign key (group_id) references public.expense_groups(id) on delete cascade;
+
+-- Purge des orphelins historiques éventuels
+delete from public.group_invites
+ where group_id not in (select id from public.expense_groups);
+
 create index if not exists idx_group_invites_group_id on public.group_invites(group_id);
 
 alter table public.group_invites enable row level security;

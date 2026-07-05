@@ -93,8 +93,15 @@ export async function joinByCode(
 
     const { data, error } = await (sb.rpc as any)('join_group_by_code', { p_code: code });
     if (error) {
-      console.warn('[familyCloud] joinByCode RPC failed:', error.message);
-      return { ok: false, error: error.message };
+      const msg = String(error.message || '');
+      const code404 = String((error as any).code || '');
+      // v3.8.0 — map missing table / RPC / not-found row to invite_not_found
+      // so the UI shows the localised message instead of the raw SQL error.
+      const isMissing =
+        code404.startsWith('PGRST20') ||
+        /Could not find|schema cache|does not exist|invite_not_found|not_found|group_missing/i.test(msg);
+      console.warn('[familyCloud] joinByCode RPC failed:', msg, '/code=', code404);
+      return { ok: false, error: isMissing ? 'invite_not_found' : msg };
     }
     if (!data || !data.group) return { ok: false, error: 'not_found' };
 

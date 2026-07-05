@@ -22,6 +22,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import * as Clipboard from 'expo-clipboard';
 import { BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
 import { useTheme } from '../../src/hooks/useTheme';
 import type { ThemePalette } from '../../src/constants/palettes';
@@ -277,7 +278,23 @@ export default function FamilyScreen() {
     const suffix = pub.ok
       ? ''
       : "\n\nℹ️ Vous êtes hors ligne : le code sera activé automatiquement à votre prochaine connexion.";
-    await Share.share({ message: shareBase + suffix });
+    const finalMsg = shareBase + suffix;
+
+    // Try native Share first. On Expo Web (or unsupported envs) fall back to
+    // clipboard so the code is still transmissible without crashing.
+    try {
+      await Share.share({ message: finalMsg });
+    } catch {
+      try {
+        await Clipboard.setStringAsync(finalMsg);
+        Alert.alert(
+          'Message copié',
+          "Le code et le lien d'invitation ont été copiés dans le presse-papiers. Vous pouvez maintenant les coller dans WhatsApp, Messages ou un e-mail.",
+        );
+      } catch {
+        Alert.alert('Code d\'invitation', `Code : ${code}\n\nLien : budgy://join/${code}`);
+      }
+    }
   };
 
   const handleJoinByCode = async () => {

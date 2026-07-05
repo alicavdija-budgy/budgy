@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import Constants from 'expo-constants';
 import { BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
 import { useTheme } from '../../src/hooks/useTheme';
 import { useStore } from '../../src/stores/useStore';
@@ -253,7 +254,7 @@ export default function MoreScreen() {
         ))}
 
         <View style={styles.footer}>
-          <Text style={styles.footerText}>Budgy v3.7</Text>
+          <Text style={styles.footerText}>Budgy v{Constants.expoConfig?.version ?? '3.8.0'}</Text>
           <Text style={styles.footerSub}>{t('more.dataPrivate')}</Text>
         </View>
 

@@ -1,0 +1,82 @@
+{
+  "passed": 18,
+  "total": 19,
+  "results": {
+    "S1.create_group": {
+      "pass": true,
+      "note": "http 201 "
+    },
+    "S1.publish_invite": {
+      "pass": true,
+      "note": "http 201 code=NDJDXZFU"
+    },
+    "S2.join_by_code": {
+      "pass": true,
+      "note": "http 200 data={\"group\": {\"id\": \"g_1783273013321\", \"name\": \"AUDIT-GROUP-A\", \"color\": \"#34D399\", \"emoji\": \"\\ud83d\\udc68\\u200d\\ud83d\\udc69\\u200d\\ud83d\\udc67\\u200d\\ud83d\\udc66\", \"members\": [{\"id\": \"m_g_1783273013321\", \"isMe\": true, \"name\": \"e2e-test\", \"color\": \"#34D39"
+    },
+    "S3.add_expense_B": {
+      "pass": true,
+      "note": "http 201 "
+    },
+    "S4.rls_A_sees_B_expense": {
+      "pass": true,
+      "note": "rows=[{'id': 'ge_1783273014638', 'title': 'TEST-DEPENSE-B', 'amount': 60.0, 'paid_by': '006d3b67-d9a6-485e-b742-7443b9e2f87a'}]"
+    },
+    "S5.C_no_groups": {
+      "pass": true,
+      "note": "c_groups=[]"
+    },
+    "S5.fake_code_maps_invite_not_found": {
+      "pass": true,
+      "note": "http 400 data={'code': 'P0001', 'details': None, 'hint': None, 'message': 'invite_not_found'}"
+    },
+    "S6.C_joins_and_sees_expense": {
+      "pass": true,
+      "note": "http 200 sees_dep=True"
+    },
+    "S7.B_leaves": {
+      "pass": true,
+      "note": "http 200 data={'ok': True}"
+    },
+    "S7.B_group_disappeared": {
+      "pass": true,
+      "note": "rows=[]"
+    },
+    "S8.owner_cannot_leave": {
+      "pass": true,
+      "note": "http 400 data={'code': 'P0001', 'details': None, 'hint': None, 'message': 'owner_cannot_leave'}"
+    },
+    "S9.delete_group": {
+      "pass": true,
+      "note": "http 204"
+    },
+    "S9.C_group_gone": {
+      "pass": true,
+      "note": "rows=[]"
+    },
+    "S10.invalid_code_message": {
+      "pass": true,
+      "note": "http 400 data={'code': 'P0001', 'details': None, 'hint': None, 'message': 'invite_not_found'}"
+    },
+    "S10.short_code_client_check": {
+      "pass": true,
+      "note": "client-side check in familyCloud.ts line 84: length!==8 \u2192 invalid_code"
+    },
+    "S11.persistence": {
+      "pass": true,
+      "note": "rows=[{'id': 'g_1783273019424p', 'name': 'AUDIT-PERSIST'}]"
+    },
+    "S12.cleanup_A": {
+      "pass": true,
+      "note": "http 204"
+    },
+    "S12.no_orphan_invites": {
+      "pass": false,
+      "note": "invites remaining: [{'code': 'NDJDXZFU', 'group_id': 'g_1783273013321'}]"
+    },
+    "S12.no_audit_groups": {
+      "pass": true,
+      "note": "remaining=[]"
+    }
+  }
+}

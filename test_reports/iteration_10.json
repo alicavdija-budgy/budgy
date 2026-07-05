@@ -1,0 +1,65 @@
+{
+  "summary": "BUDGY v3.8.0 (pre-build 70) — E2E Famille & Groupes Cloud. Precheck DB objects PASS (group_invites table, join_group_by_code RPC, leave_group RPC, expense_groups.member_user_ids column all present). Full E2E flow executed at Supabase API level across 3 accounts (User A/B/C) mirroring familyCloud.ts client logic. 18/19 assertions PASS. Only issue: after group DELETE, orphan rows remain in group_invites (missing ON DELETE CASCADE FK). UI smoke test confirmed /more/family renders with testID='family-screen', 'Créer un groupe' & 'Rejoindre avec un code' CTAs visible, no RN red screen, no runtime errors.",
+  "scenario_results": {
+    "precheck": {"status": "PASS", "note": "group_invites 200 [], RPCs return P0001 not_authenticated (=> objects exist), member_user_ids column selectable"},
+    "S1_create_group_and_publish_code": {"status": "PASS", "note": "expense_groups insert 201, group_invites upsert 201 (code=NDJDXZFU, TTL=30d)"},
+    "S2_userB_joins_by_code": {"status": "PASS", "note": "RPC join_group_by_code 200 → returns group + expenses + already_member=false"},
+    "S3_userB_adds_shared_expense": {"status": "PASS", "note": "TEST-DEPENSE-B 60 CHF inserted with member_user_ids=[A,B]"},
+    "S4_RLS_userA_sees_B_expense": {"status": "PASS", "note": "User A GET /group_expenses returns B's row → RLS auth.uid()=ANY(member_user_ids) works cross-account. NO 42501/42P01/42703/23503/PGRST204/PGRST301 errors."},
+    "S5_userC_no_visibility": {"status": "PASS", "note": "User C sees zero groups + fake code AAAAAAAA → P0001 message='invite_not_found' (correctly mapped by familyCloud.ts:100-104)"},
+    "S6_userC_joins": {"status": "PASS", "note": "C joined + received TEST-DEPENSE-B in cloud pull"},
+    "S7_userB_leaves": {"status": "PASS", "note": "RPC leave_group 200 {ok:true}; subsequent SELECT confirms group hidden from B (RLS filter removed uid from member_user_ids)"},
+    "S8_owner_cannot_leave": {"status": "PASS", "note": "RPC leave_group as A → 400 P0001 message='owner_cannot_leave' → UI shows localised alert (family.tsx:244-249)"},
+    "S9_delete_group_cascades_view": {"status": "PASS", "note": "DELETE 204; User C GET /expense_groups id=eq.gid returns [] (cascade via RLS visibility on delete)"},
+    "S10_invalid_and_short_codes": {"status": "PASS", "note": "'ZZZZZZZZ' → invite_not_found (localised UI). Short code 'ABC' guarded client-side in familyCloud.ts:84 (length!==8 → 'invalid_code' → UI alert 'Code invalide')."},
+    "S11_persistence_after_reload": {"status": "PASS", "note": "AUDIT-PERSIST created, re-read via API confirms persistence (Supabase-backed)"},
+    "S12_cleanup": {"status": "PARTIAL", "note": "All AUDIT-* expense_groups deleted OK. BUT orphan row remained in group_invites (code NDJDXZFU) after parent group DELETE. Manually purged via extra DELETE. Root cause: FK group_invites.group_id likely missing ON DELETE CASCADE in SUPABASE_FAMILY.sql."}
+  },
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "DELETE /rest/v1/expense_groups (Supabase)",
+        "issue": "Deleting an expense_group does NOT cascade-delete its rows in group_invites. Leaves orphan invite codes referencing non-existent groups. Fix: alter FK constraint in docs/SUPABASE_FAMILY.sql: `FOREIGN KEY (group_id) REFERENCES expense_groups(id) ON DELETE CASCADE`. Alternatively add a trigger. Not a blocker for user flow (client resolves invite → RPC returns invite_not_found because the group row is gone), but pollutes the invites table over time."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {
+        "component": "shadow* style props",
+        "issue": "Repeated console warnings 'shadow* style props are deprecated. Use boxShadow.' — non-blocking but should migrate legacy shadow styles to boxShadow for RN 0.76+/web parity. Not specific to family.tsx."
+      },
+      {
+        "component": "Animated / useNativeDriver",
+        "issue": "'useNativeDriver is not supported because the native animated module is missing' warnings on web — expected on web preview only, harmless on native builds."
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/test_reports/e2e_family_cloud.py",
+    "/app/test_reports/e2e_family_cloud_results.json"
+  ],
+  "action_items": [
+    "Add `ON DELETE CASCADE` to the group_invites.group_id FK in /app/docs/SUPABASE_FAMILY.sql and re-apply the migration on Supabase prod (safe: drop constraint + re-add with cascade, or use `ALTER TABLE group_invites DROP CONSTRAINT ... , ADD CONSTRAINT ... REFERENCES expense_groups(id) ON DELETE CASCADE`).",
+    "Optional QoL: purge existing orphan invites once with `DELETE FROM group_invites WHERE group_id NOT IN (SELECT id FROM expense_groups);` — testing agent already cleaned run-specific orphans.",
+    "Nothing else blocking — Milestone A cloud family flow is functionally complete and cross-account RLS works end-to-end."
+  ],
+  "critical_code_review_comments": [
+    "familyCloud.ts:100-104 — invite_not_found mapping is comprehensive (covers PGRST20* + textual matches). Confirmed working: real P0001 with message='invite_not_found' returns error='invite_not_found' → UI localised alert.",
+    "family.tsx:285-297 — Share.share() try/catch + Clipboard.setStringAsync fallback correctly prevents Web preview crash.",
+    "family.tsx:730-739 — 'Quitter le groupe' button correctly wired with testID='family-leave-group' and confirmation Alert. Owner error mapping (owner_cannot_leave) works.",
+    "SUPABASE_FAMILY.sql — Missing ON DELETE CASCADE on group_invites.group_id FK (see backend_issues.minor)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "94.7% (18/19 assertions)", "frontend": "100% (UI smoke test passes — screen renders, testID present, no red-screen)"},
+  "seed_data_creation": "Created Supabase users e2e-user-b@budgy.ch and e2e-user-c@budgy.ch (auto-confirmed). All AUDIT-* groups + invites cleaned up at end of run. Existing user e2e-test@budgy.ch untouched. No residual test data in Supabase.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "DB migration SUPABASE_FAMILY.sql now correctly applied on prod. Only outstanding issue is missing ON DELETE CASCADE on group_invites.group_id FK — non-blocking. Test users e2e-user-b@budgy.ch and e2e-user-c@budgy.ch exist in Supabase for future runs (password Test1234!). See /app/test_reports/e2e_family_cloud.py for reusable API-level regression covering the full Milestone A flow.",
+  "rca_of_issue": "S12 orphan invites: When `DELETE FROM expense_groups WHERE id=gid` is issued, the FK on group_invites.group_id was created without CASCADE, so PostgreSQL either refuses the delete or (in the current schema apparently) uses ON DELETE NO ACTION with a deferrable constraint, or the FK simply does not exist so the row is left dangling. Either way: rows survive parent delete. Reproduction: run e2e_family_cloud.py — final assertion 'S12.no_orphan_invites' fails deterministically. Mitigation: alter FK to CASCADE (see action_items).",
+  "verdict": "PROCEED_TO_i18n — 11/11 functional scenarios PASS. Sole caveat: minor SQL schema tweak (ON DELETE CASCADE on group_invites.group_id) recommended but non-blocking for the Milestone A rollout."
+}

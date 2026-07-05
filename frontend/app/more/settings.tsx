@@ -35,7 +35,11 @@ export default function SettingsScreen() {
   const { preferences, setPreferences, logout, clearAllData } = useStore();
   const { t } = useTranslation();
   const m = useMoney();
-  const appVersion = '3.7.0';
+  const appVersion = Constants.expoConfig?.version ?? '3.8.0';
+  const buildNumber =
+    (Constants.expoConfig as any)?.ios?.buildNumber ??
+    (Constants.expoConfig as any)?.android?.versionCode ??
+    null;
 
   const [loggingOut, setLoggingOut] = useState(false);
 
@@ -218,7 +222,7 @@ export default function SettingsScreen() {
           {[
             { label: t('settings.backup'), value: t('settings.backupValue') },
             { label: t('settings.servers'), value: t('settings.serversValue') },
-            { label: t('settings.version'), value: `${appVersion} · ${t('settings.appStoreReady')}` },
+            { label: t('settings.version'), value: `${appVersion}${buildNumber ? ` (${buildNumber})` : ''} · ${t('settings.appStoreReady')}` },
           ].map((item, idx) => (
             <View key={idx} style={styles.infoRow}>
               <Text style={styles.infoLabel}>{item.label}</Text>

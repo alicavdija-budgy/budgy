@@ -175,6 +175,8 @@ export default function ExpensesScreen() {
         <TouchableOpacity
           style={styles.addButton}
           onPress={() => setShowAddModal(true)}
+          testID="add-expense-fab"
+          accessibilityLabel={t('common.add')}
         >
           <Ionicons name="add" size={24} color={theme.text} />
         </TouchableOpacity>

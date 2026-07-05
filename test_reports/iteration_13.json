@@ -1,0 +1,32 @@
+{
+  "summary": "RETEST BUDGY v3.8.0 build 70 (iter_13). All 3 fixes from iter_12 verified working. T1 Settings Version now shows '3.8.0 · App Store Ready' after clearing Metro cache. T2 testID='add-expense-fab' present & opens New Expense modal. T3 /more/legal/support renders (no 404) with support@budgy.ch, budgy.ch/support, budgy.ch/privacy and all 4 FAQ questions. T4 tab regression OK (Accueil, Dépenses, Épargne, Plus all navigate, center AI button testID='budgy-ai-button' present). NOTE: '(70)' build number does not display on WEB preview because Expo Constants.expoConfig.ios/android are stripped for web platform — this is an Expo web limitation, NOT a code bug; the '(70)' WILL render correctly on native iOS/Android production build (app.json has ios.buildNumber=70 and android.versionCode=70). CRITICAL: Metro cache was serving stale app.json (version 3.7.4); testing agent had to delete /app/frontend/.metro-cache and restart expo to observe the fix. Main agent must clear Metro cache before EAS build to avoid shipping stale bundle.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Metro cache invalidation: before every EAS build/production ship, run `rm -rf .metro-cache .expo/web/cache` or start expo with --clear to guarantee fresh app.json is bundled (avoids shipping stale version like 3.7.4).",
+    "Optional polish (not blocking): on WEB preview only, buildNumber '(70)' does not display because Expo Constants strips ios/android sub-config for web. If you want the build number to show on web too, hardcode a fallback via extra.buildNumber in app.json → Constants.expoConfig.extra.buildNumber. Native builds are unaffected."
+  ],
+  "critical_code_review_comments": [
+    "app/(tabs)/more.tsx:256 still hardcodes 'Budgy v3.7' in the More footer text — should be updated to use Constants.expoConfig?.version for consistency with Settings screen (currently displays 'Budgy v3.7' on More screen while Settings shows '3.8.0').",
+    "app/more/settings.tsx buildNumber lookup relies on Constants.expoConfig.ios.buildNumber which is undefined on Expo web platform — for parity between web and native, consider mirroring buildNumber under app.json > extra.buildNumber."
+  ],
+  "updated_files": [
+    "/app/frontend/.metro-cache (deleted to clear stale bundle)",
+    "/app/frontend/.expo/web/cache (deleted)"
+  ],
+  "success_rate": {"backend": "n/a", "frontend": "100%"},
+  "seed_data_creation": "None — read-only navigation tests only.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Metro was caching an OLD app.json (version 3.7.4) despite the file on disk being 3.8.0. If Version regression appears again, delete /app/frontend/.metro-cache and restart expo. Web preview will never show ios/android buildNumber '(70)' — that is expected Expo web behavior and appears only on native builds.",
+  "rca_of_issue": "Root cause of initial T1 failure: Metro bundler cache in /app/frontend/.metro-cache/cache/bc/ held serialized app.json chunks from a prior version (3.7.4). Even after `supervisorctl restart expo`, Metro reused those cached transform chunks. The bundle served to browser embedded '\"version\":\"3.7.4\"' directly into ExponentConstants.web.js. Mitigation: delete .metro-cache dir before restart. After cache clear + restart, bundle correctly embeds '\"version\":\"3.8.0\"' and Settings displays '3.8.0 · App Store Ready'. VERDICT: GO BUILD 70 PRODUCTION (code fixes correct, cache-only issue in preview env)."
+}

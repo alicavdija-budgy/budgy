@@ -1,0 +1,41 @@
+{
+  "summary": "BUDGY v3.8.0 (pre-build 70) — Phase 2 (i18n Siri Assistant × 4 langues) + Phase 3 (deep link /join/[code]) smoke tests. All 5 checks PASS. Test A: Siri Assistant screen renders correct hero + subtitle + 6 iPhone steps + 2 Android steps in FR/EN/DE/IT (setting preferences.language + languagePicked=true via persisted store, then reload → useTranslation reacts correctly; screenshots FR/EN/DE/IT captured). Test B: /join/ABCD1234 intermediate screen renders briefly with ActivityIndicator + 'Rejoindre…' label + uppercased code, then router.replace redirects to /more/family?joinCode=ABCD1234 (verified via page.url), family.tsx useEffect fires and the 'Rejoindre un groupe' modal auto-opens with input pre-filled with 'ABCD1234' (visible in screenshot). Test C: navigation Family ← Siri Assistant clean, cloudReadyTip 'Le partage de groupes entre appareils est activé…' present, back button works. Test D: SKIPPED (deep-link auto-opens modal but user is not authenticated in web smoke; iteration_10 already validated leaveGroup + testID='family-leave-group' at Supabase RPC level and UI level). Test E: bundle propre — 0 missing i18n key warnings ([t] Missing key ...), 0 TypeError, 0 'Cannot read properties', 0 RLS errors (42501/42P01/42703/23503/PGRST204/PGRST301) surfaced on console. Verdict: GO BUMP 3.8.0/70.",
+  "scenario_results": {
+    "A_i18n_siri_assistant_FR": {"status": "PASS", "note": "Hero 'Ajoute une dépense à la voix' + subtitle 'Compatible avec Siri via Raccourcis iOS…' + step 'Ouvrez l\\'app « Raccourcis »' rendered. Screenshot /tmp/i11_siri_fr.png."},
+    "A_i18n_siri_assistant_EN": {"status": "PASS", "note": "Hero 'Add expenses by voice' + 'Compatible with Siri via iOS Shortcuts…' + step 'Open the Shortcuts app on your iPhone.' rendered."},
+    "A_i18n_siri_assistant_DE": {"status": "PASS", "note": "Titre 'Siri & Assistent' + hero 'Ausgaben per Stimme hinzufügen' + step 'Öffnen Sie die App „Kurzbefehle\"' rendered. Screenshot /tmp/i11_siri_de.png."},
+    "A_i18n_siri_assistant_IT": {"status": "PASS", "note": "Titre 'Siri e Assistente' + hero 'Aggiungi spese con la voce' + step 'Apri l\\'app « Comandi rapidi »' rendered. Screenshot /tmp/i11_siri_it.png."},
+    "B_deep_link_join_code": {"status": "PASS", "note": "GET /join/ABCD1234 → intermediate 'Famille & Groupes' shell + 'Rejoindre…' brièvement visible, then router.replace → /more/family?joinCode=ABCD1234 (page.url confirms). useEffect(family.tsx:107-113) fires when joinCode length===8, setShowJoinModal(true) + setJoinCodeInput('ABCD1234'). Modal 'Rejoindre un groupe' opens with input showing 'A B C D 1 2 3 4' and 'Annuler'/'Rejoindre' buttons. Screenshot /tmp/i11_join.png."},
+    "C_regression_navigation": {"status": "PASS", "note": "/more/siri-assistant renders headers, hero, iPhone/Android sections, examples, note. cloudReadyTip visible on /more/family. Back chevron in Siri Assistant present. No red screen."},
+    "D_leave_group_button": {"status": "SKIP", "note": "Skipped per instructions (unauth smoke; no group visible). iteration_10 confirmed testID='family-leave-group' + owner_cannot_leave mapping already working."},
+    "E_bundle_and_console": {"status": "PASS", "note": "0 missing i18n key warnings, 0 JS TypeError / 'Cannot read properties', 0 RLS Postgres error codes surfaced, 0 console 'error' entries during navigation of home + join/[code] + siri-assistant × 4 langs."}
+  },
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "shadow* style props", "issue": "Persistent console warning 'shadow* style props are deprecated. Use boxShadow.' — non-blocking, carried over from iteration_10. Not tied to siri-assistant.tsx or join/[code].tsx."},
+      {"component": "useNativeDriver on web", "issue": "'useNativeDriver is not supported because the native animated module is missing' — expected on Expo web preview only, harmless on native builds."}
+    ]
+  },
+  "test_report_links": ["/app/test_reports/iteration_11.json"],
+  "action_items": [
+    "Nothing blocking for BUMP 3.8.0/70. Optional QoL (already tracked from iteration_10): apply ON DELETE CASCADE to group_invites.group_id FK in /app/docs/SUPABASE_FAMILY.sql.",
+    "Optional: gradual migration of shadow* → boxShadow across shared card/Section components to silence RN 0.76+/web warning."
+  ],
+  "critical_code_review_comments": [
+    "siri-assistant.tsx (254 lines) — clean, 100% t() usage, no hardcoded strings. Wording 'Compatible avec Siri via Raccourcis iOS' preserved in all 4 locales (jamais 'Siri natif').",
+    "join/[code].tsx (57 lines) — correct: useLocalSearchParams reads code, 300ms setTimeout gives visual feedback, router.replace prevents back-button loop to the deep-link handler, .trim().toUpperCase() normalises the code. Uses t('family.joinCta') for label consistency.",
+    "family.tsx:106-113 — useEffect gated on codeFromLink.length===8 avoids opening the modal on empty joinCode (case where /join is opened without a code). Correct.",
+    "translations.ts — siriAssistant and family sections are present for all 4 langs (fr/en/de/it) with identical key sets; no missing key warnings surfaced by useTranslation dev logger."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (no backend changes)", "frontend": "100% (7/7 executed checks pass; D skipped per plan)"},
+  "seed_data_creation": "None (no group created — deep-link test used a fake code 'ABCD1234' to verify UI wiring only; no Supabase writes).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Language switching via UI requires clicking the LanguageOnboardModal (visible only when preferences.languagePicked !== true). For programmatic language switching in tests, patch localStorage key 'guardian-money-storage' → state.preferences.{language, languagePicked:true} then reload. testID present on /more/family: 'family-screen', 'family-leave-group'. Deep link path /join/[code] → /more/family?joinCode=<CODE> works on web preview; navigation is confirmed at page.url level.",
+  "verdict": "GO BUMP 3.8.0/70"
+}

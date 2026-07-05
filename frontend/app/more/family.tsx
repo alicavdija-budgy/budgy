@@ -12,7 +12,7 @@
  * Aucun appel backend — fonctionne hors-ligne, App Store-safe.
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
   TextInput, Alert, Share, Modal, KeyboardAvoidingView, Platform,
@@ -20,7 +20,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
 import { BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
@@ -100,6 +100,17 @@ export default function FamilyScreen() {
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [joinCodeInput, setJoinCodeInput] = useState('');
   const [showJoinModal, setShowJoinModal] = useState(false);
+
+  // v3.8.0 — Support deep link /join/[code] : ouvre automatiquement le modal
+  // Rejoindre avec le code pré-rempli.
+  const routeParams = useLocalSearchParams<{ joinCode?: string }>();
+  useEffect(() => {
+    const codeFromLink = (routeParams?.joinCode || '').toString().trim().toUpperCase();
+    if (codeFromLink && codeFromLink.length === 8) {
+      setJoinCodeInput(codeFromLink);
+      setShowJoinModal(true);
+    }
+  }, [routeParams?.joinCode]);
 
   // Create-group form
   const [newName, setNewName] = useState('');

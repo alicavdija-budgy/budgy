@@ -9,12 +9,13 @@
  * tokens (tabBarBackground, tabBarBorder, tabBarActive, tabBarInactive).
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { Tabs } from 'expo-router';
 import { View, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { FontSizes, FontWeights } from '../../src/constants/theme';
+import * as Haptics from 'expo-haptics';
+import { FontSizes, FontWeights, BorderRadius } from '../../src/constants/theme';
 import { useTheme } from '../../src/hooks/useTheme';
 import type { ThemePalette } from '../../src/constants/palettes';
 import { useTranslation } from '../../src/hooks/useTranslation';
@@ -28,6 +29,14 @@ export default function TabLayout() {
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const [aiMenuOpen, setAiMenuOpen] = useState(false);
 
+  // v3.8.0 — Light haptic feedback on tab press (iOS/Android native only).
+  // No-op on web to avoid unnecessary warnings.
+  const onTabPress = useCallback(() => {
+    if (Platform.OS !== 'web') {
+      Haptics.selectionAsync().catch(() => {});
+    }
+  }, []);
+
   return (
     <>
       <Tabs
@@ -37,17 +46,21 @@ export default function TabLayout() {
             backgroundColor: theme.tabBarBackground,
             borderTopColor: theme.tabBarBorder,
             borderTopWidth: StyleSheet.hairlineWidth,
+            // v3.8.0 — Modern iOS-style rounded top corners for premium feel.
+            // On Android, radius still applies but shadow is replaced by elevation.
+            borderTopLeftRadius: Platform.OS === 'ios' ? BorderRadius.xl : 0,
+            borderTopRightRadius: Platform.OS === 'ios' ? BorderRadius.xl : 0,
             height: 70 + insets.bottom,
             paddingBottom: insets.bottom,
             paddingTop: 8,
             ...(Platform.OS === 'ios'
               ? {
                   shadowColor: theme.premiumShadow,
-                  shadowOpacity: theme.premiumShadowOpacity * 0.8,
-                  shadowOffset: { width: 0, height: -2 },
-                  shadowRadius: 12,
+                  shadowOpacity: theme.premiumShadowOpacity * 1.1,
+                  shadowOffset: { width: 0, height: -3 },
+                  shadowRadius: 16,
                 }
-              : { elevation: 12 }),
+              : { elevation: 14 }),
           },
           tabBarActiveTintColor: theme.tabBarActive,
           tabBarInactiveTintColor: theme.tabBarInactive,
@@ -60,6 +73,7 @@ export default function TabLayout() {
       >
         <Tabs.Screen
           name="index"
+          listeners={{ tabPress: onTabPress }}
           options={{
             title: t('tabs.home'),
             tabBarIcon: ({ color, focused }) => (
@@ -69,6 +83,7 @@ export default function TabLayout() {
         />
         <Tabs.Screen
           name="expenses"
+          listeners={{ tabPress: onTabPress }}
           options={{
             title: t('tabs.expenses'),
             tabBarIcon: ({ color, focused }) => (
@@ -93,12 +108,14 @@ export default function TabLayout() {
           listeners={{
             tabPress: (e) => {
               e.preventDefault();
+              onTabPress();
               setAiMenuOpen(true);
             },
           }}
         />
         <Tabs.Screen
           name="savings"
+          listeners={{ tabPress: onTabPress }}
           options={{
             title: t('tabs.savings'),
             tabBarIcon: ({ color, focused }) => (
@@ -108,6 +125,7 @@ export default function TabLayout() {
         />
         <Tabs.Screen
           name="more"
+          listeners={{ tabPress: onTabPress }}
           options={{
             title: t('tabs.more'),
             tabBarIcon: ({ color, focused }) => (

@@ -130,9 +130,13 @@ async def fetch_by_original_transaction(orig_tx_id: str) -> Optional[Dict[str, A
     """
     if not is_configured() or not orig_tx_id:
         return None
+    # v3.9.0 SECURITY: URL-encode filter values (defense-in-depth even though
+    # `orig_tx_id` comes from Apple's signed transaction — never attacker input)
+    from urllib.parse import quote
+    safe_orig = quote(orig_tx_id, safe="")
     url = (
         f"{_env('SUPABASE_URL')}/rest/v1/user_subscriptions"
-        f"?apple_original_transaction_id=eq.{orig_tx_id}"
+        f"?apple_original_transaction_id=eq.{safe_orig}"
         f"&select=user_id,apple_original_transaction_id,subscription_state"
     )
     async with httpx.AsyncClient(timeout=15.0) as client:

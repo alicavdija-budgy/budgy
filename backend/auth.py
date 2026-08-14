@@ -36,7 +36,6 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 import jwt  # PyJWT
-from jwt import PyJWKClient
 from fastapi import Depends, Header, HTTPException, Request
 from slowapi import Limiter
 from slowapi.util import get_remote_address

@@ -15,12 +15,12 @@
 | `/api/email/parse` | POST | AUTH | Bearer JWT | 30/min · 300/hour | LLM-costly |
 | `/api/optimizer/analyze` | POST | AUTH | Bearer JWT | 20/min · 200/hour | LLM-costly |
 | `/api/voice/parse` | POST | AUTH | Bearer JWT | 60/min · 600/hour | text ≤ 1000 chars |
-| `/api/export/pdf` | POST | PUBLIC¹ | none | 120/min | own-data render only |
-| `/api/family/create` | POST | PUBLIC² | none | 120/min | in-memory legacy code path |
-| `/api/family/join` | POST | PUBLIC² | none | 120/min | in-memory legacy code path |
-| `/api/family/{code}` | GET | PUBLIC² | none | 120/min | in-memory legacy code path |
-| `/api/alerts/check-budgets` | POST | PUBLIC² | none | 120/min | in-memory legacy |
-| `/api/alerts/{user_id}` | GET | PUBLIC² | none | 120/min | in-memory legacy |
+| `/api/export/pdf` | POST | AUTH | Bearer JWT | 30/min | own-data render only |
+| `/api/family/create` | POST | AUTH | Bearer JWT | 120/min | in-memory legacy |
+| `/api/family/join` | POST | AUTH | Bearer JWT | 120/min | in-memory legacy |
+| `/api/family/{code}` | GET | AUTH+MEMBER | Bearer JWT | 120/min | caller must be a member |
+| `/api/alerts/check-budgets` | POST | AUTH | Bearer JWT | 120/min | user_id from JWT |
+| `/api/alerts/{user_id}` | GET | AUTH+OWNER | Bearer JWT | 120/min | 403 if `{user_id}` ≠ JWT sub |
 | `/api/lamal/subsidy` | POST | PUBLIC | none | 120/min | stateless calc |
 | `/api/tax/simulate` | POST | PUBLIC | none | 120/min | stateless calc |
 | `/api/iap/validate` | POST | AUTH | Bearer JWT | 30/min | **user_id from JWT only** |

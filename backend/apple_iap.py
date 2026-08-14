@@ -417,6 +417,16 @@ def verify_and_decode_notification(signed_payload: str, cfg: IAPConfig) -> Dict[
     except Exception as e:
         raise ValueError(f"signature_invalid:{e}")
 
+    # 4bis) Verify the root certificate matches Apple's known root CA G3 fingerprint (pinning)
+    #        This prevents an attacker with a valid non-Apple cert chain from forging notifications.
+    try:
+        root_cert = certs[-1]
+        root_fp = root_cert.fingerprint(hashes.SHA256()).hex()
+        if root_fp.lower() != APPLE_ROOT_CA_G3_FINGERPRINT.lower():
+            raise ValueError(f"root_cert_not_apple:{root_fp[:16]}")
+    except Exception as e:
+        raise ValueError(f"root_pinning_failed:{e}")
+
     # 5) Extract inner transaction & renewal
     data = payload.get("data") or {}
     txn = _decode_jws_body(data.get("signedTransactionInfo", "")) if data.get("signedTransactionInfo") else {}

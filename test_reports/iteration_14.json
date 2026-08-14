@@ -1,0 +1,44 @@
+{
+  "summary": "Budgy v3.9.0 Security Release — BACKEND ONLY. Ran 40 pytest cases covering SEC-001/SEC-003/SEC-004 controls: auth enforcement on 8 protected endpoints, public endpoint accessibility (6), JWT validation (expired/invalid-sig/missing-sub/wrong-aud/malformed-bearer), user_id derived from JWT (never from body/query) for /api/iap/validate and /api/iap/me, Apple webhook hardening (missing/wrong/correct secret with bad JWS + empty body), exception-leak sanitization, rate limiting on /api/scanner/ocr (20/min) triggers 429, and regression smoke on /api/tax/simulate + /api/lamal/subsidy + /api/config/status. 40/40 PASSED. All security requirements met. Pre-signed JWTs from /app/memory/security_test_jwts.md also work (verified via curl).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/iap/webhook (no secret)", "issue": "Returns 401 bad_secret rather than 401 missing_secret when ?secret= is omitted — behavior is still fail-closed and satisfies the requirement, but the error code is less specific than 'missing_token' style used elsewhere."},
+      {"endpoint": "backend/.env SUPABASE_JWT_SECRET length = 66 chars is fine, but /root/.venv PyJWT emits InsecureKeyLengthWarning for the 28-byte 'wrong-secret-xxxxxxxxxxxxxxx' we use in tests — cosmetic only."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_security_v3_9_0.py",
+    "/app/test_reports/pytest/pytest_results_v390.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is >1858 lines — consider splitting into routers (coach, scanner, email, optimizer, voice, iap, tax) for maintainability. Not a security issue.",
+    "server.py imports LlmChat/UserMessage/ImageContent from llm_client at module top after load_dotenv — good ordering, keep it.",
+    "/api/iap/webhook/apple: fail-closed logic is correct (503 when IAP_WEBHOOK_SECRET missing, 401 bad_secret when wrong, 401 invalid_signature for bad JWS, 400 empty_payload for empty body). Verified.",
+    "apple_iap.verify_and_decode_notification correctly walks the x5c cert chain and ES256-verifies the JWS. Certificate pinning against Apple root G3 fingerprint is defined (APPLE_ROOT_CA_G3_FINGERPRINT) but NOT enforced in the verification path — recommend either enforcing it or removing the constant to avoid a false sense of security.",
+    "Global exception handler correctly returns {\"error\":\"internal_server_error\"} for any uncaught 500; HTTPException handler preserves detail as {\"error\": detail}. No stack-trace leakage observed.",
+    "Rate limiter uses per-user key (u:<user_id>) when authenticated, IP otherwise — correct isolation.",
+    "coach_chat namespaces chat_sessions with user.user_id preventing cross-tenant context leak — good.",
+    "IAP validate/restore use user.user_id from JWT for Supabase upsert — body.user_id is ignored. Verified via code review + integration test.",
+    "config_status only returns 'configured'|'missing' — never leaks secret values. Verified."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_security_v3_9_0.py (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (40/40 pytest)",
+    "frontend": "N/A - backend-only per request"
+  },
+  "seed_data_creation": "No DB seed; used dev JWT secret + pre-signed JWTs from /app/memory/security_test_jwts.md and freshly minted ones via PyJWT.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All 40 security tests are in /app/backend/tests/test_security_v3_9_0.py. Re-run with: `pytest /app/backend/tests/test_security_v3_9_0.py -v --junitxml=/app/test_reports/pytest/pytest_results_v390.xml`. Requires SUPABASE_JWT_SECRET=dev-only-test-secret-do-not-use-in-production-please-rotate in /app/backend/.env (already set) and IAP_WEBHOOK_SECRET populated. Tests dynamically read IAP_WEBHOOK_SECRET from /app/backend/.env if not in shell env. The LLM providers (OpenAI/Anthropic/Gemini) are all 'missing' — that's expected; auth+rate-limit tests pass regardless of LLM availability because they only check that auth was engaged (i.e. no 401).",
+  "rca_of_issue": "N/A — all security controls verified working. SEC-001 (cross-tenant leak) mitigated by: (a) coach_chat namespacing sessions by user_id, (b) iap/me + iap/validate + iap/restore using user.user_id from JWT sub claim, (c) Supabase RLS SQL provided as documentation for owner to apply. SEC-003 (unauth AI endpoints) mitigated by require_user dependency on coach/scanner/email/optimizer/voice. SEC-004 (IAP client-supplied user_id + unsigned webhook) mitigated by: JWT-derived user_id + Apple x5c chain + ES256 JWS verification in apple_iap.verify_and_decode_notification + fail-closed IAP_WEBHOOK_SECRET check. Exception handler sanitizes all uncaught 500s."
+}

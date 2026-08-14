@@ -1,0 +1,44 @@
+{
+  "summary": "Budgy v3.9.0 third-pass surgical verification — 29/30 pytest passed. VERIFIED: (1) supabase_admin.fetch_by_original_transaction now queries LIVE columns `apple_original_transaction_id=eq.` + selects `subscription_state` (NOT legacy `original_transaction_id`/`state`). Returns {'_error': 'network'|'http_XXX'} sentinel on infra failure. (2) SQL migration is purely additive on user_subscriptions — no CREATE TABLE, only ALTER RLS + policies + UNIQUE index `user_subscriptions_apple_orig_tx_uniq` on `apple_original_transaction_id`. (3) server.py iap_validate (l.1770-1793) and iap_restore (l.1831-1851) fail-CLOSED on `_error` sentinel and any exception → `ownership_check_failed`; conflict → `transaction_already_owned`. (4) All 11 protected endpoints (coach/scanner/email/optimizer/voice/iap/family/alerts + newly-protected /api/export/pdf) return 401 missing_token. (5) JWT HS256 valid accepted; tampered→invalid_signature; expired→token_expired; alg=none→algorithm_not_allowed. (6) APP_ENV defaults to 'production' in BOTH server.py:54 AND apple_iap.py:69. (7) /api/health returns 200 with version=3.9.0 env=production (Apple fail-fast passed at boot). (8) Webhook w/o secret + fake JWS → 401 invalid_signature; empty body → 400 empty_payload. (9) Malformed JSON does not leak stack traces. (10) requirements.txt confirmed clean — python-jose + ecdsa REMOVED (grep -c returns 0). ONE ISSUE FOUND: JWKS negative-kid cache is architecturally present but EMPIRICALLY DEFEATED — 10 rapid requests with the SAME unknown kid trigger 11 real JWKS HTTP refreshes (should be ≤ 1). Root cause: `_verify_asymmetric` (auth.py:145-148) retries with `force_refresh=True` which bypasses the neg-cache guard in `_get_jwks_key_for_kid`.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "auth.py _get_jwks_key_for_kid / _verify_asymmetric",
+        "issue": "JWKS negative-kid anti-amplification cache is DEFEATED empirically. Firing 10 requests with the same unknown-kid ES256 token triggers 11 real 'JWKS refreshed' events in backend.err.log (expected: ≤ 1 per 30-second window). Two contributing causes: (a) _verify_asymmetric performs a force_refresh=True retry on the first miss, and force_refresh bypasses the `if not force_refresh:` neg-cache guard; (b) inside _get_jwks_key_for_kid, `if force_refresh or stale or not keys: _refresh_jwks_locked()` will always call _refresh when JWKS response is empty (dev env with unreachable Supabase returns 0 keys), regardless of the positive cache TTL. Recommended fix: (i) move the negative-cache short-circuit ABOVE the `if not force_refresh:` guard so it applies even to forced retries; OR (ii) in _verify_asymmetric, skip the force_refresh=True retry when the kid is already in _JWKS_NEG_KIDS within TTL. All other v3.9.0 SEC-001 + P3 items are green."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_v390_p3_hardening.py",
+    "/app/test_reports/pytest/pytest_v390_p3.xml"
+  ],
+  "action_items": [
+    "Fix JWKS negative-cache bypass in /app/backend/auth.py: honor _JWKS_NEG_KIDS even under force_refresh=True, or drop the force_refresh retry from _verify_asymmetric when kid was just added to the negative cache. Re-run test_v390_p3_hardening::TestJWKSNegativeCache::test_neg_cache_empirically_short_circuits — must PASS (≤ 1 refresh per 10 requests)."
+  ],
+  "critical_code_review_comments": [
+    "auth.py:145-148 — the `force_refresh=True` retry is intended for legitimate key rotation, but under an attack with random unknown kids it defeats the whole neg-cache hardening. The retry should be gated by a neg-cache miss on the SAME kid.",
+    "auth.py:112 — the `not keys` clause in `if force_refresh or stale or not keys` causes a refresh on EVERY call whenever the JWKS response is empty (0 keys). In dev this triggers unnecessary HTTP calls to SUPABASE_URL. Consider treating an empty JWKS response as a valid cache entry (with TTL) so we don't hammer the endpoint.",
+    "server.py iap_validate + iap_restore correctly consume the `{'_error': ...}` sentinel from fetch_by_original_transaction — good fail-closed pattern. Log line at :1779 and :1839 uses non-lazy string interpolation `existing['_error']` inside %s which is fine but consider `%s`,existing.get('_error') for consistency.",
+    "supabase_admin.fetch_by_original_transaction returns dict-with-_error sentinel while otherwise returning Optional[Dict]. Type hint is `Optional[Dict[str, Any]]` which is technically correct, but a comment/typedef distinguishing 'owner row' vs 'error sentinel' would help future callers.",
+    "SUPABASE_SECURITY_V3_9_0.sql is idempotent and purely additive on user_subscriptions — confirmed. UNIQUE partial index matches the writer column name."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_v390_p3_hardening.py (new — 30 focused v3.9.0 P3 tests)"
+  ],
+  "success_rate": {
+    "backend": "97% (29/30 pytest)",
+    "frontend": "not_tested (backend-only per request)"
+  },
+  "seed_data_creation": "No seed. HS256 test JWTs minted inline via PyJWT using /app/memory/security_test_jwts.md dev secret. Unknown-kid ES256 JWTs synthesized inline (no real signature — the server rejects at kid-lookup before verifying signature).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Re-run: `pytest /app/backend/tests/test_v390_p3_hardening.py -v --junitxml=/app/test_reports/pytest/pytest_v390_p3.xml`. Only ONE test is red: TestJWKSNegativeCache::test_neg_cache_empirically_short_circuits — will go green once auth.py neg-cache is fixed to honor force_refresh retries. All SEC-001 column-name work is fully verified via grep + code review. Real Apple sandbox and real Supabase RLS remain out-of-scope for local tests (documented as mocked).",
+  "rca_of_issue": "SEC-001 fix is COMPLETE and correct — supabase_admin.fetch_by_original_transaction queries `apple_original_transaction_id=eq.{orig}&select=user_id,apple_original_transaction_id,subscription_state`. Fail-closed sentinels are properly consumed by both iap_validate and iap_restore, returning `ownership_check_failed`. SQL migration is additive (no CREATE TABLE on user_subscriptions). \n\nRESIDUAL P3 BUG: JWKS negative-kid anti-amplification cache is DEFEATED. Reproduction: mint any JWT with alg=ES256/RS256 and a random unknown kid; POST/GET any protected endpoint 10 times → tail /var/log/supervisor/backend.err.log shows 10-11 lines of 'JWKS refreshed (0 keys)' instead of ≤ 1. Cause: `_verify_asymmetric` (auth.py:145-148) calls `_get_jwks_key_for_kid(kid, force_refresh=True)` on the first miss; inside `_get_jwks_key_for_kid`, the neg-cache check is guarded by `if not force_refresh:` so the retry skips it AND then the `if force_refresh or stale or not keys: _refresh_jwks_locked()` branch always fires. Mitigation: (a) always consult _JWKS_NEG_KIDS regardless of force_refresh, or (b) have `_verify_asymmetric` skip the force_refresh retry when the kid was just neg-cached, or (c) short-circuit force_refresh=True when the kid is already known to be missing within TTL."
+}

@@ -57,7 +57,9 @@ _ASYMMETRIC_ALGS = ["ES256", "RS256", "EdDSA"]
 
 _JWKS_URL = f"{SUPABASE_URL}/auth/v1/.well-known/jwks.json"
 _JWKS_CACHE_TTL = 300  # seconds
+_JWKS_NEG_TTL = 30     # negative-cache TTL for unknown kids (anti-amplification)
 _JWKS_CACHE: Dict[str, Any] = {"fetched_at": 0.0, "keys": [], "raw": {}}
+_JWKS_NEG_KIDS: Dict[str, float] = {}  # kid → first-seen unix ts
 _JWKS_LOCK = threading.Lock()
 
 
@@ -91,16 +93,52 @@ def _refresh_jwks_locked() -> None:
 
 
 def _get_jwks_key_for_kid(kid: str, force_refresh: bool = False) -> Optional[Dict[str, Any]]:
+    """Return the JWK matching `kid`, or None.
+
+    v3.9.0 SECURITY (anti-amplification): a negative marker is recorded when
+    a kid is missing. Subsequent lookups for the SAME kid within _JWKS_NEG_TTL
+    seconds short-circuit to None WITHOUT hitting the network — even if the
+    caller passes force_refresh=True. This prevents an attacker from spinning
+    up thousands of JWKS refreshes with random-kid tokens.
+    """
     now = time.time()
     with _JWKS_LOCK:
-        stale = (now - _JWKS_CACHE["fetched_at"]) > _JWKS_CACHE_TTL
+        # 1) Sweep old negative entries to bound memory
+        if len(_JWKS_NEG_KIDS) > 500:
+            stale_kids = [k for k, ts in _JWKS_NEG_KIDS.items() if (now - ts) >= _JWKS_NEG_TTL]
+            for k in stale_kids:
+                _JWKS_NEG_KIDS.pop(k, None)
+
+        # 2) Negative cache short-circuit — honored ALWAYS, even under
+        #    force_refresh. This is the anti-amplification core control.
+        neg_ts = _JWKS_NEG_KIDS.get(kid)
+        if neg_ts is not None and (now - neg_ts) < _JWKS_NEG_TTL:
+            return None
+
+        # 3) Look inside the current cache without hitting the network
         keys: List[Dict[str, Any]] = _JWKS_CACHE.get("keys") or []
-        if force_refresh or stale or not keys:
-            _refresh_jwks_locked()
-            keys = _JWKS_CACHE.get("keys") or []
         for k in keys:
             if k.get("kid") == kid:
+                _JWKS_NEG_KIDS.pop(kid, None)
                 return k
+
+        # 4) Not present. Should we refresh?
+        stale = (now - _JWKS_CACHE["fetched_at"]) > _JWKS_CACHE_TTL
+        # We ONLY hit the network if (force_refresh AND not-neg-cached) OR
+        # the cache is stale/empty AND we have not fetched in the last
+        # _JWKS_NEG_TTL seconds (rate-limiting empty-JWKS storms).
+        last_fetch_gap = now - _JWKS_CACHE["fetched_at"]
+        allowed_to_fetch = force_refresh or stale
+        if allowed_to_fetch and last_fetch_gap >= _JWKS_NEG_TTL:
+            _refresh_jwks_locked()
+            keys = _JWKS_CACHE.get("keys") or []
+            for k in keys:
+                if k.get("kid") == kid:
+                    _JWKS_NEG_KIDS.pop(kid, None)
+                    return k
+
+        # 5) Miss — record the negative marker.
+        _JWKS_NEG_KIDS[kid] = now
     return None
 
 
@@ -125,9 +163,8 @@ def _verify_asymmetric(token: str, header: Dict[str, Any]) -> Optional[Dict[str,
     if not kid or alg not in _ASYMMETRIC_ALGS:
         return None
     jwk = _get_jwks_key_for_kid(kid)
-    if jwk is None:
-        # Retry once with force refresh in case of a fresh rotation
-        jwk = _get_jwks_key_for_kid(kid, force_refresh=True)
+    # No manual retry: _get_jwks_key_for_kid already handles cache/refresh
+    # semantics AND enforces the negative-cache anti-amplification guarantee.
     if jwk is None:
         return None
     try:

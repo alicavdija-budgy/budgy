@@ -290,8 +290,13 @@ class PDFExportRequest(BaseModel):
 
 
 @app.post("/api/export/pdf")
-async def export_pdf(req: PDFExportRequest):
-    """Generate expense report HTML (Budgy green, with optional receipt/document appendix)"""
+@limiter.limit("30/minute")
+async def export_pdf(
+    req: PDFExportRequest,
+    request: Request,
+    user: AuthenticatedUser = Depends(require_user),
+):
+    """Generate expense report HTML for authenticated user (Budgy green theme)."""
     total_ht = sum(e.get("amount", 0) for e in req.expenses)
     tva_rate = 8.1
     total_tva = round(total_ht * tva_rate / 100, 2)
@@ -1757,23 +1762,36 @@ async def iap_validate(
     # If this originalTransactionId is already bound to a DIFFERENT user in
     # our DB, REFUSE. This prevents a User B from stealing User A's purchase
     # by relaying A's transaction id.
+    # FAIL-CLOSED: if the lookup itself fails (network / schema error), refuse.
     if state.get("ok"):
         orig = state.get("original_transaction_id")
         if orig:
             try:
                 existing = await _supabase_admin.fetch_by_original_transaction(orig)
-                if existing and existing.get("user_id") and existing["user_id"] != user.user_id:
-                    _iap_log.warning(
-                        "[iap-validation] transaction ownership conflict: orig=%s already owned",
-                        (orig or "?")[:6] + "…",
-                    )
-                    return {
-                        "valid": False,
-                        "ok": False,
-                        "error": "transaction_already_owned",
-                    }
             except Exception as e:
-                _iap_log.warning("[iap-validation] ownership pre-check failed: %s", e)
+                _iap_log.warning("[iap-validation] ownership lookup crashed: %s", e)
+                return {
+                    "valid": False,
+                    "ok": False,
+                    "error": "ownership_check_failed",
+                }
+            if existing and existing.get("_error"):
+                _iap_log.warning("[iap-validation] ownership lookup infra error: %s", existing["_error"])
+                return {
+                    "valid": False,
+                    "ok": False,
+                    "error": "ownership_check_failed",
+                }
+            if existing and existing.get("user_id") and existing["user_id"] != user.user_id:
+                _iap_log.warning(
+                    "[iap-validation] transaction ownership conflict: orig=%s already owned",
+                    (orig or "?")[:6] + "…",
+                )
+                return {
+                    "valid": False,
+                    "ok": False,
+                    "error": "transaction_already_owned",
+                }
         try:
             # SECURITY: use authenticated user_id, never req.user_id
             await _supabase_admin.upsert_subscription(user.user_id, state)
@@ -1807,19 +1825,31 @@ async def iap_restore(
         _iap_log.exception("[iap-restore] unexpected: %s", e)
         return {"valid": False, "error": "restore_error"}
     if state.get("ok"):
-        # v3.9.0 SECURITY: Same ownership rule for restore
+        # v3.9.0 SECURITY: Same ownership rule for restore, fail-closed.
         real_orig = state.get("original_transaction_id") or orig
         try:
             existing = await _supabase_admin.fetch_by_original_transaction(real_orig)
-            if existing and existing.get("user_id") and existing["user_id"] != user.user_id:
-                _iap_log.warning("[iap-restore] transaction ownership conflict")
-                return {
-                    "valid": False,
-                    "ok": False,
-                    "error": "transaction_already_owned",
-                }
         except Exception as e:
-            _iap_log.warning("[iap-restore] ownership pre-check failed: %s", e)
+            _iap_log.warning("[iap-restore] ownership lookup crashed: %s", e)
+            return {
+                "valid": False,
+                "ok": False,
+                "error": "ownership_check_failed",
+            }
+        if existing and existing.get("_error"):
+            _iap_log.warning("[iap-restore] ownership lookup infra error: %s", existing["_error"])
+            return {
+                "valid": False,
+                "ok": False,
+                "error": "ownership_check_failed",
+            }
+        if existing and existing.get("user_id") and existing["user_id"] != user.user_id:
+            _iap_log.warning("[iap-restore] transaction ownership conflict")
+            return {
+                "valid": False,
+                "ok": False,
+                "error": "transaction_already_owned",
+            }
         try:
             await _supabase_admin.upsert_subscription(user.user_id, state)
         except Exception as e:

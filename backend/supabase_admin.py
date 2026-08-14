@@ -123,16 +123,27 @@ async def fetch_by_original_transaction(orig_tx_id: str) -> Optional[Dict[str, A
     """v3.9.0 SECURITY: return the subscription record currently bound to an
     Apple originalTransactionId, if any. Used to enforce that the same Apple
     transaction cannot be claimed by two different Budgy users.
+
+    IMPORTANT: the live column is `apple_original_transaction_id` (see
+    upsert_subscription writer). Must stay in sync with the writer + the
+    UNIQUE index.
     """
     if not is_configured() or not orig_tx_id:
         return None
-    url = f"{_env('SUPABASE_URL')}/rest/v1/user_subscriptions?original_transaction_id=eq.{orig_tx_id}&select=user_id,original_transaction_id,state"
+    url = (
+        f"{_env('SUPABASE_URL')}/rest/v1/user_subscriptions"
+        f"?apple_original_transaction_id=eq.{orig_tx_id}"
+        f"&select=user_id,apple_original_transaction_id,subscription_state"
+    )
     async with httpx.AsyncClient(timeout=15.0) as client:
         try:
             r = await client.get(url, headers=_headers())
-            if r.status_code != 200:
-                return None
-            rows = r.json()
         except httpx.HTTPError:
-            return None
+            # v3.9.0 SECURITY: fail-CLOSED on network error (return a sentinel
+            # that the caller interprets as "unknown owner" -> deny).
+            return {"_error": "network"}
+    if r.status_code != 200:
+        # DB unreachable OR schema mismatch → fail-closed sentinel
+        return {"_error": f"http_{r.status_code}"}
+    rows = r.json()
     return rows[0] if rows else None

@@ -66,7 +66,7 @@ _APPLE_ROOT_CERTS: list[bytes] = _load_root_certs()
 # Production safety: fail fast at startup if the operator claims we are in
 # production but Apple root certs / official lib are missing. This prevents
 # silent fallback to unsigned _decode_jws_body in production.
-_APP_ENV = (os.getenv("APP_ENV") or os.getenv("ENV") or "development").lower()
+_APP_ENV = (os.getenv("APP_ENV") or os.getenv("ENV") or "production").lower()
 if _APP_ENV in ("production", "prod") and (not _APPLE_LIB_OK or not _APPLE_ROOT_CERTS):
     raise RuntimeError(
         f"[iap] Refusing to start in APP_ENV={_APP_ENV}: "
@@ -121,6 +121,10 @@ def _to_plain_dict(model_or_dict: Any) -> Dict[str, Any]:
         out["productId"] = out["product_id"]
     if "autoRenewStatus" not in out and "auto_renew_status" in out:
         out["autoRenewStatus"] = out["auto_renew_status"]
+    if "bundleId" not in out and "bundle_id" in out:
+        out["bundleId"] = out["bundle_id"]
+    if "environment" not in out and "env" in out:
+        out["environment"] = out["env"]
     return out
 
 

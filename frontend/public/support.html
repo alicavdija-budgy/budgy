@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Support — Budgy</title>
+<meta name="description" content="Aide, FAQ et contact pour Budgy — l'application suisse de gestion budgétaire.">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{--navy:#0E1530;--navy-2:#161E40;--green:#34D399;--green-soft:#6EE7B7;--teal:#22D3EE;--text:#F7F7FB;--text-soft:#B7C0D6;--text-mute:#6B7280;--border:rgba(255,255,255,0.08)}
+  body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",Inter,sans-serif;background:var(--navy);color:var(--text);line-height:1.7}
+  a{color:var(--green-soft);text-decoration:none;transition:opacity .2s}
+  a:hover{opacity:.8}
+  .nav{position:sticky;top:0;z-index:50;background:rgba(14,21,48,.85);backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);border-bottom:1px solid var(--border)}
+  .nav-inner{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;max-width:1100px;margin:0 auto}
+  .brand{display:flex;align-items:center;gap:10px}
+  .brand img{width:34px;height:34px;border-radius:8px}
+  .brand-name{font-size:20px;font-weight:900;letter-spacing:-.5px;background:linear-gradient(135deg,var(--green),var(--teal));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .nav-links{display:flex;gap:24px}
+  .nav-links a{color:var(--text-soft);font-size:14px;font-weight:500}
+  .nav-links a:hover{color:var(--text);opacity:1}
+  @media(max-width:700px){.nav-links{display:none}}
+  .hero{background:linear-gradient(135deg,#0E1530 0%,#143A2E 60%,#0E1530 100%);padding:80px 20px 60px;text-align:center;position:relative;overflow:hidden}
+  .hero::before{content:'';position:absolute;inset:-50% -10% auto -10%;height:600px;background:radial-gradient(ellipse at top,rgba(52,211,153,.2),transparent 60%);z-index:0}
+  .hero-inner{position:relative;z-index:1}
+  .hero h1{font-size:clamp(32px,5vw,48px);font-weight:900;letter-spacing:-1.5px;margin-bottom:14px}
+  .hero h1 span{background:linear-gradient(135deg,var(--green),var(--teal));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .hero p{color:var(--text-soft);max-width:640px;margin:0 auto;font-size:17px}
+  .container{max-width:900px;margin:0 auto;padding:60px 24px}
+  h2{color:#fff;font-size:24px;font-weight:800;margin-top:44px;margin-bottom:14px;border-left:4px solid var(--green);padding-left:14px;letter-spacing:-.3px}
+  h3{color:#fff;font-size:17px;font-weight:700;margin-top:22px;margin-bottom:6px}
+  p,li{color:var(--text-soft);font-size:15px}
+  ul{padding-left:22px;margin-top:8px}
+  ul li{margin-bottom:6px}
+  strong{color:#fff;font-weight:700}
+  .card{background:linear-gradient(155deg,rgba(255,255,255,.04),rgba(255,255,255,.01));border:1px solid var(--border);border-radius:20px;padding:26px;margin-bottom:18px}
+  details{background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:14px;padding:16px 20px;margin-bottom:12px;transition:background .2s}
+  details[open]{background:rgba(255,255,255,.06)}
+  summary{cursor:pointer;font-weight:700;font-size:16px;color:#fff;list-style:none;display:flex;justify-content:space-between;align-items:center;gap:12px}
+  summary::after{content:'+';font-size:22px;color:var(--green);transition:transform .2s;flex-shrink:0}
+  details[open] summary::after{transform:rotate(45deg)}
+  details p{margin-top:12px;font-size:14px;color:var(--text-soft)}
+  .contact-box{background:linear-gradient(135deg,rgba(52,211,153,.08),rgba(34,211,238,.04));border:1px solid rgba(52,211,153,.2);border-radius:20px;padding:36px;text-align:center;margin:40px 0}
+  .contact-box h3{font-size:22px;margin-bottom:10px}
+  .contact-mail{display:inline-block;background:#fff;color:#000;padding:14px 28px;border-radius:14px;font-weight:700;font-size:16px;margin-top:14px;box-shadow:0 8px 24px rgba(0,0,0,.3);transition:transform .2s,box-shadow .2s}
+  .contact-mail:hover{transform:translateY(-2px);opacity:1;box-shadow:0 12px 30px rgba(52,211,153,.4)}
+  footer{padding:48px 24px 32px;color:var(--text-mute);font-size:13px;border-top:1px solid var(--border);margin-top:60px}
+  .footer-grid{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:40px;max-width:1100px;margin:0 auto 32px}
+  @media(max-width:700px){.footer-grid{grid-template-columns:1fr 1fr;gap:32px}}
+  footer h4{color:var(--text);font-size:13px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;margin-bottom:12px}
+  footer ul{list-style:none;padding-left:0;display:flex;flex-direction:column;gap:8px}
+  footer ul a{color:var(--text-soft)}
+  footer .legal{border-top:1px solid var(--border);padding-top:24px;text-align:center;max-width:1100px;margin:0 auto}
+  footer .brand{justify-content:flex-start;margin-bottom:14px}
+  footer .desc{max-width:320px;line-height:1.7}
+</style>
+</head>
+<body>
+<nav class="nav">
+  <div class="nav-inner">
+    <a class="brand" href="./"><img src="icons/apple-touch-icon.png" alt="Budgy"><span class="brand-name">Budgy</span></a>
+    <div class="nav-links">
+      <a href="./#features">Fonctionnalités</a>
+      <a href="./support">Support</a>
+      <a href="./privacy">Confidentialité</a>
+      <a href="./terms">Conditions</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="hero-inner">
+    <h1>Aide & <span>Support Budgy</span></h1>
+    <p>Trouvez une réponse rapide ou contactez notre équipe. Nous répondons sous 48h ouvrées, en français, allemand, anglais ou italien.</p>
+  </div>
+</header>
+
+<main class="container">
+  <h2>1. Démarrage rapide</h2>
+  <div class="card">
+    <h3>Créer un compte</h3>
+    <p>À l'ouverture de Budgy, appuyez sur <strong>« Commencer »</strong>, puis choisissez <strong>« S'inscrire »</strong>. Renseignez votre e-mail et un mot de passe d'au moins 8 caractères. Un code de confirmation vous sera envoyé.</p>
+    <h3>Se connecter</h3>
+    <p>Utilisez votre e-mail et mot de passe. Si vous avez activé le verrou biométrique, Face ID / Touch ID prendra le relais à chaque ouverture.</p>
+    <h3>Utiliser Budgy sans compte</h3>
+    <p>L'application fonctionne 100% hors-ligne dès l'installation. Un compte n'est nécessaire que si vous souhaitez synchroniser vos données entre plusieurs appareils ou rejoindre un groupe familial.</p>
+  </div>
+
+  <h2>2. FAQ — Questions fréquentes</h2>
+
+  <details>
+    <summary>Je n'arrive pas à me connecter, que faire ?</summary>
+    <p>Vérifiez votre connexion internet, puis votre adresse e-mail. Si vous avez oublié votre mot de passe, appuyez sur <strong>« Mot de passe oublié »</strong> depuis l'écran de connexion pour recevoir un lien de réinitialisation. Le lien expire au bout de 60 minutes.</p>
+  </details>
+
+  <details>
+    <summary>Comment activer la synchronisation Cloud ?</summary>
+    <p>Créez ou connectez-vous à un compte Budgy, puis rendez-vous dans <strong>Plus → Sync Cloud</strong>. Activez l'interrupteur. Vos données seront chiffrées puis synchronisées vers nos serveurs Supabase hébergés en Union européenne (Allemagne). La synchronisation est automatique et se fait en arrière-plan.</p>
+  </details>
+
+  <details>
+    <summary>Puis-je utiliser Budgy sur plusieurs appareils ?</summary>
+    <p>Oui, dès que la synchronisation Cloud est activée sur chaque appareil connecté au même compte, vos budgets, transactions, objectifs et factures sont mis à jour en temps réel.</p>
+  </details>
+
+  <details>
+    <summary>Comment gérer / annuler mon abonnement Budgy Pro ?</summary>
+    <p>L'abonnement est géré directement par Apple (App Store). Ouvrez <strong>Réglages iOS → Votre nom → Abonnements → Budgy</strong>. Vous pouvez y modifier votre plan ou l'annuler en 1 clic. L'annulation prend effet à la fin de la période en cours. Aucun engagement.</p>
+  </details>
+
+  <details>
+    <summary>Comment restaurer un achat déjà effectué ?</summary>
+    <p>Dans l'app, ouvrez <strong>Plus → Budgy Pro</strong> ou le paywall, puis appuyez sur <strong>« Restaurer »</strong>. Assurez-vous d'être connecté au même identifiant Apple ayant réalisé l'achat initial.</p>
+  </details>
+
+  <details>
+    <summary>Quelle est la période d'essai gratuite ?</summary>
+    <p>Budgy Pro propose <strong>7 jours d'essai gratuit</strong>. Aucun paiement n'est prélevé tant que vous n'avez pas confirmé. Vous pouvez annuler à tout moment depuis les Réglages iOS avant la fin de l'essai.</p>
+  </details>
+
+  <details>
+    <summary>Comment scanner un reçu ou une facture ?</summary>
+    <p>Depuis l'écran d'accueil, appuyez sur le bouton central <strong>« B »</strong> puis choisissez <strong>« Scanner »</strong>. Autorisez l'accès caméra lorsque demandé. Cadrez votre reçu et Budgy détectera automatiquement le montant, le marchand et la catégorie. Vous pouvez ajuster avant validation.</p>
+  </details>
+
+  <details>
+    <summary>Comment fonctionne la saisie vocale ?</summary>
+    <p>Depuis l'accueil, tapez sur le bouton central puis sur l'icône micro. Autorisez l'accès au microphone et à la reconnaissance vocale. Dites par exemple « J'ai dépensé 27 francs 50 chez Migros » — Budgy interprète et propose la transaction. La reconnaissance se fait via l'API système d'Apple.</p>
+  </details>
+
+  <details>
+    <summary>Puis-je partager un budget avec ma famille ?</summary>
+    <p>Oui. Ouvrez <strong>Plus → Famille & Groupes</strong>, créez un groupe, puis générez un code d'invitation à 8 caractères. Partagez-le à un proche : il pourra rejoindre le groupe depuis son propre compte Budgy et voir les dépenses partagées en temps réel.</p>
+  </details>
+
+  <details>
+    <summary>Où sont stockées mes données ?</summary>
+    <p>Par défaut, tout est stocké <strong>localement</strong> sur votre appareil (base chiffrée par le système iOS). Si vous activez la synchronisation, vos données sont répliquées vers notre base <strong>Supabase hébergée en Allemagne (UE)</strong>, protégée par Row Level Security : vous seul pouvez lire ou modifier vos lignes.</p>
+  </details>
+
+  <details>
+    <summary>Comment activer Face ID / Touch ID ?</summary>
+    <p>Ouvrez <strong>Plus → Verrou & biométrie</strong>, définissez un code PIN à 6 chiffres, puis activez le verrou biométrique. À chaque ouverture, Budgy demandera Face ID ou Touch ID avant d'afficher vos données.</p>
+  </details>
+
+  <details>
+    <summary>Comment supprimer mon compte et toutes mes données ?</summary>
+    <p>Ouvrez <strong>Plus → Paramètres → Données & confidentialité → Supprimer mes données</strong>. Confirmez : toutes les données locales sont effacées immédiatement, et les données cloud (le cas échéant) sont supprimées de nos serveurs dans un délai de 30 jours. Vous pouvez aussi nous écrire à <a href="mailto:support@budgy.ch">support@budgy.ch</a> pour une suppression manuelle. Voir <a href="./delete-account">la procédure détaillée</a>.</p>
+  </details>
+
+  <details>
+    <summary>Budgy fonctionne-t-il hors ligne ?</summary>
+    <p>Oui, entièrement. Toutes les fonctions principales (budget, transactions, objectifs, scanner OCR local, statistiques) fonctionnent sans connexion. Les fonctions IA (Coach, prédictions) et la synchronisation nécessitent Internet.</p>
+  </details>
+
+  <details>
+    <summary>L'IA a-t-elle accès à mes données personnelles ?</summary>
+    <p>Lorsque vous déclenchez une fonction IA (Coach, Économiseur, Predict), un résumé anonymisé de vos données financières est transmis à notre passerelle Emergent (OpenAI / Google). Aucune information d'identification (nom, e-mail, IBAN) n'est envoyée. Les transmissions sont chiffrées en TLS et rien n'est conservé côté fournisseur.</p>
+  </details>
+
+  <details>
+    <summary>Comment changer de langue ou de devise ?</summary>
+    <p>Ouvrez <strong>Plus → Préférences</strong>. Vous pouvez y changer la langue (Français, Allemand, Anglais, Italien), la devise d'affichage et le thème (Sombre, Clair, Auto).</p>
+  </details>
+
+  <details>
+    <summary>Le comparateur LAMal est-il à jour ?</summary>
+    <p>Oui. Les primes sont mises à jour chaque année selon les données officielles de l'<strong>OFSP (Office fédéral de la santé publique) et Priminfo 2026</strong>. Les 26 cantons et les 15 principaux assureurs suisses sont couverts.</p>
+  </details>
+
+  <div class="contact-box">
+    <h3>Vous n'avez pas trouvé votre réponse ?</h3>
+    <p>Écrivez-nous — nous répondons sous 48h ouvrées.</p>
+    <a class="contact-mail" href="mailto:support@budgy.ch">support@budgy.ch</a>
+  </div>
+
+  <h2>3. Signaler un bug</h2>
+  <p>Vous rencontrez un comportement inattendu ? Merci d'inclure dans votre message :</p>
+  <ul>
+    <li>Modèle d'iPhone / iPad et version d'iOS</li>
+    <li>Version de Budgy (visible dans <strong>Plus → Paramètres → Version</strong>)</li>
+    <li>Description précise du problème et étapes pour le reproduire</li>
+    <li>Captures d'écran si possible</li>
+  </ul>
+
+  <h2>4. Demandes de fonctionnalités</h2>
+  <p>Vos idées sont les bienvenues. Envoyez-nous vos suggestions à <a href="mailto:hello@budgy.ch">hello@budgy.ch</a> — nous étudions chaque proposition et intégrons les plus utiles dans les prochaines versions.</p>
+
+  <h2>5. Confidentialité et sécurité</h2>
+  <p>Pour toute question sur la protection de vos données, consultez notre <a href="./privacy">Politique de confidentialité</a> ou écrivez à <a href="mailto:support@budgy.ch">support@budgy.ch</a>.</p>
+</main>
+
+<footer>
+  <div class="footer-grid">
+    <div>
+      <a class="brand" href="./"><img src="icons/apple-touch-icon.png" alt="Budgy" style="width:34px;height:34px;border-radius:8px"><span class="brand-name">Budgy</span></a>
+      <p class="desc">L'application suisse de gestion budgétaire pensée pour la sérénité financière. Édité en Suisse 🇨🇭, hébergé en Europe.</p>
+    </div>
+    <div><h4>Produit</h4><ul><li><a href="./#features">Fonctionnalités</a></li><li><a href="./#faq">FAQ</a></li><li><a href="#">App Store</a></li></ul></div>
+    <div><h4>Légal</h4><ul><li><a href="./privacy">Confidentialité</a></li><li><a href="./terms">Conditions</a></li><li><a href="./delete-account">Suppression du compte</a></li></ul></div>
+    <div><h4>Contact</h4><ul><li><a href="./support">Support</a></li><li><a href="mailto:support@budgy.ch">support@budgy.ch</a></li><li><a href="mailto:hello@budgy.ch">hello@budgy.ch</a></li></ul></div>
+  </div>
+  <div class="legal">© <span id="year"></span> Budgy — Édité en Suisse 🇨🇭 · Tous droits réservés.</div>
+</footer>
+<script>document.getElementById('year').textContent=new Date().getFullYear();</script>
+</body>
+</html>

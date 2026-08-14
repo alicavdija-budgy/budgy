@@ -1,0 +1,240 @@
+╔══════════════════════════════════════════════════════════════════════╗
+║  BUDGY · APP STORE CONNECT — CHAMPS À REMPLIR (v3.8.0 / Build 70)   ║
+║  À copier-coller directement dans App Store Connect                  ║
+╚══════════════════════════════════════════════════════════════════════╝
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+NOM DE L'APP (30 caractères max)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Budgy · Budget & Économies
+(26 caractères)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SOUS-TITRE (30 caractères max)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Vos finances suisses, en clair
+(30 caractères)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DESCRIPTION (4 000 caractères max)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Budgy est l'application suisse pour prendre le contrôle de ton budget, simplement, sans complication.
+
+Chaque mois, Budgy te montre en un coup d'œil combien il te reste vraiment à dépenser, une fois toutes tes charges fixes déduites : loyer, assurance maladie, télécom, abonnements, transports, LAMal. Fini les mauvaises surprises en fin de mois.
+
+FONCTIONNALITÉS PRINCIPALES
+
+• Tableau de bord clair — Ton solde disponible, tes revenus, tes engagements, tout au même endroit.
+• Score financier Budgy — Un score de 0 à 100 pour évaluer instantanément la santé de ton budget.
+• Coach Predict IA — Prévisions de fin de mois, alertes intelligentes, conseils personnalisés.
+• Suivi des abonnements — Repère facilement Netflix, Spotify, Swisscom, Sunrise et toutes tes dépenses récurrentes.
+• Portefeuille & investissements — Suis tes cryptos et actifs, avec projections indicatives.
+• Économiseur IA — Trouve des économies concrètes à faire chaque semaine.
+• Optimiseur d'impôts — Simulations IFD et impôt cantonal simplifiées.
+• LAMal & Subsides — Compare tes primes, vérifie tes subsides, optimise ta franchise.
+• Ajout Intelligent — Ajoute une dépense à la voix via les Raccourcis iOS (compatible Siri).
+• Famille & Groupes — Partage tes dépenses avec tes proches, calcule les remboursements automatiquement.
+• 4 langues — Français, Allemand, Anglais, Italien.
+• Mode sombre — Interface premium optimisée pour tes yeux.
+
+PENSÉE POUR LA SUISSE
+
+Budgy est conçue pour le quotidien suisse : CHF, LAMal, subsides cantonaux, 13ème salaire, factures QR, TPG, CFF, tout est pris en compte. Change de devise vers l'EUR ou l'USD en un tap si tu voyages.
+
+TRANSPARENCE & CONTRÔLE
+
+Tes données financières sont sauvegardées localement sur ton appareil. La synchronisation cloud (optionnelle) est chiffrée. Aucune connexion bancaire externe. Aucune publicité. Aucun partage avec des tiers.
+
+BUDGY PRO
+
+Débloque toutes les fonctionnalités avancées avec Budgy Pro :
+• Économiseur IA illimité
+• Radar d'économies personnalisé
+• Score avancé et historique complet
+• Coach Predict avec conseils IA
+• Statistiques avancées, tendances 12 mois
+• Cloud sécurisé, sync multi-appareils
+• Optimiseur d'impôts et de primes LAMal
+
+Essaie Budgy Pro gratuitement pendant 7 jours. Aucun engagement, résiliable à tout moment depuis tes Réglages iCloud.
+
+Une question ? support@budgy.ch
+
+Fait en Suisse 🇨🇭 avec amour.
+(≈ 2 100 caractères)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MOTS-CLÉS (100 caractères max, virgules)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+budget,dépenses,épargne,facture,QR,assurance,LAMal,famille,IA,scanner,CHF,suisse
+(80 caractères)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TEXTE PROMOTIONNEL (170 caractères max — modifiable sans review)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Budgy analyse tes dépenses, détecte les économies possibles et sécurise tes documents. 100 % suisse. Essai Pro gratuit 7 jours.
+(133 caractères)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+URL DE L'ASSISTANCE (obligatoire)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+https://budgy.ch/support
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+URL MARKETING (facultatif — recommandé)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+https://budgy.ch
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+URL DE POLITIQUE DE CONFIDENTIALITÉ (obligatoire, section Confidentialité)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+https://budgy.ch/privacy
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+VERSION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1.0
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+COPYRIGHT (200 caractères max)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+© 2026 Budgy. Tous droits réservés.
+(35 caractères — remplace 2026 par l'année en cours si différent)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CATÉGORIE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Principale : Finance
+Secondaire : Productivité
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CLASSIFICATION D'ÂGE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+4+ (Aucun contenu inapproprié)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+NOUVEAUTÉS DE CETTE VERSION (4 000 caractères max)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎉 Bienvenue dans Budgy 1.0 !
+
+Découvre l'application suisse qui te fait enfin comprendre ton budget :
+
+• Tableau de bord clair avec ton solde disponible en temps réel
+• Score financier Budgy pour évaluer la santé de tes finances
+• Coach Predict IA avec prévisions et conseils personnalisés
+• Suivi automatique de tes abonnements et charges récurrentes
+• Portefeuille d'investissements avec projections
+• Ajout Intelligent à la voix via Siri et Google Assistant
+• Famille & Groupes pour partager tes dépenses
+• 4 langues : FR / DE / EN / IT
+• Cloud chiffré 🇨🇭
+• Mode sombre premium
+
+Essaie Budgy Pro gratuitement pendant 7 jours.
+(≈ 570 caractères)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+INFORMATIONS POUR LA REVIEW APPLE (App Review Information)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CONTACT
+Prénom : [Ton prénom]
+Nom : [Ton nom]
+Téléphone : [Ton numéro suisse au format +41...]
+Email : support@budgy.ch
+
+COMPTE DE DÉMONSTRATION
+Nom d'utilisateur : e2e-test@budgy.ch
+Mot de passe : Test1234!
+(Compte Supabase avec auto-confirmation activée)
+
+NOTES POUR LES REVIEWERS
+Budgy utilise exclusivement les achats intégrés Apple (In-App Purchase).
+Aucun paiement externe (Stripe, PayPal, crypto) n'est proposé.
+
+Les exports (PDF, images) restent sur l'appareil de l'utilisateur.
+Aucune connexion bancaire externe n'est requise ni proposée.
+Toutes les données financières sont saisies manuellement ou importées
+manuellement par l'utilisateur.
+
+Le compte de démonstration ci-dessus donne accès à toutes les
+fonctionnalités Pro. Pour tester un flux complet :
+1. Se connecter avec e2e-test@budgy.ch / Test1234!
+2. Naviguer dans les onglets Accueil, Dépenses, Épargne, Plus
+3. Tester l'Ajout Intelligent via /quick-add
+4. Tester le deep-link budgy://join/CODE pour rejoindre un groupe
+
+Backend API : https://api.budgy.ch (endpoint /api/config/status)
+Fait en Suisse. Support 24/48h ouvrées : support@budgy.ch
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DÉTAILS SUR LA CONFIDENTIALITÉ (App Privacy)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Données collectées et liées à l'identifiant utilisateur :
+  • Coordonnées : Adresse e-mail (pour l'authentification Supabase)
+  • Contenu utilisateur : Transactions, budgets, objectifs d'épargne
+    (saisis manuellement par l'utilisateur, stockés chiffrés sur
+    serveur Suisse/UE)
+  • Identifiants : Identifiant utilisateur (UUID Supabase)
+
+Données collectées non liées à l'utilisateur : Aucune
+
+Données utilisées pour le suivi de l'utilisateur : Aucune
+(Budgy ne suit pas ses utilisateurs à travers d'autres apps ou sites)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+VERSIONS EN LANGUES ADDITIONNELLES (à répliquer FR → DE / EN / IT)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🇩🇪 DEUTSCH
+Nom : Budgy · Budget & Sparen
+Sous-titre : Ihre Finanzen einfach klar
+Mots-clés : Budget,Ausgaben,Sparen,Rechnung,QR,Versicherung,KVG,Familie,KI,Scanner,CHF
+
+🇬🇧 ENGLISH
+Nom : Budgy · Smart Budget CH
+Sous-titre : Your Swiss finances, clear
+Mots-clés : budget,expenses,savings,receipt,QR,insurance,family,AI,scanner,swiss,CHF
+
+🇮🇹 ITALIANO
+Nom : Budgy · Budget & Risparmi
+Sous-titre : Le tue finanze svizzere
+Mots-clés : budget,spese,risparmi,fattura,QR,assicurazione,famiglia,IA,scanner,CHF,svizzera
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CHECKLIST FINALE AVANT SOUMISSION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[ ] Nom, sous-titre, description remplis (4 langues)
+[ ] Mots-clés remplis (4 langues)
+[ ] URL Support renseignée
+[ ] URL Marketing renseignée
+[ ] URL Privacy renseignée
+[ ] Copyright renseigné
+[ ] Catégorie principale = Finance
+[ ] Classification d'âge = 4+
+[ ] 7 screenshots iPhone 6.5" uploadés (fichiers 01→07)
+[ ] Compte de test renseigné dans App Review Info
+[ ] Notes reviewer copiées dans App Review Info
+[ ] Détails Confidentialité complétés
+[ ] Accords Apple Developer signés (Program License + Paid Applications)
+[ ] IAP mensuel + annuel attachés à cette version
+[ ] Build 3.8.0 (70) uploadé via EAS / Xcode et sélectionné
+[ ] Version 1.0 marquée "Manual Release"
+[ ] Ajouter pour vérification
+
+Bonne chance ! 🚀

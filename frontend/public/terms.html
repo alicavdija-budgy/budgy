@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Conditions d'utilisation — Budgy</title>
+<meta name="description" content="Conditions générales d'utilisation de l'application Budgy.">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{--navy:#0E1530;--navy-2:#161E40;--green:#34D399;--green-soft:#6EE7B7;--teal:#22D3EE;--text:#F7F7FB;--text-soft:#B7C0D6;--text-mute:#6B7280;--border:rgba(255,255,255,0.08)}
+  body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",Inter,sans-serif;background:var(--navy);color:var(--text);line-height:1.7}
+  a{color:var(--green-soft);text-decoration:none;transition:opacity .2s}
+  a:hover{opacity:.8;text-decoration:underline}
+  .nav{position:sticky;top:0;z-index:50;background:rgba(14,21,48,.85);backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);border-bottom:1px solid var(--border)}
+  .nav-inner{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;max-width:1100px;margin:0 auto}
+  .brand{display:flex;align-items:center;gap:10px}
+  .brand img{width:34px;height:34px;border-radius:8px}
+  .brand-name{font-size:20px;font-weight:900;letter-spacing:-.5px;background:linear-gradient(135deg,var(--green),var(--teal));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .nav-links{display:flex;gap:24px}
+  .nav-links a{color:var(--text-soft);font-size:14px;font-weight:500}
+  .nav-links a:hover{color:var(--text);opacity:1}
+  @media(max-width:700px){.nav-links{display:none}}
+  .hero{background:linear-gradient(135deg,#0E1530 0%,#143A2E 60%,#0E1530 100%);padding:80px 20px 60px;text-align:center;position:relative;overflow:hidden}
+  .hero::before{content:'';position:absolute;inset:-50% -10% auto -10%;height:600px;background:radial-gradient(ellipse at top,rgba(52,211,153,.2),transparent 60%);z-index:0}
+  .hero-inner{position:relative;z-index:1}
+  .hero h1{font-size:clamp(30px,5vw,44px);font-weight:900;letter-spacing:-1.5px;margin-bottom:14px}
+  .hero h1 span{background:linear-gradient(135deg,var(--green),var(--teal));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .hero p{color:var(--text-soft);max-width:640px;margin:0 auto;font-size:16px}
+  .container{max-width:820px;margin:0 auto;padding:60px 24px}
+  h2{color:#fff;font-size:22px;font-weight:800;margin-top:44px;margin-bottom:12px;border-left:4px solid var(--green);padding-left:14px}
+  h3{color:#fff;font-size:16px;font-weight:700;margin-top:20px;margin-bottom:6px}
+  p,li{color:var(--text-soft);font-size:15px}
+  ul{padding-left:22px;margin-top:8px}
+  ul li{margin-bottom:6px}
+  strong{color:#fff;font-weight:700}
+  .meta{color:var(--text-mute);font-size:13px;margin-bottom:16px}
+  .warning{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.3);border-radius:14px;padding:18px 22px;margin-top:14px;color:#FDE68A;font-size:14px}
+  footer{padding:48px 24px 32px;color:var(--text-mute);font-size:13px;border-top:1px solid var(--border);margin-top:60px}
+  .footer-grid{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:40px;max-width:1100px;margin:0 auto 32px}
+  @media(max-width:700px){.footer-grid{grid-template-columns:1fr 1fr;gap:32px}}
+  footer h4{color:var(--text);font-size:13px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;margin-bottom:12px}
+  footer ul{list-style:none;padding-left:0;display:flex;flex-direction:column;gap:8px}
+  footer ul a{color:var(--text-soft)}
+  footer .legal{border-top:1px solid var(--border);padding-top:24px;text-align:center;max-width:1100px;margin:0 auto}
+  footer .brand{justify-content:flex-start;margin-bottom:14px}
+  footer .desc{max-width:320px;line-height:1.7}
+</style>
+</head>
+<body>
+<nav class="nav">
+  <div class="nav-inner">
+    <a class="brand" href="./"><img src="icons/apple-touch-icon.png" alt="Budgy"><span class="brand-name">Budgy</span></a>
+    <div class="nav-links">
+      <a href="./#features">Fonctionnalités</a>
+      <a href="./support">Support</a>
+      <a href="./privacy">Confidentialité</a>
+      <a href="./terms">Conditions</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="hero-inner">
+    <h1>Conditions <span>d'utilisation</span></h1>
+    <p>Les règles qui régissent l'utilisation de Budgy. Nous les avons rédigées en langage clair, sans jargon inutile.</p>
+  </div>
+</header>
+
+<main class="container">
+  <p class="meta">Dernière mise à jour : <span id="date"></span> · Version 3.8.0</p>
+
+  <p>Les présentes Conditions générales d'utilisation (« CGU ») régissent l'utilisation de l'application mobile <strong>Budgy</strong>. En téléchargeant, installant ou utilisant l'application, vous acceptez ces conditions dans leur intégralité.</p>
+
+  <h2>1. Description du service</h2>
+  <p>Budgy est une application de <strong>gestion budgétaire personnelle</strong> pensée pour la Suisse. Elle vous permet notamment de :</p>
+  <ul>
+    <li>Suivre vos dépenses, revenus, budgets et objectifs d'épargne.</li>
+    <li>Scanner des reçus et QR-bills suisses.</li>
+    <li>Comparer les primes LAMal officielles et simuler vos impôts (IFD + ICC).</li>
+    <li>Utiliser des fonctions d'intelligence artificielle (Coach, Économiseur, Predict).</li>
+    <li>Synchroniser vos données entre plusieurs appareils (optionnel).</li>
+    <li>Partager des dépenses avec votre famille ou vos amis.</li>
+  </ul>
+
+  <div class="warning">
+    ⚠️ <strong>Important</strong> — Budgy est un outil de <strong>gestion et d'aide à la décision</strong>. Elle ne constitue en aucun cas un conseil financier, fiscal, juridique ou en assurance professionnel. Les simulations et estimations affichées sont indicatives. Pour toute décision engageante, consultez un professionnel qualifié.
+  </div>
+
+  <h2>2. Compte utilisateur</h2>
+  <p>L'usage de Budgy est possible sans compte (mode 100% local). La création d'un compte est requise pour :</p>
+  <ul>
+    <li>La synchronisation cloud multi-appareils.</li>
+    <li>La souscription à Budgy Pro.</li>
+    <li>Le partage de groupes et dépenses avec des tiers.</li>
+  </ul>
+  <p>Vous êtes responsable de la confidentialité de votre mot de passe et de toutes les activités effectuées depuis votre compte. Prévenez-nous sans délai en cas d'accès non autorisé.</p>
+
+  <h2>3. Utilisation acceptable</h2>
+  <p>Vous vous engagez à ne pas :</p>
+  <ul>
+    <li>Utiliser Budgy à des fins illégales, frauduleuses ou de blanchiment.</li>
+    <li>Tenter de contourner les mécanismes de sécurité ou de paiement.</li>
+    <li>Reverse-engineer, décompiler ou redistribuer l'application.</li>
+    <li>Utiliser des scripts automatisés pour surcharger nos serveurs.</li>
+    <li>Créer plusieurs comptes gratuits pour contourner les limites d'utilisation.</li>
+    <li>Publier ou partager des données violant les droits d'autrui.</li>
+  </ul>
+  <p>Toute violation peut entraîner la suspension ou la clôture immédiate de votre compte.</p>
+
+  <h2>4. Abonnement Budgy Pro</h2>
+  <h3>4.1 Formules et prix</h3>
+  <ul>
+    <li><strong>Budgy Pro Mensuel</strong> — <strong>CHF 4.90 / mois</strong></li>
+    <li><strong>Budgy Pro Annuel</strong> — <strong>CHF 39.90 / an</strong> (équivalent à CHF 3.33 / mois)</li>
+    <li><strong>Essai gratuit</strong> — <strong>7 jours</strong> offerts pour toute première souscription.</li>
+  </ul>
+
+  <h3>4.2 Modalités de paiement</h3>
+  <p>Le paiement s'effectue via votre compte Apple / App Store. Il sera prélevé sur votre moyen de paiement Apple à la confirmation. Aucun paiement n'est effectué durant l'essai gratuit.</p>
+
+  <h3>4.3 Renouvellement automatique</h3>
+  <p>L'abonnement se renouvelle automatiquement pour une nouvelle période identique, à moins d'être annulé au moins 24 heures avant la fin de la période en cours. Le renouvellement est facturé au prix en vigueur.</p>
+
+  <h3>4.4 Gestion et annulation</h3>
+  <p>Vous pouvez modifier ou annuler votre abonnement à tout moment depuis <strong>Réglages iOS → Votre nom → Abonnements → Budgy</strong>. L'annulation prend effet à la fin de la période en cours ; aucune facturation supplémentaire ne sera effectuée. Les périodes déjà entamées ne sont pas remboursables.</p>
+
+  <h3>4.5 Restauration des achats</h3>
+  <p>En cas de changement d'appareil ou de réinstallation, appuyez sur <strong>« Restaurer »</strong> dans le paywall pour retrouver votre abonnement actif, sous réserve d'être connecté au même identifiant Apple.</p>
+
+  <h3>4.6 Fonctions débloquées par Pro</h3>
+  <ul>
+    <li>IA illimitée (Coach conversationnel, Économiseur, Predict).</li>
+    <li>Optimiseur d'impôts complet et prédictions long terme.</li>
+    <li>Import e-mail automatique de factures.</li>
+    <li>Export PDF illimité de vos budgets et transactions.</li>
+    <li>Synchronisation cloud multi-appareils.</li>
+    <li>Support prioritaire.</li>
+  </ul>
+
+  <h2>5. Contenus et données</h2>
+  <p>Vous restez le seul propriétaire des données que vous saisissez dans Budgy. Nous nous limitons à les stocker et traiter selon vos instructions, dans les conditions détaillées par notre <a href="./privacy">Politique de confidentialité</a>. Vous pouvez à tout moment exporter ou supprimer vos données.</p>
+
+  <h2>6. Propriété intellectuelle</h2>
+  <p>Le nom Budgy, le logo, les designs, les icônes, les textes, le code source et l'ensemble des éléments graphiques sont la propriété exclusive de l'éditeur. Les données publiques (primes LAMal Priminfo, barèmes fiscaux) restent la propriété de leurs organismes émetteurs (OFSP, cantons).</p>
+
+  <h2>7. Résiliation & suppression du compte</h2>
+  <p>Vous pouvez à tout moment :</p>
+  <ul>
+    <li>Vous <strong>déconnecter</strong> — vos données restent stockées localement.</li>
+    <li><strong>Supprimer vos données</strong> — via <strong>Plus → Paramètres → Supprimer mes données</strong>. Effacement local immédiat et cloud sous 30 jours.</li>
+    <li><strong>Fermer votre compte</strong> — voir <a href="./delete-account">procédure détaillée</a>.</li>
+  </ul>
+  <p>Nous nous réservons le droit de suspendre ou fermer un compte en cas de violation des présentes CGU, avec préavis lorsque cela est raisonnablement possible.</p>
+
+  <h2>8. Limitation de responsabilité</h2>
+  <p>Budgy est fournie « en l'état », dans un but d'aide personnelle à la gestion financière. Dans les limites permises par la loi, nous ne saurions être tenus responsables de :</p>
+  <ul>
+    <li>Pertes financières résultant de décisions prises sur la base des estimations et analyses de l'app.</li>
+    <li>Interruptions temporaires du service (maintenance, incidents fournisseurs).</li>
+    <li>Perte ou corruption de données due à un dysfonctionnement de votre appareil.</li>
+    <li>Utilisation frauduleuse résultant de la compromission de votre appareil ou compte.</li>
+  </ul>
+  <p>Nous vous recommandons d'effectuer régulièrement une <strong>copie de sauvegarde</strong> via la fonction Export.</p>
+
+  <h2>9. Disponibilité du service</h2>
+  <p>Nous nous efforçons de maintenir Budgy disponible 24/7, mais ne pouvons garantir un service ininterrompu. La synchronisation Cloud et les fonctions IA dépendent de nos fournisseurs (Supabase, Emergent, OpenAI, Google). Les fonctions locales (budget, transactions, scanner OCR) restent disponibles hors ligne.</p>
+
+  <h2>10. Confidentialité</h2>
+  <p>Le traitement de vos données personnelles est régi par notre <a href="./privacy">Politique de confidentialité</a>, qui fait partie intégrante des présentes CGU.</p>
+
+  <h2>11. Modifications des CGU</h2>
+  <p>Nous pouvons modifier ces CGU pour tenir compte d'évolutions légales, techniques ou fonctionnelles. Les modifications substantielles vous seront notifiées in-app. La version la plus récente est toujours accessible ici.</p>
+
+  <h2>12. Loi applicable et juridiction</h2>
+  <p>Les présentes CGU sont régies par le <strong>droit suisse</strong>, à l'exclusion de ses règles de conflits de lois. Tout litige sera soumis à la juridiction exclusive des tribunaux compétents du canton de Vaud, sous réserve des dispositions impératives protégeant les consommateurs.</p>
+
+  <h2>13. Contact</h2>
+  <p>Pour toute question relative à ces conditions :<br><strong><a href="mailto:support@budgy.ch">support@budgy.ch</a></strong></p>
+</main>
+
+<footer>
+  <div class="footer-grid">
+    <div>
+      <a class="brand" href="./"><img src="icons/apple-touch-icon.png" alt="Budgy" style="width:34px;height:34px;border-radius:8px"><span class="brand-name">Budgy</span></a>
+      <p class="desc">L'application suisse de gestion budgétaire pensée pour la sérénité financière. Édité en Suisse 🇨🇭, hébergé en Europe.</p>
+    </div>
+    <div><h4>Produit</h4><ul><li><a href="./#features">Fonctionnalités</a></li><li><a href="./#faq">FAQ</a></li><li><a href="#">App Store</a></li></ul></div>
+    <div><h4>Légal</h4><ul><li><a href="./privacy">Confidentialité</a></li><li><a href="./terms">Conditions</a></li><li><a href="./delete-account">Suppression du compte</a></li></ul></div>
+    <div><h4>Contact</h4><ul><li><a href="./support">Support</a></li><li><a href="mailto:support@budgy.ch">support@budgy.ch</a></li><li><a href="mailto:hello@budgy.ch">hello@budgy.ch</a></li></ul></div>
+  </div>
+  <div class="legal">© <span id="year"></span> Budgy — Édité en Suisse 🇨🇭 · Tous droits réservés.</div>
+</footer>
+<script>document.getElementById('year').textContent=new Date().getFullYear();document.getElementById('date').textContent=new Date().toLocaleDateString('fr-CH');</script>
+</body>
+</html>

@@ -118,3 +118,21 @@ async def fetch_subscription(user_id: str) -> Optional[Dict[str, Any]]:
         except httpx.HTTPError:
             return None
     return rows[0] if rows else None
+
+async def fetch_by_original_transaction(orig_tx_id: str) -> Optional[Dict[str, Any]]:
+    """v3.9.0 SECURITY: return the subscription record currently bound to an
+    Apple originalTransactionId, if any. Used to enforce that the same Apple
+    transaction cannot be claimed by two different Budgy users.
+    """
+    if not is_configured() or not orig_tx_id:
+        return None
+    url = f"{_env('SUPABASE_URL')}/rest/v1/user_subscriptions?original_transaction_id=eq.{orig_tx_id}&select=user_id,original_transaction_id,state"
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        try:
+            r = await client.get(url, headers=_headers())
+            if r.status_code != 200:
+                return None
+            rows = r.json()
+        except httpx.HTTPError:
+            return None
+    return rows[0] if rows else None

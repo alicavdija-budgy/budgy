@@ -1,38 +1,67 @@
-"""Budgy — Authentication + Rate Limiting middleware (v3.9.0 Security Release).
+"""Budgy — Supabase JWT verification with JWKS (production-grade) + HS256
+legacy fallback (v3.9.0 Security Release).
 
-Verifies Supabase JWTs and enforces per-user + IP rate limits on paid endpoints.
+DESIGN
+======
+The JWT is verified in this order:
 
-Design:
-- We verify the JWT signature using the Supabase JWT secret (HS256) shared
-  with the Supabase project. This is the standard Supabase Auth flow.
-- The user_id is ALWAYS derived from the verified JWT `sub` claim, never
-  from a client-supplied query/body parameter.
-- We tolerate a "no-auth" mode in dev when SUPABASE_JWT_SECRET is unset,
-  which returns 401 for endpoints that require auth (fail closed).
+1) **JWKS (preferred)** — fetch `{SUPABASE_URL}/auth/v1/.well-known/jwks.json`,
+   pick the key matching the token's `kid`, and verify with ES256/RS256/EdDSA.
+   Keys are cached in memory with a TTL and refreshed on `kid` miss.
+
+2) **HS256 legacy fallback** — ONLY if
+   `SUPABASE_JWT_ALLOW_HS256_FALLBACK=1` is set in the env AND
+   `SUPABASE_JWT_SECRET` is configured. This is meant as a transitional
+   mechanism while a self-hosted Supabase instance has not yet enabled
+   asymmetric signing keys. Explicit opt-in, fail-closed by default.
+
+SECURITY
+========
+- Rejects `alg=none` (explicit allow-list of algorithms).
+- Rejects unknown `kid`.
+- Rejects tokens without `exp` or `sub`.
+- Validates `aud` (default: `authenticated`) and optionally `iss`.
+- Constant-time comparisons handled by PyJWT internally.
+- Never logs the token, secret, or JWKS bytes.
 """
 
 from __future__ import annotations
 
 import os
+import time
+import json
 import logging
-from typing import Optional
+import threading
+from typing import Any, Dict, List, Optional, Tuple
 
+import httpx
 import jwt  # PyJWT
-from fastapi import Depends, Header, HTTPException, Request, status
+from jwt import PyJWKClient
+from fastapi import Depends, Header, HTTPException, Request
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 log = logging.getLogger("budgy.auth")
 
 # ─── Config ─────────────────────────────────────────────────────────────────
+SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/") or "https://supabase.budgy.ch"
+SUPABASE_JWT_AUD = os.getenv("SUPABASE_JWT_AUD", "authenticated") or None
+SUPABASE_JWT_ISS = os.getenv("SUPABASE_JWT_ISS", "").strip() or None
 SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET", "").strip()
-SUPABASE_JWT_ISS = os.getenv("SUPABASE_JWT_ISS", "").strip() or None  # optional issuer
-SUPABASE_JWT_AUD = os.getenv("SUPABASE_JWT_AUD", "authenticated")     # default audience
+SUPABASE_JWT_ALLOW_HS256_FALLBACK = os.getenv("SUPABASE_JWT_ALLOW_HS256_FALLBACK", "0").strip() in (
+    "1", "true", "yes", "on"
+)
+
+# Algorithms we accept for asymmetric JWKS verification.
+_ASYMMETRIC_ALGS = ["ES256", "RS256", "EdDSA"]
+
+_JWKS_URL = f"{SUPABASE_URL}/auth/v1/.well-known/jwks.json"
+_JWKS_CACHE_TTL = 300  # seconds
+_JWKS_CACHE: Dict[str, Any] = {"fetched_at": 0.0, "keys": [], "raw": {}}
+_JWKS_LOCK = threading.Lock()
 
 
 class AuthenticatedUser:
-    """Immutable representation of the authenticated user (from verified JWT)."""
-
     __slots__ = ("user_id", "email", "role", "raw_claims")
 
     def __init__(self, user_id: str, email: Optional[str], role: Optional[str], raw_claims: dict):
@@ -41,11 +70,40 @@ class AuthenticatedUser:
         self.role = role
         self.raw_claims = raw_claims
 
-    def __repr__(self):  # pragma: no cover
-        return f"<AuthenticatedUser id={self.user_id[:8]}… role={self.role}>"
+
+# ─── JWKS handling ──────────────────────────────────────────────────────────
+def _refresh_jwks_locked() -> None:
+    """Fetch and cache the JWKS document. Called under _JWKS_LOCK."""
+    try:
+        with httpx.Client(timeout=5.0) as c:
+            resp = c.get(_JWKS_URL, headers={"Accept": "application/json"})
+        if resp.status_code == 200:
+            raw = resp.json()
+            keys = raw.get("keys") or []
+            _JWKS_CACHE["fetched_at"] = time.time()
+            _JWKS_CACHE["keys"] = keys
+            _JWKS_CACHE["raw"] = raw
+            log.info("[auth] JWKS refreshed (%d key%s)", len(keys), "s" if len(keys) != 1 else "")
+        else:
+            log.warning("[auth] JWKS HTTP %s at %s", resp.status_code, _JWKS_URL)
+    except Exception as e:
+        log.warning("[auth] JWKS fetch failed: %s", type(e).__name__)
 
 
-# ─── JWT verification ───────────────────────────────────────────────────────
+def _get_jwks_key_for_kid(kid: str, force_refresh: bool = False) -> Optional[Dict[str, Any]]:
+    now = time.time()
+    with _JWKS_LOCK:
+        stale = (now - _JWKS_CACHE["fetched_at"]) > _JWKS_CACHE_TTL
+        keys: List[Dict[str, Any]] = _JWKS_CACHE.get("keys") or []
+        if force_refresh or stale or not keys:
+            _refresh_jwks_locked()
+            keys = _JWKS_CACHE.get("keys") or []
+        for k in keys:
+            if k.get("kid") == kid:
+                return k
+    return None
+
+
 def _extract_bearer_token(authorization: Optional[str]) -> Optional[str]:
     if not authorization:
         return None
@@ -55,62 +113,114 @@ def _extract_bearer_token(authorization: Optional[str]) -> Optional[str]:
     return parts[1].strip() or None
 
 
-def _verify_supabase_jwt(token: str) -> dict:
-    """Verify a Supabase JWT (HS256) and return its claims.
+def _peek_jwt_header(token: str) -> Dict[str, Any]:
+    """Peek the unverified header of a JWT to read `alg` and `kid`."""
+    return jwt.get_unverified_header(token)
 
-    Raises HTTPException(401) on any failure.
-    """
-    if not SUPABASE_JWT_SECRET:
-        log.error("[auth] SUPABASE_JWT_SECRET is not configured — refusing to authenticate")
-        raise HTTPException(status_code=503, detail="auth_not_configured")
+
+def _verify_asymmetric(token: str, header: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Try to verify using JWKS. Returns claims dict or None if kid unknown."""
+    kid = header.get("kid")
+    alg = header.get("alg")
+    if not kid or alg not in _ASYMMETRIC_ALGS:
+        return None
+    jwk = _get_jwks_key_for_kid(kid)
+    if jwk is None:
+        # Retry once with force refresh in case of a fresh rotation
+        jwk = _get_jwks_key_for_kid(kid, force_refresh=True)
+    if jwk is None:
+        return None
     try:
-        options = {"require": ["exp", "sub"], "verify_aud": bool(SUPABASE_JWT_AUD)}
-        claims = jwt.decode(
-            token,
-            SUPABASE_JWT_SECRET,
-            algorithms=["HS256"],
-            audience=SUPABASE_JWT_AUD if SUPABASE_JWT_AUD else None,
-            issuer=SUPABASE_JWT_ISS if SUPABASE_JWT_ISS else None,
-            options=options,
-        )
+        key = jwt.algorithms.get_default_algorithms()[alg].from_jwk(json.dumps(jwk))
+    except Exception:
+        return None
+    options = {"require": ["exp", "sub"]}
+    return jwt.decode(
+        token,
+        key=key,
+        algorithms=[alg],
+        audience=SUPABASE_JWT_AUD if SUPABASE_JWT_AUD else None,
+        issuer=SUPABASE_JWT_ISS if SUPABASE_JWT_ISS else None,
+        options=options,
+    )
+
+
+def _verify_hs256_legacy(token: str) -> Dict[str, Any]:
+    """Legacy HS256 fallback (opt-in via env)."""
+    if not SUPABASE_JWT_ALLOW_HS256_FALLBACK:
+        raise HTTPException(status_code=401, detail="unsupported_algorithm")
+    if not SUPABASE_JWT_SECRET:
+        raise HTTPException(status_code=503, detail="auth_not_configured")
+    options = {"require": ["exp", "sub"]}
+    return jwt.decode(
+        token,
+        SUPABASE_JWT_SECRET,
+        algorithms=["HS256"],
+        audience=SUPABASE_JWT_AUD if SUPABASE_JWT_AUD else None,
+        issuer=SUPABASE_JWT_ISS if SUPABASE_JWT_ISS else None,
+        options=options,
+    )
+
+
+def _verify(token: str) -> Dict[str, Any]:
+    """Verify a Supabase JWT. Raises HTTPException(401) on any failure."""
+    try:
+        header = _peek_jwt_header(token)
+    except Exception:
+        raise HTTPException(status_code=401, detail="malformed_token")
+
+    alg = header.get("alg")
+    if alg == "none" or not alg:
+        raise HTTPException(status_code=401, detail="algorithm_not_allowed")
+
+    try:
+        if alg in _ASYMMETRIC_ALGS:
+            # Try JWKS
+            claims = _verify_asymmetric(token, header)
+            if claims is not None:
+                return claims
+            # kid unknown OR JWKS empty — try HS256 legacy fallback IF opted-in
+            if SUPABASE_JWT_ALLOW_HS256_FALLBACK and SUPABASE_JWT_SECRET:
+                # Only allowed if the token actually claims HS256 in its header
+                # (we do NOT accept an ES256 header with an HS256 secret).
+                raise HTTPException(status_code=401, detail="unknown_kid")
+            raise HTTPException(status_code=401, detail="unknown_kid")
+        elif alg == "HS256":
+            return _verify_hs256_legacy(token)
+        else:
+            raise HTTPException(status_code=401, detail="algorithm_not_allowed")
+    except HTTPException:
+        raise
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="token_expired")
     except jwt.InvalidAudienceError:
         raise HTTPException(status_code=401, detail="invalid_audience")
     except jwt.InvalidIssuerError:
         raise HTTPException(status_code=401, detail="invalid_issuer")
+    except jwt.InvalidSignatureError:
+        raise HTTPException(status_code=401, detail="invalid_signature")
     except jwt.InvalidTokenError as e:
-        log.warning("[auth] invalid token: %s", type(e).__name__)
+        log.debug("[auth] invalid token: %s", type(e).__name__)
         raise HTTPException(status_code=401, detail="invalid_token")
-    return claims
 
 
-# ─── FastAPI dependencies ───────────────────────────────────────────────────
 def require_user(
     request: Request,
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
 ) -> AuthenticatedUser:
-    """Dependency : require a valid Supabase JWT, return the authenticated user.
-
-    Usage:
-        @app.get("/api/thing")
-        async def thing(user: AuthenticatedUser = Depends(require_user)):
-            return {"user_id": user.user_id}
-    """
     token = _extract_bearer_token(authorization)
     if not token:
         raise HTTPException(status_code=401, detail="missing_token")
-    claims = _verify_supabase_jwt(token)
+    claims = _verify(token)
     sub = claims.get("sub")
     if not sub:
         raise HTTPException(status_code=401, detail="missing_sub")
     user = AuthenticatedUser(
         user_id=sub,
         email=claims.get("email"),
-        role=claims.get("role") or claims.get("app_metadata", {}).get("role"),
+        role=claims.get("role") or (claims.get("app_metadata") or {}).get("role"),
         raw_claims=claims,
     )
-    # Stash on request.state for downstream logging / rate-limit keying.
     request.state.user = user
     return user
 
@@ -119,12 +229,11 @@ def optional_user(
     request: Request,
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
 ) -> Optional[AuthenticatedUser]:
-    """Same as require_user but returns None instead of 401 if no token."""
     token = _extract_bearer_token(authorization)
     if not token:
         return None
     try:
-        claims = _verify_supabase_jwt(token)
+        claims = _verify(token)
     except HTTPException:
         return None
     sub = claims.get("sub")
@@ -142,7 +251,6 @@ def optional_user(
 
 # ─── Rate limiting ──────────────────────────────────────────────────────────
 def rate_key(request: Request) -> str:
-    """Rate-limit key : authenticated user_id if present, else remote IP."""
     user: Optional[AuthenticatedUser] = getattr(request.state, "user", None)
     if user is not None:
         return f"u:{user.user_id}"
@@ -151,9 +259,9 @@ def rate_key(request: Request) -> str:
 
 limiter = Limiter(
     key_func=rate_key,
-    default_limits=["120/minute"],  # generous fallback
-    headers_enabled=False,  # v3.9.0: disabled — endpoints return Pydantic models, not Response
-    swallow_errors=True,  # don't crash if Redis missing — in-memory fallback
+    default_limits=["120/minute"],
+    headers_enabled=False,
+    swallow_errors=True,
 )
 
 

@@ -373,3 +373,87 @@ grant execute on function public.remove_member(text, uuid) to authenticated;
 -- ============================================================================
 -- END OF MIGRATION
 -- ============================================================================
+
+-- ─── 9. v3.9.0 IAP TRANSACTION OWNERSHIP ────────────────────────────────────
+-- Ensure the same Apple original_transaction_id can never be attached to two
+-- different Budgy user_ids. If the row exists but with another user_id, an
+-- INSERT/UPSERT will fail — the API layer already checks first, this is a
+-- defense-in-depth belt.
+--
+-- Also enable RLS on user_subscriptions so users can only read their own row.
+--
+create table if not exists public.user_subscriptions (
+  user_id                   uuid        primary key references auth.users(id) on delete cascade,
+  original_transaction_id   text        unique,
+  product_id                text,
+  state                     text        not null default 'FREE',
+  pro_until                 timestamptz,
+  auto_renew                boolean,
+  environment               text,
+  updated_at                timestamptz not null default now()
+);
+
+-- Enforce unique original_transaction_id (idempotent — creating it if missing)
+do $$
+begin
+  if not exists (
+    select 1 from pg_indexes
+     where schemaname='public' and tablename='user_subscriptions'
+       and indexname='user_subscriptions_orig_tx_uniq'
+  ) then
+    execute 'create unique index user_subscriptions_orig_tx_uniq
+             on public.user_subscriptions(original_transaction_id)
+             where original_transaction_id is not null';
+  end if;
+end$$;
+
+alter table public.user_subscriptions enable row level security;
+
+drop policy if exists "select_own_subscription" on public.user_subscriptions;
+create policy "select_own_subscription" on public.user_subscriptions
+  for select using (auth.uid() = user_id);
+
+-- INSERT / UPDATE / DELETE : only the service_role (used by the backend) can
+-- write to this table. Regular authenticated users have NO write access.
+drop policy if exists "no_write_subscription" on public.user_subscriptions;
+create policy "no_write_subscription" on public.user_subscriptions
+  for insert with check (false);
+
+drop policy if exists "no_update_subscription" on public.user_subscriptions;
+create policy "no_update_subscription" on public.user_subscriptions
+  for update using (false);
+
+drop policy if exists "no_delete_subscription" on public.user_subscriptions;
+create policy "no_delete_subscription" on public.user_subscriptions
+  for delete using (false);
+
+-- ─── 10. Harden prevent_group_ownership_change trigger ──────────────────────
+-- Refined logic: only the OWNER's session (auth.uid = groups.user_id) OR
+-- a SECURITY DEFINER RPC context (empty jwt.sub) may modify member_user_ids.
+--
+create or replace function public.prevent_group_ownership_change()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_jwt_uid text := current_setting('request.jwt.claim.sub', true);
+begin
+  -- Block any change to user_id (ownership handover) regardless of caller.
+  if new.user_id is distinct from old.user_id then
+    raise exception 'ownership_change_forbidden';
+  end if;
+  if new.member_user_ids is distinct from old.member_user_ids then
+    -- Allowed only if:
+    --   (a) we are inside a SECURITY DEFINER RPC (jwt.sub is NULL), OR
+    --   (b) the caller is the OWNER of the group (matches old.user_id).
+    if v_jwt_uid is not null and auth.uid() is distinct from old.user_id then
+      raise exception 'member_list_change_forbidden';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+-- Reminder: apply this file on Supabase Dashboard → SQL Editor → Run.

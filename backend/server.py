@@ -1753,7 +1753,27 @@ async def iap_validate(
         _iap_log.exception("[iap-validation] unexpected: %s", e)
         return {"valid": False, "error": "validation_error"}
 
+    # v3.9.0 SECURITY: Transaction Ownership Enforcement
+    # If this originalTransactionId is already bound to a DIFFERENT user in
+    # our DB, REFUSE. This prevents a User B from stealing User A's purchase
+    # by relaying A's transaction id.
     if state.get("ok"):
+        orig = state.get("original_transaction_id")
+        if orig:
+            try:
+                existing = await _supabase_admin.fetch_by_original_transaction(orig)
+                if existing and existing.get("user_id") and existing["user_id"] != user.user_id:
+                    _iap_log.warning(
+                        "[iap-validation] transaction ownership conflict: orig=%s already owned",
+                        (orig or "?")[:6] + "…",
+                    )
+                    return {
+                        "valid": False,
+                        "ok": False,
+                        "error": "transaction_already_owned",
+                    }
+            except Exception as e:
+                _iap_log.warning("[iap-validation] ownership pre-check failed: %s", e)
         try:
             # SECURITY: use authenticated user_id, never req.user_id
             await _supabase_admin.upsert_subscription(user.user_id, state)
@@ -1771,7 +1791,7 @@ async def iap_restore(
 ):
     """Re-derive subscription state from a known originalTransactionId.
 
-    v3.9.0 SECURITY: user_id is derived from JWT.
+    v3.9.0 SECURITY: user_id is derived from JWT. Ownership check applied.
     """
     if not _iap_cfg.is_ready():
         return JSONResponse(
@@ -1787,6 +1807,19 @@ async def iap_restore(
         _iap_log.exception("[iap-restore] unexpected: %s", e)
         return {"valid": False, "error": "restore_error"}
     if state.get("ok"):
+        # v3.9.0 SECURITY: Same ownership rule for restore
+        real_orig = state.get("original_transaction_id") or orig
+        try:
+            existing = await _supabase_admin.fetch_by_original_transaction(real_orig)
+            if existing and existing.get("user_id") and existing["user_id"] != user.user_id:
+                _iap_log.warning("[iap-restore] transaction ownership conflict")
+                return {
+                    "valid": False,
+                    "ok": False,
+                    "error": "transaction_already_owned",
+                }
+        except Exception as e:
+            _iap_log.warning("[iap-restore] ownership pre-check failed: %s", e)
         try:
             await _supabase_admin.upsert_subscription(user.user_id, state)
         except Exception as e:
@@ -1803,25 +1836,29 @@ async def iap_webhook_apple(
 ):
     """App Store Server Notifications V2 webhook.
 
-    v3.9.0 SECURITY:
-    - The IAP_WEBHOOK_SECRET is now REQUIRED (fail closed).
-    - Prefer the X-IAP-Secret header over the ?secret= query param
-      (query strings can be logged by proxies).
-    - Comparison uses hmac.compare_digest (constant time) to prevent timing.
-    - The JWS signedPayload is verified using Apple's certificate chain
-      (see apple_iap.verify_and_decode_notification).
-    - Bundle ID + environment are enforced.
+    v3.9.0 SECURITY (updated):
+    - PRIMARY security: JWS signature verification with Apple's official
+      SignedDataVerifier (see apple_iap.verify_and_decode_notification).
+    - Apple can POST DIRECTLY to this endpoint without any shared secret.
+    - IAP_WEBHOOK_SECRET remains as an OPTIONAL secondary check for
+      internal replay/testing tools. If configured AND provided, it must
+      match; if not provided, we skip that check (Apple is trusted via JWS).
+    - Comparison uses hmac.compare_digest (constant time).
     """
     import hmac as _hmac
-    # 1) Require the shared secret (defense-in-depth in addition to JWS check)
-    if not _iap_cfg.webhook_secret:
-        _iap_log.error("[iap-webhook] IAP_WEBHOOK_SECRET is not configured — rejecting")
-        raise HTTPException(status_code=503, detail="webhook_not_configured")
-    provided = (x_iap_secret or secret or "").strip()
-    if not provided or not _hmac.compare_digest(provided, _iap_cfg.webhook_secret):
-        _iap_log.warning("[iap-webhook] rejected: bad/missing secret")
-        raise HTTPException(status_code=401, detail="bad_secret")
 
+    # 1) OPTIONAL shared-secret check (only enforced if BOTH the env is set
+    #    AND the client provided one — Apple itself never sends it).
+    provided = (x_iap_secret or secret or "").strip()
+    if provided:
+        if not _iap_cfg.webhook_secret:
+            # Client passed a secret but backend doesn't have one configured
+            _iap_log.warning("[iap-webhook] client passed secret but backend has none")
+        elif not _hmac.compare_digest(provided, _iap_cfg.webhook_secret):
+            _iap_log.warning("[iap-webhook] rejected: bad shared secret")
+            raise HTTPException(status_code=401, detail="bad_secret")
+
+    # 2) Read body
     try:
         body = await request.json()
     except Exception:
@@ -1831,7 +1868,7 @@ async def iap_webhook_apple(
         _iap_log.warning("[iap-webhook] empty signedPayload")
         raise HTTPException(status_code=400, detail="empty_payload")
 
-    # 2) Verify JWS signature + certificate chain
+    # 3) Verify JWS signature + certificate chain via official Apple library
     try:
         decoded = _verify_and_decode_notification(signed_payload, _iap_cfg)
     except Exception as e:
@@ -1842,7 +1879,7 @@ async def iap_webhook_apple(
     txn = decoded.get("transactionInfo") or {}
     orig = txn.get("originalTransactionId")
 
-    # 3) Enforce bundle-id + environment match
+    # 4) Enforce bundle-id (defense-in-depth; SDK already checks it)
     if txn.get("bundleId") and txn["bundleId"] != _iap_cfg.bundle_id:
         _iap_log.warning("[iap-webhook] bundle_id mismatch: %s", txn["bundleId"])
         raise HTTPException(status_code=401, detail="bundle_id_mismatch")
@@ -1854,7 +1891,7 @@ async def iap_webhook_apple(
         (orig or "?")[:6] + "…",
     )
 
-    # 4) Re-derive state by calling Apple again — single source of truth.
+    # 5) Re-derive state by calling Apple again — single source of truth.
     if orig:
         try:
             state = await _restore_for(_iap_cfg, orig)
@@ -1864,6 +1901,7 @@ async def iap_webhook_apple(
             _iap_log.exception("[iap-webhook] re-derive failed: %s", e)
 
     return {"ok": True, "notificationType": n_type}
+
 
 
 @app.get("/api/iap/me")

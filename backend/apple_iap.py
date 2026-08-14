@@ -63,6 +63,18 @@ def _load_root_certs() -> list[bytes]:
 
 _APPLE_ROOT_CERTS: list[bytes] = _load_root_certs()
 
+# Production safety: fail fast at startup if the operator claims we are in
+# production but Apple root certs / official lib are missing. This prevents
+# silent fallback to unsigned _decode_jws_body in production.
+_APP_ENV = (os.getenv("APP_ENV") or os.getenv("ENV") or "development").lower()
+if _APP_ENV in ("production", "prod") and (not _APPLE_LIB_OK or not _APPLE_ROOT_CERTS):
+    raise RuntimeError(
+        f"[iap] Refusing to start in APP_ENV={_APP_ENV}: "
+        f"apple_lib_installed={_APPLE_LIB_OK} root_certs={len(_APPLE_ROOT_CERTS)}. "
+        f"Install `app-store-server-library` and provision `backend/apple_certs/` "
+        f"before deploying."
+    )
+
 
 # Per-environment SignedDataVerifier cache (keyed by (env, bundle))
 _VERIFIER_CACHE: Dict[Tuple[str, str], Any] = {}

@@ -1,0 +1,30 @@
+{
+  "summary": "v3.9.0 backend security pass 2 — 33/33 tests passed. Verified: (1) JWKS-first / HS256-fallback dual auth returns correct 401 error codes (token_expired, invalid_signature, algorithm_not_allowed, invalid_audience, missing_sub, unknown_kid, missing_token, wrong-secret invalid_signature). (2) Official Apple `SignedDataVerifier` is wired for outer notification, inner signedTransactionInfo and inner signedRenewalInfo (grep + fake payload → 401 invalid_signature). (3) Transaction ownership binding via `fetch_by_original_transaction` and `transaction_already_owned` present on /api/iap/validate and /api/iap/restore (grep-confirmed at server.py:1764/1813). (4) Webhook accepts direct Apple POST WITHOUT any secret (no header/query + fake JWS → 401 invalid_signature; wrong X-IAP-Secret → 401 bad_secret; empty body & empty signedPayload → 400 empty_payload; outer alg=none → 401 invalid_signature). (5) Global `cfg.use_sandbox = ...` mutation REMOVED from apple_iap.py — replaced by per-call `use_sandbox` parameter (verified via grep — 0 matches). (6) `bundle_id_mismatch` enforced at server.py:1885. (7) All AI endpoints (coach, ocr, email/parse, optimizer, voice) return 401 unauthenticated; return non-401 with valid JWT. (8) Rate limiting works: voice 5/5 OK (limit 60/min); scanner/ocr hit 429 within 30 quick requests (limit 20/min). (9) /api/alerts/<other_uid> returns 403 forbidden; /api/family/* requires auth. (10) /api/config/status returns only 'configured'/'missing' flags — no secret values leaked. (11) Public endpoints (/health, /api/health, /api/iap/health, /api/tax/simulate, /api/lamal/subsidy) still work without auth. (12) Malformed JSON does not leak stack trace.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_v390_security.py",
+    "/app/test_reports/pytest/pytest_v390_pass2.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "auth.py line 182-187: the branch `if SUPABASE_JWT_ALLOW_HS256_FALLBACK and SUPABASE_JWT_SECRET: raise unknown_kid` is functionally identical to the else branch — both raise unknown_kid. Not a bug, just dead code that could be removed for clarity.",
+    "apple_iap.py: When _APPLE_LIB_OK is False OR root CAs missing, get_signed_data_verifier returns None and get_transaction_info/get_subscription_statuses fall back to unsigned _decode_jws_body. This is a soft-fail behavior. In production `appstoreserverlibrary` MUST be installed and certs MUST be present, otherwise inner JWS is trusted without signature verification. Recommend a startup-time assertion that fails fast if certs are missing in APP_ENV=production.",
+    "server.py exception_handler: HTTPException handler returns {\"error\": exc.detail}. If a caller ever raises HTTPException(detail={...}) with a dict, the dict is exposed as-is. Currently all internal raises pass a string, so it's safe — but a lint rule would prevent regressions."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "not_tested"},
+  "seed_data_creation": "No seed data created. Fresh HS256 JWTs are minted inline in test file using dev secret from /app/memory/security_test_jwts.md.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All 22 requested test scenarios verified. Real Apple sandbox transactions and non-empty Supabase JWKS were not testable in this env (documented as mocked in review request). Ownership-binding & real Apple JWS acceptance need integration verification with an actual TestFlight sandbox purchase. Test file /app/backend/tests/test_v390_security.py can be re-run as regression on future changes: `pytest backend/tests/test_v390_security.py -v`.",
+  "rca_of_issue": "N/A — no bugs found in this pass."
+}

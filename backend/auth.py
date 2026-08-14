@@ -179,11 +179,7 @@ def _verify(token: str) -> Dict[str, Any]:
             claims = _verify_asymmetric(token, header)
             if claims is not None:
                 return claims
-            # kid unknown OR JWKS empty — try HS256 legacy fallback IF opted-in
-            if SUPABASE_JWT_ALLOW_HS256_FALLBACK and SUPABASE_JWT_SECRET:
-                # Only allowed if the token actually claims HS256 in its header
-                # (we do NOT accept an ES256 header with an HS256 secret).
-                raise HTTPException(status_code=401, detail="unknown_kid")
+            # kid unknown OR JWKS empty
             raise HTTPException(status_code=401, detail="unknown_kid")
         elif alg == "HS256":
             return _verify_hs256_legacy(token)

@@ -49,7 +49,7 @@ import {
 import { useUsageQuota, useIsPremium } from '../services/featureFlags';
 import { useTranslation } from '../hooks/useTranslation';
 import SoftPaywall from './SoftPaywall';
-import { safeFetchJson } from '../lib/network';
+import { safeFetchJson, apiFetchJson } from '../lib/network';
 import { parseVoiceLocally } from '../lib/voiceLocalParser';
 
 const ACCENT = '#16E0C6';
@@ -371,7 +371,7 @@ export default function VoiceInputModal({ visible, onClose }: Props) {
     };
 
     try {
-      const r = await safeFetchJson<ParsedTxn>(`${BACKEND_URL}/api/voice/parse`, {
+      const r = await apiFetchJson<ParsedTxn>(`/api/voice/parse`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: input, locale: sttLocale }),

@@ -39,7 +39,7 @@ import { Button } from '../src/components/ui';
 import { EXPENSE_CATEGORIES, PAYMENT_METHODS } from '../src/data/swiss-data';
 import { CategoryIcon } from '../src/components/CategoryIcon';
 import type { ReceiptType } from '../src/types';
-import { safeFetchJson } from '../src/lib/network';
+import { safeFetchJson, apiFetchJson } from '../src/lib/network';
 import { normalizeImageForUpload } from '../src/lib/imageUpload';
 import { AppErrorModal, buildErrorFromResult, type ErrorPayload } from '../src/components/AppErrorModal';
 import { useTranslation } from '../src/hooks/useTranslation';
@@ -118,8 +118,8 @@ export default function ScannerModal() {
   const runOcr = async (b64: string) => {
     setStage('ocr');
     setOcrError(null);
-    const r = await safeFetchJson<any>(
-      `${BACKEND_URL}/api/scanner/ocr`,
+    const r = await apiFetchJson<any>(
+      `/api/scanner/ocr`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

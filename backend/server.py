@@ -17,8 +17,9 @@ import string
 import logging
 from datetime import datetime, timezone
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse as _AutoJSONResponse
 from pydantic import BaseModel
 from typing import Optional
 import json
@@ -30,6 +31,11 @@ load_dotenv()
 
 # Self-hosted LLM client (LiteLLM under the hood, no Emergent proxy)
 from llm_client import ImageContent, LlmChat, UserMessage  # noqa: E402
+
+# ─── v3.9.0 Security: JWT auth + rate limiting ──────────────────────────────
+from auth import AuthenticatedUser, require_user, limiter  # noqa: E402
+from slowapi.errors import RateLimitExceeded  # noqa: E402
+from slowapi.middleware import SlowAPIMiddleware  # noqa: E402
 
 # ─────────────────────────────────────────────────────────────
 # Logging — structured, prod-friendly
@@ -44,7 +50,7 @@ log = logging.getLogger("budgy")
 # ─────────────────────────────────────────────────────────────
 # Env / Config
 # ─────────────────────────────────────────────────────────────
-APP_VERSION = os.getenv("APP_VERSION", "3.7.27")
+APP_VERSION = os.getenv("APP_VERSION", "3.9.0")
 APP_ENV = os.getenv("APP_ENV", "production")  # production | staging | dev
 
 # LLM key kept for backwards-compat with code paths that still check it.
@@ -74,12 +80,41 @@ ALLOWED_ORIGINS = [o.strip() for o in _CORS_ENV.split(",") if o.strip()]
 
 # Mobile schemes / arbitrary native bundle IDs can't be matched by a literal
 # string. We allow them via regex so the WKWebView / native scheme works.
+# v3.9.0 SECURITY: anchor the regex end-of-domain to avoid `budgy.ch.attacker.com`
 _CORS_REGEX = os.getenv(
     "CORS_ALLOWED_ORIGIN_REGEX",
-    r"^(https://([a-z0-9-]+\.)*budgy\.ch|budgy://.*|capacitor://.*)$",
+    r"^(https://([a-z0-9-]+\.)*budgy\.ch$|budgy://.*|capacitor://.*)$",
 )
 
 app = FastAPI(title="Budgy API", version=APP_VERSION)
+
+# v3.9.0 SECURITY: rate limiting middleware
+app.state.limiter = limiter
+app.add_middleware(SlowAPIMiddleware)
+
+
+@app.exception_handler(RateLimitExceeded)
+async def _rate_limit_handler(request, exc):  # noqa: D401
+    return _AutoJSONResponse(
+        status_code=429,
+        content={"error": "rate_limited", "detail": "Too many requests. Please slow down."},
+    )
+
+
+# v3.9.0 SECURITY: never leak internal errors / stack traces / secrets
+@app.exception_handler(HTTPException)
+async def _http_exception_handler(request, exc):  # noqa: D401
+    return _AutoJSONResponse(status_code=exc.status_code, content={"error": exc.detail})
+
+
+@app.exception_handler(Exception)
+async def _global_exception_handler(request, exc):  # noqa: D401
+    # Preserve intentional HTTPException semantics (401, 429, etc.)
+    if isinstance(exc, HTTPException):
+        return _AutoJSONResponse(status_code=exc.status_code, content={"error": exc.detail})
+    log.exception("[unhandled] %s at %s", type(exc).__name__, request.url.path)
+    return _AutoJSONResponse(status_code=500, content={"error": "internal_server_error"})
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -201,33 +236,42 @@ class ChatResponse(BaseModel):
 
 
 @app.post("/api/coach/chat", response_model=ChatResponse)
-async def coach_chat(req: ChatRequest):
+@limiter.limit("30/minute; 300/hour")
+async def coach_chat(
+    request: Request,
+    req: ChatRequest,
+    user: AuthenticatedUser = Depends(require_user),
+):
     if not EMERGENT_LLM_KEY:
         raise HTTPException(status_code=500, detail="LLM key not configured")
 
     try:
-        # Get or create chat session
-        if req.session_id not in chat_sessions:
+        # v3.9.0 SECURITY: namespace session id by user to prevent context leaks
+        namespaced_session = f"{user.user_id}:{req.session_id}"
+        if namespaced_session not in chat_sessions:
             system_msg = SYSTEM_PROMPT
             if req.financial_context:
                 system_msg += f"\n\nCONTEXTE FINANCIER DE L'UTILISATEUR:\n{req.financial_context}"
 
             chat = LlmChat(
                 api_key=EMERGENT_LLM_KEY,
-                session_id=req.session_id,
+                session_id=namespaced_session,
                 system_message=system_msg,
             )
             chat.with_model("openai", "gpt-4o-mini")
-            chat_sessions[req.session_id] = chat
+            chat_sessions[namespaced_session] = chat
 
-        chat = chat_sessions[req.session_id]
+        chat = chat_sessions[namespaced_session]
         user_msg = UserMessage(text=req.message)
         response = await chat.send_message(user_msg)
 
         return ChatResponse(response=response, session_id=req.session_id)
 
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        log.exception("[coach_chat] failed: %s", e)
+        raise HTTPException(status_code=500, detail="coach_unavailable")
 
 
 # ──────────────────────────────────────────────────
@@ -667,10 +711,19 @@ def parse_json_loose(text: str) -> dict:
 
 
 @app.post("/api/scanner/ocr", response_model=OCRResponse)
-async def scanner_ocr(req: OCRRequest):
+@limiter.limit("20/minute; 200/hour")
+async def scanner_ocr(
+    request: Request,
+    req: OCRRequest,
+    user: AuthenticatedUser = Depends(require_user),
+):
     """Extract structured data from a receipt image using vision LLM."""
     if not EMERGENT_LLM_KEY:
         return OCRResponse(success=False, error="LLM key not configured")
+
+    # v3.9.0 SECURITY: enforce max image size (~ 8 MB base64)
+    if len(req.image_base64 or "") > 12_000_000:
+        raise HTTPException(status_code=413, detail="image_too_large")
 
     # Strip any data:image/...;base64, prefix if present
     img_b64 = req.image_base64
@@ -815,7 +868,12 @@ Mets null pour les champs manquants. Pas de markdown, pas de commentaire."""
 
 
 @app.post("/api/email/parse", response_model=EmailParseResponse)
-async def email_parse(req: EmailParseRequest):
+@limiter.limit("30/minute; 300/hour")
+async def email_parse(
+    request: Request,
+    req: EmailParseRequest,
+    user: AuthenticatedUser = Depends(require_user),
+):
     """Parse an email/invoice text into a structured invoice."""
     if not EMERGENT_LLM_KEY:
         return EmailParseResponse(success=False, error="LLM key not configured")
@@ -1271,7 +1329,12 @@ def _fallback_optimizer(req: OptimizerRequest) -> OptimizerResponse:
 
 
 @app.post("/api/optimizer/analyze", response_model=OptimizerResponse)
-async def optimizer_analyze(req: OptimizerRequest):
+@limiter.limit("20/minute; 200/hour")
+async def optimizer_analyze(
+    request: Request,
+    req: OptimizerRequest,
+    user: AuthenticatedUser = Depends(require_user),
+):
     """Analyze user's financial snapshot and propose concrete savings via AI."""
     if not EMERGENT_LLM_KEY:
         return _fallback_optimizer(req)
@@ -1493,10 +1556,17 @@ def _parse_voice_local(text: str) -> dict:
 
 
 @app.post("/api/voice/parse", response_model=VoiceParseResponse)
-async def voice_parse(req: VoiceParseRequest):
+@limiter.limit("60/minute; 600/hour")
+async def voice_parse(
+    request: Request,
+    req: VoiceParseRequest,
+    user: AuthenticatedUser = Depends(require_user),
+):
     """Parse a natural language sentence into a structured transaction."""
     text = (req.text or "").strip()
-    print(f"[voice] parsing: {text[:120]}")
+    # v3.9.0 SECURITY: max sentence length
+    if len(text) > 1000:
+        raise HTTPException(status_code=413, detail="text_too_long")
     if not text:
         return VoiceParseResponse(success=False, error="Texte vide")
 
@@ -1560,6 +1630,7 @@ from apple_iap import (
     validate_purchase as _validate_purchase,
     restore_for as _restore_for,
     parse_webhook_payload as _parse_webhook,
+    verify_and_decode_notification as _verify_and_decode_notification,
 )
 import supabase_admin as _supabase_admin
 
@@ -1624,13 +1695,16 @@ def _state_to_response(state: dict) -> dict:
 
 
 @app.post("/api/iap/validate")
-async def iap_validate(req: IapValidateRequest):
+@limiter.limit("30/minute")
+async def iap_validate(
+    request: Request,
+    req: IapValidateRequest,
+    user: AuthenticatedUser = Depends(require_user),
+):
     """Validate an Apple StoreKit purchase via App Store Server API.
 
-    Behavior:
-      • If APPLE_PRIVATE_KEY_P8 + transaction_id present → real validation
-      • Else (no keys yet) → 503 with `{error:'iap_not_configured', missing:[...]}`
-        so the frontend can show a clear "backend not configured" toast.
+    v3.9.0 SECURITY: user_id is ALWAYS derived from the JWT — client-supplied
+    value in the body is IGNORED.
     """
     if req.platform != "ios":
         return {"valid": False, "error": "android_not_supported_yet"}
@@ -1644,7 +1718,6 @@ async def iap_validate(req: IapValidateRequest):
                 "ok": False,
                 "error": "iap_not_configured",
                 "missing": _iap_cfg.missing(),
-                "hint": "Add APPLE_PRIVATE_KEY_P8 (and SUPABASE_SERVICE_ROLE_KEY) to backend/.env then restart.",
             },
         )
     if not req.transaction_id:
@@ -1654,28 +1727,32 @@ async def iap_validate(req: IapValidateRequest):
         state = await _validate_purchase(_iap_cfg, req.transaction_id)
     except Exception as e:
         _iap_log.exception("[iap-validation] unexpected: %s", e)
-        return {"valid": False, "error": f"validation_error:{e}"}
+        return {"valid": False, "error": "validation_error"}
 
-    if req.user_id and state.get("ok"):
+    if state.get("ok"):
         try:
-            await _supabase_admin.upsert_subscription(req.user_id, state)
+            # SECURITY: use authenticated user_id, never req.user_id
+            await _supabase_admin.upsert_subscription(user.user_id, state)
         except Exception as e:
             _iap_log.warning("[iap-validation] supabase upsert failed: %s", e)
     return _state_to_response(state)
 
 
 @app.post("/api/iap/restore")
-async def iap_restore(req: IapRestoreRequest):
-    """Re-derive subscription state from a known originalTransactionId."""
+@limiter.limit("30/minute")
+async def iap_restore(
+    request: Request,
+    req: IapRestoreRequest,
+    user: AuthenticatedUser = Depends(require_user),
+):
+    """Re-derive subscription state from a known originalTransactionId.
+
+    v3.9.0 SECURITY: user_id is derived from JWT.
+    """
     if not _iap_cfg.is_ready():
         return JSONResponse(
             status_code=503,
-            content={
-                "valid": False,
-                "ok": False,
-                "error": "iap_not_configured",
-                "missing": _iap_cfg.missing(),
-            },
+            content={"valid": False, "ok": False, "error": "iap_not_configured"},
         )
     orig = req.original_transaction_id or req.transaction_id
     if not orig:
@@ -1684,25 +1761,31 @@ async def iap_restore(req: IapRestoreRequest):
         state = await _restore_for(_iap_cfg, orig)
     except Exception as e:
         _iap_log.exception("[iap-restore] unexpected: %s", e)
-        return {"valid": False, "error": f"restore_error:{e}"}
-    if req.user_id and state.get("ok"):
+        return {"valid": False, "error": "restore_error"}
+    if state.get("ok"):
         try:
-            await _supabase_admin.upsert_subscription(req.user_id, state)
+            await _supabase_admin.upsert_subscription(user.user_id, state)
         except Exception as e:
             _iap_log.warning("[iap-restore] supabase upsert failed: %s", e)
     return _state_to_response(state)
 
 
 @app.post("/api/iap/webhook/apple")
-async def iap_webhook_apple(request: _Request, secret: Optional[str] = _Query(None)):
+@limiter.limit("240/minute")
+async def iap_webhook_apple(request: Request, secret: Optional[str] = _Query(None)):
     """App Store Server Notifications V2 webhook.
 
-    Configure this URL in App Store Connect → My Apps → Budgy → App Store
-    Server Notifications, with `?secret=<IAP_WEBHOOK_SECRET>` appended to
-    authenticate incoming POSTs (V1). V2 will add proper JWS signature
-    verification with Apple's certificate chain.
+    v3.9.0 SECURITY:
+    - The IAP_WEBHOOK_SECRET is now REQUIRED (fail closed).
+    - The JWS signedPayload is verified using Apple's certificate chain
+      (see apple_iap.verify_and_decode_notification).
+    - Bundle ID + environment are enforced.
     """
-    if _iap_cfg.webhook_secret and secret != _iap_cfg.webhook_secret:
+    # 1) Require the shared secret (defense-in-depth in addition to JWS check)
+    if not _iap_cfg.webhook_secret:
+        _iap_log.error("[iap-webhook] IAP_WEBHOOK_SECRET is not configured — rejecting")
+        raise HTTPException(status_code=503, detail="webhook_not_configured")
+    if secret != _iap_cfg.webhook_secret:
         _iap_log.warning("[iap-webhook] rejected: bad/missing secret")
         raise HTTPException(status_code=401, detail="bad_secret")
 
@@ -1713,15 +1796,32 @@ async def iap_webhook_apple(request: _Request, secret: Optional[str] = _Query(No
     signed_payload = (body or {}).get("signedPayload", "")
     if not signed_payload:
         _iap_log.warning("[iap-webhook] empty signedPayload")
-        return {"ok": False, "error": "empty_payload"}
+        raise HTTPException(status_code=400, detail="empty_payload")
 
-    decoded = _parse_webhook(signed_payload)
+    # 2) Verify JWS signature + certificate chain
+    try:
+        decoded = _verify_and_decode_notification(signed_payload, _iap_cfg)
+    except Exception as e:
+        _iap_log.warning("[iap-webhook] JWS verification failed: %s", type(e).__name__)
+        raise HTTPException(status_code=401, detail="invalid_signature")
+
     n_type = decoded.get("notificationType")
     txn = decoded.get("transactionInfo") or {}
     orig = txn.get("originalTransactionId")
-    _iap_log.info("[iap-webhook] type=%s subtype=%s orig=%s", n_type, decoded.get("subtype"), (orig or "?")[:6] + "…")
 
-    # Re-derive state by calling Apple again — single source of truth.
+    # 3) Enforce bundle-id + environment match
+    if txn.get("bundleId") and txn["bundleId"] != _iap_cfg.bundle_id:
+        _iap_log.warning("[iap-webhook] bundle_id mismatch: %s", txn["bundleId"])
+        raise HTTPException(status_code=401, detail="bundle_id_mismatch")
+
+    _iap_log.info(
+        "[iap-webhook] type=%s subtype=%s orig=%s",
+        n_type,
+        decoded.get("subtype"),
+        (orig or "?")[:6] + "…",
+    )
+
+    # 4) Re-derive state by calling Apple again — single source of truth.
     if orig:
         try:
             state = await _restore_for(_iap_cfg, orig)
@@ -1734,8 +1834,12 @@ async def iap_webhook_apple(request: _Request, secret: Optional[str] = _Query(No
 
 
 @app.get("/api/iap/me")
-async def iap_me(user_id: str = _Query(...)):
-    rec = await _supabase_admin.fetch_subscription(user_id)
+async def iap_me(
+    request: Request,
+    user: AuthenticatedUser = Depends(require_user),
+):
+    """v3.9.0 SECURITY: user_id derived from JWT — no more query param spoofing."""
+    rec = await _supabase_admin.fetch_subscription(user.user_id)
     if not rec:
         return {"is_pro": False, "subscription_state": "FREE"}
     return rec

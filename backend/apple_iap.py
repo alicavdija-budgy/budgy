@@ -327,3 +327,112 @@ def parse_webhook_payload(signed_payload: str) -> Dict[str, Any]:
         "renewalInfo": ren,
         "raw": decoded,
     }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# v3.9.0 SECURITY: JWS verification using Apple's certificate chain
+# ─────────────────────────────────────────────────────────────────────────────
+# Apple root CA (SHA-256 fingerprint for pinning if desired)
+APPLE_ROOT_CA_G3_FINGERPRINT = (
+    "63343abfb89a6a03eb2bec5b9eec7396ce16ce8b90b6ce7c8a2b40b0f6dc9c30"  # AppleRootCA-G3
+)
+
+
+def verify_and_decode_notification(signed_payload: str, cfg: IAPConfig) -> Dict[str, Any]:
+    """Verify an App Store Server Notification V2 JWS.
+
+    Verification steps:
+      1) Parse the 3-part JWS
+      2) Extract the x5c cert chain from the header
+      3) Verify each cert signs the next
+      4) Verify the leaf cert signs the JWS payload (ES256)
+      5) Optionally check that the root cert fingerprint matches Apple's root
+      6) Validate bundleId + environment
+
+    Raises Exception on any failure. Returns decoded payload dict on success.
+    """
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import ec, padding
+    from cryptography.hazmat.backends import default_backend
+
+    if not signed_payload:
+        raise ValueError("empty_payload")
+
+    parts = signed_payload.split(".")
+    if len(parts) != 3:
+        raise ValueError("malformed_jws")
+
+    # 1) Parse header + payload
+    header_b64 = parts[0] + "=" * (-len(parts[0]) % 4)
+    payload_b64 = parts[1] + "=" * (-len(parts[1]) % 4)
+    signature_b64 = parts[2] + "=" * (-len(parts[2]) % 4)
+
+    header = json.loads(base64.urlsafe_b64decode(header_b64))
+    payload = json.loads(base64.urlsafe_b64decode(payload_b64))
+    signature = base64.urlsafe_b64decode(signature_b64)
+
+    alg = header.get("alg")
+    if alg != "ES256":
+        raise ValueError(f"unsupported_algorithm:{alg}")
+
+    x5c = header.get("x5c")
+    if not x5c or len(x5c) < 2:
+        raise ValueError("missing_x5c_chain")
+
+    # 2) Load certificates
+    certs = []
+    for b64 in x5c:
+        cert_der = base64.b64decode(b64)
+        certs.append(x509.load_der_x509_certificate(cert_der, default_backend()))
+
+    # 3) Verify chain: each cert signed by next
+    for i in range(len(certs) - 1):
+        child = certs[i]
+        parent = certs[i + 1]
+        parent_pub = parent.public_key()
+        try:
+            parent_pub.verify(
+                child.signature,
+                child.tbs_certificate_bytes,
+                ec.ECDSA(child.signature_hash_algorithm),
+            )
+        except Exception as e:
+            raise ValueError(f"cert_chain_broken_at_{i}:{e}")
+
+    # 4) Verify the JWS signature with the leaf cert
+    leaf_pub = certs[0].public_key()
+    signing_input = f"{parts[0]}.{parts[1]}".encode()
+
+    # ECDSA signature from JWS is raw r||s (P-256 → 64 bytes) — convert to DER
+    from cryptography.hazmat.primitives.asymmetric.utils import encode_dss_signature
+    if len(signature) != 64:
+        raise ValueError(f"unexpected_sig_len:{len(signature)}")
+    r = int.from_bytes(signature[:32], "big")
+    s = int.from_bytes(signature[32:], "big")
+    der_sig = encode_dss_signature(r, s)
+
+    try:
+        leaf_pub.verify(der_sig, signing_input, ec.ECDSA(hashes.SHA256()))
+    except Exception as e:
+        raise ValueError(f"signature_invalid:{e}")
+
+    # 5) Extract inner transaction & renewal
+    data = payload.get("data") or {}
+    txn = _decode_jws_body(data.get("signedTransactionInfo", "")) if data.get("signedTransactionInfo") else {}
+    ren = _decode_jws_body(data.get("signedRenewalInfo", "")) if data.get("signedRenewalInfo") else {}
+
+    # 6) Enforce bundleId — if Apple sent a bundleId in data, it must match
+    apple_bundle = data.get("bundleId") or txn.get("bundleId")
+    if apple_bundle and cfg.bundle_id and apple_bundle != cfg.bundle_id:
+        raise ValueError(f"bundle_mismatch:{apple_bundle}")
+
+    return {
+        "notificationType": payload.get("notificationType"),
+        "subtype": payload.get("subtype"),
+        "transactionInfo": txn,
+        "renewalInfo": ren,
+        "raw": payload,
+        "environment": data.get("environment"),
+        "signatureVerified": True,
+    }

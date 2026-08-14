@@ -333,10 +333,32 @@ export function hasApiBaseUrl(): boolean {
 }
 
 /**
+ * v3.9.0 SECURITY: get the current Supabase access token, if any.
+ * Returns null if the user is not authenticated (never throws).
+ */
+async function getAuthHeader(): Promise<Record<string, string>> {
+  try {
+    // Lazy-import to avoid a circular dep with network.ts.
+    // supabase.ts uses only exports of this file indirectly (fetch impl).
+    const { supabase, isSupabaseConfigured } = await import('./supabase');
+    if (!isSupabaseConfigured()) return {};
+    const { data } = await supabase.auth.getSession();
+    const token = data?.session?.access_token;
+    if (!token) return {};
+    return { Authorization: `Bearer ${token}` };
+  } catch {
+    return {};
+  }
+}
+
+/**
  * Convenience: full apiFetchJson(path, init?) — relative path is appended to
  * the configured base URL, and uses safeFetchJson defaults (35s timeout, 1
  * retry, AbortController, NetInfo gating). Use this for ALL backend calls
  * to eliminate URL-string-concat bugs.
+ *
+ * v3.9.0 SECURITY: automatically attaches the Supabase JWT as
+ * `Authorization: Bearer <token>` when a session is active.
  */
 export async function apiFetchJson<T = unknown>(
   path: string,
@@ -345,5 +367,16 @@ export async function apiFetchJson<T = unknown>(
 ): Promise<SafeFetchResult<T>> {
   const base = getApiBaseUrl();
   const url = path.startsWith('http') ? path : `${base}${path.startsWith('/') ? '' : '/'}${path}`;
-  return safeFetchJson<T>(url, init, options);
+  // Inject Bearer token silently if the caller didn't set one already.
+  const existingAuth =
+    init?.headers &&
+    Object.keys(init.headers as Record<string, string>).some(
+      (k) => k.toLowerCase() === 'authorization'
+    );
+  const authHeaders = existingAuth ? {} : await getAuthHeader();
+  const mergedInit: RequestInit = {
+    ...(init || {}),
+    headers: { ...(init?.headers || {}), ...authHeaders },
+  };
+  return safeFetchJson<T>(url, mergedInit, options);
 }

@@ -15,6 +15,19 @@
 
 import { Platform } from 'react-native';
 
+// v3.9.0 SECURITY: attach Supabase JWT to all backend calls.
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  try {
+    const { supabase, isSupabaseConfigured } = await import('../lib/supabase');
+    if (!isSupabaseConfigured()) return {};
+    const { data } = await supabase.auth.getSession();
+    const token = data?.session?.access_token;
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    return {};
+  }
+}
+
 export const IAP_PRODUCT_IDS = {
   monthly: 'com.budgy.ch.budgy.monthly',
   annual: 'com.budgy.ch.budgy.annual',
@@ -225,9 +238,11 @@ export interface BackendValidation {
 }
 
 async function postJson(path: string, body: any): Promise<BackendValidation> {
+  // v3.9.0 SECURITY: attach Supabase JWT
+  const authHeaders = await getAuthHeaders();
   const r = await safeFetch(`${BACKEND_URL}${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders },
     body: JSON.stringify(body),
   }, { timeoutMs: 8000, retries: 1, silent: true });
 
@@ -300,9 +315,12 @@ export interface RemoteSubscription {
 export async function fetchSubscriptionFromBackend(
   user_id: string
 ): Promise<RemoteSubscription | null> {
+  // v3.9.0 SECURITY: user_id is now derived from JWT server-side — the query
+  // param is kept for backwards compat but ignored by the backend.
+  const authHeaders = await getAuthHeaders();
   const r = await safeFetch(
-    `${BACKEND_URL}/api/iap/me?user_id=${encodeURIComponent(user_id)}`,
-    undefined,
+    `${BACKEND_URL}/api/iap/me`,
+    { headers: authHeaders },
     { timeoutMs: 6000, retries: 1, silent: true }
   );
   if (!r.ok || !r.data) return null;

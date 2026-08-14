@@ -1,47 +1,55 @@
 # 🍎 Budgy — App Store Submission Final Package (v3.8.0 · Build 70)
 
-> **Prêt à copier-coller** dans App Store Connect.
-> Toutes les informations correspondent EXACTEMENT au comportement réel de l'app (aucune fonctionnalité inventée).
+> **Build 70 déjà présent dans TestFlight.** Ce document contient tout ce dont vous avez besoin pour cliquer sur *Submit for Review* — copier-coller uniquement.
+>
 > Bundle Identifier : `com.budgy.ch.budgy` · SKU : `budgy-ios-2026`
-> Category : `Finance` (Primary) · `Productivity` (Secondary)
+> Marketing Version : `3.8.0` · Build : `70` (existant, ne pas re-générer)
 
 ---
 
-## 📎 URLs & INFOS GLOBALES
+## 🎯 Quick-Reference Values (à copier-coller)
 
-| Champ | Valeur |
+| Champ App Store Connect | Valeur exacte |
 |---|---|
-| **Support URL** | `https://budgy.ch/support` |
-| **Marketing URL** | `https://budgy.ch` |
-| **Privacy Policy URL** | `https://budgy.ch/privacy` |
-| **Privacy Choices URL** | *(non applicable — aucun tracking, aucune option de désactivation à exposer)* |
-| **Terms URL (EULA)** | `https://budgy.ch/terms` (utiliser Custom EULA dans App Information) |
-| **Delete Account URL** | `https://budgy.ch/delete-account` |
-| **Copyright** | `© 2026 Budgy` |
-| **Age Rating** | `4+` (aucun contenu sensible) |
+| **Bundle ID** | `com.budgy.ch.budgy` |
+| **SKU** | `budgy-ios-2026` |
+| **Primary Category** | `Finance` |
+| **Secondary Category** | `Productivity` |
 | **Content Rights** | *Does not contain, show, or access third-party content* |
+| **Age Rating** | `4+` (aucun contenu sensible ; ne cocher aucune case dans le questionnaire) |
+| **Copyright** | `© 2026 Budgy` |
+| **Marketing URL** | `https://budgy.ch` |
+| **Support URL** | `https://budgy.ch/support` |
+| **Privacy Policy URL** | `https://budgy.ch/privacy` |
+| **Terms of Use (EULA) URL** | `https://budgy.ch/terms` (Custom EULA) |
+| **Delete Account URL** | `https://budgy.ch/delete-account` |
+| **Advertising Identifier (IDFA)** | ❌ **No** (Budgy n'utilise pas IDFA) |
+| **Encryption (Export Compliance)** | ✅ **Uses only exempt encryption (HTTPS/TLS)** — `ITSAppUsesNonExemptEncryption = false` (déjà dans Info.plist) |
+| **Tracking (App Tracking Transparency)** | ❌ **No** (aucun tracking cross-app) |
+| **Minimum iOS** | `15.0` |
+| **Devices** | iPhone + iPad (Universal) |
 
 ---
 
-## 🇫🇷 FRANÇAIS (Langue principale)
+## 🇫🇷 FRANÇAIS (langue principale)
 
 ### App Name (30 caractères max)
 ```
 Budgy · Budget & Économies
 ```
-*(26 caractères)*
+*(26 car.)*
 
 ### Subtitle (30 caractères max)
 ```
 Vos finances suisses, en clair
 ```
-*(30 caractères)*
+*(30 car.)*
 
 ### Promotional Text (170 caractères max)
 ```
 Prenez le contrôle de votre budget suisse : IA, scanner OCR, comparateur LAMal, optimiseur d'impôts. 100% privé, 7 jours gratuits.
 ```
-*(155 caractères)*
+*(155 car.)*
 
 ### Description (4000 caractères max)
 ```
@@ -51,11 +59,11 @@ Chaque mois, Budgy vous montre en un coup d'œil combien il vous reste vraiment 
 
 FONCTIONNALITÉS PRINCIPALES
 
-• Tableau de bord clair — Votre solde disponible, vos revenus, vos engagements, tout au même endroit.
+• Tableau de bord clair — Solde disponible, revenus, engagements, tout au même endroit.
 • Score financier Budgy — Un score de 0 à 100 pour évaluer instantanément la santé de votre budget.
 • Coach Predict IA — Prévisions de fin de mois, alertes intelligentes, conseils personnalisés.
 • Suivi des abonnements — Repérez Netflix, Spotify, Swisscom, Sunrise et toutes vos dépenses récurrentes.
-• Portefeuille & investissements — Suivez vos ETF, actions, crypto, cash, avec insights IA.
+• Portefeuille & investissements — Suivez ETF, actions, crypto, cash avec insights IA.
 • Économiseur IA — Trouvez des économies concrètes à faire chaque semaine.
 • Optimiseur d'impôts — Simulations IFD et impôt cantonal simplifiées.
 • LAMal & Subsides — Comparez vos primes 2026, vérifiez vos subsides, optimisez votre franchise.
@@ -67,7 +75,7 @@ FONCTIONNALITÉS PRINCIPALES
 
 PENSÉE POUR LA SUISSE
 
-Budgy est conçue pour le quotidien suisse : CHF, LAMal, subsides cantonaux, 13ème salaire, factures QR, CFF, TPG. Change de devise vers l'EUR ou l'USD en un tap si vous voyagez.
+Budgy est conçue pour le quotidien suisse : CHF, LAMal, subsides cantonaux, 13ème salaire, factures QR, CFF, TPG. Changez de devise vers l'EUR ou l'USD en un tap si vous voyagez.
 
 TRANSPARENCE & CONTRÔLE
 
@@ -88,7 +96,7 @@ TARIFS BUDGY PRO
 • Annuel : CHF 39.90 / an (soit CHF 3.33 / mois — économisez 32%)
 • Essai gratuit de 7 jours pour toute première souscription
 
-Aucun engagement — annulez en 1 clic dans les Réglages iOS. Le paiement est prélevé sur votre compte Apple à la confirmation de l'achat. Renouvellement automatique sauf annulation 24h avant l'échéance.
+Aucun engagement — annulez en 1 clic dans les Réglages iOS. Paiement prélevé sur votre compte Apple à la confirmation. Renouvellement automatique sauf annulation 24h avant l'échéance.
 
 Conditions d'utilisation : https://budgy.ch/terms
 Politique de confidentialité : https://budgy.ch/privacy
@@ -97,48 +105,45 @@ Support : https://budgy.ch/support
 Édité en Suisse 🇨🇭 — Hébergé en Europe 🇪🇺
 ```
 
-### Keywords (100 caractères max, séparés par virgule)
+### Keywords (100 caractères max)
 ```
 budget,dépenses,finances,suisse,LAMal,impôts,épargne,IA,scanner,QR,CHF,coach,économies,famille
 ```
-*(99 caractères)*
 
-### What's New in 3.8.0 (4000 caractères max)
+### What's New in 3.8.0
 ```
 🎉 Budgy 3.8.0 — La version App Store officielle est là !
 
 NOUVEAUTÉS
-• Famille & Groupes : partagez vos dépenses avec vos proches via un simple code d'invitation.
+• Famille & Groupes : partagez vos dépenses via un simple code d'invitation.
 • Synchronisation Cloud optimisée : plus rapide, plus fiable, multi-appareils.
-• Ajout vocal : dictez une dépense via Siri et les Raccourcis iOS.
+• Ajout vocal : dictez une dépense via Siri et Raccourcis iOS.
 • Traduction complète en Allemand, Anglais et Italien.
 • Nouvelle barre d'onglets iOS avec effet blur natif.
 • Deep-linking pour partager un groupe famille en 1 clic.
 
 AMÉLIORATIONS
-• Reconnaissance vocale plus précise (langage naturel).
-• Comparateur LAMal 2026 mis à jour avec les données Priminfo officielles.
+• Reconnaissance vocale plus précise.
+• Comparateur LAMal 2026 mis à jour (données Priminfo officielles).
 • Meilleures performances sur les grandes bases de données.
 • Corrections d'affichage sur iPhone 15/16 Pro Max.
 
-Merci pour votre confiance et vos retours ! N'hésitez pas à nous écrire à hello@budgy.ch pour toute idée d'amélioration.
+Merci pour votre confiance ! Écrivez-nous à hello@budgy.ch pour vos idées.
 ```
 
 ---
 
-## 🇩🇪 DEUTSCH (Sekundär)
+## 🇩🇪 DEUTSCH
 
 ### App Name
 ```
 Budgy · Budget & Sparen
 ```
-*(23 caractères)*
 
 ### Subtitle
 ```
 Ihre Schweizer Finanzen, klar
 ```
-*(29 caractères)*
 
 ### Promotional Text
 ```
@@ -153,31 +158,30 @@ Jeden Monat zeigt Ihnen Budgy auf einen Blick, wie viel Sie wirklich noch ausgeb
 
 HAUPTFUNKTIONEN
 
-• Klares Dashboard — Ihr verfügbares Guthaben, Einkommen und Verpflichtungen an einem Ort.
+• Klares Dashboard — Verfügbares Guthaben, Einkommen und Verpflichtungen an einem Ort.
 • Budgy-Finanzscore — Bewertung von 0 bis 100 für Ihre Finanzgesundheit.
-• Predict Coach KI — Monatsende-Prognosen, intelligente Warnungen, personalisierte Tipps.
-• Abo-Übersicht — Netflix, Spotify, Swisscom, Sunrise und alle wiederkehrenden Ausgaben im Blick.
+• Predict Coach KI — Monatsende-Prognosen, intelligente Warnungen, persönliche Tipps.
+• Abo-Übersicht — Netflix, Spotify, Swisscom, Sunrise und alle wiederkehrenden Ausgaben.
 • Portfolio & Investments — ETFs, Aktien, Krypto, Cash mit KI-Insights.
-• KI-Sparassistent — Konkrete Einsparungen jede Woche entdecken.
-• Steuer-Optimierer — Vereinfachte Simulationen für Bundes- und Kantonssteuern.
-• LAMal & Prämienverbilligung — Prämien 2026 vergleichen, Franchise optimieren.
-• Belegscanner — Intelligenter OCR: einfach abfotografieren, Budgy klassifiziert automatisch.
-• Sprachliche Eingabe — Ausgaben natürlich diktieren über Siri / iOS-Kurzbefehle.
-• Familie & Gruppen — Ausgaben mit Angehörigen teilen, Rückzahlungen automatisch berechnet.
+• KI-Sparassistent — Konkrete Einsparungen jede Woche.
+• Steuer-Optimierer — Vereinfachte Bundes- und Kantonssteuer-Simulationen.
+• Krankenkasse & Prämienverbilligung — Prämien 2026 vergleichen, Franchise optimieren.
+• Belegscanner — Intelligenter OCR: abfotografieren, Budgy sortiert automatisch.
+• Spracheingabe — Ausgaben natürlich diktieren via Siri / iOS-Kurzbefehle.
+• Familie & Gruppen — Ausgaben teilen, Rückzahlungen automatisch berechnet.
 • 4 Sprachen — Französisch, Deutsch, Englisch, Italienisch.
 • Dark Mode — Premium-Design, augenfreundlich.
 
 FÜR DIE SCHWEIZ ENTWICKELT
 
-Budgy ist für den Schweizer Alltag konzipiert: CHF, LAMal, kantonale Prämienverbilligung, 13. Monatslohn, QR-Rechnungen, SBB, ÖV. Wechseln Sie zu EUR oder USD mit einem Tipp, wenn Sie reisen.
+Budgy ist für den Schweizer Alltag konzipiert: CHF, LAMal, kantonale Prämienverbilligung, 13. Monatslohn, QR-Rechnungen, SBB, ÖV.
 
 TRANSPARENZ & KONTROLLE
 
-Ihre Finanzdaten werden lokal auf Ihrem Gerät gespeichert. Die optionale Cloud-Synchronisierung ist TLS-verschlüsselt und in Deutschland (EU) gehostet. Keine externe Bankverbindung. Keine Werbung. Kein Datenaustausch mit Dritten.
+Ihre Finanzdaten werden lokal gespeichert. Die optionale Cloud-Synchronisierung ist TLS-verschlüsselt und in Deutschland (EU) gehostet. Keine externe Bankverbindung. Keine Werbung. Kein Datenaustausch mit Dritten.
 
 BUDGY PRO
 
-Alle erweiterten Funktionen freischalten:
 • Unbegrenzte KI (Coach, Sparassistent, Predict)
 • Vollständiger Steuer-Optimierer und Langzeitprognosen
 • Automatischer E-Mail-Import von Rechnungen
@@ -188,9 +192,9 @@ Alle erweiterten Funktionen freischalten:
 BUDGY PRO PREISE
 • Monatlich: CHF 4.90 / Monat
 • Jährlich: CHF 39.90 / Jahr (CHF 3.33 / Monat — 32% sparen)
-• 7 Tage kostenlose Testphase für die erste Anmeldung
+• 7 Tage kostenlose Testphase bei erster Anmeldung
 
-Keine Verpflichtung — jederzeit in den iOS-Einstellungen kündbar. Die Zahlung erfolgt über Ihr Apple-Konto bei Kaufbestätigung. Automatische Verlängerung, sofern nicht 24 Std. vor Ablauf gekündigt.
+Keine Verpflichtung — jederzeit in den iOS-Einstellungen kündbar. Automatische Verlängerung, sofern nicht 24 Std. vor Ablauf gekündigt.
 
 AGB: https://budgy.ch/terms
 Datenschutz: https://budgy.ch/privacy
@@ -209,7 +213,7 @@ budget,ausgaben,finanzen,schweiz,LAMal,steuern,sparen,KI,scanner,QR,CHF,coach,fa
 🎉 Budgy 3.8.0 — Die offizielle App Store-Version ist da!
 
 NEUES
-• Familie & Gruppen: Teilen Sie Ausgaben mit Ihren Angehörigen per einfachem Einladungscode.
+• Familie & Gruppen: Ausgaben mit Ihren Angehörigen per Einladungscode teilen.
 • Optimierte Cloud-Synchronisation: schneller, zuverlässiger, geräteübergreifend.
 • Spracheingabe: Ausgabe per Siri und iOS-Kurzbefehlen diktieren.
 • Vollständige Übersetzung ins Deutsche, Englische und Italienische.
@@ -217,12 +221,12 @@ NEUES
 • Deep-Linking für 1-Klick-Familien-Gruppen-Teilung.
 
 VERBESSERUNGEN
-• Genauere Spracherkennung (natürliche Sprache).
-• LAMal-Vergleich 2026 mit offiziellen Priminfo-Daten aktualisiert.
+• Genauere Spracherkennung.
+• LAMal-Vergleich 2026 mit offiziellen Priminfo-Daten.
 • Bessere Performance bei grossen Datenbanken.
 • Anzeigekorrekturen auf iPhone 15/16 Pro Max.
 
-Vielen Dank für Ihr Vertrauen und Ihr Feedback! Schreiben Sie uns an hello@budgy.ch für Verbesserungsvorschläge.
+Danke für Ihr Vertrauen! Schreiben Sie uns an hello@budgy.ch.
 ```
 
 ---
@@ -252,13 +256,13 @@ Every month, Budgy shows you at a glance how much you truly have left to spend, 
 
 KEY FEATURES
 
-• Clear dashboard — Your available balance, income and commitments in one place.
+• Clear dashboard — Available balance, income and commitments in one place.
 • Budgy Financial Score — Instantly rate your budget health from 0 to 100.
 • Predict AI Coach — End-of-month forecasts, smart alerts, tailored advice.
-• Subscription tracker — Spot Netflix, Spotify, Swisscom, Sunrise and every recurring expense.
+• Subscription tracker — Spot Netflix, Spotify, Swisscom and every recurring expense.
 • Portfolio & investments — Track ETFs, stocks, crypto and cash with AI insights.
 • AI Money Saver — Discover concrete savings every week.
-• Tax optimizer — Simplified simulations for federal and cantonal taxes.
+• Tax optimizer — Simplified federal and cantonal tax simulations.
 • Health insurance & subsidies — Compare 2026 premiums, verify subsidies, optimize your excess.
 • Receipt scanner — Smart OCR: frame it, Budgy sorts it automatically.
 • Voice input — Dictate expenses naturally via Siri / iOS Shortcuts.
@@ -268,7 +272,7 @@ KEY FEATURES
 
 BUILT FOR SWITZERLAND
 
-Budgy is designed for Swiss daily life: CHF, LAMal, cantonal subsidies, 13th salary, QR-bills, SBB, public transport. Switch to EUR or USD with one tap when travelling.
+Budgy is designed for Swiss daily life: CHF, LAMal, cantonal subsidies, 13th salary, QR-bills, SBB, public transport.
 
 TRANSPARENCY & CONTROL
 
@@ -276,7 +280,6 @@ Your financial data is stored locally on your device. Optional cloud sync is TLS
 
 BUDGY PRO
 
-Unlock all advanced features:
 • Unlimited AI (Coach, Money Saver, Predict)
 • Complete tax optimizer and long-term forecasts
 • Automatic e-mail invoice import
@@ -289,7 +292,7 @@ BUDGY PRO PRICES
 • Annual: CHF 39.90 / year (CHF 3.33 / month — save 32%)
 • 7-day free trial for first subscription
 
-No commitment — cancel any time in iOS Settings. Payment is charged to your Apple account on purchase confirmation. Auto-renews unless cancelled 24h before renewal.
+No commitment — cancel any time in iOS Settings. Auto-renews unless cancelled 24h before renewal.
 
 Terms of Use: https://budgy.ch/terms
 Privacy Policy: https://budgy.ch/privacy
@@ -308,7 +311,7 @@ budget,expenses,finance,swiss,health,tax,savings,AI,scanner,QR,CHF,coach,family,
 🎉 Budgy 3.8.0 — The official App Store release is here!
 
 WHAT'S NEW
-• Family & Groups: share expenses with loved ones via a simple invite code.
+• Family & Groups: share expenses via a simple invite code.
 • Optimized Cloud Sync: faster, more reliable, multi-device.
 • Voice input: dictate an expense via Siri and iOS Shortcuts.
 • Full translation in German, English and Italian.
@@ -316,12 +319,12 @@ WHAT'S NEW
 • Deep-linking for 1-tap family group sharing.
 
 IMPROVEMENTS
-• More accurate speech recognition (natural language).
+• More accurate speech recognition.
 • 2026 LAMal comparator updated with official Priminfo data.
 • Better performance on large databases.
 • Display fixes on iPhone 15/16 Pro Max.
 
-Thanks for your trust and feedback! Drop us a line at hello@budgy.ch with any suggestions.
+Thanks for your trust! Drop us a line at hello@budgy.ch.
 ```
 
 ---
@@ -351,31 +354,30 @@ Ogni mese, Budgy ti mostra a colpo d'occhio quanto ti resta davvero da spendere,
 
 FUNZIONI PRINCIPALI
 
-• Dashboard chiara — Il tuo saldo disponibile, entrate e impegni, tutto in un unico posto.
-• Punteggio finanziario Budgy — Un voto da 0 a 100 per valutare la salute del tuo budget.
+• Dashboard chiara — Saldo disponibile, entrate e impegni in un unico posto.
+• Punteggio finanziario Budgy — Voto da 0 a 100 sulla salute del tuo budget.
 • Coach Predict IA — Previsioni di fine mese, avvisi intelligenti, consigli personalizzati.
-• Tracker abbonamenti — Individua Netflix, Spotify, Swisscom, Sunrise e ogni spesa ricorrente.
-• Portafoglio & investimenti — Segui ETF, azioni, crypto, cash con insights IA.
+• Tracker abbonamenti — Netflix, Spotify, Swisscom e ogni spesa ricorrente.
+• Portafoglio & investimenti — ETF, azioni, crypto, cash con insights IA.
 • Risparmiatore IA — Trova risparmi concreti ogni settimana.
 • Ottimizzatore tasse — Simulazioni federali e cantonali semplificate.
-• LAMal & sussidi — Confronta le primes 2026, verifica i sussidi, ottimizza la franchigia.
+• LAMal & sussidi — Confronta le primes 2026, ottimizza la franchigia.
 • Scanner scontrini — OCR smart: inquadra, Budgy classifica automaticamente.
 • Input vocale — Detta le spese in linguaggio naturale via Siri / Comandi rapidi iOS.
-• Famiglia & Gruppi — Condividi le spese con i tuoi cari, rimborsi calcolati automaticamente.
+• Famiglia & Gruppi — Condividi le spese, rimborsi calcolati automaticamente.
 • 4 lingue — Francese, Tedesco, Inglese, Italiano.
-• Modalità scura — Interfaccia premium, riposante per gli occhi.
+• Modalità scura — Interfaccia premium.
 
 PROGETTATA PER LA SVIZZERA
 
-Budgy è pensata per il quotidiano svizzero: CHF, LAMal, sussidi cantonali, 13ª mensilità, fatture QR, FFS, trasporti pubblici. Passa a EUR o USD con un tap se viaggi.
+Budgy è pensata per il quotidiano svizzero: CHF, LAMal, sussidi cantonali, 13ª mensilità, fatture QR, FFS, trasporti pubblici.
 
 TRASPARENZA & CONTROLLO
 
-I tuoi dati finanziari sono salvati localmente sul dispositivo. La sincronizzazione cloud (opzionale) è cifrata TLS e ospitata in Germania (UE). Nessun collegamento bancario esterno. Nessuna pubblicità. Nessuna condivisione con terzi.
+I tuoi dati finanziari sono salvati localmente. La sincronizzazione cloud (opzionale) è cifrata TLS e ospitata in Germania (UE). Nessun collegamento bancario esterno. Nessuna pubblicità. Nessuna condivisione con terzi.
 
 BUDGY PRO
 
-Sblocca tutte le funzionalità avanzate:
 • IA illimitata (Coach, Risparmiatore, Predict)
 • Ottimizzatore tasse completo e previsioni a lungo termine
 • Importazione automatica fatture via e-mail
@@ -388,7 +390,7 @@ PREZZI BUDGY PRO
 • Annuale: CHF 39.90 / anno (CHF 3.33 / mese — risparmi 32%)
 • 7 giorni di prova gratuita per la prima sottoscrizione
 
-Nessun impegno — annulla in 1 clic dalle Impostazioni iOS. Il pagamento viene addebitato sull'account Apple alla conferma dell'acquisto. Rinnovo automatico salvo disdetta 24h prima della scadenza.
+Nessun impegno — annulla in 1 clic dalle Impostazioni iOS. Rinnovo automatico salvo disdetta 24h prima della scadenza.
 
 Condizioni d'uso: https://budgy.ch/terms
 Privacy: https://budgy.ch/privacy
@@ -407,7 +409,7 @@ budget,spese,finanza,svizzera,LAMal,tasse,risparmio,IA,scanner,QR,CHF,coach,fami
 🎉 Budgy 3.8.0 — La versione ufficiale App Store è arrivata!
 
 NOVITÀ
-• Famiglia & Gruppi: condividi le spese con i tuoi cari tramite semplice codice invito.
+• Famiglia & Gruppi: condividi le spese via semplice codice invito.
 • Sincronizzazione Cloud ottimizzata: più veloce, più affidabile, multi-dispositivo.
 • Input vocale: detta una spesa via Siri e Comandi rapidi iOS.
 • Traduzione completa in Tedesco, Inglese e Italiano.
@@ -415,179 +417,311 @@ NOVITÀ
 • Deep-linking per condivisione gruppo famiglia con 1 tap.
 
 MIGLIORAMENTI
-• Riconoscimento vocale più preciso (linguaggio naturale).
+• Riconoscimento vocale più preciso.
 • Confronto LAMal 2026 aggiornato con dati ufficiali Priminfo.
 • Migliori prestazioni su grandi database.
 • Correzioni visive su iPhone 15/16 Pro Max.
 
-Grazie per la tua fiducia e i tuoi feedback! Scrivici a hello@budgy.ch per suggerimenti.
+Grazie per la tua fiducia! Scrivici a hello@budgy.ch.
 ```
 
 ---
 
-## 🍏 APP REVIEW NOTES (Apple internal, French — accepté par Apple)
+## 🍏 APP REVIEW NOTES (Notes for Apple — champ *App Review Information → Notes*)
 
 ```
 NOTES POUR APPLE REVIEW — BUDGY v3.8.0 (Build 70)
 
-Contexte
+CONTEXTE
 Budgy est une application suisse de gestion budgétaire personnelle.
-100% privée (aucune publicité, aucune revente, aucune connexion bancaire).
+100% privée : aucune publicité, aucune revente, aucune connexion bancaire externe.
 Bundle: com.budgy.ch.budgy · Localisations: fr, de, en, it.
+Cible: iPhone 15+, iPad, iOS 15+.
 
-Accès de test
-Aucun compte de démonstration nécessaire pour tester les fonctionnalités
-principales. L'app fonctionne 100% hors-ligne dès l'installation.
-Toutes les fonctions cœur (transactions, budgets, scanner OCR, LAMal, impôts)
-sont accessibles sans compte.
+TEST SANS COMPTE
+L'app fonctionne 100% hors-ligne dès l'installation. Toutes les fonctions cœur
+(budgets, transactions, scanner OCR, LAMal, impôts, statistiques) sont accessibles
+sans création de compte.
 
-Pour tester les fonctions Cloud & Famille (facultatives) :
-- Créer un compte in-app avec n'importe quel e-mail
-- La confirmation e-mail est instantanée (aucun code SMS)
+COMPTE DE TEST FOURNI (pour tester Cloud Sync & Famille & Groupes)
+• E-mail : e2e-test@budgy.ch
+• Mot de passe : Test1234!
+• Le compte est déjà provisionné dans Supabase et prêt à l'emploi.
+• Aucune vérification e-mail ou SMS requise.
 
-Compte de test disponible si demandé :
-E-mail : e2e-test@budgy.ch
-Mot de passe : Test@2026
+COMMENT TESTER LE PREMIUM (Budgy Pro)
+1. Ouvrir l'app → onglet "Plus" → "Passer à Budgy Pro"
+2. Le paywall affiche 2 plans : Mensuel (CHF 4.90/mois) et Annuel (CHF 39.90/an)
+3. Un essai gratuit de 7 jours est proposé lors de la première souscription
+4. Le bouton "Restaurer" est présent en bas du paywall
+5. Les liens "Conditions d'utilisation" et "Politique de confidentialité" sont
+   présents et cliquables sous le paywall
 
-Achats intégrés (Budgy Pro)
-- Budgy Pro Mensuel : CHF 4.90 / mois (id: budgy_pro_monthly)
-- Budgy Pro Annuel : CHF 39.90 / an (id: budgy_pro_annual)
-- 7 jours d'essai gratuit sur la première souscription
-- Le bouton "Restaurer" est présent sur le paywall (capture jointe)
-- Le paywall affiche prix, durée, mention de renouvellement auto,
-  Conditions d'utilisation (https://budgy.ch/terms) et Politique de
-  confidentialité (https://budgy.ch/privacy)
+COMMENT TESTER LA RESTAURATION DES ACHATS
+Paywall → bouton "Restaurer" (visible en bas). Requiert d'être connecté à un
+identifiant Apple ayant déjà réalisé l'achat en environnement Sandbox.
 
-Suppression du compte
-Disponible directement dans l'app :
-Plus → Paramètres → Données & confidentialité → Zone dangereuse →
-« Supprimer mes données ». Ou par e-mail à support@budgy.ch.
-Procédure détaillée : https://budgy.ch/delete-account
+COMMENT TESTER LA SUPPRESSION DU COMPTE
+Onglet "Plus" → "Paramètres" → section "Données & confidentialité" →
+"⚠️ Zone dangereuse" → "Supprimer mes données". Confirmation immédiate.
+Procédure alternative documentée sur https://budgy.ch/delete-account.
 
-Fonctions IA
-Les fonctions IA (Coach, Économiseur, Predict, OCR) utilisent notre
-passerelle Emergent (relais vers OpenAI/Google). Aucune donnée
-d'identification personnelle n'est transmise. TLS 1.3.
+FONCTIONS À TESTER EN PRIORITÉ
+• Écran d'accueil : Budgy Score + Disponible ce mois
+• Ajouter une dépense (+ bouton "B" central)
+• Scanner un reçu (nécessite autorisation caméra)
+• Ajout vocal (nécessite autorisation micro + reconnaissance vocale)
+• Comparateur LAMal (Plus → LAMal & Subsides)
+• Optimiseur d'impôts (Plus → Optimiseur d'impôts)
+• Famille & Groupes (Plus → Famille & Groupes → créer un groupe → générer un code)
 
-Permissions demandées (justifications in-app claires)
-- Camera : scanner de reçus (facultatif)
-- Photos : joindre une photo à une transaction (facultatif)
-- Microphone + Speech Recognition : saisie vocale (facultatif)
-- Face ID : verrouillage biométrique optionnel
+PERMISSIONS DEMANDÉES (toutes justifiées par un besoin utilisateur)
+• Camera : scanner de reçus (facultatif)
+• Photos : joindre une photo à une transaction (facultatif)
+• Microphone + Speech Recognition : saisie vocale (facultatif)
+• Face ID : verrouillage biométrique optionnel
 
-Support Apple
-Toutes les URLs sont opérationnelles :
-- https://budgy.ch (marketing)
-- https://budgy.ch/support
-- https://budgy.ch/privacy
-- https://budgy.ch/terms
-- https://budgy.ch/delete-account
+DONNÉES ET IA
+Les fonctions IA (Coach, Économiseur, Predict, OCR) transitent par notre
+passerelle Emergent (relais vers OpenAI/Google). Aucune donnée d'identification
+personnelle (nom, e-mail, IBAN) n'est transmise. TLS 1.3 obligatoire.
+Base de données Supabase auto-hébergée en Allemagne (UE).
+
+URLS PUBLIQUES (toutes accessibles sans connexion)
+• https://budgy.ch (Marketing)
+• https://budgy.ch/support
+• https://budgy.ch/privacy
+• https://budgy.ch/terms
+• https://budgy.ch/delete-account
+
+CONTACT
+E-mail : hello@budgy.ch
+Support : support@budgy.ch
 
 Merci pour votre revue !
-Contact : hello@budgy.ch
 ```
 
 ---
 
-## ✅ CHECKLIST APP PRIVACY (App Store Connect > App Privacy)
+## 💳 IN-APP PURCHASES — Configuration exacte
 
-**Réponse à la question « Do you or your third-party partners collect data from this app? »** → **YES** (pour les fonctionnalités Cloud / IA optionnelles uniquement).
+| Champ | Valeur exacte |
+|---|---|
+| **Subscription Group Name** | `Budgy Premium` |
+| **Product 1 — Reference Name** | `Budgy Pro Monthly` |
+| **Product 1 — Product ID** | `com.budgy.ch.budgy.monthly` |
+| **Product 1 — Duration** | 1 Month |
+| **Product 1 — Price (CH)** | **CHF 4.90** |
+| **Product 2 — Reference Name** | `Budgy Pro Annual` |
+| **Product 2 — Product ID** | `com.budgy.ch.budgy.annual` |
+| **Product 2 — Duration** | 1 Year |
+| **Product 2 — Price (CH)** | **CHF 39.90** |
+| **Introductory Offer** | Free trial · 7 days · New customers only (first-time subscribers) |
+| **Family Sharing** | Recommandé : **désactivé** (données financières personnelles) |
+| **Localizations** | fr, de, en, it (voir chaînes ci-dessous) |
 
-### Data types collected
+### Localizations IAP (à saisir pour chaque produit)
 
-| Catégorie | Collectée ? | Liée à l'utilisateur ? | Utilisée pour tracking ? | Finalité |
+**Product 1 · Monthly**
+| Langue | Display Name | Description |
+|---|---|---|
+| 🇫🇷 fr | Budgy Pro — Mensuel | Débloquez l'IA illimitée, l'optimiseur d'impôts, l'import e-mail, l'export PDF illimité et la synchronisation multi-appareils. Renouvellement mensuel. |
+| 🇩🇪 de | Budgy Pro — Monatlich | Schalten Sie unbegrenzte KI, Steuer-Optimierer, E-Mail-Import, unbegrenzten PDF-Export und Multi-Geräte-Sync frei. Monatliche Verlängerung. |
+| 🇬🇧 en | Budgy Pro — Monthly | Unlock unlimited AI, tax optimizer, e-mail import, unlimited PDF export and multi-device sync. Monthly renewal. |
+| 🇮🇹 it | Budgy Pro — Mensile | Sblocca IA illimitata, ottimizzatore tasse, importazione e-mail, export PDF illimitato e sync multi-dispositivo. Rinnovo mensile. |
+
+**Product 2 · Annual**
+| Langue | Display Name | Description |
+|---|---|---|
+| 🇫🇷 fr | Budgy Pro — Annuel | Toutes les fonctionnalités Pro à CHF 3.33/mois (facturé CHF 39.90/an). Économisez 32% vs mensuel. Renouvellement annuel. |
+| 🇩🇪 de | Budgy Pro — Jährlich | Alle Pro-Funktionen für CHF 3.33/Monat (CHF 39.90/Jahr). 32% sparen vs. monatlich. Jährliche Verlängerung. |
+| 🇬🇧 en | Budgy Pro — Annual | All Pro features for CHF 3.33/month (billed CHF 39.90/year). Save 32% vs monthly. Yearly renewal. |
+| 🇮🇹 it | Budgy Pro — Annuale | Tutte le funzioni Pro a CHF 3.33/mese (fatturato CHF 39.90/anno). Risparmia il 32%. Rinnovo annuale. |
+
+---
+
+## 🔒 APP PRIVACY — Réponses exactes pour App Store Connect
+
+> Question globale : **« Do you or your third-party partners collect data from this app? »**
+> **Réponse : YES**
+
+### Tableau complet (à cocher tel quel dans App Store Connect)
+
+| Catégorie Apple | Collectée ? | Liée à l'identité ? | Utilisée pour tracking ? | Finalité (App Functionality) |
 |---|---|---|---|---|
-| **Contact Info → Email address** | ✅ Yes | ✅ Yes | ❌ No | App Functionality (authentification, réinit. mot de passe) |
-| **Contact Info → Name** | ⚠️ Yes (optionnel) | ✅ Yes | ❌ No | App Functionality (personnalisation) |
-| **Contact Info → Phone Number** | ❌ No | – | – | – |
-| **Contact Info → Physical Address** | ❌ No | – | – | – |
-| **Contact Info → Other User Contact Info** | ❌ No | – | – | – |
-| **Health & Fitness** | ❌ No | – | – | – |
-| **Financial Info → Payment Info** | ❌ No | – | – | (Gérée par Apple / RevenueCat côté StoreKit) |
-| **Financial Info → Credit Info** | ❌ No | – | – | – |
-| **Financial Info → Other Financial Info** | ✅ Yes | ✅ Yes | ❌ No | App Functionality (budgets, transactions, objectifs — saisis par l'utilisateur, stockés localement + cloud optionnel) |
-| **Location → Precise Location** | ❌ No | – | – | – |
-| **Location → Coarse Location** | ❌ No | – | – | – |
-| **Sensitive Info** | ❌ No | – | – | – |
-| **Contacts** | ❌ No | – | – | – |
-| **User Content → Emails or Text Messages** | ❌ No | – | – | – |
-| **User Content → Photos or Videos** | ✅ Yes | ✅ Yes | ❌ No | App Functionality (photos de reçus/factures attachées aux transactions, stockage local + cloud optionnel) |
-| **User Content → Audio Data** | ❌ No | – | – | (La reconnaissance vocale utilise l'API système Apple, aucun audio n'est envoyé ni stocké par Budgy) |
-| **User Content → Customer Support** | ✅ Yes | ✅ Yes | ❌ No | App Functionality (e-mails support@budgy.ch) |
-| **User Content → Other User Content** | ✅ Yes | ✅ Yes | ❌ No | App Functionality (notes texte attachées aux transactions) |
-| **Browsing History** | ❌ No | – | – | – |
-| **Search History** | ❌ No | – | – | – |
-| **Identifiers → User ID** | ✅ Yes | ✅ Yes | ❌ No | App Functionality (UUID Supabase Auth) |
-| **Identifiers → Device ID** | ❌ No | – | – | – |
-| **Purchases → Purchase History** | ✅ Yes | ✅ Yes | ❌ No | App Functionality (statut abonnement Budgy Pro) |
-| **Usage Data → Product Interaction** | ❌ No | – | – | (Aucun analytics : ni Firebase, ni Segment, ni Amplitude) |
-| **Usage Data → Advertising Data** | ❌ No | – | – | (Aucune pub) |
-| **Usage Data → Other Usage Data** | ❌ No | – | – | – |
-| **Diagnostics → Crash Data** | ❌ No | – | – | (Non implémenté à ce jour) |
-| **Diagnostics → Performance Data** | ❌ No | – | – | – |
-| **Diagnostics → Other Diagnostic Data** | ❌ No | – | – | – |
-| **Other Data** | ❌ No | – | – | – |
+| Contact Info · Email address | ✅ **Yes** | ✅ Yes | ❌ No | App Functionality (auth) |
+| Contact Info · Name | ✅ **Yes** *(optionnel)* | ✅ Yes | ❌ No | App Functionality (personnalisation) |
+| Contact Info · Phone Number | ❌ No | — | — | — |
+| Contact Info · Physical Address | ❌ No | — | — | — |
+| Contact Info · Other User Contact Info | ❌ No | — | — | — |
+| Health & Fitness · Health | ❌ No | — | — | — |
+| Health & Fitness · Fitness | ❌ No | — | — | — |
+| Financial Info · Payment Info | ❌ No | — | — | *(géré par Apple/StoreKit)* |
+| Financial Info · Credit Info | ❌ No | — | — | — |
+| Financial Info · Other Financial Info | ✅ **Yes** | ✅ Yes | ❌ No | App Functionality (budgets/transactions saisis par l'utilisateur) |
+| Location · Precise Location | ❌ No | — | — | — |
+| Location · Coarse Location | ❌ No | — | — | — |
+| Sensitive Info | ❌ No | — | — | — |
+| Contacts | ❌ No | — | — | — |
+| User Content · Emails or Text Messages | ❌ No | — | — | — |
+| User Content · Photos or Videos | ✅ **Yes** | ✅ Yes | ❌ No | App Functionality (photos de reçus attachées aux transactions) |
+| User Content · Audio Data | ❌ No | — | — | *(la reconnaissance vocale utilise l'API système iOS, aucun audio n'est envoyé/stocké par Budgy)* |
+| User Content · Customer Support | ✅ **Yes** | ✅ Yes | ❌ No | App Functionality (e-mails support@budgy.ch) |
+| User Content · Other User Content | ✅ **Yes** | ✅ Yes | ❌ No | App Functionality (notes texte sur transactions) |
+| Browsing History | ❌ No | — | — | — |
+| Search History | ❌ No | — | — | — |
+| Identifiers · User ID | ✅ **Yes** | ✅ Yes | ❌ No | App Functionality (UUID Supabase Auth) |
+| Identifiers · Device ID | ❌ No | — | — | — |
+| Purchases · Purchase History | ✅ **Yes** | ✅ Yes | ❌ No | App Functionality (statut Budgy Pro) |
+| Usage Data · Product Interaction | ❌ No | — | — | *(aucun analytics)* |
+| Usage Data · Advertising Data | ❌ No | — | — | *(aucune pub)* |
+| Usage Data · Other Usage Data | ❌ No | — | — | — |
+| Diagnostics · Crash Data | ❌ No | — | — | *(non implémenté)* |
+| Diagnostics · Performance Data | ❌ No | — | — | — |
+| Diagnostics · Other Diagnostic Data | ❌ No | — | — | — |
+| Surroundings · Environment Scanning | ❌ No | — | — | — |
+| Body · Body & Head Movement | ❌ No | — | — | — |
+| Other Data | ❌ No | — | — | — |
 
-### Tracking
-> **Answer: NO** — Budgy ne traque pas l'utilisateur à travers d'autres apps ou sites, et n'utilise aucun SDK publicitaire.
+### Réponse tracking
+> **« Do you use data from this app to track users? »** → **NO**
 
-### Data Use Summary (pour l'affichage privacy sur App Store)
-- **App Functionality** : Financial Info, User Content, Email, Purchases, User ID
-- **Product Personalization** : (aucun)
-- **Analytics** : (aucun)
-- **Advertising** : (aucun)
-- **Developer's Advertising or Marketing** : (aucun)
-- **Other Purposes** : (aucun)
-
----
-
-## 📸 APPS ATTACHÉS À CETTE SOUMISSION
-
-### iPhone Screenshots (7 × 4 langues = 28 images)
-- `/app/app-store-assets/ios/fr/iphone/01..07_budgy_fr_iphone_6.9.png` (1284 × 2778)
-- `/app/app-store-assets/ios/de/iphone/01..07_budgy_de_iphone_6.9.png`
-- `/app/app-store-assets/ios/en/iphone/01..07_budgy_en_iphone_6.9.png`
-- `/app/app-store-assets/ios/it/iphone/01..07_budgy_it_iphone_6.9.png`
-
-### iPad Screenshots (7 × 4 langues = 28 images)
-- `/app/app-store-assets/ios/{lang}/ipad/01..07_budgy_{lang}_ipad_13.png` (2064 × 2752)
-
-### Subscription Review Capture
-- `/app/app-store-assets/subscription-review/budgy_paywall_review_fr.png`
+### Data Use Summary (affiché publiquement sur la fiche App Store)
+- **App Functionality** : Contact Info (Email, Name), Financial Info, User Content (Photos, Support, Notes), User ID, Purchases
+- **Analytics** : *(aucun)*
+- **Product Personalization** : *(aucun)*
+- **Advertising** : *(aucun)*
+- **Developer's Advertising or Marketing** : *(aucun)*
+- **Fraud Prevention, Security, and Compliance** : *(aucun)*
+- **Other Purposes** : *(aucun)*
 
 ---
 
-## 🔒 EULA (Custom)
+## 🛂 EXPORT COMPLIANCE, ADVERTISING, TRACKING
 
-Utiliser l'URL Custom EULA dans App Information → General Information :
+### Encryption
+Question : *« Does your app use encryption? »*
+> **Réponse : YES**
+
+Suivi de : *« Does your app qualify for any of the exemptions provided in Category 5, Part 2 of the U.S. Export Administration Regulations? »*
+> **Réponse : YES** (chiffrement HTTPS/TLS standard uniquement — exempt)
+
+`ITSAppUsesNonExemptEncryption = false` est déjà présent dans `Info.plist`.
+
+### IDFA (Advertising Identifier)
+Question : *« Does this app use the Advertising Identifier (IDFA)? »*
+> **Réponse : NO**
+
+### App Tracking Transparency (ATT)
+Question : *« Do you track users? »*
+> **Réponse : NO**
+
+Aucun `NSUserTrackingUsageDescription` n'est déclaré (correct).
+
+### Content Rights
+> **Réponse : Does not contain, show, or access third-party content**
+
+*(Les données de primes LAMal Priminfo et les barèmes fiscaux sont des données publiques, aucune licence requise.)*
+
+---
+
+## ✅ CHECKLIST FINALE — Ordre exact dans App Store Connect
+
+Suivez cet ordre exact. Chaque étape prend 1-5 minutes.
+
+### 📦 Phase 1 — App Information (page globale)
+1. Ouvrir **App Store Connect → My Apps → Budgy**
+2. Onglet **App Information** :
+   - Primary Category : `Finance`
+   - Secondary Category : `Productivity`
+   - Content Rights : cocher *"Does not contain, show, or access third-party content"*
+   - Age Rating : cliquer *Edit* → répondre **Non** à toutes les questions → sauvegarder (résultat = **4+**)
+   - Custom EULA : cocher *"Use custom EULA"* → coller `https://budgy.ch/terms`
+3. Sauvegarder
+
+### 💰 Phase 2 — Pricing and Availability
+4. Onglet **Pricing and Availability** :
+   - Base Price : `Free`
+   - Availability : cocher *"Available in all countries and regions"* (ou selon votre choix)
+5. Sauvegarder
+
+### 🛒 Phase 3 — Subscriptions (In-App Purchases)
+6. Onglet **Subscriptions** :
+   - Créer le Subscription Group `Budgy Premium` (si pas fait)
+   - Product `com.budgy.ch.budgy.monthly` : vérifier prix `CHF 4.90`, durée `1 Month`, localisations FR/DE/EN/IT
+   - Product `com.budgy.ch.budgy.annual` : vérifier prix `CHF 39.90`, durée `1 Year`, localisations FR/DE/EN/IT
+   - **Introductory Offer** : cocher *Free · 7 days · New Customers Only* pour les 2 produits
+   - Sauvegarder → statut doit être **"Ready to Submit"** pour chaque produit
+   - Attacher les 2 IAP à la nouvelle version 3.8.0 (Build 70)
+
+### 📱 Phase 4 — Version 3.8.0 (créer la nouvelle version)
+7. Onglet **+ Version or Platform → iOS** → saisir `3.8.0`
+8. Sélectionner la langue par défaut : **Français (France)**
+
+### 🖼️ Phase 5 — Screenshots
+9. Ajouter les Screenshots **iPhone 6.5"** (1284×2778) → dossier `/app/app-store-assets/ios/fr/iphone-6.5/` (7 images)
+10. Ajouter les Screenshots **iPhone 6.9"** (1320×2868) → dossier `/app/app-store-assets/ios/fr/iphone-6.9/` (7 images)
+11. Ajouter les Screenshots **iPad 13"** (2064×2752) → dossier `/app/app-store-assets/ios/fr/ipad/` (7 images)
+12. Répéter pour Deutsch (DE), English (EN), Italiano (IT) — chaque langue nécessite les 3 tailles
+
+### ✍️ Phase 6 — Metadata (par langue)
+13. Pour chaque langue (FR, DE, EN, IT), copier depuis ce document :
+    - **Promotional Text**
+    - **Description**
+    - **Keywords**
+    - **Support URL** : `https://budgy.ch/support`
+    - **Marketing URL** : `https://budgy.ch`
+    - **App Name** (30 car. max)
+    - **Subtitle** (30 car. max)
+
+### 🆕 Phase 7 — What's New in Version
+14. Coller le What's New dans chaque langue
+
+### 📦 Phase 8 — Sélection du Build
+15. Section **Build** → cliquer **+ Select a build before you submit**
+16. Choisir **3.8.0 (70)** dans la liste TestFlight
+17. Répondre aux Export Compliance : YES → YES (exempt HTTPS/TLS)
+
+### 🔒 Phase 9 — App Privacy
+18. Menu latéral gauche → **App Privacy**
+19. Répondre YES à *"Do you or your third-party partners collect data from this app?"*
+20. Cocher les catégories exactes du tableau App Privacy ci-dessus
+21. Répondre NO à *"Do you use data from this app to track users?"*
+22. Publier
+
+### 📞 Phase 10 — App Review Information
+23. Section **App Review Information** :
+    - First Name / Last Name : *(vos coordonnées)*
+    - Phone : *(votre numéro)*
+    - Email : `hello@budgy.ch`
+    - **Sign-in required** : ✅ YES → E-mail `e2e-test@budgy.ch` · Mot de passe `Test1234!`
+    - **Notes** : coller le bloc "Notes for Apple" ci-dessus
+    - **Attachment** : joindre `budgy_paywall_review_fr.png` depuis `/app/app-store-assets/subscription-review/`
+
+### 🚀 Phase 11 — Submit
+24. Bouton **Save** en haut à droite
+25. Bouton **Add for Review**
+26. Bouton **Submit for Review**
+27. Attente typique Apple Review : 24-72h
+
+---
+
+## 📎 EMPLACEMENTS DES FICHIERS
+
 ```
-https://budgy.ch/terms
+/app/app-store-assets/
+├── APP_STORE_SUBMISSION_FINAL.md        ← Ce document
+├── budgy_appstore_submission_v3.8.0.zip ← ZIP complet (tout dedans)
+├── ios/
+│   ├── fr/
+│   │   ├── iphone-6.5/ (7 PNG · 1284×2778)
+│   │   ├── iphone-6.9/ (7 PNG · 1320×2868)
+│   │   └── ipad/       (7 PNG · 2064×2752)
+│   ├── de/ · en/ · it/  (structure identique)
+└── subscription-review/
+    └── budgy_paywall_review_fr.png (1284×2778 · attach pour Apple Review)
 ```
-Cocher également : *"I have read and agree to the Apple Media Services Terms and Conditions"* (défaut) OU cocher *Use Custom EULA* pour appliquer notre URL.
 
 ---
 
-## 🎯 VERSION & BUILD
-
-| Champ | Valeur |
-|---|---|
-| **Marketing Version** | `3.8.0` |
-| **Build Number** | `70` |
-| **Minimum iOS** | `15.0` |
-| **Devices** | `iPhone`, `iPad` (Universal) |
-| **Encryption Declaration** | `Does not use encryption` OR `Uses only exempt encryption (HTTPS/TLS)` → ITSAppUsesNonExemptEncryption = false (déjà dans Info.plist) |
-
----
-
-## 📞 CONTACT INFORMATION (Apple review team)
-
-| Champ | Valeur |
-|---|---|
-| **First Name** | *(propriétaire du compte Apple Developer)* |
-| **Last Name** | *(propriétaire du compte Apple Developer)* |
-| **Phone** | *(numéro personnel — non affiché publiquement)* |
-| **Email** | `hello@budgy.ch` |
-
----
-
-**🚀 Prêt pour la soumission. Copier chaque section dans le champ correspondant d'App Store Connect.**
+**🎯 STATUS : Prêt pour soumission. Cliquer *Submit for Review* dans App Store Connect.**

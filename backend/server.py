@@ -489,8 +489,12 @@ class JoinFamilyRequest(BaseModel):
 
 
 @app.post("/api/family/create")
-async def create_family(req: CreateFamilyRequest):
-    """Create a family group with an 8-char invitation code"""
+async def create_family(
+    req: CreateFamilyRequest,
+    user: AuthenticatedUser = Depends(require_user),
+):
+    """Create a family group with an 8-char invitation code (legacy in-memory).
+    v3.9.0: requires authentication; owner_id derived from JWT."""
     code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
     while code in family_groups:
         code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
@@ -498,9 +502,9 @@ async def create_family(req: CreateFamilyRequest):
     family_groups[code] = {
         "code": code,
         "name": req.family_name,
-        "owner_id": req.owner_id,
+        "owner_id": user.user_id,
         "owner_name": req.owner_name,
-        "members": [{"id": req.owner_id, "name": req.owner_name, "role": "admin", "joined": datetime.now(timezone.utc).isoformat()}],
+        "members": [{"id": user.user_id, "name": req.owner_name, "role": "admin", "joined": datetime.now(timezone.utc).isoformat()}],
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -508,22 +512,25 @@ async def create_family(req: CreateFamilyRequest):
 
 
 @app.post("/api/family/join")
-async def join_family(req: JoinFamilyRequest):
-    """Join a family group with invitation code"""
+async def join_family(
+    req: JoinFamilyRequest,
+    user: AuthenticatedUser = Depends(require_user),
+):
+    """Join a family group with invitation code (legacy in-memory).
+    v3.9.0: requires authentication; user_id derived from JWT."""
     if req.code not in family_groups:
-        raise HTTPException(status_code=404, detail="Code d'invitation invalide")
+        raise HTTPException(status_code=404, detail="invite_not_found")
 
     family = family_groups[req.code]
 
-    # Check if already a member
-    if any(m["id"] == req.user_id for m in family["members"]):
-        raise HTTPException(status_code=400, detail="Vous êtes déjà membre de cette famille")
+    if any(m["id"] == user.user_id for m in family["members"]):
+        raise HTTPException(status_code=400, detail="already_member")
 
     if len(family["members"]) >= 6:
-        raise HTTPException(status_code=400, detail="Famille complète (max 6 membres)")
+        raise HTTPException(status_code=400, detail="family_full")
 
     family["members"].append({
-        "id": req.user_id,
+        "id": user.user_id,
         "name": req.user_name,
         "role": "member",
         "joined": datetime.now(timezone.utc).isoformat(),
@@ -533,11 +540,18 @@ async def join_family(req: JoinFamilyRequest):
 
 
 @app.get("/api/family/{code}")
-async def get_family(code: str):
-    """Get family group info"""
+async def get_family(
+    code: str,
+    user: AuthenticatedUser = Depends(require_user),
+):
+    """Get family group info (legacy in-memory).
+    v3.9.0: requires authentication; caller must be a member of the family."""
     if code not in family_groups:
-        raise HTTPException(status_code=404, detail="Famille non trouvée")
-    return {"family": family_groups[code]}
+        raise HTTPException(status_code=404, detail="family_not_found")
+    family = family_groups[code]
+    if not any(m.get("id") == user.user_id for m in family.get("members", [])):
+        raise HTTPException(status_code=403, detail="not_a_member")
+    return {"family": family}
 
 
 # ──────────────────────────────────────────────────
@@ -550,8 +564,11 @@ class CheckBudgetRequest(BaseModel):
 
 
 @app.post("/api/alerts/check-budgets")
-async def check_budgets(req: CheckBudgetRequest):
-    """Check budgets and generate alerts"""
+async def check_budgets(
+    req: CheckBudgetRequest,
+    user: AuthenticatedUser = Depends(require_user),
+):
+    """Check budgets and generate alerts. v3.9.0: user_id from JWT."""
     alerts = []
     day_of_month = datetime.now().day
     progress = day_of_month / 30
@@ -602,16 +619,21 @@ async def check_budgets(req: CheckBudgetRequest):
                 "percentage": pct,
             })
 
-    # Store alerts
-    alerts_store[req.user_id] = alerts
+    # Store alerts (v3.9.0: use JWT-derived user_id, never body)
+    alerts_store[user.user_id] = alerts
 
     return {"alerts": alerts, "count": len(alerts)}
 
 
 @app.get("/api/alerts/{user_id}")
-async def get_alerts(user_id: str):
-    """Get stored alerts for a user"""
-    return {"alerts": alerts_store.get(user_id, []), "count": len(alerts_store.get(user_id, []))}
+async def get_alerts(
+    user_id: str,
+    user: AuthenticatedUser = Depends(require_user),
+):
+    """Get stored alerts. v3.9.0 SECURITY: caller can only fetch their own."""
+    if user_id != user.user_id:
+        raise HTTPException(status_code=403, detail="forbidden")
+    return {"alerts": alerts_store.get(user.user_id, []), "count": len(alerts_store.get(user.user_id, []))}
 
 
 
@@ -789,7 +811,8 @@ async def scanner_ocr(
             raw_text=response,
         )
     except Exception as e:
-        return OCRResponse(success=False, error=str(e))
+        log.exception("[ocr] failed: %s", e)
+        return OCRResponse(success=False, error="ocr_failed")
 
 
 # ──────────────────────────────────────────────────
@@ -928,7 +951,8 @@ async def email_parse(
             confidence=conf,
         )
     except Exception as e:
-        return EmailParseResponse(success=False, error=str(e))
+        log.exception("[email_parse] failed: %s", e)
+        return EmailParseResponse(success=False, error="email_parse_failed")
 
 
 # ──────────────────────────────────────────────────
@@ -1772,20 +1796,29 @@ async def iap_restore(
 
 @app.post("/api/iap/webhook/apple")
 @limiter.limit("240/minute")
-async def iap_webhook_apple(request: Request, secret: Optional[str] = _Query(None)):
+async def iap_webhook_apple(
+    request: Request,
+    secret: Optional[str] = _Query(None),
+    x_iap_secret: Optional[str] = _Header(None, alias="X-IAP-Secret"),
+):
     """App Store Server Notifications V2 webhook.
 
     v3.9.0 SECURITY:
     - The IAP_WEBHOOK_SECRET is now REQUIRED (fail closed).
+    - Prefer the X-IAP-Secret header over the ?secret= query param
+      (query strings can be logged by proxies).
+    - Comparison uses hmac.compare_digest (constant time) to prevent timing.
     - The JWS signedPayload is verified using Apple's certificate chain
       (see apple_iap.verify_and_decode_notification).
     - Bundle ID + environment are enforced.
     """
+    import hmac as _hmac
     # 1) Require the shared secret (defense-in-depth in addition to JWS check)
     if not _iap_cfg.webhook_secret:
         _iap_log.error("[iap-webhook] IAP_WEBHOOK_SECRET is not configured — rejecting")
         raise HTTPException(status_code=503, detail="webhook_not_configured")
-    if secret != _iap_cfg.webhook_secret:
+    provided = (x_iap_secret or secret or "").strip()
+    if not provided or not _hmac.compare_digest(provided, _iap_cfg.webhook_secret):
         _iap_log.warning("[iap-webhook] rejected: bad/missing secret")
         raise HTTPException(status_code=401, detail="bad_secret")
 

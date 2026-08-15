@@ -3,7 +3,47 @@
 **Version cible:** Budgy v3.9.0 (Build 71)
 **Contexte:** L'endpoint `https://supabase.budgy.ch/auth/v1/.well-known/jwks.json` retourne actuellement `{"keys":[]}` → Supabase self-hosted utilise encore le JWT legacy HS256. Il faut migrer proprement vers ES256 asymétrique **sans casser** les utilisateurs existants.
 
-**Bonne nouvelle:** La procédure officielle Supabase inclut nativement le legacy HS256 dans le JWKS. **Le fallback est géré par Supabase lui-même**, pas de code custom nécessaire.
+**Bonne nouvelle:** La procédure officielle Supabase inclut nativement le legacy HS256 dans le **JWKS interne inter-services**. Le fallback HS256 reste ainsi accessible aux services Supabase (PostgREST, Realtime, Storage) **sans jamais exposer le secret** sur l'endpoint public.
+
+---
+
+## 🔒 Distinction critique — JWKS interne vs JWKS public
+
+⚠️ **Point de sécurité fondamental à comprendre avant toute action :**
+
+| Aspect | **JWKS interne** (`JWT_JWKS` env) | **JWKS public** (`/.well-known/jwks.json`) |
+|---|---|---|
+| Rôle | Consommé UNIQUEMENT par les services self-hosted (PostgREST, Realtime, Storage, Edge Functions) via variables d'env | Consommé par les **clients externes** (backend Budgy, apps tierces) pour vérifier les JWT |
+| Peut contenir HS256 ? | ✅ OUI temporairement (transition legacy) — le champ `k` reste dans le réseau privé Docker/K8s | ❌ **NON, JAMAIS** — n'importe qui lit cet endpoint |
+| Matériel autorisé | JWK privée EC + JWK publique EC + clé oct (HS256) legacy | UNIQUEMENT clés publiques asymétriques (`kty=EC` ou `kty=RSA` ou `kty=OKP`, sans `d`, `p`, `q`, `dp`, `dq`, `qi`, `k`) |
+| Exposition réseau | Interne, docker network | HTTPS public, Internet |
+
+### ❌ Ce qui NE DOIT JAMAIS apparaître dans `/.well-known/jwks.json`
+
+- `"kty": "oct"` → indique une clé symétrique (leak = forgeage complet de tokens)
+- Champ `"k"` → **c'est le secret HS256 en clair**
+- Champs `"d"`, `"p"`, `"q"`, `"dp"`, `"dq"`, `"qi"` → composantes privées EC/RSA
+- Toute clé privée sous quelque forme que ce soit
+
+### ✅ Ce qui EST autorisé dans `/.well-known/jwks.json`
+
+UNIQUEMENT les champs publics d'une clé asymétrique :
+
+- `kty`: `EC`, `RSA` ou `OKP`
+- `crv`: `P-256`, `P-384`, `Ed25519` etc.
+- `alg`: `ES256`, `RS256`, `EdDSA`
+- `kid`: identifiant public
+- `x`, `y`: coordonnées publiques EC (safe)
+- `n`, `e`: exposants publics RSA (safe)
+- `use`, `key_ops`: métadonnées non sensibles
+
+### Vérification GoTrue
+
+GoTrue expose par défaut `/.well-known/jwks.json` en filtrant automatiquement les champs privés. Néanmoins, **toujours vérifier** avec `scripts/verify-jwks.sh` après chaque migration ou rotation de clé (voir Phase 4.2).
+
+Le fallback legacy HS256 fonctionne côté Budgy backend via `SUPABASE_JWT_ALLOW_HS256_FALLBACK=1` + `SUPABASE_JWT_SECRET`, **sans dépendre du JWKS public**. C'est le design correct.
+
+---
 
 **IMPORTANT — Statut backend Budgy:** Le backend `auth.py` supporte déjà :
 - ✅ JWKS ES256 / RS256 / EdDSA (asymétrique)
@@ -219,7 +259,7 @@ docker ps --format 'table {{.Names}}\t{{.Status}}' | grep supabase
 curl -s https://supabase.budgy.ch/auth/v1/.well-known/jwks.json | jq .
 ```
 
-**Attendu (au minimum 1 clé publique EC) :**
+**Attendu — UNIQUEMENT du matériel public asymétrique :**
 ```json
 {
   "keys": [
@@ -230,18 +270,28 @@ curl -s https://supabase.budgy.ch/auth/v1/.well-known/jwks.json | jq .
       "kid": "<uuid>",
       "x": "...",
       "y": "..."
-    },
-    {
-      "kty": "oct",
-      "alg": "HS256",
-      "kid": "legacy-symmetric",
-      "k": "..."
     }
   ]
 }
 ```
 
-**⚠️ Ne jamais logguer/afficher la clé privée.** Elle reste uniquement dans `JWT_KEYS` côté serveur.
+🚨 **INTERDIT dans le JWKS public** — si `curl` retourne l'un des éléments suivants, **ARRÊTEZ IMMÉDIATEMENT** et rollback :
+
+- `"kty": "oct"` (clé symétrique)
+- Champ `"k"` (secret HS256 en clair)
+- Champs `"d"`, `"p"`, `"q"`, `"dp"`, `"dq"`, `"qi"` (composantes privées EC/RSA)
+
+Toute présence de ces champs signifie que GoTrue expose votre secret sur Internet.
+
+**Contrôle automatique — OBLIGATOIRE :**
+```bash
+/app/scripts/verify-jwks.sh https://supabase.budgy.ch
+```
+Le script échoue en `exit 3` si un secret est détecté et bloque le GO Build 71.
+
+**⚠️ Ne jamais logguer/afficher la clé privée EC** — elle reste uniquement dans `JWT_KEYS` côté serveur (env interne).
+
+**⚠️ Le legacy HS256 reste supporté** — mais UNIQUEMENT via le JWKS interne (env `JWT_JWKS` des services) ou via `SUPABASE_JWT_SECRET` côté backend Budgy. **Pas via l'endpoint public.**
 
 ### 4.3 Vérifier chaque service (script de diagnostic officiel)
 

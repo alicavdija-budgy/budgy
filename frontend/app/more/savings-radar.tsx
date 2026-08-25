@@ -30,6 +30,7 @@ import type { ThemePalette } from '../../src/constants/palettes';
 import { useStore } from '../../src/stores/useStore';
 import type { Contract, RecurringExpense, Transaction } from '../../src/types';
 import { Card } from '../../src/components/ui';
+import { useTranslation } from '../../src/hooks/useTranslation';
 
 // ─────────── Types ───────────
 type SavingBucket =
@@ -67,47 +68,47 @@ interface BucketAnalysis {
   maxSaving: number;
 }
 
-// ─────────── Conservative Swiss market ranges ───────────
+// ─────────── Conservative Swiss market ranges (labels & tips via i18n keys) ───────────
 const BUCKETS: Record<SavingBucket, BucketDef> = {
   insurance_auto: {
-    id: 'insurance_auto', label: 'Assurance auto', emoji: '🚗',
+    id: 'insurance_auto', label: 'savingsRadar.labelInsuranceAuto', emoji: '🚗',
     minPct: 0.12, maxPct: 0.22,
-    tip: 'Comparez plusieurs offres avant le prochain renouvellement. Une franchise plus haute ou un changement de couverture peut aussi réduire la prime.',
+    tip: 'savingsRadar.tipInsuranceAuto',
   },
   insurance_health: {
-    id: 'insurance_health', label: 'Assurance maladie', emoji: '🏥',
+    id: 'insurance_health', label: 'savingsRadar.labelInsuranceHealth', emoji: '🏥',
     minPct: 0.08, maxPct: 0.18,
-    tip: 'En Suisse, la prime LAMal varie selon la caisse et la franchise. Comparez plusieurs caisses chaque automne avant le 30 novembre.',
+    tip: 'savingsRadar.tipInsuranceHealth',
   },
   insurance_home: {
-    id: 'insurance_home', label: 'Assurance ménage / RC', emoji: '🏠',
+    id: 'insurance_home', label: 'savingsRadar.labelInsuranceHome', emoji: '🏠',
     minPct: 0.15, maxPct: 0.25,
-    tip: 'Vérifiez les doublons (RC entreprise + ménage) et comparez plusieurs offres tous les 3 ans.',
+    tip: 'savingsRadar.tipInsuranceHome',
   },
   telecom_mobile: {
-    id: 'telecom_mobile', label: 'Téléphone mobile', emoji: '📱',
+    id: 'telecom_mobile', label: 'savingsRadar.labelTelecomMobile', emoji: '📱',
     minPct: 0.20, maxPct: 0.40,
-    tip: 'Les forfaits en Suisse varient fortement. Comparez votre usage réel (data, appels) avec les offres actuelles.',
+    tip: 'savingsRadar.tipTelecomMobile',
   },
   telecom_internet: {
-    id: 'telecom_internet', label: 'Internet fixe', emoji: '🌐',
+    id: 'telecom_internet', label: 'savingsRadar.labelTelecomInternet', emoji: '🌐',
     minPct: 0.15, maxPct: 0.30,
-    tip: 'Les promotions « nouveau client » sont fréquentes. Renégociez tous les 12 à 24 mois.',
+    tip: 'savingsRadar.tipTelecomInternet',
   },
   banking_fees: {
-    id: 'banking_fees', label: 'Frais bancaires', emoji: '🏦',
+    id: 'banking_fees', label: 'savingsRadar.labelBankingFees', emoji: '🏦',
     minPct: 0.30, maxPct: 0.60,
-    tip: 'Plusieurs banques en ligne suisses proposent des comptes sans frais. Comparez votre paquet actuel.',
+    tip: 'savingsRadar.tipBankingFees',
   },
   energy: {
-    id: 'energy', label: 'Électricité / gaz', emoji: '⚡',
+    id: 'energy', label: 'savingsRadar.labelEnergy', emoji: '⚡',
     minPct: 0.08, maxPct: 0.20,
-    tip: 'Vérifiez le tarif et la classification (heures pleines/creuses). De petits gestes (LED, veille) impactent aussi.',
+    tip: 'savingsRadar.tipEnergy',
   },
   subscriptions: {
-    id: 'subscriptions', label: 'Abonnements', emoji: '🎬',
+    id: 'subscriptions', label: 'savingsRadar.labelSubscriptions', emoji: '🎬',
     minPct: 0.25, maxPct: 0.50,
-    tip: 'Listez tous vos abonnements et désactivez ceux que vous n\'utilisez pas chaque mois.',
+    tip: 'savingsRadar.tipSubscriptions',
   },
 };
 
@@ -208,6 +209,7 @@ const fmt = (n: number) => `CHF ${Math.round(n).toLocaleString('fr-CH').replace(
 // ─────────── Screen ───────────
 export default function SavingsRadarScreen() {
   const theme = useTheme();
+  const { t } = useTranslation();
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -231,7 +233,7 @@ export default function SavingsRadarScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
           <Ionicons name="chevron-back" size={26} color={theme.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>Radar d'économies</Text>
+        <Text style={styles.title}>{t('savingsRadar.title')}</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -245,23 +247,22 @@ export default function SavingsRadarScreen() {
         >
           <View style={styles.heroBadge}>
             <Ionicons name="radio" size={14} color={theme.gold} />
-            <Text style={styles.heroBadgeTxt}>BUDGY · RADAR</Text>
+            <Text style={styles.heroBadgeTxt}>{t('savingsRadar.heroBadge')}</Text>
           </View>
-          <Text style={styles.heroTitle}>Économie potentielle annuelle</Text>
+          <Text style={styles.heroTitle}>{t('savingsRadar.heroTitle')}</Text>
           <Text style={styles.heroAmount}>
-            jusqu'à <Text style={{ color: theme.gold }}>{fmt(totalMax)}</Text>
+            {t('savingsRadar.heroAmountUpTo')}{' '}
+            <Text style={{ color: theme.gold }}>{fmt(totalMax)}</Text>
           </Text>
           <Text style={styles.heroSub}>
             {totalMin > 0
-              ? `Fourchette estimée : ${fmt(totalMin)} – ${fmt(totalMax)} / an`
-              : 'Ajoutez vos contrats et abonnements pour activer le radar.'}
+              ? t('savingsRadar.heroRange', { min: fmt(totalMin), max: fmt(totalMax) })
+              : t('savingsRadar.heroEmptyHint')}
           </Text>
           <View style={styles.heroDivider} />
           <View style={styles.heroNeutral}>
             <Ionicons name="shield-checkmark" size={14} color={theme.primary} />
-            <Text style={styles.heroNeutralTxt}>
-              Budgy reste 100 % neutre · Aucun partenaire, aucun affilié.
-            </Text>
+            <Text style={styles.heroNeutralTxt}>{t('savingsRadar.neutralPledge')}</Text>
           </View>
         </LinearGradient>
 
@@ -269,10 +270,8 @@ export default function SavingsRadarScreen() {
         {analysis.length === 0 ? (
           <Card style={styles.emptyCard}>
             <Text style={{ fontSize: 48 }}>📡</Text>
-            <Text style={styles.emptyTitle}>Aucune charge analysable détectée</Text>
-            <Text style={styles.emptySub}>
-              Importez vos contrats (assurances, télécom, énergie) ou vos abonnements pour que Budgy puisse identifier des économies potentielles.
-            </Text>
+            <Text style={styles.emptyTitle}>{t('savingsRadar.emptyTitle')}</Text>
+            <Text style={styles.emptySub}>{t('savingsRadar.emptySub')}</Text>
           </Card>
         ) : (
           analysis.map((a) => (
@@ -280,31 +279,34 @@ export default function SavingsRadarScreen() {
               <View style={styles.bucketHeader}>
                 <Text style={{ fontSize: 28 }}>{a.bucket.emoji}</Text>
                 <View style={{ flex: 1, marginLeft: Spacing.sm }}>
-                  <Text style={styles.bucketLabel}>{a.bucket.label}</Text>
+                  <Text style={styles.bucketLabel}>{t(a.bucket.label)}</Text>
                   <Text style={styles.bucketCurrent}>
-                    Charge actuelle : <Text style={{ color: theme.text, fontWeight: '700' }}>{fmt(a.currentYearly)}/an</Text>
+                    {t('savingsRadar.bucketCurrent', { amount: fmt(a.currentYearly) })}
                   </Text>
                 </View>
               </View>
 
               <View style={styles.savingRow}>
                 <View>
-                  <Text style={styles.savingLabel}>Économie potentielle</Text>
+                  <Text style={styles.savingLabel}>{t('savingsRadar.bucketSaving')}</Text>
                   <Text style={styles.savingAmount}>
-                    {fmt(a.minSaving)} – {fmt(a.maxSaving)} / an
+                    {t('savingsRadar.bucketRange', { min: fmt(a.minSaving), max: fmt(a.maxSaving) })}
                   </Text>
                 </View>
                 <View style={styles.savingBadge}>
                   <Ionicons name="trending-down" size={14} color={theme.gold} />
                   <Text style={styles.savingBadgePct}>
-                    -{Math.round(a.bucket.minPct * 100)} à {Math.round(a.bucket.maxPct * 100)}%
+                    {t('savingsRadar.bucketPct', {
+                      min: Math.round(a.bucket.minPct * 100),
+                      max: Math.round(a.bucket.maxPct * 100),
+                    })}
                   </Text>
                 </View>
               </View>
 
               <View style={styles.tipBlock}>
                 <Ionicons name="bulb" size={14} color={theme.primary} style={{ marginTop: 2 }} />
-                <Text style={styles.tipTxt}>{a.bucket.tip}</Text>
+                <Text style={styles.tipTxt}>{t(a.bucket.tip)}</Text>
               </View>
             </View>
           ))
@@ -313,9 +315,7 @@ export default function SavingsRadarScreen() {
         {/* Footer disclaimer */}
         <View style={styles.footer}>
           <Ionicons name="information-circle" size={16} color={theme.textTertiary} />
-          <Text style={styles.footerTxt}>
-            Les économies indiquées sont des estimations basées sur les écarts typiques du marché suisse. Budgy ne reçoit aucune commission et ne recommande aucune marque.
-          </Text>
+          <Text style={styles.footerTxt}>{t('savingsRadar.footer')}</Text>
         </View>
       </ScrollView>
     </View>

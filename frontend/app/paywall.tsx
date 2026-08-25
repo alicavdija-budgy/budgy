@@ -1,12 +1,27 @@
 /**
- * BUDGY - Premium Paywall Screen
- * Highly optimized for conversion (dark fintech style, gradient hero,
- * benefits over features, annual plan emphasized, 7-day trial CTA).
+ * BUDGY — Premium Paywall
  *
- * MOCKED subscription: plug RevenueCat later via usePremiumStore.purchase().
+ * App Review 2.1(b) — v3.9.0 / Build 73
+ * ────────────────────────────────────────────────────────────────────
+ * The paywall MUST route the primary CTA through Apple StoreKit
+ * (`iap.purchase()`), never through a local "startTrial" bypass.
+ * The free trial, if any, comes from the Introductory Offer configured
+ * on the subscription product in App Store Connect and is presented
+ * only when Apple StoreKit reports it in `introductoryPricePaymentModeIOS`.
+ *
+ * Pricing, currency and trial period ALL come from StoreKit — no
+ * fallback hardcoded numbers. When StoreKit fails, the CTA is disabled
+ * and a "Retry" button is shown. Pro is NEVER activated locally.
+ *
+ * iPad-safe: the content is centred with `maxWidth: 560` so that on
+ * iPad Air 11" (M3) the paywall never spans the full width.
+ *
+ * Legal: Terms & Privacy links (https://budgy.ch/{terms,privacy}) are
+ * exposed in the footer, and a visible "Restore purchases" link goes
+ * through StoreKit `getAvailablePurchases` (see useIAP.restore()).
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -15,7 +30,9 @@ import {
   TouchableOpacity,
   Image,
   Alert,
+  Linking,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -26,114 +43,89 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withRepeat,
-  withSequence,
   withTiming,
   Easing,
 } from 'react-native-reanimated';
 import { usePremiumStore, type Plan } from '../src/stores/usePremiumStore';
 import { useTranslation } from '../src/hooks/useTranslation';
 import { useIAP } from '../src/hooks/useIAP';
+import type { IapProduct } from '../src/services/iap';
 
-const PRICE_MONTHLY = 4.90;
-const PRICE_ANNUAL = 39.90;
-const DISCOUNT = Math.round((1 - PRICE_ANNUAL / (PRICE_MONTHLY * 12)) * 100);
-
-const BENEFITS = [
-  {
-    icon: 'sparkles',
-    color: '#34D399',
-    title: 'IA intelligente',
-    desc: 'Coach financier qui analyse vos dépenses et recommande des économies concrètes chaque semaine.',
-  },
-  {
-    icon: 'analytics',
-    color: '#22D3EE',
-    title: 'Statistiques avancées',
-    desc: 'Graphiques mensuels, tendances 12 mois, prévisions et comparaisons par catégorie.',
-  },
-  {
-    icon: 'flash',
-    color: '#F59E0B',
-    title: 'Automatisation',
-    desc: 'Factures récurrentes, OCR tickets, import email. Gagnez 2 h par mois.',
-  },
-  {
-    icon: 'cloud-done',
-    color: '#8B5CF6',
-    title: 'Cloud sécurisé',
-    desc: 'Sync multi-appareils chiffrée, hébergée en Suisse/UE. Vos données vous suivent.',
-  },
-  {
-    icon: 'trophy',
-    color: '#EC4899',
-    title: 'Objectifs avancés',
-    desc: 'Plans d’épargne intelligents, projections IA et simulateur d’impôts illimité.',
-  },
+// Static, brand-independent benefits (no price, no currency)
+const BENEFIT_KEYS = [
+  { icon: 'sparkles', color: '#34D399', titleKey: 'softPaywall.benefit1', descKey: 'softPaywall.voiceSubtitle' },
+  { icon: 'analytics', color: '#22D3EE', titleKey: 'softPaywall.benefit2', descKey: 'softPaywall.timelineSubtitle' },
+  { icon: 'flash', color: '#F59E0B', titleKey: 'softPaywall.benefit3', descKey: 'softPaywall.benefit3' },
+  { icon: 'cloud-done', color: '#8B5CF6', titleKey: 'softPaywall.benefit5', descKey: 'softPaywall.benefit5' },
+  { icon: 'trophy', color: '#EC4899', titleKey: 'softPaywall.benefit4', descKey: 'softPaywall.benefit4' },
 ] as const;
 
-type TriggerCopy = {
-  title: string;
-  subtitle: string;
-};
+const TERMS_URL = 'https://budgy.ch/terms';
+const PRIVACY_URL = 'https://budgy.ch/privacy';
 
-function getTriggerCopy(trigger?: string): TriggerCopy {
+// ── Helpers ──────────────────────────────────────────────────────────────
+function getTriggerCopy(trigger: string | undefined, t: (k: string, p?: any) => string) {
   switch (trigger) {
     case 'feature_ai':
-      return {
-        title: 'Débloquez votre coach IA',
-        subtitle: 'Des conseils personnalisés pour économiser dès ce mois-ci.',
-      };
+      return { title: t('paywallTriggers.aiTitle'), subtitle: t('paywallTriggers.aiSubtitle') };
     case 'feature_tax':
-      return {
-        title: 'Optimisez vos impôts',
-        subtitle: 'Simulateur illimité — IFD, ICC et LAMal pour les 26 cantons.',
-      };
+      return { title: t('paywallTriggers.taxTitle'), subtitle: t('paywallTriggers.taxSubtitle') };
     case 'feature_analytics':
-      return {
-        title: 'Statistiques avancées',
-        subtitle: 'Tendances, prévisions, comparaisons — votre budget décodé.',
-      };
+      return { title: t('paywallTriggers.analyticsTitle'), subtitle: t('paywallTriggers.analyticsSubtitle') };
     case 'feature_export':
-      return {
-        title: 'Exports illimités',
-        subtitle: 'PDF professionnels sans limite, prêts pour votre comptable.',
-      };
+      return { title: t('paywallTriggers.exportTitle'), subtitle: t('paywallTriggers.exportSubtitle') };
     case 'feature_cloud':
-      return {
-        title: 'Synchronisation Pro',
-        subtitle: 'Vos données sur tous vos appareils, chiffrées et sécurisées.',
-      };
+      return { title: t('paywallTriggers.cloudTitle'), subtitle: t('paywallTriggers.cloudSubtitle') };
     case 'organic_transactions':
-      return {
-        title: 'Vous progressez vite 💪',
-        subtitle: 'Passez à la vitesse supérieure avec Budgy Pro.',
-      };
+      return { title: t('paywallTriggers.organicTitle'), subtitle: t('paywallTriggers.organicSubtitle') };
     default:
-      return {
-        title: 'Prenez le contrôle total de votre argent',
-        subtitle: 'Budgy vous aide à économiser, prévoir et optimiser vos finances.',
-      };
+      return { title: t('paywallTriggers.defaultTitle'), subtitle: t('paywallTriggers.defaultSubtitle') };
   }
 }
 
+/** Does this StoreKit product ship with an Introductory Offer that is a
+ * free trial? We inspect the introductory payment mode when available. */
+function hasIntroductoryFreeTrial(product: IapProduct | null): boolean {
+  if (!product) return false;
+  const p: any = product;
+  // react-native-iap exposes introductory info on iOS via these fields:
+  //   introductoryPricePaymentModeIOS: 'FREETRIAL' | 'PAYASYOUGO' | 'PAYUPFRONT'
+  //   introductoryPriceNumberOfPeriodsIOS: '7'
+  //   introductoryPriceSubscriptionPeriodIOS: 'DAY' | 'WEEK' | 'MONTH' | 'YEAR'
+  const mode = String(p.introductoryPricePaymentModeIOS || p.introductoryPricePaymentMode || '').toUpperCase();
+  return mode === 'FREETRIAL' || mode === 'FREE_TRIAL';
+}
+
+/** Format the trial as "7 days" / "1 week" using StoreKit period info. */
+function formatIntroductoryPeriodDays(product: IapProduct | null): number | null {
+  if (!product) return null;
+  const p: any = product;
+  const num = Number(p.introductoryPriceNumberOfPeriodsIOS || p.introductoryPriceNumberOfPeriods || 0);
+  const unit = String(p.introductoryPriceSubscriptionPeriodIOS || p.introductoryPriceSubscriptionPeriod || '').toUpperCase();
+  if (!num || !unit) return null;
+  if (unit === 'DAY') return num;
+  if (unit === 'WEEK') return num * 7;
+  if (unit === 'MONTH') return num * 30;
+  if (unit === 'YEAR') return num * 365;
+  return null;
+}
+
+// ── Screen ───────────────────────────────────────────────────────────────
 export default function PaywallScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const params = useLocalSearchParams<{ trigger?: string }>();
+  const { t } = useTranslation();
+
   const [selected, setSelected] = useState<Plan>('annual');
   const [processing, setProcessing] = useState(false);
 
-  const { t } = useTranslation();
-  const startTrial = usePremiumStore((s) => s.startTrial);
-  const purchase = usePremiumStore((s) => s.purchase);
   const markDismissed = usePremiumStore((s) => s.markPaywallDismissed);
-
-  // Real StoreKit IAP (falls back to mocked prices on web/Expo Go)
   const iap = useIAP();
 
-  const copy = getTriggerCopy(params.trigger);
+  const copy = getTriggerCopy(params.trigger, t);
 
-  // Pulsing glow behind hero icon
+  // Pulsing glow
   const glow = useSharedValue(0.4);
   useEffect(() => {
     glow.value = withRepeat(
@@ -141,31 +133,32 @@ export default function PaywallScreen() {
       -1,
       true
     );
-  }, []);
+  }, [glow]);
   const glowStyle = useAnimatedStyle(() => ({ opacity: glow.value }));
 
-  const handleTrial = async () => {
-    if (processing) return;
-    setProcessing(true);
-    try {
-      if (Platform.OS !== 'web') {
-        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      }
-    } catch {}
-    // MOCKED: in real flow, call RevenueCat.purchasePackage(trial_package)
-    startTrial();
-    setTimeout(() => {
-      setProcessing(false);
-      Alert.alert(
-        '🎉 Essai activé',
-        'Vous avez 7 jours pour profiter de toutes les fonctionnalités Pro. Sans engagement.',
-        [{ text: 'Super !', onPress: () => router.back() }]
-      );
-    }, 400);
-  };
+  // StoreKit-backed product state
+  const productsLoading = iap.phase === 'loading' || (!iap.ready && iap.available);
+  const productsAvailable = iap.available && (!!iap.annual || !!iap.monthly);
+  const productsError = iap.available && iap.ready && !productsAvailable;
+
+  const selectedProduct: IapProduct | null = useMemo(
+    () => (selected === 'annual' ? iap.annual : iap.monthly),
+    [selected, iap.annual, iap.monthly]
+  );
+
+  const showTrial = hasIntroductoryFreeTrial(selectedProduct);
+  const trialDays = formatIntroductoryPeriodDays(selectedProduct);
+
+  const buyDisabled =
+    processing ||
+    iap.phase !== 'idle' ||
+    (iap.available && !selectedProduct); // must have real product on native
+
+  // ── Actions ─────────────────────────────────────────────────────────────
 
   const handlePurchase = async () => {
-    if (processing) return;
+    if (buyDisabled) return;
+
     setProcessing(true);
     try {
       if (Platform.OS !== 'web') {
@@ -173,43 +166,43 @@ export default function PaywallScreen() {
       }
     } catch {}
 
-    // Real StoreKit purchase (with backend receipt validation)
-    if (iap.available) {
-      const res = await iap.purchase(selected);
+    // Real StoreKit purchase (with backend receipt validation).
+    // Web / Expo Go path: gently redirect the user to the TestFlight/App
+    // Store build (never activate Pro locally).
+    if (!iap.available) {
       setProcessing(false);
-
-      if (res.cancelled) return; // silent on cancel
-      if (res.notConfigured) {
-        Alert.alert(t('iap.pendingTitle'), t('iap.pendingBody'), [{ text: t('iap.ctaOK') }]);
-        return;
-      }
-      if (res.success) {
-        try { if (Platform.OS !== 'web') await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
-        Alert.alert(
-          t('iap.welcomeTitle'),
-          selected === 'annual' ? t('iap.welcomeYearly') : t('iap.welcomeMonthly'),
-          [{ text: t('iap.ctaStart'), onPress: () => router.back() }]
-        );
-      } else {
-        Alert.alert(t('iap.buyFailedTitle'), res.error || t('iap.buyFailedBody'));
-      }
+      Alert.alert(t('iap.restoreTitle'), t('iap.restoreOnlyNative'), [{ text: t('iap.ctaOK') }]);
       return;
     }
 
-    // Fallback (web preview / Expo Go): mocked unlock for dev convenience only
-    purchase(selected);
-    setTimeout(() => {
-      setProcessing(false);
-      Alert.alert(t('iap.previewTitle'), t('iap.previewBody'), [
-        { text: t('iap.ctaOK'), onPress: () => router.back() },
-      ]);
-    }, 300);
+    const res = await iap.purchase(selected);
+    setProcessing(false);
+
+    if (res.cancelled) return; // silent on user cancel
+    if (res.notConfigured) {
+      Alert.alert(t('iap.pendingTitle'), t('iap.pendingBody'), [{ text: t('iap.ctaOK') }]);
+      return;
+    }
+    if (res.success) {
+      try {
+        if (Platform.OS !== 'web') {
+          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }
+      } catch {}
+      Alert.alert(
+        t('iap.welcomeTitle'),
+        selected === 'annual' ? t('iap.welcomeYearly') : t('iap.welcomeMonthly'),
+        [{ text: t('iap.ctaStart'), onPress: () => router.back() }]
+      );
+    } else {
+      Alert.alert(t('iap.buyFailedTitle'), res.error || t('iap.buyFailedBody'));
+    }
   };
 
   const handleRestore = async () => {
     if (processing) return;
     if (!iap.available) {
-      Alert.alert(t('iap.restoreTitle'), t('iap.restoreOnlyNative'));
+      Alert.alert(t('iap.restoreTitle'), t('iap.restoreOnlyNative'), [{ text: t('iap.ctaOK') }]);
       return;
     }
     setProcessing(true);
@@ -217,13 +210,19 @@ export default function PaywallScreen() {
     setProcessing(false);
 
     if (res.notConfigured) {
-      Alert.alert(t('iap.restoreBackendNotConfiguredTitle'), t('iap.restoreBackendNotConfiguredBody'), [
-        { text: t('iap.ctaOK') },
-      ]);
+      Alert.alert(
+        t('iap.restoreBackendNotConfiguredTitle'),
+        t('iap.restoreBackendNotConfiguredBody'),
+        [{ text: t('iap.ctaOK') }]
+      );
       return;
     }
     if (res.success) {
-      try { if (Platform.OS !== 'web') await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
+      try {
+        if (Platform.OS !== 'web') {
+          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }
+      } catch {}
       const n = res.restored || 0;
       Alert.alert(
         t('iap.restoreDoneTitle'),
@@ -235,8 +234,12 @@ export default function PaywallScreen() {
         { text: t('iap.ctaOK') },
       ]);
     } else {
-      Alert.alert(t('iap.restoreNoneTitle'), t('iap.restoreNoneBody'));
+      Alert.alert(t('iap.restoreNoneTitle'), t('iap.restoreNoneBody'), [{ text: t('iap.ctaOK') }]);
     }
+  };
+
+  const handleRetryLoad = () => {
+    iap.reload();
   };
 
   const handleClose = () => {
@@ -244,169 +247,252 @@ export default function PaywallScreen() {
     router.back();
   };
 
+  const openLink = async (url: string) => {
+    try {
+      await Linking.openURL(url);
+    } catch {}
+  };
+
+  // ── Derived UI text ────────────────────────────────────────────────────
+
+  const annualPriceLabel = iap.annual?.localizedPrice || null;
+  const monthlyPriceLabel = iap.monthly?.localizedPrice || null;
+  const monthlyEquivalent = (() => {
+    if (!iap.annual) return null;
+    const raw = Number(iap.annual.price);
+    if (!raw || Number.isNaN(raw)) return null;
+    const per = raw / 12;
+    const cur = iap.annual.currency || '';
+    return `${cur} ${per.toFixed(2)}`.trim();
+  })();
+
+  const ctaLabel = (() => {
+    if (iap.phase === 'restoring') return t('iap.btnRestoreInProgress');
+    if (iap.phase === 'validating') return t('iap.btnValidating');
+    if (iap.phase === 'purchasing') return t('iap.btnValidating');
+    if (processing) return '…';
+    if (showTrial && trialDays) {
+      return t('paywallTriggers.trialCta');
+    }
+    return t('paywallTriggers.subscribeCta');
+  })();
+
+  // ── Render ─────────────────────────────────────────────────────────────
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Top bar with close */}
+      {/* Top bar */}
       <View style={styles.topBar}>
-        <TouchableOpacity onPress={handleClose} style={styles.closeBtn} hitSlop={14}>
-          <Ionicons name="close" size={22} color="rgba(255,255,255,0.6)" />
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={handleRestore}
-          hitSlop={14}
-          disabled={processing}
-        >
-          <Text style={styles.restoreLink}>{t('paywall.restore')}</Text>
-        </TouchableOpacity>
+        <View style={styles.topBarInner}>
+          <TouchableOpacity onPress={handleClose} style={styles.closeBtn} hitSlop={14}>
+            <Ionicons name="close" size={22} color="rgba(255,255,255,0.6)" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={handleRestore}
+            hitSlop={14}
+            disabled={processing || iap.phase === 'restoring'}
+          >
+            <Text style={styles.restoreLink}>{t('iap.btnRestore')}</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 200 }}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 220 }}
       >
-        {/* Hero */}
-        <View style={styles.hero}>
-          <View style={styles.iconWrap}>
-            <Animated.View style={[styles.glow, glowStyle]} />
-            <Image
-              source={require('../assets/images/icon.png')}
-              style={styles.icon}
-              resizeMode="contain"
-            />
-          </View>
-          <LinearGradient
-            colors={['rgba(52,211,153,0.15)', 'rgba(34,211,238,0.1)']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.proBadge}
-          >
-            <Ionicons name="sparkles" size={14} color="#34D399" />
-            <Text style={styles.proBadgeText}>BUDGY PRO</Text>
-          </LinearGradient>
-          <Text style={styles.title}>{copy.title}</Text>
-          <Text style={styles.subtitle}>{copy.subtitle}</Text>
-        </View>
-
-        {/* Benefits */}
-        <View style={styles.benefits}>
-          {BENEFITS.map((b, i) => (
-            <View
-              key={b.title}
-              
-              style={styles.benefitRow}
-            >
-              <View style={[styles.benefitIcon, { backgroundColor: `${b.color}22` }]}>
-                <Ionicons name={b.icon as any} size={20} color={b.color} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.benefitTitle}>{b.title}</Text>
-                <Text style={styles.benefitDesc}>{b.desc}</Text>
-              </View>
-              <Ionicons name="checkmark-circle" size={20} color="#34D399" />
-            </View>
-          ))}
-        </View>
-
-        {/* Social proof pill */}
-        <View style={styles.socialProof}>
-          <View style={styles.avatars}>
-            {['#34D399', '#22D3EE', '#8B5CF6'].map((c, idx) => (
-              <View
-                key={idx}
-                style={[
-                  styles.avatar,
-                  { backgroundColor: c, marginLeft: idx === 0 ? 0 : -10, zIndex: 3 - idx },
-                ]}
+        <View style={styles.contentWrap}>
+          {/* Hero */}
+          <View style={styles.hero}>
+            <View style={styles.iconWrap}>
+              <Animated.View style={[styles.glow, glowStyle]} />
+              <Image
+                source={require('../assets/images/icon.png')}
+                style={styles.icon}
+                resizeMode="contain"
               />
+            </View>
+            <LinearGradient
+              colors={['rgba(52,211,153,0.15)', 'rgba(34,211,238,0.1)']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.proBadge}
+            >
+              <Ionicons name="sparkles" size={14} color="#34D399" />
+              <Text style={styles.proBadgeText}>BUDGY PRO</Text>
+            </LinearGradient>
+            <Text style={styles.title}>{copy.title}</Text>
+            <Text style={styles.subtitle}>{copy.subtitle}</Text>
+          </View>
+
+          {/* Benefits */}
+          <View style={styles.benefits}>
+            {BENEFIT_KEYS.map((b) => (
+              <View key={b.titleKey} style={styles.benefitRow}>
+                <View style={[styles.benefitIcon, { backgroundColor: `${b.color}22` }]}>
+                  <Ionicons name={b.icon as any} size={20} color={b.color} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.benefitTitle}>{t(b.titleKey)}</Text>
+                  <Text style={styles.benefitDesc}>{t(b.descKey)}</Text>
+                </View>
+                <Ionicons name="checkmark-circle" size={20} color="#34D399" />
+              </View>
             ))}
           </View>
-          <Text style={styles.socialText}>
-            Rejoignez les Suissesses et Suisses qui reprennent le contrôle 🇨🇭
-          </Text>
-        </View>
 
-        {/* Plans */}
-        <View style={styles.plans}>
-          {/* Annual */}
-          <TouchableOpacity
-            activeOpacity={0.9}
-            onPress={() => setSelected('annual')}
-            style={[
-              styles.plan,
-              selected === 'annual' && styles.planActive,
-            ]}
-          >
-            {selected === 'annual' && (
-              <LinearGradient
-                colors={['#34D399', '#22D3EE']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.recommendBadge}
-              >
-                <Text style={styles.recommendText}>⭐ {t('paywall.bestOffer')} · -{DISCOUNT}%</Text>
-              </LinearGradient>
-            )}
-            <View style={styles.planRow}>
-              <View style={styles.planRadio}>
-                {selected === 'annual' && <View style={styles.planRadioDot} />}
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.planTitle}>{t('paywall.annual')}</Text>
-                <Text style={styles.planSub}>
-                  CHF {(PRICE_ANNUAL / 12).toFixed(2)}/mois · facturé CHF {PRICE_ANNUAL.toFixed(2)}/an
-                </Text>
-              </View>
-              <View style={{ alignItems: 'flex-end' }}>
-                <Text style={styles.planPrice}>CHF {PRICE_ANNUAL.toFixed(2)}</Text>
-                <Text style={styles.planPriceUnit}>par an</Text>
-              </View>
+          {/* Social proof */}
+          <View style={styles.socialProof}>
+            <View style={styles.avatars}>
+              {['#34D399', '#22D3EE', '#8B5CF6'].map((c, idx) => (
+                <View
+                  key={idx}
+                  style={[
+                    styles.avatar,
+                    { backgroundColor: c, marginLeft: idx === 0 ? 0 : -10, zIndex: 3 - idx },
+                  ]}
+                />
+              ))}
             </View>
-          </TouchableOpacity>
+            <Text style={styles.socialText}>{t('paywallTriggers.socialProof')}</Text>
+          </View>
 
-          {/* Monthly */}
-          <TouchableOpacity
-            activeOpacity={0.9}
-            onPress={() => setSelected('monthly')}
-            style={[
-              styles.plan,
-              selected === 'monthly' && styles.planActive,
-            ]}
-          >
-            <View style={styles.planRow}>
-              <View style={styles.planRadio}>
-                {selected === 'monthly' && <View style={styles.planRadioDot} />}
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.planTitle}>{t('paywall.monthly')}</Text>
-                <Text style={styles.planSub}>Flexibilité totale, annulable chaque mois.</Text>
-              </View>
-              <View style={{ alignItems: 'flex-end' }}>
-                <Text style={styles.planPrice}>CHF {PRICE_MONTHLY.toFixed(2)}</Text>
-                <Text style={styles.planPriceUnit}>par mois</Text>
-              </View>
+          {/* ── Loading state ─────────────────────────────────────────── */}
+          {productsLoading && (
+            <View style={styles.stateBox}>
+              <ActivityIndicator color="#34D399" />
+              <Text style={styles.stateText}>{t('paywallTriggers.loadingProducts')}</Text>
             </View>
-          </TouchableOpacity>
-        </View>
+          )}
 
-        {/* Reassurance */}
-        <View style={styles.reassureRow}>
-          <View style={styles.reassureItem}>
-            <Ionicons name="shield-checkmark" size={16} color="#34D399" />
-            <Text style={styles.reassureText}>{t('paywall.noCommit')}</Text>
+          {/* ── Error state ───────────────────────────────────────────── */}
+          {productsError && (
+            <View style={styles.errorBox}>
+              <Ionicons name="alert-circle" size={20} color="#F87171" />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.errorTitle}>{t('paywallTriggers.productsErrorTitle')}</Text>
+                <Text style={styles.errorBody}>{t('paywallTriggers.productsErrorBody')}</Text>
+              </View>
+              <TouchableOpacity onPress={handleRetryLoad} style={styles.retryBtn}>
+                <Ionicons name="refresh" size={14} color="#0E1530" />
+                <Text style={styles.retryTxt}>{t('paywallTriggers.retry')}</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* ── Plans (only when StoreKit responded successfully) ─────── */}
+          {productsAvailable && (
+            <View style={styles.plans}>
+              {/* Annual */}
+              {iap.annual && (
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  onPress={() => setSelected('annual')}
+                  style={[styles.plan, selected === 'annual' && styles.planActive]}
+                >
+                  {selected === 'annual' && (
+                    <LinearGradient
+                      colors={['#34D399', '#22D3EE']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.recommendBadge}
+                    >
+                      <Text style={styles.recommendText}>
+                        ⭐ {t('paywall.bestOffer')}
+                      </Text>
+                    </LinearGradient>
+                  )}
+                  <View style={styles.planRow}>
+                    <View style={styles.planRadio}>
+                      {selected === 'annual' && <View style={styles.planRadioDot} />}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.planTitle}>{t('paywall.annual')}</Text>
+                      {monthlyEquivalent ? (
+                        <Text style={styles.planSub}>
+                          {t('paywallTriggers.annualPerMonth', {
+                            price: monthlyEquivalent,
+                            yearly: annualPriceLabel,
+                          })}
+                        </Text>
+                      ) : (
+                        <Text style={styles.planSub}>{annualPriceLabel}</Text>
+                      )}
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={styles.planPrice}>{annualPriceLabel}</Text>
+                      <Text style={styles.planPriceUnit}>{t('paywallTriggers.periodYear')}</Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              )}
+
+              {/* Monthly */}
+              {iap.monthly && (
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  onPress={() => setSelected('monthly')}
+                  style={[styles.plan, selected === 'monthly' && styles.planActive]}
+                >
+                  <View style={styles.planRow}>
+                    <View style={styles.planRadio}>
+                      {selected === 'monthly' && <View style={styles.planRadioDot} />}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.planTitle}>{t('paywall.monthly')}</Text>
+                      <Text style={styles.planSub}>{t('paywallTriggers.monthlyFlex')}</Text>
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={styles.planPrice}>{monthlyPriceLabel}</Text>
+                      <Text style={styles.planPriceUnit}>{t('paywallTriggers.periodMonth')}</Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+
+          {/* Reassurance */}
+          <View style={styles.reassureRow}>
+            <View style={styles.reassureItem}>
+              <Ionicons name="shield-checkmark" size={16} color="#34D399" />
+              <Text style={styles.reassureText}>{t('paywall.noCommit')}</Text>
+            </View>
+            <View style={styles.reassureItem}>
+              <Ionicons name="refresh-circle" size={16} color="#22D3EE" />
+              <Text style={styles.reassureText}>{t('paywall.cancelAny')}</Text>
+            </View>
+            <View style={styles.reassureItem}>
+              <Ionicons name="lock-closed" size={16} color="#8B5CF6" />
+              <Text style={styles.reassureText}>{t('paywall.securePay')}</Text>
+            </View>
           </View>
-          <View style={styles.reassureItem}>
-            <Ionicons name="refresh-circle" size={16} color="#22D3EE" />
-            <Text style={styles.reassureText}>{t('paywall.cancelAny')}</Text>
-          </View>
-          <View style={styles.reassureItem}>
-            <Ionicons name="lock-closed" size={16} color="#8B5CF6" />
-            <Text style={styles.reassureText}>{t('paywall.securePay')}</Text>
+
+          {/* Trial fine-print (only if StoreKit exposes an Intro Offer) */}
+          {productsAvailable && showTrial && trialDays && annualPriceLabel && (
+            <Text style={styles.trialLine}>
+              {t('paywallTriggers.introHasTrial', {
+                days: trialDays,
+                price:
+                  selected === 'annual'
+                    ? `${annualPriceLabel} ${t('paywallTriggers.annualLabel')}`
+                    : `${monthlyPriceLabel} ${t('paywallTriggers.monthlyLabel')}`,
+              })}
+            </Text>
+          )}
+
+          {/* Legal + Terms/Privacy links */}
+          <Text style={styles.fineprint}>{t('paywallTriggers.legalIntro')}</Text>
+          <View style={styles.legalLinks}>
+            <TouchableOpacity onPress={() => openLink(TERMS_URL)} hitSlop={10}>
+              <Text style={styles.legalLink}>{t('paywallTriggers.terms')}</Text>
+            </TouchableOpacity>
+            <Text style={styles.legalDot}> · </Text>
+            <TouchableOpacity onPress={() => openLink(PRIVACY_URL)} hitSlop={10}>
+              <Text style={styles.legalLink}>{t('paywallTriggers.privacy')}</Text>
+            </TouchableOpacity>
           </View>
         </View>
-
-        <Text style={styles.fineprint}>
-          L’essai gratuit de 7 jours se convertit automatiquement en abonnement {selected === 'annual' ? 'annuel' : 'mensuel'} sauf annulation 24 h avant la fin. Géré par l’App Store.
-        </Text>
       </ScrollView>
 
       {/* Sticky CTA */}
@@ -416,167 +502,219 @@ export default function PaywallScreen() {
           style={styles.ctaGradient}
           pointerEvents="none"
         />
-        <TouchableOpacity
-          onPress={handleTrial}
-          disabled={processing || iap.phase === 'restoring' || iap.phase === 'validating'}
-          activeOpacity={0.85}
-          style={styles.ctaWrap}
-        >
-          <LinearGradient
-            colors={['#34D399', '#22D3EE']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.ctaBtn}
+        <View style={styles.ctaWrapCentered}>
+          <TouchableOpacity
+            onPress={handlePurchase}
+            disabled={buyDisabled}
+            activeOpacity={0.85}
+            style={[styles.ctaWrap, buyDisabled && styles.ctaDisabled]}
+            testID="paywall-primary-cta"
           >
-            <Ionicons name="rocket" size={18} color="#0E1530" />
-            <Text style={styles.ctaText}>
-              {iap.phase === 'restoring'
-                ? 'Restauration…'
-                : iap.phase === 'validating'
-                ? 'Validation…'
-                : iap.phase === 'purchasing'
-                ? 'Achat en cours…'
-                : processing
-                ? '…'
-                : t('paywall.tryFree')}
-            </Text>
-          </LinearGradient>
-        </TouchableOpacity>
+            <LinearGradient
+              colors={buyDisabled ? ['#374151', '#374151'] : ['#34D399', '#22D3EE']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.ctaBtn}
+            >
+              <Ionicons
+                name={showTrial ? 'rocket' : 'lock-closed'}
+                size={18}
+                color="#0E1530"
+              />
+              <Text style={styles.ctaText}>{ctaLabel}</Text>
+            </LinearGradient>
+          </TouchableOpacity>
 
-        <TouchableOpacity onPress={handlePurchase} disabled={processing || iap.phase !== 'idle'}>
-          <Text style={styles.buyNowLink}>
-            ou s'abonner directement — CHF {(selected === 'annual' ? PRICE_ANNUAL : PRICE_MONTHLY).toFixed(2)}
-            {selected === 'annual' ? ' / an' : ' / mois'}
-          </Text>
-        </TouchableOpacity>
+          {/* Secondary link with real price */}
+          {productsAvailable && selectedProduct && (
+            <Text style={styles.subLegal}>
+              {selected === 'annual'
+                ? `${annualPriceLabel} / ${t('paywallTriggers.periodYear')}`
+                : `${monthlyPriceLabel} / ${t('paywallTriggers.periodMonth')}`}
+            </Text>
+          )}
+        </View>
       </View>
     </View>
   );
 }
 
+// ── Styles ─────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0E1530' },
 
+  // iPad-safe centred content (max width 560 for legibility)
+  contentWrap: {
+    width: '100%',
+    maxWidth: 560,
+    alignSelf: 'center',
+    paddingHorizontal: 20,
+  },
   topBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 8,
   },
+  topBarInner: {
+    width: '100%',
+    maxWidth: 560,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   closeBtn: {
-    width: 36, height: 36, borderRadius: 18,
-    alignItems: 'center', justifyContent: 'center',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.06)',
   },
   restoreLink: {
-    color: 'rgba(255,255,255,0.5)',
-    fontSize: 13,
+    color: '#22D3EE',
+    fontSize: 14,
     fontWeight: '600',
   },
 
   hero: {
     alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: 24,
+    marginTop: 8,
+    marginBottom: 20,
   },
   iconWrap: {
-    width: 100, height: 100,
-    alignItems: 'center', justifyContent: 'center',
-    marginBottom: 20,
+    width: 96,
+    height: 96,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
   },
   glow: {
     position: 'absolute',
-    width: 160, height: 160, borderRadius: 80,
-    backgroundColor: 'rgba(52,211,153,0.35)',
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: '#34D399',
+    opacity: 0.35,
   },
-  icon: { width: 92, height: 92, borderRadius: 22 },
+  icon: { width: 84, height: 84, borderRadius: 20 },
   proBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: 12, paddingVertical: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: 999,
-    borderWidth: 1, borderColor: 'rgba(52,211,153,0.3)',
-    marginBottom: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(52,211,153,0.35)',
+    marginBottom: 12,
   },
-  proBadgeText: { color: '#34D399', fontSize: 11, fontWeight: '900', letterSpacing: 1 },
-
+  proBadgeText: {
+    color: '#34D399',
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 1.5,
+  },
   title: {
     color: '#FFF',
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: '900',
-    letterSpacing: -1,
     textAlign: 'center',
-    lineHeight: 34,
-    marginBottom: 10,
+    lineHeight: 32,
   },
   subtitle: {
-    color: 'rgba(255,255,255,0.65)',
+    color: 'rgba(255,255,255,0.72)',
     fontSize: 15,
     textAlign: 'center',
-    lineHeight: 22,
-    maxWidth: 340,
+    marginTop: 8,
+    lineHeight: 21,
+    paddingHorizontal: 12,
   },
 
-  benefits: {
-    paddingHorizontal: 20,
-    marginTop: 8,
-    gap: 12,
-  },
+  benefits: { gap: 10, marginBottom: 16 },
   benefitRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
+    gap: 12,
+    padding: 12,
+    borderRadius: 14,
     backgroundColor: 'rgba(255,255,255,0.04)',
-    borderRadius: 16,
-    padding: 14,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.06)',
   },
   benefitIcon: {
-    width: 40, height: 40, borderRadius: 12,
-    alignItems: 'center', justifyContent: 'center',
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  benefitTitle: {
-    color: '#FFF', fontSize: 15, fontWeight: '800',
-    marginBottom: 2,
-  },
-  benefitDesc: {
-    color: 'rgba(255,255,255,0.55)', fontSize: 12, lineHeight: 17,
-  },
+  benefitTitle: { color: '#FFF', fontSize: 14, fontWeight: '700' },
+  benefitDesc: { color: 'rgba(255,255,255,0.6)', fontSize: 12, marginTop: 2, lineHeight: 16 },
 
   socialProof: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    marginTop: 24,
-    marginHorizontal: 20,
+    marginTop: 4,
+    marginBottom: 16,
     padding: 12,
-    borderRadius: 14,
-    backgroundColor: 'rgba(52,211,153,0.06)',
+    borderRadius: 12,
+    backgroundColor: 'rgba(52,211,153,0.08)',
     borderWidth: 1,
     borderColor: 'rgba(52,211,153,0.15)',
   },
   avatars: { flexDirection: 'row' },
   avatar: {
-    width: 26, height: 26, borderRadius: 13,
-    borderWidth: 2, borderColor: '#0E1530',
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    borderWidth: 2,
+    borderColor: '#0E1530',
   },
-  socialText: { color: 'rgba(255,255,255,0.8)', fontSize: 12, flex: 1, fontWeight: '500' },
+  socialText: { color: 'rgba(255,255,255,0.75)', fontSize: 12, flex: 1 },
 
-  plans: {
-    paddingHorizontal: 20,
-    marginTop: 24,
+  // ── Loading / error states ─────────────────────────────────
+  stateBox: {
+    marginVertical: 16,
+    padding: 20,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: 10,
   },
+  stateText: { color: 'rgba(255,255,255,0.7)', fontSize: 13 },
+  errorBox: {
+    marginVertical: 16,
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: 'rgba(248,113,113,0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(248,113,113,0.35)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  errorTitle: { color: '#FCA5A5', fontSize: 13, fontWeight: '700' },
+  errorBody: { color: 'rgba(252,165,165,0.85)', fontSize: 12, marginTop: 2 },
+  retryBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: '#FCA5A5',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  retryTxt: { color: '#0E1530', fontSize: 12, fontWeight: '800' },
+
+  plans: { gap: 10, marginTop: 6, marginBottom: 12 },
   plan: {
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderRadius: 18,
-    borderWidth: 2,
+    borderRadius: 16,
+    borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    position: 'relative',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    padding: 14,
   },
   planActive: {
     borderColor: '#34D399',
@@ -584,74 +722,106 @@ const styles = StyleSheet.create({
   },
   recommendBadge: {
     position: 'absolute',
-    top: -10, right: 16,
-    paddingHorizontal: 10, paddingVertical: 4,
+    top: -12,
+    right: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: 999,
   },
-  recommendText: { color: '#0E1530', fontSize: 10, fontWeight: '900', letterSpacing: 0.5 },
+  recommendText: { color: '#0E1530', fontSize: 10, fontWeight: '900' },
   planRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   planRadio: {
-    width: 22, height: 22, borderRadius: 11,
-    borderWidth: 2, borderColor: 'rgba(255,255,255,0.3)',
-    alignItems: 'center', justifyContent: 'center',
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  planRadioDot: {
-    width: 10, height: 10, borderRadius: 5,
-    backgroundColor: '#34D399',
-  },
-  planTitle: { color: '#FFF', fontSize: 16, fontWeight: '800', marginBottom: 2 },
-  planSub: { color: 'rgba(255,255,255,0.55)', fontSize: 11 },
-  planPrice: { color: '#FFF', fontSize: 18, fontWeight: '900', letterSpacing: -0.5 },
+  planRadioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#34D399' },
+  planTitle: { color: '#FFF', fontSize: 15, fontWeight: '800' },
+  planSub: { color: 'rgba(255,255,255,0.6)', fontSize: 12, marginTop: 2 },
+  planPrice: { color: '#FFF', fontSize: 16, fontWeight: '900' },
   planPriceUnit: { color: 'rgba(255,255,255,0.5)', fontSize: 11 },
 
   reassureRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-around',
-    marginTop: 20,
-    paddingHorizontal: 20,
+    marginTop: 8,
+    marginBottom: 12,
+    paddingHorizontal: 4,
+    gap: 8,
   },
-  reassureItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  reassureText: { color: 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: '600' },
+  reassureItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  reassureText: { color: 'rgba(255,255,255,0.65)', fontSize: 11 },
 
+  trialLine: {
+    color: '#34D399',
+    fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginTop: 4,
+    marginBottom: 8,
+  },
   fineprint: {
-    color: 'rgba(255,255,255,0.35)',
-    fontSize: 10,
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: 11,
     lineHeight: 15,
     textAlign: 'center',
-    paddingHorizontal: 32,
-    marginTop: 18,
+    marginTop: 6,
+    paddingHorizontal: 4,
   },
+  legalLinks: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 10,
+  },
+  legalLink: {
+    color: '#22D3EE',
+    fontSize: 12,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
+  },
+  legalDot: { color: 'rgba(255,255,255,0.5)', fontSize: 12 },
 
+  // Sticky CTA
   ctaBar: {
     position: 'absolute',
-    left: 0, right: 0, bottom: 0,
-    paddingHorizontal: 20, paddingTop: 24,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 16,
+    paddingTop: 12,
   },
   ctaGradient: {
     position: 'absolute',
-    top: -40, left: 0, right: 0, bottom: 0,
-    height: '100%',
+    left: 0,
+    right: 0,
+    top: -60,
+    bottom: 0,
+  },
+  ctaWrapCentered: {
+    width: '100%',
+    maxWidth: 560,
+    alignSelf: 'center',
   },
   ctaWrap: { borderRadius: 18, overflow: 'hidden' },
+  ctaDisabled: { opacity: 0.5 },
   ctaBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
-    paddingVertical: 18,
-    borderRadius: 18,
+    paddingVertical: 16,
   },
-  ctaText: {
-    color: '#0E1530',
-    fontSize: 16,
-    fontWeight: '900',
-    letterSpacing: 0.3,
-  },
-  buyNowLink: {
+  ctaText: { color: '#0E1530', fontSize: 16, fontWeight: '900' },
+  subLegal: {
     color: 'rgba(255,255,255,0.55)',
     fontSize: 12,
+    marginTop: 10,
     textAlign: 'center',
-    marginTop: 14,
-    textDecorationLine: 'underline',
   },
 });

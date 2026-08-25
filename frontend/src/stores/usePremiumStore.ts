@@ -156,14 +156,28 @@ export const usePremiumStore = create<PremiumState>()(
 
       featureUsage: { ...DEFAULT_USAGE },
 
+      /**
+       * ⚠️ Apple App Review 2.1(b) — v3.9.0 / Build 73
+       *
+       * The Apple free trial MUST come from the Introductory Offer configured
+       * in App Store Connect and be granted ONLY through a real StoreKit
+       * transaction (`iap.purchase()` → App Store Server API → backend
+       * verification). No path in production may activate Pro locally without
+       * a validated Apple receipt.
+       *
+       * This method is kept as a NO-OP (with a dev-only warn) so that any
+       * legacy call site fails safely — the caller will simply not unlock Pro,
+       * forcing the paywall CTA to route through StoreKit.
+       */
       startTrial: () => {
-        const now = Date.now();
-        set({
-          isPro: true,
-          plan: null,
-          trialStartedAt: now,
-          trialEndsAt: now + TRIAL_DAYS * MS_PER_DAY,
-        });
+        if (__DEV__) {
+          // eslint-disable-next-line no-console
+          console.warn(
+            '[Premium] startTrial() is intentionally a no-op since v3.9.0. ' +
+              'Free trials must come from the Apple Introductory Offer via ' +
+              'iap.purchase(). No local Pro activation is allowed.'
+          );
+        }
       },
 
       purchase: (plan: Plan) => {

@@ -17,6 +17,7 @@ import { useTheme } from '../../src/hooks/useTheme';
 import { useStore } from '../../src/stores/useStore';
 import { Card, Button } from '../../src/components/ui';
 import { apiFetchJson, hasApiBaseUrl } from '../../src/lib/network';
+import { useTranslation } from '../../src/hooks/useTranslation';
 
 const TAG = '[ai-optimizer]';
 
@@ -27,17 +28,21 @@ const TAG = '[ai-optimizer]';
  * des propositions locales basées sur les vraies données utilisateur,
  * tout en conservant les propositions IA en tête de liste.
  *
- * Catégories prioritaires d'enrichissement :
- *   abonnements · santé · fiscal · télécoms · logement · alimentation
+ * v3.9.0 build 73 — i18n: la fonction reçoit maintenant `t` pour
+ * générer les titres/actions dans la langue de l'utilisateur.
  */
 function enrichWithLocalProposals(
   data: any,
   store: any,
   monthlyIncome: number,
+  t: (k: string, p?: any) => string,
+  cur: string,
 ): any {
   const existing = Array.isArray(data?.proposals) ? [...data.proposals] : [];
   const existingCats = new Set(existing.map((p: any) => String(p.category || '').toLowerCase()));
   const candidates: any[] = [];
+
+  const money = (n: number) => `${cur} ${Math.round(n)}`;
 
   const recurringTotal = (store.recurringExpenses || [])
     .filter((r: any) => r.active !== false)
@@ -46,19 +51,18 @@ function enrichWithLocalProposals(
     .filter((r: any) => r.active !== false && /(abonn|stream|telecom|cloud|media)/i.test(String(r.category || '')))
     .reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0);
   const restoTotal = (store.transactions || [])
-    .filter((t: any) => /(restaurant|food|alim)/i.test(String(t.category || '')))
-    .reduce((s: number, t: any) => s + (Number(t.amount) || 0), 0);
+    .filter((t2: any) => /(restaurant|food|alim)/i.test(String(t2.category || '')))
+    .reduce((s: number, t2: any) => s + (Number(t2.amount) || 0), 0);
   const coursesTotal = (store.transactions || [])
-    .filter((t: any) => String(t.category || '').toLowerCase() === 'courses')
-    .reduce((s: number, t: any) => s + (Number(t.amount) || 0), 0);
-  const hasInvoices = (store.invoices || []).length > 0;
+    .filter((t2: any) => String(t2.category || '').toLowerCase() === 'courses')
+    .reduce((s: number, t2: any) => s + (Number(t2.amount) || 0), 0);
   const hasContracts = (store.contracts || []).length > 0;
 
   // 1. Audit abonnements / récurrent
   if (!existingCats.has('abonnements') && (subsTotal > 0 || recurringTotal > 50)) {
     const base = subsTotal > 0 ? subsTotal : recurringTotal;
     candidates.push({
-      title: 'Audit de vos abonnements',
+      title: t('aiOptimizer.propSubs'),
       category: 'subscription',
       potential_saving_monthly: Math.round(base * 0.20 * 100) / 100,
       potential_saving_yearly: Math.round(base * 0.20 * 12 * 100) / 100,
@@ -66,14 +70,14 @@ function enrichWithLocalProposals(
       annual_potential: Math.round(base * 0.20 * 12 * 100) / 100,
       current_monthly: base,
       effort: 'easy',
-      action: `Vous avez environ CHF ${base.toFixed(0)}/mois en charges récurrentes. Annulez celles qu'on n'utilise plus depuis 60 jours pour économiser ~20%.`,
+      action: t('aiOptimizer.propSubsAction', { amount: money(base) }),
       explanation: '',
     });
   }
   // 2. LAMal / santé
   if (!existingCats.has('sante') && !existingCats.has('insurance')) {
     candidates.push({
-      title: 'Assurance maladie LAMal',
+      title: t('aiOptimizer.propHealth'),
       category: 'insurance',
       potential_saving_monthly: 60,
       potential_saving_yearly: 720,
@@ -81,14 +85,14 @@ function enrichWithLocalProposals(
       annual_potential: 720,
       current_monthly: 0,
       effort: 'medium',
-      action: 'Comparez les caisses maladie sur priminfo.admin.ch (OFSP). Économie moyenne CHF 50-80/mois en modèle alternatif (HMO, médecin de famille).',
+      action: t('aiOptimizer.propHealthAction'),
       explanation: '',
     });
   }
   // 3. 3e pilier / fiscal
   if (!existingCats.has('fiscal') && !existingCats.has('tax') && monthlyIncome > 1000) {
     candidates.push({
-      title: 'Pilier 3a — Optimisation fiscale',
+      title: t('aiOptimizer.prop3a'),
       category: 'tax',
       potential_saving_monthly: Math.round((Math.min(monthlyIncome * 0.10, 588)) * 100) / 100,
       potential_saving_yearly: 7056,
@@ -96,14 +100,14 @@ function enrichWithLocalProposals(
       annual_potential: 7056,
       current_monthly: 0,
       effort: 'medium',
-      action: 'Maximisez votre 3e pilier (plafond CHF 7056/an salarié). Économie d\'impôt typique : CHF 1500-2500 selon canton.',
+      action: t('aiOptimizer.prop3aAction'),
       explanation: '',
     });
   }
   // 4. Télécoms
   if (!existingCats.has('telecoms') && !existingCats.has('telco')) {
     candidates.push({
-      title: 'Forfait télécom',
+      title: t('aiOptimizer.propTelco'),
       category: 'telco',
       potential_saving_monthly: 25,
       potential_saving_yearly: 300,
@@ -111,7 +115,7 @@ function enrichWithLocalProposals(
       annual_potential: 300,
       current_monthly: 0,
       effort: 'easy',
-      action: 'Passez d\'un forfait premium à un opérateur low-cost suisse. Économie typique CHF 20-30/mois pour des services équivalents.',
+      action: t('aiOptimizer.propTelcoAction'),
       explanation: '',
     });
   }
@@ -119,7 +123,7 @@ function enrichWithLocalProposals(
   if (!existingCats.has('alimentation') && !existingCats.has('food') && (restoTotal + coursesTotal) > 200) {
     const base = restoTotal > 100 ? restoTotal : coursesTotal;
     candidates.push({
-      title: 'Alimentation — réduire les sorties',
+      title: t('aiOptimizer.propFood'),
       category: 'food',
       potential_saving_monthly: Math.round(base * 0.25 * 100) / 100,
       potential_saving_yearly: Math.round(base * 0.25 * 12 * 100) / 100,
@@ -127,14 +131,14 @@ function enrichWithLocalProposals(
       annual_potential: Math.round(base * 0.25 * 12 * 100) / 100,
       current_monthly: base,
       effort: 'easy',
-      action: `CHF ${base.toFixed(0)} ce mois — cuisiner 1 jour de plus/semaine et planifier les courses (liste, marques distributeur) économise ~25%.`,
+      action: t('aiOptimizer.propFoodAction', { amount: money(base) }),
       explanation: '',
     });
   }
   // 6. Logement / loyer
   if (!existingCats.has('logement') && !existingCats.has('other') && (store.recurringExpenses || []).some((r: any) => /loyer|logement|rent/i.test(String(r.title || '')))) {
     candidates.push({
-      title: 'Logement — renégocier loyer ou charges',
+      title: t('aiOptimizer.propHousing'),
       category: 'other',
       potential_saving_monthly: 50,
       potential_saving_yearly: 600,
@@ -142,14 +146,14 @@ function enrichWithLocalProposals(
       annual_potential: 600,
       current_monthly: 0,
       effort: 'medium',
-      action: 'Vérifiez sur asloca.ch que votre loyer correspond au taux hypothécaire actuel. Beaucoup de bailleurs ne répercutent pas les baisses.',
+      action: t('aiOptimizer.propHousingAction'),
       explanation: '',
     });
   }
   // 7. Contrats à renégocier
   if (!existingCats.has('contrats') && hasContracts) {
     candidates.push({
-      title: 'Renégocier vos contrats',
+      title: t('aiOptimizer.propContracts'),
       category: 'insurance',
       potential_saving_monthly: 40,
       potential_saving_yearly: 480,
@@ -157,14 +161,14 @@ function enrichWithLocalProposals(
       annual_potential: 480,
       current_monthly: 0,
       effort: 'medium',
-      action: `Vous avez ${store.contracts.length} contrat(s) actif(s). Renégocier 1 fois par an (assurance ménage/RC, télécom) génère 10-20% d'économie.`,
+      action: t('aiOptimizer.propContractsAction', { n: store.contracts.length }),
       explanation: '',
     });
   }
   // 8. Frais bancaires
   if (!existingCats.has('bank') && !existingCats.has('frais_bancaires')) {
     candidates.push({
-      title: 'Frais bancaires',
+      title: t('aiOptimizer.propBank'),
       category: 'bank',
       potential_saving_monthly: 8,
       potential_saving_yearly: 96,
@@ -172,12 +176,11 @@ function enrichWithLocalProposals(
       annual_potential: 96,
       current_monthly: 0,
       effort: 'easy',
-      action: 'Comparez votre banque (UBS, Raiffeisen, PostFinance) avec Yuh / Neon / Zak. Souvent 0 frais de tenue + meilleur change.',
+      action: t('aiOptimizer.propBankAction'),
       explanation: '',
     });
   }
 
-  // On garde le résultat IA en tête + on ajoute jusqu'à atteindre 3 propos min
   const minCount = Math.max(3, existing.length);
   for (const c of candidates) {
     if (existing.length >= minCount && new Set(existing.map((p: any) => p.category)).size >= 3) break;
@@ -187,12 +190,12 @@ function enrichWithLocalProposals(
   const total_monthly = existing.reduce((s, p) => s + (p.potential_saving_monthly || p.monthly_potential || 0), 0);
   const total_annual = existing.reduce((s, p) => s + (p.potential_saving_yearly || p.annual_potential || 0), 0);
 
-  // Si on a dû enrichir (backend a rendu 0 ou peu de propos), on remplace
-  // le résumé trompeur "0 pistes détectées" par un résumé honnête.
   const enriched = existing.length > (data?.proposals?.length || 0);
   let summary = data?.summary;
   if (enriched || !summary || /0 pistes|aucune piste|no proposals?/i.test(summary)) {
-    summary = `${existing.length} pistes d'économies identifiées${enriched ? ' (analyse locale enrichie)' : ''}.`;
+    summary = enriched
+      ? t('aiOptimizer.summaryEnriched', { n: existing.length })
+      : t('aiOptimizer.summaryNormal', { n: existing.length });
   }
 
   return {
@@ -233,21 +236,21 @@ interface OptimizerResult {
   error?: string;
 }
 
-const CATEGORY_META: Record<Category, { icon: keyof typeof Ionicons.glyphMap; label: string; color: string }> = {
-  subscription: { icon: 'play-circle', label: 'Abonnement', color: '#EC4899' },
-  insurance: { icon: 'shield-checkmark', label: 'Assurance', color: '#10B981' },
-  food: { icon: 'restaurant', label: 'Alimentation', color: '#F97316' },
-  energy: { icon: 'flash', label: 'Énergie', color: '#F59E0B' },
-  telco: { icon: 'cellular', label: 'Télécom', color: '#0EA5E9' },
-  bank: { icon: 'card', label: 'Banque', color: '#8B5CF6' },
-  tax: { icon: 'calculator', label: 'Impôts', color: '#6366F1' },
-  other: { icon: 'sparkles', label: 'Autre', color: '#14B8A6' },
+const CATEGORY_META: Record<Category, { icon: keyof typeof Ionicons.glyphMap; labelKey: string; color: string }> = {
+  subscription: { icon: 'play-circle', labelKey: 'aiOptimizer.catSubscription', color: '#EC4899' },
+  insurance: { icon: 'shield-checkmark', labelKey: 'aiOptimizer.catInsurance', color: '#10B981' },
+  food: { icon: 'restaurant', labelKey: 'aiOptimizer.catFood', color: '#F97316' },
+  energy: { icon: 'flash', labelKey: 'aiOptimizer.catEnergy', color: '#F59E0B' },
+  telco: { icon: 'cellular', labelKey: 'aiOptimizer.catTelco', color: '#0EA5E9' },
+  bank: { icon: 'card', labelKey: 'aiOptimizer.catBank', color: '#8B5CF6' },
+  tax: { icon: 'calculator', labelKey: 'aiOptimizer.catTax', color: '#6366F1' },
+  other: { icon: 'sparkles', labelKey: 'aiOptimizer.catOther', color: '#14B8A6' },
 };
 
-const EFFORT_META: Record<Effort, { label: string; color: string; emoji: string }> = {
-  easy: { label: 'Facile', color: '#10B981', emoji: '⚡' },
-  medium: { label: 'Moyen', color: '#F59E0B', emoji: '⏱️' },
-  hard: { label: 'Démarche', color: '#EF4444', emoji: '🛠️' },
+const EFFORT_META: Record<Effort, { labelKey: string; color: string; emoji: string }> = {
+  easy: { labelKey: 'aiOptimizer.effortEasy', color: '#10B981', emoji: '⚡' },
+  medium: { labelKey: 'aiOptimizer.effortMedium', color: '#F59E0B', emoji: '⏱️' },
+  hard: { labelKey: 'aiOptimizer.effortHard', color: '#EF4444', emoji: '🛠️' },
 };
 
 function fmt(n: number, cur: string): string {
@@ -259,6 +262,7 @@ export default function AIOptimizerScreen() {
   const router = useRouter();
   const C = useTheme();
   const store = useStore();
+  const { t } = useTranslation();
   const CUR = store.preferences.currency;
 
   const [loading, setLoading] = useState(false);
@@ -281,7 +285,7 @@ export default function AIOptimizerScreen() {
 
   const analyze = async () => {
     if (!hasApiBaseUrl()) {
-      setError('URL backend manquante');
+      setError(t('aiOptimizer.errorBackendMissing'));
       return;
     }
     setLoading(true);
@@ -292,11 +296,11 @@ export default function AIOptimizerScreen() {
         yearly_income: yearlyIncome,
         currency: CUR,
         canton: (store.preferences as any).canton || 'VD',
-        transactions: store.transactions.slice(0, 120).map((t) => ({
-          title: t.title,
-          amount: t.amount,
-          category: t.category,
-          date: t.date,
+        transactions: store.transactions.slice(0, 120).map((tx) => ({
+          title: tx.title,
+          amount: tx.amount,
+          category: tx.category,
+          date: tx.date,
         })),
         pro_expenses: (store.proExpenses || []).slice(0, 50).map((e: any) => ({
           title: e.title,
@@ -342,17 +346,12 @@ export default function AIOptimizerScreen() {
           saved: g.saved,
           deadline: g.deadline,
         })),
-        // Demande explicite : recommandations diversifiées (DO OR DIE)
         require_min_proposals: 3,
         require_categories_diversity: ['abonnements', 'sante', 'fiscal', 'logement', 'telecoms', 'alimentation', 'energie'],
       };
 
       console.log(`${TAG} POST /api/optimizer/analyze (signals=${(body.transactions||[]).length} txns)`);
-      if (!hasApiBaseUrl()) {
-        throw new Error('Configuration manquante : EXPO_PUBLIC_BACKEND_URL n\'est pas définie.');
-      }
 
-      // Centralized fetch with timeout + retry (35s, 1 retry) — never throws raw network errors
       const r = await apiFetchJson<OptimizerResult>('/api/optimizer/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -360,32 +359,25 @@ export default function AIOptimizerScreen() {
       }, { timeoutMs: 35000, retries: 1, silent: true });
       console.log(`${TAG} apiFetchJson → ok=${r.ok} status=${r.status} offline=${r.offline}`);
       if (!r.ok || !r.data) {
-        throw new Error(r.offline ? 'offline' : `Le serveur a retourné le code ${r.status}.`);
+        throw new Error(r.offline ? 'offline' : `HTTP ${r.status}`);
       }
       const data = r.data;
-      console.log(`${TAG} parsed result, ${data.proposals?.length || 0} proposals`);
-      if (!data.success) throw new Error(data.error || 'Analyse échouée');
+      if (!data.success) throw new Error(data.error || 'Analysis failed');
 
-      // ✅ DO OR DIE v3.7.26 — Garantir ≥3 propositions et diversité de catégories
-      // même si l'IA backend ne renvoie qu'1-2 propositions (ex: "Netflix"
-      // uniquement). On ENRICHIT (jamais on n'écrase) avec des propositions
-      // locales basées sur les vraies données.
-      const enriched = enrichWithLocalProposals(data, store, monthlyIncome);
+      const enriched = enrichWithLocalProposals(data, store, monthlyIncome, t, CUR);
       setResult(enriched);
     } catch (e: any) {
       console.error(`${TAG} fatal:`, e);
-      // ── Local fallback: never show the user a dead end ────────────────────
-      // v3.7.26 — On utilise le MÊME helper enrichWithLocalProposals que
-      // la branche success, en partant de proposals=[]. Cela garantit ≥3
-      // propositions sur ≥3 catégories distinctes, même hors-ligne ou
-      // quand l'auth OpenAI échoue (cas preview / sk-emerg legacy).
+      // Local fallback
       const enriched = enrichWithLocalProposals(
-        { success: true, proposals: [], summary: 'Suggestions locales — basées sur vos données.' },
+        { success: true, proposals: [], summary: t('aiOptimizer.localSuggestions') },
         store,
         monthlyIncome,
+        t,
+        CUR,
       );
       enriched._local = true;
-      enriched.summary = 'Suggestions locales — basées sur vos données. Pour une analyse IA personnalisée, vérifiez votre connexion ou réessayez plus tard.';
+      enriched.summary = t('aiOptimizer.localSuggestions');
       setResult(enriched);
     } finally {
       setLoading(false);
@@ -458,7 +450,7 @@ export default function AIOptimizerScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
           <Ionicons name="chevron-back" size={26} color={C.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>Économiseur IA</Text>
+        <Text style={styles.title}>{t('aiOptimizer.title')}</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -466,33 +458,31 @@ export default function AIOptimizerScreen() {
         {!result && !loading && (
           <>
             <LinearGradient colors={C.gradientPrimary as [string, string]} style={styles.hero}>
-              <Text style={styles.heroEmoji}>🧠</Text>
-              <Text style={styles.heroTitle}>Analyse IA de vos finances</Text>
-              <Text style={styles.heroSub}>
-                Notre IA examine vos dépenses, abonnements et contrats pour proposer des économies concrètes adaptées à la Suisse.
-              </Text>
+              <Text style={styles.heroEmoji}>{t('aiOptimizer.heroEmoji')}</Text>
+              <Text style={styles.heroTitle}>{t('aiOptimizer.heroTitle')}</Text>
+              <Text style={styles.heroSub}>{t('aiOptimizer.heroSub')}</Text>
             </LinearGradient>
 
             <Card style={styles.incomeCard}>
-              <Text style={[styles.sectionTitle, { marginTop: 0 }]}>Base de l'analyse</Text>
+              <Text style={[styles.sectionTitle, { marginTop: 0 }]}>{t('aiOptimizer.analysisBase')}</Text>
               <View style={styles.incomeRow}>
-                <Text style={styles.incomeLabel}>Revenu mensuel estimé</Text>
+                <Text style={styles.incomeLabel}>{t('aiOptimizer.labelMonthlyIncome')}</Text>
                 <Text style={styles.incomeValue}>{fmt(monthlyIncome, CUR)}</Text>
               </View>
               <View style={styles.incomeRow}>
-                <Text style={styles.incomeLabel}>Revenu annuel estimé</Text>
+                <Text style={styles.incomeLabel}>{t('aiOptimizer.labelYearlyIncome')}</Text>
                 <Text style={styles.incomeValue}>{fmt(yearlyIncome, CUR)}</Text>
               </View>
               <View style={styles.incomeRow}>
-                <Text style={styles.incomeLabel}>Transactions analysées</Text>
+                <Text style={styles.incomeLabel}>{t('aiOptimizer.labelTransactions')}</Text>
                 <Text style={styles.incomeValue}>{store.transactions.length}</Text>
               </View>
               <View style={styles.incomeRow}>
-                <Text style={styles.incomeLabel}>Dépenses récurrentes</Text>
+                <Text style={styles.incomeLabel}>{t('aiOptimizer.labelRecurring')}</Text>
                 <Text style={styles.incomeValue}>{store.recurringExpenses.length}</Text>
               </View>
               <View style={styles.incomeRow}>
-                <Text style={styles.incomeLabel}>Canton</Text>
+                <Text style={styles.incomeLabel}>{t('aiOptimizer.labelCanton')}</Text>
                 <Text style={styles.incomeValue}>{(store.preferences as any).canton || 'VD'}</Text>
               </View>
             </Card>
@@ -504,40 +494,41 @@ export default function AIOptimizerScreen() {
               </View>
             )}
 
-            {/* Empty-state pédagogique quand pas assez de données */}
             {(store.transactions.length < 5 && store.recurringExpenses.length < 2) && (
               <View style={[styles.errorBox, { backgroundColor: `${C.info}15`, marginTop: Spacing.md, marginBottom: 0 }]}>
                 <Ionicons name="information-circle" size={20} color={C.info} />
                 <Text style={[styles.errorText, { color: C.info }]}>
-                  Nous analysons actuellement vos données. Ajoutez davantage de dépenses pour obtenir des recommandations personnalisées.
+                  {t('aiOptimizer.insufficientData')}
                 </Text>
               </View>
             )}
 
-            <Button title="Lancer l'analyse IA" onPress={analyze} fullWidth size="lg" icon="sparkles" />
+            <Button title={t('aiOptimizer.startAnalysis')} onPress={analyze} fullWidth size="lg" icon="sparkles" />
           </>
         )}
 
         {loading && (
           <View style={styles.loaderBox}>
             <ActivityIndicator color={C.primary} size="large" />
-            <Text style={styles.loaderText}>
-              🧠 L'IA analyse vos finances...{'\n'}Identification des économies possibles (10-20 s)
-            </Text>
+            <Text style={styles.loaderText}>{t('aiOptimizer.loadingText')}</Text>
           </View>
         )}
 
         {result && !loading && (
           <>
             <LinearGradient colors={C.gradientSuccess as [string, string]} style={styles.resultHero}>
-              <Text style={styles.resultLabel}>Économie potentielle annuelle</Text>
+              <Text style={styles.resultLabel}>{t('aiOptimizer.resultLabel')}</Text>
               <Text style={styles.resultBig}>{fmt(result.yearly_potential, CUR)}</Text>
-              <Text style={styles.resultSub}>soit ~{fmt(result.monthly_potential, CUR)}/mois</Text>
+              <Text style={styles.resultSub}>
+                {t('aiOptimizer.resultSubMonthly', { amount: fmt(result.monthly_potential, CUR) })}
+              </Text>
             </LinearGradient>
 
             {result.summary && <Text style={styles.summary}>{result.summary}</Text>}
 
-            <Text style={styles.sectionTitle}>Propositions concrètes ({result.proposals.length})</Text>
+            <Text style={styles.sectionTitle}>
+              {t('aiOptimizer.proposalsCount', { n: result.proposals.length })}
+            </Text>
 
             {result.proposals.map((p, idx) => {
               const meta = CATEGORY_META[p.category] || CATEGORY_META.other;
@@ -553,21 +544,21 @@ export default function AIOptimizerScreen() {
 
                   <View style={styles.badgesRow}>
                     <View style={[styles.badge, { backgroundColor: `${meta.color}25` }]}>
-                      <Text style={[styles.badgeText, { color: meta.color }]}>{meta.label}</Text>
+                      <Text style={[styles.badgeText, { color: meta.color }]}>{t(meta.labelKey)}</Text>
                     </View>
                     <View style={[styles.badge, { backgroundColor: `${effort.color}25` }]}>
                       <Text style={[styles.badgeText, { color: effort.color }]}>
-                        {effort.emoji} {effort.label}
+                        {effort.emoji} {t(effort.labelKey)}
                       </Text>
                     </View>
                   </View>
 
                   <View style={styles.savingRow}>
-                    <Text style={styles.savingLabel}>💰 Économie / mois</Text>
+                    <Text style={styles.savingLabel}>{t('aiOptimizer.savingsPerMonth')}</Text>
                     <Text style={styles.savingMonth}>{fmt(p.potential_saving_monthly, CUR)}</Text>
                   </View>
                   <View style={styles.savingRow}>
-                    <Text style={styles.savingLabel}>📅 Économie / an</Text>
+                    <Text style={styles.savingLabel}>{t('aiOptimizer.savingsPerYear')}</Text>
                     <Text style={styles.savingYear}>{fmt(p.potential_saving_yearly, CUR)}</Text>
                   </View>
 
@@ -579,7 +570,7 @@ export default function AIOptimizerScreen() {
 
             {result.tips.length > 0 && (
               <Card style={styles.tipsCard}>
-                <Text style={styles.tipsTitle}>💡 Conseils Budgy</Text>
+                <Text style={styles.tipsTitle}>{t('aiOptimizer.tipsTitle')}</Text>
                 {result.tips.map((tip, i) => (
                   <View key={i} style={styles.tipItem}>
                     <Text style={styles.tipBullet}>•</Text>
@@ -590,7 +581,7 @@ export default function AIOptimizerScreen() {
             )}
 
             <Button
-              title="Relancer l'analyse"
+              title={t('aiOptimizer.restart')}
               onPress={() => { setResult(null); setError(null); }}
               fullWidth size="lg" icon="refresh" variant="secondary"
               style={{ marginTop: Spacing.lg }}

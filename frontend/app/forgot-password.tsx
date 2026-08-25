@@ -67,7 +67,7 @@ export default function ForgotPasswordScreen() {
         // en utilisant des messages génériques côté UX.
         const { humanizeAuthError } = await import('../src/lib/authErrors');
         const h = humanizeAuthError(e, 'resetPassword');
-        setError(h.hint ? `${h.message}\n\n${h.hint}` : h.message);
+        setError(h.hintKey ? `${t(h.messageKey)}\n\n${t(h.hintKey)}` : t(h.messageKey));
         try { if (Platform.OS !== 'web') await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error); } catch {}
         return;
       }
@@ -76,7 +76,7 @@ export default function ForgotPasswordScreen() {
     } catch (e: any) {
       const { humanizeAuthError } = await import('../src/lib/authErrors');
       const h = humanizeAuthError(e, 'resetPassword');
-      setError(h.hint ? `${h.message}\n\n${h.hint}` : h.message);
+      setError(h.hintKey ? `${t(h.messageKey)}\n\n${t(h.hintKey)}` : t(h.messageKey));
     } finally {
       setLoading(false);
     }

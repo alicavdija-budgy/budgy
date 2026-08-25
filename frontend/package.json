@@ -11,7 +11,9 @@
     "build": "expo export --platform web && cp -n serve.json dist/serve.json 2>/dev/null || true",
     "serve": "serve dist -l tcp://0.0.0.0:${PORT:-3000}",
     "start:prod": "npm run build && npm run serve",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "check:i18n": "node scripts/check-i18n.mjs",
+    "audit:i18n": "node scripts/audit-i18n.mjs"
   },
   "dependencies": {
     "@babel/runtime": "^7.20.6",

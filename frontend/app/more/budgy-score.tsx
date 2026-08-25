@@ -27,6 +27,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Svg, { Circle } from 'react-native-svg';
 import { BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
 import { useTheme } from '../../src/hooks/useTheme';
+import { useTranslation } from '../../src/hooks/useTranslation';
 import type { ThemePalette } from '../../src/constants/palettes';
 import { useStore } from '../../src/stores/useStore';
 import type { Income, RecurringExpense, SavingsGoal } from '../../src/types';
@@ -36,18 +37,20 @@ const STORAGE_KEY = 'budgy:score-history:v1';
 // ─────────── Score breakdown ───────────
 interface Dimension {
   id: 'savings' | 'fixed' | 'subscriptions' | 'income' | 'goals';
-  label: string;
+  labelKey: string;
   emoji: string;
   maxPts: number;
   scored: number;
-  value: number;     // raw computed metric, 0..1
-  badText: string;
-  goodText: string;
+  value: number;
+  badKey: string;
+  goodKey: string;
 }
+
+export type BudgyGrade = 'excellent' | 'good' | 'fair' | 'needsImprovement';
 
 interface ScoreResult {
   total: number;
-  grade: 'excellent' | 'bon' | 'moyen' | 'à améliorer';
+  grade: BudgyGrade;
   dimensions: Dimension[];
   monthlyIncome: number;
   monthlyRecurring: number;
@@ -107,87 +110,95 @@ function compute(
   }
 
   const total = Math.max(0, Math.min(100, savingsPts + fixedPts + subPts + stabilityPts + goalsPts));
-  const grade: ScoreResult['grade'] =
-    total >= 85 ? 'excellent' : total >= 70 ? 'bon' : total >= 50 ? 'moyen' : 'à améliorer';
+  const grade: BudgyGrade =
+    total >= 85 ? 'excellent' : total >= 70 ? 'good' : total >= 50 ? 'fair' : 'needsImprovement';
 
   const dims: Dimension[] = [
     {
-      id: 'savings', label: 'Taux d\'épargne', emoji: '🐷', maxPts: 25, scored: savingsPts,
+      id: 'savings', labelKey: 'budgyScore.labelSavings', emoji: '🐷', maxPts: 25, scored: savingsPts,
       value: savingsRate,
-      badText: 'Votre épargne est faible. Tentez de mettre de côté 10–20% de vos revenus.',
-      goodText: 'Excellent taux d\'épargne — gardez cette discipline.',
+      badKey: 'budgyScore.badSavings',
+      goodKey: 'budgyScore.goodSavings',
     },
     {
-      id: 'fixed', label: 'Charges fixes', emoji: '🏠', maxPts: 20, scored: fixedPts,
+      id: 'fixed', labelKey: 'budgyScore.labelFixed', emoji: '🏠', maxPts: 20, scored: fixedPts,
       value: fixedRatio,
-      badText: 'Vos charges fixes sont élevées par rapport à vos revenus. Renégociez certains contrats.',
-      goodText: 'Charges fixes bien maîtrisées.',
+      badKey: 'budgyScore.badFixed',
+      goodKey: 'budgyScore.goodFixed',
     },
     {
-      id: 'subscriptions', label: 'Abonnements', emoji: '🎬', maxPts: 15, scored: subPts,
+      id: 'subscriptions', labelKey: 'budgyScore.labelSubs', emoji: '🎬', maxPts: 15, scored: subPts,
       value: subRatio,
-      badText: 'Beaucoup d\'abonnements pour votre budget. Faites le tri sur ceux que vous utilisez réellement.',
-      goodText: 'Vos abonnements sont raisonnables.',
+      badKey: 'budgyScore.badSubs',
+      goodKey: 'budgyScore.goodSubs',
     },
     {
-      id: 'income', label: 'Stabilité des revenus', emoji: '💼', maxPts: 15, scored: stabilityPts,
+      id: 'income', labelKey: 'budgyScore.labelIncome', emoji: '💼', maxPts: 15, scored: stabilityPts,
       value: stabilityPts / 15,
-      badText: 'Ajoutez vos revenus récurrents dans Budgy pour des prévisions plus fiables.',
-      goodText: 'Vos revenus récurrents sont bien identifiés.',
+      badKey: 'budgyScore.badIncome',
+      goodKey: 'budgyScore.goodIncome',
     },
     {
-      id: 'goals', label: 'Objectifs atteints', emoji: '🎯', maxPts: 25, scored: goalsPts,
+      id: 'goals', labelKey: 'budgyScore.labelGoals', emoji: '🎯', maxPts: 25, scored: goalsPts,
       value: goals && goals.length > 0 ? goalsPts / 25 : 0,
-      badText: 'Créez un objectif d\'épargne pour visualiser vos progrès.',
-      goodText: 'Vos objectifs progressent — continuez !',
+      badKey: 'budgyScore.badGoals',
+      goodKey: 'budgyScore.goodGoals',
     },
   ];
 
   return { total, grade, dimensions: dims, monthlyIncome, monthlyRecurring, monthlySubs, monthlySavingsCapacity };
 }
 
-// ─────────── Top 3 advice ───────────
-function topAdvice(result: ScoreResult): { title: string; text: string; icon: keyof typeof Ionicons.glyphMap }[] {
-  // Sort dimensions by points-gap (maxPts - scored) descending
+// ─────────── Top 3 advice (i18n keys — resolved at render time) ───────────
+interface AdviceRecipe {
+  titleKey: string;
+  textKey: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  params?: Record<string, string | number>;
+}
+function topAdviceRecipes(result: ScoreResult): AdviceRecipe[] {
   const gaps = [...result.dimensions]
     .map((d) => ({ ...d, gap: d.maxPts - d.scored }))
     .filter((d) => d.gap > 0)
     .sort((a, b) => b.gap - a.gap)
     .slice(0, 3);
 
-  return gaps.map((d) => {
+  return gaps.map<AdviceRecipe>((d) => {
     if (d.id === 'savings') {
       const targetMonthly = Math.round(result.monthlyIncome * 0.15);
       return {
-        title: 'Augmentez votre épargne mensuelle',
-        text: `Visez ${targetMonthly > 0 ? `CHF ${targetMonthly.toLocaleString('fr-CH').replace(/,/g, "'")}/mois` : 'environ 15% de vos revenus'}. Programmez un virement automatique le jour de votre salaire.`,
+        titleKey: 'budgyScore.adviceSavingsTitle',
+        textKey: 'budgyScore.adviceSavingsText',
         icon: 'trending-up',
+        params: { n: targetMonthly },
       };
     }
     if (d.id === 'fixed') {
+      const yearlyGain = Math.round(result.monthlyRecurring * 0.10 * 12);
       return {
-        title: 'Réduisez vos charges fixes',
-        text: 'Repassez en revue assurances, télécom et internet. Le Radar d\'économies peut vous aider à identifier où économiser.',
+        titleKey: 'budgyScore.adviceFixedTitle',
+        textKey: 'budgyScore.adviceFixedText',
         icon: 'home',
+        params: { n: yearlyGain },
       };
     }
     if (d.id === 'subscriptions') {
       return {
-        title: 'Faites le tri dans vos abonnements',
-        text: 'Annulez les abonnements que vous n\'utilisez pas chaque mois. Une seule annulation peut représenter CHF 100–200/an.',
+        titleKey: 'budgyScore.adviceSubsTitle',
+        textKey: 'budgyScore.adviceSubsText',
         icon: 'film',
       };
     }
     if (d.id === 'income') {
       return {
-        title: 'Ajoutez vos revenus récurrents',
-        text: 'Renseignez votre salaire (et autres revenus fixes) pour que Budgy puisse calculer votre capacité d\'épargne réelle.',
+        titleKey: 'budgyScore.adviceIncomeTitle',
+        textKey: 'budgyScore.adviceIncomeText',
         icon: 'cash',
       };
     }
     return {
-      title: 'Créez un objectif d\'épargne',
-      text: 'Un objectif concret (vacances, urgence, projet) augmente la motivation et la régularité de l\'épargne.',
+      titleKey: 'budgyScore.adviceGoalsTitle',
+      textKey: 'budgyScore.adviceGoalsText',
       icon: 'flag',
     };
   });
@@ -257,6 +268,7 @@ function Gauge({ value, size = 200, color }: { value: number; size?: number; col
 // ─────────── Screen ───────────
 export default function BudgyScoreScreen() {
   const theme = useTheme();
+  const { t } = useTranslation();
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -266,7 +278,13 @@ export default function BudgyScoreScreen() {
   const goals = useStore((s) => s.savingsGoals);
 
   const result = useMemo(() => compute(incomes || [], recurring || [], goals || []), [incomes, recurring, goals]);
-  const advice = useMemo(() => topAdvice(result), [result]);
+  const advice = useMemo(() => topAdviceRecipes(result), [result]);
+  const gradeLabel = t(
+    result.grade === 'excellent' ? 'budgyScore.gradeExcellent'
+    : result.grade === 'good' ? 'budgyScore.gradeGood'
+    : result.grade === 'fair' ? 'budgyScore.gradeFair'
+    : 'budgyScore.gradeNeedsImprovement'
+  );
 
   const [history, setHistory] = useState<ScoreSnapshot[]>([]);
   const [showDetails, setShowDetails] = useState(false);
@@ -319,7 +337,7 @@ export default function BudgyScoreScreen() {
               <Text style={[styles.gaugeNumber, { color: gaugeColor }]}>{result.total}</Text>
               <Text style={styles.gaugeOutOf}>/100</Text>
               <View style={[styles.gradeBadge, { backgroundColor: `${gaugeColor}25`, borderColor: gaugeColor }]}>
-                <Text style={[styles.gradeBadgeTxt, { color: gaugeColor }]}>{result.grade}</Text>
+                <Text style={[styles.gradeBadgeTxt, { color: gaugeColor }]}>{gradeLabel}</Text>
               </View>
             </View>
           </View>
@@ -359,8 +377,8 @@ export default function BudgyScoreScreen() {
                   <Ionicons name={a.icon} size={20} color={theme.primary} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.adviceTitle}>{a.title}</Text>
-                  <Text style={styles.adviceTxt}>{a.text}</Text>
+                  <Text style={styles.adviceTitle}>{t(a.titleKey)}</Text>
+                  <Text style={styles.adviceTxt}>{t(a.textKey, a.params)}</Text>
                 </View>
                 <View style={[styles.priorityPill, { backgroundColor: `${theme.gold}20`, borderColor: theme.gold }]}>
                   <Text style={[styles.priorityTxt, { color: theme.gold }]}>{i + 1}</Text>
@@ -384,14 +402,14 @@ export default function BudgyScoreScreen() {
                 <View key={d.id} style={styles.dimRow}>
                   <View style={styles.dimHeader}>
                     <Text style={{ fontSize: 22 }}>{d.emoji}</Text>
-                    <Text style={styles.dimLabel}>{d.label}</Text>
+                    <Text style={styles.dimLabel}>{t(d.labelKey)}</Text>
                     <Text style={styles.dimPts}>{d.scored} / {d.maxPts}</Text>
                   </View>
                   <View style={styles.dimBarBg}>
                     <View style={[styles.dimBar, { width: `${Math.round(pct * 100)}%`, backgroundColor: pct >= 0.7 ? theme.success : pct >= 0.4 ? theme.warning : theme.error }]} />
                   </View>
                   <Text style={styles.dimNote}>
-                    {pct >= 0.7 ? d.goodText : d.badText}
+                    {pct >= 0.7 ? t(d.goodKey) : t(d.badKey)}
                   </Text>
                 </View>
               );

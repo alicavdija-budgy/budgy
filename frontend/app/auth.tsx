@@ -40,10 +40,10 @@ export default function AuthScreen() {
   const validate = (): boolean => {
     const errs: Record<string, string> = {};
     if (!email.includes('@')) errs.email = t('auth.errEmail');
-    if (password.length < 6) errs.password = 'Minimum 6 caractères';
+    if (password.length < 6) errs.password = t('auth.errPasswordShort');
     if (mode === 'register') {
-      if (!name.trim()) errs.name = 'Nom requis';
-      if (password !== confirmPassword) errs.confirmPassword = 'Mots de passe différents';
+      if (!name.trim()) errs.name = t('auth.errNameRequired');
+      if (password !== confirmPassword) errs.confirmPassword = t('auth.errPasswordMismatch');
     }
     setErrors(errs);
     return Object.keys(errs).length === 0;
@@ -159,11 +159,11 @@ export default function AuthScreen() {
       const buttons: any[] = [{ text: 'OK', style: 'default' }];
       if (mode === 'login' && (h._code === 'AUTH_SIGNIN_UNAUTHORIZED' || h._code === 'AUTH_INVALID_CREDENTIALS' || h._code === 'AUTH_SIGNIN_GENERIC')) {
         buttons.unshift({
-          text: 'Mot de passe oublié',
+          text: t('auth.forgotPwdShort'),
           onPress: () => router.push('/forgot-password' as any),
         });
       }
-      Alert.alert(h.title, h.hint ? `${h.message}\n\n${h.hint}` : h.message, buttons);
+      Alert.alert(t(h.titleKey), h.hintKey ? `${t(h.messageKey)}\n\n${t(h.hintKey)}` : t(h.messageKey), buttons);
     } finally {
       setLoading(false);
     }
@@ -211,10 +211,10 @@ export default function AuthScreen() {
           <View style={styles.form}>
             {mode === 'register' && (
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Nom complet</Text>
+                <Text style={styles.label}>{t('auth.fullName')}</Text>
                 <View style={[styles.inputContainer, errors.name && styles.inputError]}>
                   <Ionicons name="person-outline" size={20} color={Colors.textTertiary} />
-                  <TextInput testID="auth-name-input" style={styles.input} value={name} onChangeText={setName} placeholder="Jean Dupont" placeholderTextColor={Colors.textTertiary} autoCapitalize="words" />
+                  <TextInput testID="auth-name-input" style={styles.input} value={name} onChangeText={setName} placeholder={t('auth.fullNamePlaceholder')} placeholderTextColor={Colors.textTertiary} autoCapitalize="words" />
                 </View>
                 {errors.name && <Text style={styles.errorText}>{errors.name}</Text>}
               </View>
@@ -280,7 +280,7 @@ export default function AuthScreen() {
           </TouchableOpacity>
 
           <Text style={styles.privacyNote}>
-            {isSupabaseConfigured() ? 'Données chiffrées · Sync cloud sécurisé' : 'Données stockées localement · 100% privé'}
+            {isSupabaseConfigured() ? t('auth.securityCloud') : t('auth.securityLocal')}
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>

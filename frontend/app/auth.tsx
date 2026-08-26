@@ -180,16 +180,26 @@ export default function AuthScreen() {
   const handleDemoMode = async () => {
     setLoading(true);
     try {
-      // v3.9.0 Build 74 — Demo mode is Pro locally, but strictly SCOPED to
-      // the synthetic 'demo_user' owner. Any real login afterwards will
-      // detect the userId mismatch and immediately wipe the demo Pro.
+      // v3.9.0 Build 74 — APPLE GUIDELINE 2.1(b) COMPLIANCE.
+      // Demo mode MUST start strictly FREE. The ONLY paths to Pro are:
+      //   1) StoreKit purchase → validateOnBackend → confirmPro()
+      //   2) StoreKit restore  → restoreOnBackend  → confirmPro()
+      //   3) Provisional grant AFTER a real Apple receipt (transient)
+      // No local grant of any kind — the paywall route is identical to any
+      // Free user, so App Review sees the real StoreKit flow.
       const premium = usePremiumStore.getState();
       premium.resetForUserChange();
       premium.attachToUser('demo_user');
-      premium.purchase('annual'); // demo grant — never leaks (owner=demo_user)
 
-      setUser({ id: 'demo_user', email: 'demo@guardian.app', name: t('authExtra.demoName'), createdAt: Date.now(), isPro: true, isDemo: true });
-      setPro(true);
+      setUser({
+        id: 'demo_user',
+        email: 'demo@guardian.app',
+        name: t('authExtra.demoName'),
+        createdAt: Date.now(),
+        isPro: false,
+        isDemo: true,
+      });
+      setPro(false);
       // Phase 1: no seed data — demo mode also starts empty
       setPreferences({ onboarded: true });
       await new Promise(r => setTimeout(r, 300));

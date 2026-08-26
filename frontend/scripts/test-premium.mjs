@@ -13,6 +13,13 @@
  * Run: `node scripts/test-premium.mjs`
  */
 
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 // ── Pure reducers (must mirror usePremiumStore.ts) ─────────────────────
 const DEFAULT_USAGE = {
   ai: 0, tax: 0, export: 0, cloud: 0,
@@ -268,6 +275,61 @@ scenario('H. Provisional Pro wiped on user switch', () => {
   assert('user_H2 has NO provisional access', !actions.hasPremiumAccess(s));
   assert('user_H2 provisionalProUntil cleared', s.provisionalProUntil === null);
   assert('user_H2 pendingValidation cleared', s.pendingValidation === null);
+});
+
+// I — v3.9.0 Build 74 — Demo mode = STRICTLY FREE (Apple 2.1(b) compliance)
+scenario('I. Demo mode starts FREE (no local Pro grant)', () => {
+  let s = initialState();
+  // Mirror auth.tsx.handleDemoMode
+  s = actions.resetForUserChange(s);
+  s = actions.attachToUser(s, 'demo_user');
+  // NO premium.purchase(), NO setPro(true) — this is the whole point
+
+  assert('demo_user is NOT Pro', !s.isPro);
+  assert('demo_user has no plan', s.plan === null);
+  assert('demo_user hasPremiumAccess = false', !actions.hasPremiumAccess(s));
+  assert('demo_user has no provisional', s.provisionalProUntil === null);
+  assert('demo_user has no pending validation', s.pendingValidation === null);
+  assert('demo_user ownerUserId = demo_user', s.ownerUserId === 'demo_user');
+});
+
+// J — Demo → real account transition (must remain FREE)
+scenario('J. Demo FREE → logout → real user stays FREE', () => {
+  let s = initialState();
+  s = actions.attachToUser(s, 'demo_user');
+  assert('demo_user is FREE', !s.isPro);
+
+  // logout
+  s = actions.resetForUserChange(s);
+
+  // real login
+  s = actions.attachToUser(s, 'user_real');
+  assert('real user is FREE', !s.isPro);
+  assert('real user has no plan', s.plan === null);
+});
+
+// K — Static contract: no premium grant path in auth.tsx (source scan)
+scenario('K. auth.tsx contains no premium grant path', () => {
+  const authFile = path.join(__dirname, '..', 'app', 'auth.tsx');
+  const src = fs.readFileSync(authFile, 'utf8');
+
+  // Strip comments (block + line) to only inspect executable code
+  const stripped = src
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\/\/.*$/gm, '');
+
+  const banned = [
+    { pattern: /premium\.purchase\s*\(/, name: 'premium.purchase(' },
+    { pattern: /\.confirmPro\s*\(/, name: '.confirmPro(' },
+    { pattern: /\.grantProvisionalPro\s*\(/, name: '.grantProvisionalPro(' },
+    { pattern: /setPro\s*\(\s*true\s*\)/, name: 'setPro(true)' },
+    { pattern: /isPro\s*:\s*true/, name: 'isPro: true (literal)' },
+  ];
+
+  for (const b of banned) {
+    const found = b.pattern.test(stripped);
+    assert(`auth.tsx has no ${b.name}`, !found, found ? `found forbidden token ${b.name}` : '');
+  }
 });
 
 // ── Report ─────────────────────────────────────────────────────────────

@@ -17,8 +17,7 @@
       },
       "env": {
         "EXPO_PUBLIC_BACKEND_URL": "https://api.budgy.ch",
-        "EXPO_PUBLIC_SUPABASE_URL": "https://supabase.budgy.ch",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "REPLACE_WITH_SUPABASE_BUDGY_CH_ANON_JWT"
+        "EXPO_PUBLIC_SUPABASE_URL": "https://supabase.budgy.ch"
       }
     },
     "preview": {
@@ -33,8 +32,7 @@
       },
       "env": {
         "EXPO_PUBLIC_BACKEND_URL": "https://api.budgy.ch",
-        "EXPO_PUBLIC_SUPABASE_URL": "https://supabase.budgy.ch",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "REPLACE_WITH_SUPABASE_BUDGY_CH_ANON_JWT"
+        "EXPO_PUBLIC_SUPABASE_URL": "https://supabase.budgy.ch"
       }
     },
     "production": {
@@ -50,8 +48,7 @@
       },
       "env": {
         "EXPO_PUBLIC_BACKEND_URL": "https://api.budgy.ch",
-        "EXPO_PUBLIC_SUPABASE_URL": "https://supabase.budgy.ch",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "REPLACE_WITH_SUPABASE_BUDGY_CH_ANON_JWT"
+        "EXPO_PUBLIC_SUPABASE_URL": "https://supabase.budgy.ch"
       }
     }
   },

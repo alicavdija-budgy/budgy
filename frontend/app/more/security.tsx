@@ -30,11 +30,13 @@ import type { ThemePalette } from '../../src/constants/palettes';
 import { useStore } from '../../src/stores/useStore';
 import { Card, Button } from '../../src/components/ui';
 import { setPin, setDecoyPin, isBiometricAvailable, requestBiometric } from '../../src/services/security';
+import { useTranslation } from '../../src/hooks/useTranslation';
 
 type PinModalKind = 'main-set' | 'main-change' | 'decoy' | null;
 
 export default function SecurityScreen() {
   const theme = useTheme();
+  const { t } = useTranslation();
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -64,10 +66,10 @@ export default function SecurityScreen() {
   };
 
   const removePin = () => {
-    Alert.alert('Désactiver le verrouillage ?', 'Vos données ne seront plus protégées par PIN.', [
-      { text: 'Annuler', style: 'cancel' },
+    Alert.alert(t('security.disableLockTitle'), t('security.disableLockBody'), [
+      { text: t('security.cancel'), style: 'cancel' },
       {
-        text: 'Désactiver', style: 'destructive', onPress: () => {
+        text: t('security.disable'), style: 'destructive', onPress: () => {
           setSecurity({ appLockEnabled: false, pinHash: undefined, biometricEnabled: false });
         }
       }
@@ -92,7 +94,7 @@ export default function SecurityScreen() {
           // confirm
           if (next !== firstPin) {
             if (Platform.OS !== 'web') Vibration.vibrate(120);
-            Alert.alert('Codes différents', 'Recommencez.');
+            Alert.alert(t('security.pinMismatch'), t('security.pinMismatchBody'));
             setPinValue('');
             setFirstPin('');
             setPinStep('first');
@@ -117,10 +119,10 @@ export default function SecurityScreen() {
 
   const enableBiometric = async () => {
     if (!bioAvail) {
-      Alert.alert('Biométrie indisponible', 'Configurez Face ID / Touch ID dans les réglages système.');
+      Alert.alert(t('security.biometricUnavailable'), t('security.biometricSetup'));
       return;
     }
-    const ok = await requestBiometric('Vérifier votre identité');
+    const ok = await requestBiometric(t('security.verifyIdentity'));
     if (ok) setSecurity({ biometricEnabled: true });
   };
 
@@ -133,7 +135,7 @@ export default function SecurityScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
           <Ionicons name="chevron-back" size={24} color={theme.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>Sécurité</Text>
+        <Text style={styles.title}>{t('security.title')}</Text>
         <View style={{ width: 36 }} />
       </View>
 
@@ -141,18 +143,18 @@ export default function SecurityScreen() {
         <LinearGradient colors={['#10B981', '#059669']} style={styles.hero}>
           <Ionicons name="shield-checkmark" size={36} color={theme.text} />
           <View style={{ flex: 1 }}>
-            <Text style={styles.heroTitle}>Vos données sont protégées</Text>
-            <Text style={styles.heroSub}>{dataCount} éléments stockés localement • Aucun partage tiers</Text>
+            <Text style={styles.heroTitle}>{t('security.heroTitle')}</Text>
+            <Text style={styles.heroSub}>{t('security.heroSub', { n: dataCount })}</Text>
           </View>
         </LinearGradient>
 
-        <Text style={styles.section}>Verrouillage</Text>
+        <Text style={styles.section}>{t('security.sectionLock')}</Text>
         <Card style={styles.card}>
           <View style={styles.row}>
             <Ionicons name="lock-closed" size={22} color={theme.primaryLight} />
             <View style={{ flex: 1 }}>
-              <Text style={styles.rowTitle}>App lock</Text>
-              <Text style={styles.rowSub}>{security.appLockEnabled ? 'Actif • PIN configuré' : 'Inactif'}</Text>
+              <Text style={styles.rowTitle}>{t('security.appLock')}</Text>
+              <Text style={styles.rowSub}>{security.appLockEnabled ? t('security.activeLockPin') : t('security.inactive')}</Text>
             </View>
             <Switch
               value={security.appLockEnabled}
@@ -169,7 +171,7 @@ export default function SecurityScreen() {
               <View style={styles.divider} />
               <TouchableOpacity style={styles.row} onPress={openSetMain}>
                 <Ionicons name="key-outline" size={22} color={theme.text} />
-                <Text style={[styles.rowTitle, { flex: 1 }]}>Changer le code PIN</Text>
+                <Text style={[styles.rowTitle, { flex: 1 }]}>{t('security.changePin')}</Text>
                 <Ionicons name="chevron-forward" size={18} color={theme.textTertiary} />
               </TouchableOpacity>
               <View style={styles.divider} />
@@ -177,7 +179,7 @@ export default function SecurityScreen() {
                 <Ionicons name="finger-print" size={22} color={theme.success} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.rowTitle}>Face ID / Touch ID</Text>
-                  <Text style={styles.rowSub}>{bioAvail ? (security.biometricEnabled ? 'Activé' : 'Disponible') : 'Indisponible sur cet appareil'}</Text>
+                  <Text style={styles.rowSub}>{bioAvail ? (security.biometricEnabled ? t('security.enabled') : t('security.available')) : t('security.unavailableDevice')}</Text>
                 </View>
                 <Switch
                   value={security.biometricEnabled}
@@ -191,8 +193,8 @@ export default function SecurityScreen() {
               <View style={styles.row}>
                 <Ionicons name="timer-outline" size={22} color={theme.warning} />
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.rowTitle}>Verrouillage auto</Text>
-                  <Text style={styles.rowSub}>Après {security.autoLockSeconds}s en arrière-plan</Text>
+                  <Text style={styles.rowTitle}>{t('security.autoLock')}</Text>
+                  <Text style={styles.rowSub}>{t('security.autoLockSub', { n: security.autoLockSeconds })}</Text>
                 </View>
                 <View style={{ flexDirection: 'row', gap: 6 }}>
                   {[15, 60, 300].map((s) => (
@@ -214,53 +216,53 @@ export default function SecurityScreen() {
 
         {security.appLockEnabled && (
           <>
-            <Text style={styles.section}>Mode panique 🚨</Text>
+            <Text style={styles.section}>{t('security.sectionPanic')}</Text>
             <Card style={styles.card}>
               <View style={styles.row}>
                 <Ionicons name="swap-horizontal" size={22} color={theme.warning} />
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.rowTitle}>Code de décoy</Text>
+                  <Text style={styles.rowTitle}>{t('security.decoyCode')}</Text>
                   <Text style={styles.rowSub}>
-                    {security.decoyPinHash ? 'Configuré • ouvre une app vide' : 'Inactif'}
+                    {security.decoyPinHash ? t('security.panicConfigured') : t('security.inactive')}
                   </Text>
                 </View>
                 {security.decoyPinHash ? (
-                  <Button title="Retirer" variant="danger" size="sm" onPress={removeDecoy} />
+                  <Button title={t('security.remove')} variant="danger" size="sm" onPress={removeDecoy} />
                 ) : (
-                  <Button title="Configurer" size="sm" onPress={openDecoy} />
+                  <Button title={t('security.configure')} size="sm" onPress={openDecoy} />
                 )}
               </View>
               <View style={styles.divider} />
               <Text style={styles.helperText}>
-                En cas de contrainte (ex: réquisition forcée), saisir ce code ouvre une version vide de Budgy, sans vos vraies données.
+                {t('security.panicHelper')}
               </Text>
             </Card>
           </>
         )}
 
-        <Text style={styles.section}>Stockage</Text>
+        <Text style={styles.section}>{t('security.sectionStorage')}</Text>
         <Card style={styles.card}>
           <View style={styles.statRow}>
             <Ionicons name="phone-portrait-outline" size={20} color={theme.primaryLight} />
-            <Text style={styles.statLabel}>Appareil (chiffré)</Text>
-            <Text style={styles.statValue}>{dataCount} items</Text>
+            <Text style={styles.statLabel}>{t('security.storageDevice')}</Text>
+            <Text style={styles.statValue}>{t('security.storageItems', { n: dataCount })}</Text>
           </View>
           <View style={styles.divider} />
           <View style={styles.statRow}>
             <Ionicons name="cloud-offline-outline" size={20} color={theme.textTertiary} />
-            <Text style={styles.statLabel}>Backend</Text>
-            <Text style={styles.statValueDim}>0 (privé)</Text>
+            <Text style={styles.statLabel}>{t('security.storageBackend')}</Text>
+            <Text style={styles.statValueDim}>{t('security.storageBackendValue')}</Text>
           </View>
           <View style={styles.divider} />
           <View style={styles.statRow}>
             <Ionicons name="server-outline" size={20} color={theme.success} />
-            <Text style={styles.statLabel}>Supabase (auth)</Text>
-            <Text style={styles.statValue}>Configuré</Text>
+            <Text style={styles.statLabel}>{t('security.storageSupabase')}</Text>
+            <Text style={styles.statValue}>{t('security.storageConfigured')}</Text>
           </View>
         </Card>
 
         <Text style={styles.helperText}>
-          ⚡ Toutes vos données financières restent sur votre téléphone. L’IA OCR reçoit uniquement les images de reçus et ne stocke rien.
+          {t('security.storageHelper')}
         </Text>
       </ScrollView>
 
@@ -269,10 +271,10 @@ export default function SecurityScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.pinCard}>
             <Text style={styles.pinTitle}>
-              {pinModal === 'decoy' ? 'Code de panique' : (security.appLockEnabled ? 'Nouveau code' : 'Créer un code')}
+              {pinModal === 'decoy' ? t('security.pinPanicTitle') : (security.appLockEnabled ? t('security.pinNew') : t('security.pinCreate'))}
             </Text>
             <Text style={styles.pinSubtitle}>
-              {pinStep === 'first' ? 'Saisissez 6 chiffres' : 'Confirmez le code'}
+              {pinStep === 'first' ? t('security.pinEnter6') : t('security.pinConfirm')}
             </Text>
             <View style={styles.dotsRow}>
               {dots.map((filled, i) => (
@@ -300,7 +302,7 @@ export default function SecurityScreen() {
                 </View>
               ))}
             </View>
-            <Button title="Annuler" variant="ghost" onPress={() => setPinModal(null)} fullWidth />
+            <Button title={t('security.cancel')} variant="ghost" onPress={() => setPinModal(null)} fullWidth />
           </View>
         </View>
       </Modal>

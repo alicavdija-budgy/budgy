@@ -20,18 +20,20 @@ import { useStore } from '../../src/stores/useStore';
 import { formatNumber, pct } from '../../src/utils/calculations';
 import { EntityActionsSheet, type EntityActionsContext } from '../../src/components/EntityActionsSheet';
 import { EntityEditModal, type EditField } from '../../src/components/EntityEditModal';
+import { useTranslation } from '../../src/hooks/useTranslation';
 
 const DEBT_TYPES = [
-  { id: 'card',     label: 'Carte de crédit', icon: 'card',         color: '#EF4444' },
-  { id: 'loan',     label: 'Prêt personnel',  icon: 'cash',         color: '#F97316' },
-  { id: 'mortgage', label: 'Hypothèque',      icon: 'home',         color: '#A78BFA' },
-  { id: 'leasing',  label: 'Leasing auto',    icon: 'car',          color: '#22D3EE' },
-  { id: 'student',  label: 'Prêt études',     icon: 'school',       color: '#FBBF24' },
-  { id: 'other',    label: 'Autre',           icon: 'document',     color: '#94A3B8' },
+  { id: 'card',     labelKey: 'debts.typeCard',     icon: 'card',     color: '#EF4444' },
+  { id: 'loan',     labelKey: 'debts.typeLoan',     icon: 'cash',     color: '#F97316' },
+  { id: 'mortgage', labelKey: 'debts.typeMortgage', icon: 'home',     color: '#A78BFA' },
+  { id: 'leasing',  labelKey: 'debts.typeLeasing',  icon: 'car',      color: '#22D3EE' },
+  { id: 'student',  labelKey: 'debts.typeStudent',  icon: 'school',   color: '#FBBF24' },
+  { id: 'other',    labelKey: 'debts.typeOther',    icon: 'document', color: '#94A3B8' },
 ];
 
 export default function DebtsScreen() {
   const theme = useTheme();
+  const { t } = useTranslation();
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -41,17 +43,16 @@ export default function DebtsScreen() {
   const [showAdd, setShowAdd] = useState(false);
   const [showPay, setShowPay] = useState<string | null>(null);
   const [payAmount, setPayAmount] = useState('');
-  // v3.7.28 — Edit / Actions sheet (réutilise les composants existants)
   const [actionsCtx, setActionsCtx] = useState<EntityActionsContext | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const editingDebt = useMemo(() => debts.find((d) => d.id === editingId) || null, [debts, editingId]);
   const EDIT_FIELDS: EditField[] = useMemo(() => [
-    { key: 'title', label: 'Titre', type: 'text', icon: 'document-text-outline', placeholder: 'ex: Carte UBS', required: true },
-    { key: 'total', label: `Montant total (${CUR})`, type: 'number', icon: 'cash-outline', placeholder: '10000', required: true, decimal: true },
-    { key: 'paid', label: `Déjà remboursé (${CUR})`, type: 'number', icon: 'checkmark-circle-outline', placeholder: '0', decimal: true },
-    { key: 'interestRate', label: 'Taux d\'intérêt (%)', type: 'number', icon: 'trending-up-outline', placeholder: '9.9', decimal: true },
-    { key: 'monthlyPayment', label: `Mensualité (${CUR})`, type: 'number', icon: 'calendar-outline', placeholder: '250', decimal: true },
-  ], [CUR]);
+    { key: 'title', label: t('debts.editTitleLabel'), type: 'text', icon: 'document-text-outline', placeholder: t('debts.placeholderExample'), required: true },
+    { key: 'total', label: t('debts.editTotal', { currency: CUR }), type: 'number', icon: 'cash-outline', placeholder: '10000', required: true, decimal: true },
+    { key: 'paid', label: t('debts.editPaid', { currency: CUR }), type: 'number', icon: 'checkmark-circle-outline', placeholder: '0', decimal: true },
+    { key: 'interestRate', label: t('debts.editRate'), type: 'number', icon: 'trending-up-outline', placeholder: '9.9', decimal: true },
+    { key: 'monthlyPayment', label: t('debts.editMonthly', { currency: CUR }), type: 'number', icon: 'calendar-outline', placeholder: '250', decimal: true },
+  ], [CUR, t]);
   const handleEditSubmit = (values: Record<string, any>) => {
     if (!editingDebt) return;
     const total = parseFloat(String(values.total).replace(',', '.')) || editingDebt.total;
@@ -86,20 +87,20 @@ export default function DebtsScreen() {
 
   const handleAdd = () => {
     if (!form.title.trim() || !form.total) {
-      Alert.alert('Erreur', 'Veuillez remplir le titre et le montant total');
+      Alert.alert(t('debts.error'), t('debts.errFillTitleAmount'));
       return;
     }
     const total = parseFloat(form.total.replace(',', '.')) || 0;
     const paid = parseFloat(form.paid.replace(',', '.')) || 0;
     if (total <= 0) {
-      Alert.alert('Erreur', 'Le montant total doit être positif');
+      Alert.alert(t('debts.error'), t('debts.errPositive'));
       return;
     }
     if (paid > total) {
-      Alert.alert('Erreur', 'Le montant remboursé ne peut pas dépasser le total');
+      Alert.alert(t('debts.error'), t('debts.errPaidExceeds'));
       return;
     }
-    const type = DEBT_TYPES.find(t => t.id === form.typeId) || DEBT_TYPES[0];
+    const type = DEBT_TYPES.find(x => x.id === form.typeId) || DEBT_TYPES[0];
     addDebt({
       id: `debt_${Date.now()}`,
       title: form.title.trim(),
@@ -116,11 +117,11 @@ export default function DebtsScreen() {
 
   const handleDelete = (id: string, title: string) => {
     Alert.alert(
-      'Supprimer la dette',
-      `Voulez-vous supprimer "${title}" ?`,
+      t('debts.deleteTitle'),
+      t('debts.deleteConfirm', { title }),
       [
-        { text: 'Annuler', style: 'cancel' },
-        { text: 'Supprimer', style: 'destructive', onPress: () => deleteDebt(id) },
+        { text: t('debts.cancel'), style: 'cancel' },
+        { text: t('debts.delete'), style: 'destructive', onPress: () => deleteDebt(id) },
       ],
     );
   };
@@ -129,7 +130,7 @@ export default function DebtsScreen() {
     if (!showPay) return;
     const amt = parseFloat(payAmount.replace(',', '.')) || 0;
     if (amt <= 0) {
-      Alert.alert('Erreur', 'Montant invalide');
+      Alert.alert(t('debts.error'), t('debts.errInvalid'));
       return;
     }
     const debt = debts.find(d => d.id === showPay);
@@ -146,7 +147,7 @@ export default function DebtsScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
           <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>Dettes</Text>
+        <Text style={styles.title}>{t('debts.title')}</Text>
         <TouchableOpacity onPress={() => setShowAdd(true)} style={styles.iconBtn}>
           <Ionicons name="add" size={26} color={theme.text} />
         </TouchableOpacity>
@@ -159,23 +160,23 @@ export default function DebtsScreen() {
             colors={totalDebt > 0 ? ['#7F1D1D', '#991B1B'] as any : ['#065F46', '#047857'] as any}
             style={styles.hero}
           >
-            <Text style={styles.heroLabel}>DETTE TOTALE RESTANTE</Text>
+            <Text style={styles.heroLabel}>{t('debts.heroLabel')}</Text>
             <Text style={styles.heroAmount}>{CUR} {formatNumber(totalDebt)}</Text>
             {debts.length > 0 && (
               <View style={styles.heroStats}>
                 <View style={styles.heroStat}>
-                  <Text style={styles.heroStatLabel}>Mensualités</Text>
+                  <Text style={styles.heroStatLabel}>{t('debts.statMonthly')}</Text>
                   <Text style={styles.heroStatValue}>{CUR} {formatNumber(totalMonthly)}</Text>
                 </View>
                 <View style={styles.heroSep} />
                 <View style={styles.heroStat}>
-                  <Text style={styles.heroStatLabel}>Taux moyen</Text>
+                  <Text style={styles.heroStatLabel}>{t('debts.statAvgRate')}</Text>
                   <Text style={styles.heroStatValue}>{avgRate.toFixed(1)}%</Text>
                 </View>
                 <View style={styles.heroSep} />
                 <View style={styles.heroStat}>
-                  <Text style={styles.heroStatLabel}>Reste</Text>
-                  <Text style={styles.heroStatValue}>{estimatedMonths > 0 ? `~${estimatedMonths} mois` : '—'}</Text>
+                  <Text style={styles.heroStatLabel}>{t('debts.statRemaining')}</Text>
+                  <Text style={styles.heroStatValue}>{estimatedMonths > 0 ? t('debts.monthsApprox', { n: estimatedMonths }) : '—'}</Text>
                 </View>
               </View>
             )}
@@ -185,9 +186,9 @@ export default function DebtsScreen() {
         {debts.length === 0 ? (
           <EmptyState
             icon="card-outline"
-            title="Aucune dette"
-            subtitle="Tracez vos prêts, leasing & cartes de crédit pour visualiser votre désendettement"
-            action={{ label: '+ Ajouter une dette', onPress: () => setShowAdd(true) }}
+            title={t('debts.emptyTitle')}
+            subtitle={t('debts.emptySubtitle')}
+            action={{ label: t('debts.emptyAction'), onPress: () => setShowAdd(true) }}
           />
         ) : (
           debts.map((d, idx) => {
@@ -214,7 +215,7 @@ export default function DebtsScreen() {
                     <View style={styles.debtInfo}>
                       <Text style={styles.debtTitle}>{d.title}</Text>
                       <Text style={styles.debtMeta}>
-                        Taux {d.interestRate}% · {months > 0 ? `${months} mois restants` : 'Aucune mensualité'}
+                        {t('debts.cardMetaRate', { rate: d.interestRate })} · {months > 0 ? t('debts.cardMetaMonthsRemaining', { n: months }) : t('debts.cardMetaNoMonthly')}
                       </Text>
                     </View>
                     <TouchableOpacity onPress={() => setActionsCtx({
@@ -229,13 +230,13 @@ export default function DebtsScreen() {
 
                   <View style={styles.debtAmtRow}>
                     <View>
-                      <Text style={styles.debtAmtLabel}>Reste à payer</Text>
+                      <Text style={styles.debtAmtLabel}>{t('debts.remainingToPay')}</Text>
                       <Text style={[styles.debtAmt, isComplete && { color: theme.success }]}>
                         {CUR} {formatNumber(remaining)}
                       </Text>
                     </View>
                     <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={styles.debtAmtLabel}>Total / Remboursé</Text>
+                      <Text style={styles.debtAmtLabel}>{t('debts.totalPaid')}</Text>
                       <Text style={styles.debtAmtSmall}>
                         {CUR} {formatNumber(d.total)} · {CUR} {formatNumber(d.paid)}
                       </Text>
@@ -246,7 +247,7 @@ export default function DebtsScreen() {
 
                   <View style={styles.debtBottomRow}>
                     <Text style={styles.debtMonthly}>
-                      💳 Mensualité: {CUR} {formatNumber(d.monthlyPayment)}
+                      {t('debts.monthlyLabel', { amount: `${CUR} ${formatNumber(d.monthlyPayment)}` })}
                     </Text>
                     {!isComplete && (
                       <TouchableOpacity
@@ -254,13 +255,13 @@ export default function DebtsScreen() {
                         onPress={() => { setShowPay(d.id); setPayAmount(''); }}
                       >
                         <Ionicons name="add" size={14} color={d.color} />
-                        <Text style={[styles.payBtnTxt, { color: d.color }]}>Versement</Text>
+                        <Text style={[styles.payBtnTxt, { color: d.color }]}>{t('debts.payment')}</Text>
                       </TouchableOpacity>
                     )}
                     {isComplete && (
                       <View style={styles.completeBadge}>
                         <Ionicons name="checkmark-circle" size={14} color={theme.success} />
-                        <Text style={styles.completeTxt}>Remboursé !</Text>
+                        <Text style={styles.completeTxt}>{t('debts.paidOff')}</Text>
                       </View>
                     )}
                   </View>
@@ -279,57 +280,57 @@ export default function DebtsScreen() {
         <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Nouvelle dette</Text>
+              <Text style={styles.modalTitle}>{t('debts.newDebt')}</Text>
               <TouchableOpacity onPress={() => setShowAdd(false)}>
                 <Ionicons name="close" size={24} color={theme.text} />
               </TouchableOpacity>
             </View>
 
             <ScrollView style={{ maxHeight: 480 }} keyboardShouldPersistTaps="handled">
-              <Text style={styles.label}>Type de dette</Text>
+              <Text style={styles.label}>{t('debts.debtType')}</Text>
               <View style={styles.typesGrid}>
-                {DEBT_TYPES.map((t) => (
+                {DEBT_TYPES.map((dt) => (
                   <TouchableOpacity
-                    key={t.id}
-                    onPress={() => setForm((p) => ({ ...p, typeId: t.id }))}
+                    key={dt.id}
+                    onPress={() => setForm((p) => ({ ...p, typeId: dt.id }))}
                     style={[
                       styles.typeChip,
-                      form.typeId === t.id && { borderColor: t.color, backgroundColor: `${t.color}18` },
+                      form.typeId === dt.id && { borderColor: dt.color, backgroundColor: `${dt.color}18` },
                     ]}
                   >
-                    <Ionicons name={t.icon as any} size={18} color={form.typeId === t.id ? t.color : theme.textSecondary} />
-                    <Text style={[styles.typeChipTxt, form.typeId === t.id && { color: t.color }]}>{t.label}</Text>
+                    <Ionicons name={dt.icon as any} size={18} color={form.typeId === dt.id ? dt.color : theme.textSecondary} />
+                    <Text style={[styles.typeChipTxt, form.typeId === dt.id && { color: dt.color }]}>{t(dt.labelKey)}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
 
-              <Text style={styles.label}>Titre</Text>
+              <Text style={styles.label}>{t('debts.label')}</Text>
               <TextInput
                 style={styles.input}
                 value={form.title}
-                onChangeText={(t) => setForm((p) => ({ ...p, title: t }))}
-                placeholder="ex: Carte Mastercard UBS"
+                onChangeText={(txt) => setForm((p) => ({ ...p, title: txt }))}
+                placeholder={t('debts.placeholderExample')}
                 placeholderTextColor={theme.textTertiary}
               />
 
               <View style={styles.row2}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.label}>Montant total ({CUR})</Text>
+                  <Text style={styles.label}>{t('debts.totalAmount', { currency: CUR })}</Text>
                   <TextInput
                     style={styles.input}
                     value={form.total}
-                    onChangeText={(t) => setForm((p) => ({ ...p, total: t }))}
+                    onChangeText={(txt) => setForm((p) => ({ ...p, total: txt }))}
                     placeholder="10000"
                     placeholderTextColor={theme.textTertiary}
                     keyboardType="decimal-pad"
                   />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.label}>Déjà remboursé</Text>
+                  <Text style={styles.label}>{t('debts.alreadyPaid')}</Text>
                   <TextInput
                     style={styles.input}
                     value={form.paid}
-                    onChangeText={(t) => setForm((p) => ({ ...p, paid: t }))}
+                    onChangeText={(txt) => setForm((p) => ({ ...p, paid: txt }))}
                     placeholder="0"
                     placeholderTextColor={theme.textTertiary}
                     keyboardType="decimal-pad"
@@ -339,22 +340,22 @@ export default function DebtsScreen() {
 
               <View style={styles.row2}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.label}>Taux d'intérêt %</Text>
+                  <Text style={styles.label}>{t('debts.interestRate')}</Text>
                   <TextInput
                     style={styles.input}
                     value={form.interestRate}
-                    onChangeText={(t) => setForm((p) => ({ ...p, interestRate: t }))}
+                    onChangeText={(txt) => setForm((p) => ({ ...p, interestRate: txt }))}
                     placeholder="9.9"
                     placeholderTextColor={theme.textTertiary}
                     keyboardType="decimal-pad"
                   />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.label}>Mensualité ({CUR})</Text>
+                  <Text style={styles.label}>{t('debts.monthlyPayment', { currency: CUR })}</Text>
                   <TextInput
                     style={styles.input}
                     value={form.monthlyPayment}
-                    onChangeText={(t) => setForm((p) => ({ ...p, monthlyPayment: t }))}
+                    onChangeText={(txt) => setForm((p) => ({ ...p, monthlyPayment: txt }))}
                     placeholder="250"
                     placeholderTextColor={theme.textTertiary}
                     keyboardType="decimal-pad"
@@ -362,7 +363,7 @@ export default function DebtsScreen() {
                 </View>
               </View>
 
-              <Button title="Ajouter la dette" onPress={handleAdd} fullWidth size="lg" style={{ marginTop: Spacing.lg }} />
+              <Button title={t('debts.addBtn')} onPress={handleAdd} fullWidth size="lg" style={{ marginTop: Spacing.lg }} />
             </ScrollView>
           </View>
         </KeyboardAvoidingView>
@@ -381,12 +382,12 @@ export default function DebtsScreen() {
           >
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Ajouter un versement</Text>
+                <Text style={styles.modalTitle}>{t('debts.addPayment')}</Text>
                 <TouchableOpacity onPress={() => setShowPay(null)}>
                   <Ionicons name="close" size={24} color={theme.text} />
                 </TouchableOpacity>
               </View>
-              <Text style={styles.label}>Montant ({CUR})</Text>
+              <Text style={styles.label}>{t('debts.amount', { currency: CUR })}</Text>
               <TextInput
                 style={styles.input}
                 value={payAmount}
@@ -398,7 +399,7 @@ export default function DebtsScreen() {
                 returnKeyType="done"
                 onSubmitEditing={handleAddPayment}
               />
-              <Button title="Confirmer" onPress={handleAddPayment} fullWidth size="lg" style={{ marginTop: Spacing.lg }} />
+              <Button title={t('debts.confirm')} onPress={handleAddPayment} fullWidth size="lg" style={{ marginTop: Spacing.lg }} />
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -418,14 +419,14 @@ export default function DebtsScreen() {
           setActionsCtx(null);
           if (id) deleteDebt(id);
         }}
-        deleteConfirmTitle="Supprimer cette dette ?"
-        deleteConfirmMessage="Cette action est irréversible. La progression et l'historique seront perdus."
+        deleteConfirmTitle={t('debts.actionsDeleteTitle')}
+        deleteConfirmMessage={t('debts.actionsDeleteBody')}
       />
 
       <EntityEditModal
         visible={!!editingDebt}
         onClose={() => setEditingId(null)}
-        title="Modifier la dette"
+        title={t('debts.editTitle')}
         fields={EDIT_FIELDS}
         initialValues={{
           title: editingDebt?.title || '',
@@ -435,7 +436,7 @@ export default function DebtsScreen() {
           monthlyPayment: editingDebt?.monthlyPayment?.toString() || '0',
         }}
         onSubmit={handleEditSubmit}
-        submitLabel="Enregistrer"
+        submitLabel={t('debts.save')}
       />
     </View>
   );

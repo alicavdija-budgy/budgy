@@ -1,10 +1,9 @@
 /**
  * BUDGY — useIAP hook (backend-first)
  *
- * @i18n-technical-file
- *
- * ⚠ Contains stable error identifiers returned to the paywall UI via
- * IapResult.error. The paywall/UI translates them at display time.
+ * User-visible error messages are localised through useTranslation() and
+ * exposed via `IapResult.error`. Stable machine-readable codes (product_not_found,
+ * transaction_not_found…) are preserved for logic branching.
  *
  * Production-ready flow:
  *   purchase()  → StoreKit → /api/iap/validate (App Store Server API)
@@ -39,6 +38,7 @@ import {
 } from '../services/iap';
 import { usePremiumStore } from '../stores/usePremiumStore';
 import { getSupabase } from '../lib/supabase';
+import { useTranslation } from './useTranslation';
 
 export type IapPhase = 'idle' | 'loading' | 'purchasing' | 'validating' | 'restoring' | 'syncing';
 
@@ -82,6 +82,7 @@ async function getCurrentUserId(): Promise<string | undefined> {
 }
 
 export function useIAP() {
+  const { t } = useTranslation();
   const setPro = usePremiumStore((s) => s.purchase);
   const confirmPro = usePremiumStore((s) => s.confirmPro);
   const grantProvisional = usePremiumStore((s) => s.grantProvisionalPro);
@@ -116,7 +117,7 @@ export function useIAP() {
         phase: 'idle',
         ready: false,
         available: false,
-        reason: getIapUnavailableReason() || 'IAP indisponible sur cet appareil',
+        reason: getIapUnavailableReason() || t('iapErrors.unavailable'),
       }));
       return;
     }
@@ -150,7 +151,7 @@ export function useIAP() {
       if (!isIapAvailable()) {
         return {
           success: false,
-          error: getIapUnavailableReason() || 'IAP indisponible',
+          error: getIapUnavailableReason() || t('iapErrors.unavailable'),
         };
       }
 
@@ -179,8 +180,7 @@ export function useIAP() {
             return {
               success: false,
               notConfigured: true,
-              error:
-                'Achat momentanément indisponible. Le produit n\'est pas encore disponible dans App Store. (Vérifiez que les produits sont en statut "Ready to Submit" et que le contrat Paid Apps est signé.)',
+              error: `${t('iapErrors.notReadyToSubmit')} ${t('iapErrors.debugTip')}`,
             };
           }
           // Update state with the freshly-loaded products
@@ -251,14 +251,14 @@ export function useIAP() {
             };
           }
           setPhase('idle', {
-            error: verdict.error || 'Reçu invalide',
+            error: verdict.error || t('iapErrors.invalidReceipt'),
           });
           // Still finish the txn — backend has the data; user should not be
           // re-prompted on next launch.
           await finishTransaction(receipt);
           return {
             success: false,
-            error: verdict.error || 'Reçu invalide',
+            error: verdict.error || t('iapErrors.invalidReceipt'),
             state: (verdict.subscription_state as any) || 'FREE',
           };
         }
@@ -272,11 +272,11 @@ export function useIAP() {
           state: (verdict.subscription_state as any) || 'PRO',
         };
       } catch (e: any) {
-        setPhase('idle', { error: e?.message || 'Achat échoué' });
-        return { success: false, error: e?.message || 'Achat échoué' };
+        setPhase('idle', { error: e?.message || t('iapErrors.purchaseFailed') });
+        return { success: false, error: e?.message || t('iapErrors.purchaseFailed') };
       }
     },
-    [setPhase, confirmPro, grantProvisional]
+    [setPhase, confirmPro, grantProvisional, t]
   );
 
   // ── Restore ─────────────────────────────────────────────────────────────
@@ -284,7 +284,7 @@ export function useIAP() {
     if (!isIapAvailable()) {
       return {
         success: false,
-        error: getIapUnavailableReason() || 'IAP indisponible',
+        error: getIapUnavailableReason() || t('iapErrors.unavailable'),
       };
     }
     setPhase('restoring', { error: null, notConfigured: false });
@@ -348,8 +348,8 @@ export function useIAP() {
         error: restored === 0 ? lastError || undefined : undefined,
       };
     } catch (e: any) {
-      setPhase('idle', { error: e?.message || 'Restore failed' });
-      return { success: false, error: e?.message || 'Restore failed' };
+      setPhase('idle', { error: e?.message || t('iapErrors.purchaseFailed') });
+      return { success: false, error: e?.message || t('iapErrors.purchaseFailed') };
     }
   }, [setPhase, confirmPro, cancelPro]);
 

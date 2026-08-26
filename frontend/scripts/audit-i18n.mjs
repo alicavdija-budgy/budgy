@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Budgy — hardcoded user-visible strings auditor
+ * Budgy — hardcoded user-visible strings auditor (v2)
  *
  * Scans .tsx/.ts files under `app/` and `src/` for strings likely visible
  * to end users but not routed through i18n. Emits a classified report:
@@ -9,6 +9,23 @@
  *   TECHNICAL         → ignored (whitelisted / imports / logs / URLs)
  *
  * Exits with code 1 if any USER_VISIBLE finding is not whitelisted.
+ *
+ * ── Directives ────────────────────────────────────────────────────────
+ * File-level directives (must appear in the first 500 chars):
+ *   @i18n-technical-file — the entire file is TECHNICAL. NEVER allowed
+ *     under app/** (those are user-visible screens/routes). Only allowed
+ *     under specific back-office locations declared in
+ *     FILE_DIRECTIVE_ALLOWED_ROOTS below.
+ *   @i18n-official-data — official/legal names (cantons, insurers, brand
+ *     names). Same policy as technical-file (banned under app/**).
+ *
+ * Line-level directive:
+ *   /* i18n-technical *\/ or // i18n-technical
+ * Instructs the audit to classify strings on that line as TECHNICAL.
+ * This is the ONLY escape hatch allowed under app/**.
+ *
+ * Fixture self-test:
+ *   node scripts/audit-i18n.mjs --self-test
  *
  * Usage:
  *   node scripts/audit-i18n.mjs
@@ -25,6 +42,7 @@ const IGNORE_DIRS = new Set(['node_modules', '.expo', '.metro-cache', 'dist', 'b
 
 const args = new Set(process.argv.slice(2));
 const asJson = args.has('--json');
+const selfTest = args.has('--self-test');
 
 // Files & lines that are explicitly allowed to contain non-i18n text.
 const FILE_ALLOWLIST = new Set([
@@ -39,17 +57,21 @@ const PATH_ALLOWLIST_SUBSTR = [
   '/scripts/',
 ];
 
-// File-level directives (place near the top of the file):
-//   @i18n-technical-file — the entire file is TECHNICAL/OFFICIAL_DATA (matching
-//     keywords, brand names, official label maps used only for matching or
-//     computation). Contents are not shown as UI text.
-//   @i18n-official-data — the file holds official/legal names (cantons,
-//     insurers, brands) that must not be translated arbitrarily.
+// File-level directive regex.
 const FILE_DIRECTIVE_TECHNICAL = /@i18n-technical-file|@i18n-official-data/;
 
-// Line-level directive:
-//   /* i18n-technical */ or // i18n-technical
-// Instructs the audit to classify strings on that line as TECHNICAL.
+// Roots where file-level opt-out is allowed. app/ is DELIBERATELY EXCLUDED
+// because everything under app/ is a route/screen. Technical concerns in a
+// screen must be handled with LINE-level `// i18n-technical`.
+const FILE_DIRECTIVE_ALLOWED_ROOTS = [
+  'src/data/',
+  'src/lib/',
+  'src/services/',
+  'src/utils/',
+  'src/i18n/',
+];
+
+// Line-level directive.
 const LINE_DIRECTIVE_TECHNICAL = /i18n-technical/;
 
 // Regex applied to string literal contents to decide the class.
@@ -128,7 +150,6 @@ function classify(entry, filePath) {
   if (/AsyncStorage\.(get|set|remove)Item/.test(raw)) return 'TECHNICAL';
   // Env variables
   if (/process\.env\./.test(raw)) return 'TECHNICAL';
-  // Alert.alert titles are user-visible; keep them
   // Regex literals
   if (/new RegExp\(/.test(raw)) return 'TECHNICAL';
   // Query params / API paths (starting with /api)
@@ -164,50 +185,148 @@ function relPath(abs) {
   return path.relative(ROOT, abs).replace(/\\/g, '/');
 }
 
+/**
+ * Returns true when the file-level @i18n-technical-file / @i18n-official-data
+ * directive is allowed for `rel`.
+ * Explicitly false when the file lives under `app/**` (user-visible routes).
+ */
+function fileDirectiveAllowed(rel) {
+  if (rel.startsWith('app/')) return false;
+  return FILE_DIRECTIVE_ALLOWED_ROOTS.some((root) => rel.startsWith(root));
+}
+
+function runAudit(fileList /* array of {rel, src} */) {
+  const findings = {
+    USER_VISIBLE: [],
+    REVIEW_MANUALLY: [],
+    TECHNICAL_COUNT: 0,
+    IGNORED_DIRECTIVES: [], // file-level directives found under app/**
+  };
+
+  for (const { rel, src } of fileList) {
+    if (FILE_ALLOWLIST.has(rel)) continue;
+    if (PATH_ALLOWLIST_SUBSTR.some((s) => rel.includes(s))) continue;
+
+    const firstChunk = src.slice(0, 500);
+    const hasFileDirective = FILE_DIRECTIVE_TECHNICAL.test(firstChunk);
+
+    if (hasFileDirective && fileDirectiveAllowed(rel)) {
+      // Legitimate technical file: skip content scan.
+      const strings = extractStrings(src);
+      findings.TECHNICAL_COUNT += strings.length;
+      continue;
+    }
+
+    if (hasFileDirective && !fileDirectiveAllowed(rel)) {
+      // Directive is ILLEGAL under app/**. Record & scan normally.
+      findings.IGNORED_DIRECTIVES.push(rel);
+    }
+
+    const strings = extractStrings(src);
+    for (const e of strings) {
+      // Line-level opt-out (only escape hatch under app/**)
+      if (LINE_DIRECTIVE_TECHNICAL.test(e.raw)) {
+        findings.TECHNICAL_COUNT += 1;
+        continue;
+      }
+      const cls = classify(e, rel);
+      if (cls === 'TECHNICAL') findings.TECHNICAL_COUNT += 1;
+      else findings[cls].push({ file: rel, line: e.line, value: e.value });
+    }
+  }
+  return findings;
+}
+
+// ─────────── Self-test fixtures ───────────
+function selfTestRun() {
+  const fixtures = [
+    {
+      rel: 'app/fake.tsx',
+      src:
+        '/**\n * @i18n-technical-file\n */\nimport React from "react";\n' +
+        'export default function F(){ Alert.alert("Impossible de récupérer les données"); return null; }\n',
+      expectUserVisibleMin: 1,
+      expectIgnoredDirective: true,
+    },
+    {
+      rel: 'src/lib/matchers.ts',
+      src:
+        '/** @i18n-technical-file */\nexport const patterns = [\n' +
+        '  "confirmation email",\n' +
+        '  "user not found",\n];\n',
+      expectUserVisibleMin: 0,
+      expectIgnoredDirective: false,
+    },
+    {
+      rel: 'app/ok.tsx',
+      src:
+        'import { useTranslation } from "../src/hooks/useTranslation";\n' +
+        'export default function F(){const {t}=useTranslation(); return t("home.hello");}\n',
+      expectUserVisibleMin: 0,
+      expectIgnoredDirective: false,
+    },
+    {
+      rel: 'app/line-escape.tsx',
+      src:
+        'export function f(){\n' +
+        '  throw new Error("Bonjour serveur"); // i18n-technical\n' +
+        '}\n',
+      expectUserVisibleMin: 0,
+      expectIgnoredDirective: false,
+    },
+  ];
+
+  let failed = 0;
+  for (const fx of fixtures) {
+    const f = runAudit([fx]);
+    const uvCount = f.USER_VISIBLE.length;
+    const hasIgnored = f.IGNORED_DIRECTIVES.includes(fx.rel);
+    const okUV = uvCount >= fx.expectUserVisibleMin;
+    const okIgn = hasIgnored === fx.expectIgnoredDirective;
+    const status = okUV && okIgn ? 'PASS' : 'FAIL';
+    if (status === 'FAIL') failed++;
+    console.log(
+      `[${status}] ${fx.rel} → USER_VISIBLE=${uvCount} (≥${fx.expectUserVisibleMin}), ` +
+      `ignoredDirective=${hasIgnored} (expected ${fx.expectIgnoredDirective})`
+    );
+  }
+  if (failed > 0) {
+    console.error(`\n❌ ${failed} fixture(s) failed`);
+    process.exit(1);
+  }
+  console.log('\n✅ All self-test fixtures pass');
+  process.exit(0);
+}
+
+if (selfTest) {
+  selfTestRun();
+}
+
+// ─────────── Full run ───────────
 const files = [];
 for (const d of SCAN_DIRS) {
   const abs = path.join(ROOT, d);
   if (fs.existsSync(abs)) walk(abs, files);
 }
 
-const findings = { USER_VISIBLE: [], REVIEW_MANUALLY: [], TECHNICAL_COUNT: 0 };
-
-for (const f of files) {
-  const rel = relPath(f);
-  if (FILE_ALLOWLIST.has(rel)) continue;
-  if (PATH_ALLOWLIST_SUBSTR.some((s) => rel.includes(s))) continue;
-
-  const src = fs.readFileSync(f, 'utf8');
-  // File-level opt-out: treat every literal as TECHNICAL.
-  const firstChunk = src.slice(0, 500);
-  if (FILE_DIRECTIVE_TECHNICAL.test(firstChunk)) {
-    // Count strings but classify as TECHNICAL.
-    const strings = extractStrings(src);
-    findings.TECHNICAL_COUNT += strings.length;
-    continue;
-  }
-  const strings = extractStrings(src);
-  for (const e of strings) {
-    // Line-level opt-out
-    if (LINE_DIRECTIVE_TECHNICAL.test(e.raw)) {
-      findings.TECHNICAL_COUNT += 1;
-      continue;
-    }
-    const cls = classify(e, f);
-    if (cls === 'TECHNICAL') findings.TECHNICAL_COUNT += 1;
-    else findings[cls].push({ file: rel, line: e.line, value: e.value });
-  }
-}
+const fileList = files.map((f) => ({ rel: relPath(f), src: fs.readFileSync(f, 'utf8') }));
+const findings = runAudit(fileList);
 
 if (asJson) {
   console.log(JSON.stringify(findings, null, 2));
-  process.exit(findings.USER_VISIBLE.length > 0 ? 1 : 0);
+  process.exit(findings.USER_VISIBLE.length > 0 || findings.IGNORED_DIRECTIVES.length > 0 ? 1 : 0);
 }
 
 console.log(`Files scanned : ${files.length}`);
 console.log(`Technical     : ${findings.TECHNICAL_COUNT}`);
 console.log(`USER_VISIBLE  : ${findings.USER_VISIBLE.length}`);
 console.log(`REVIEW_MANUALLY: ${findings.REVIEW_MANUALLY.length}`);
+
+if (findings.IGNORED_DIRECTIVES.length > 0) {
+  console.log('\n── ⚠ Illegal @i18n-technical-file directives under app/** ──');
+  for (const f of findings.IGNORED_DIRECTIVES) console.log(`  ${f}`);
+  console.log('These directives were IGNORED. File contents were scanned normally.');
+}
 
 if (findings.USER_VISIBLE.length > 0) {
   console.log('\n── USER_VISIBLE (must be i18n) ─────────');

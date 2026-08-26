@@ -1,7 +1,6 @@
 /**
  * GUARDIAN MONEY CHF - Budgets Screen
  *
- * @i18n-technical-file
  *
  * ⚠ Residual FR-CH fallback labels / EditField props / examples;
  * multi-locale wrapping deferred to v3.9.1 backlog.
@@ -57,9 +56,9 @@ export default function BudgetsScreen() {
     [editingBudgetId, budgets]
   );
   const BUDGET_EDIT_FIELDS: EditField[] = useMemo(() => [
-    { key: 'category', label: t('budgetsUi.category'), type: 'select', options: EXPENSE_CATEGORIES.slice(0, 12).map((c) => ({ value: c.id, label: c.name, color: c.color })) },
+    { key: 'category', label: t('budgetsUi.category'), type: 'select', options: EXPENSE_CATEGORIES.slice(0, 12).map((c) => ({ value: c.id, label: t(`categoryLabels.${c.id}`) || c.name, color: c.color })) },
     { key: 'limit', label: t('budgetsUi.monthLimit'), type: 'number', icon: 'cash-outline', placeholder: '500', required: true },
-  ], []);
+  ], [t]);
   const handleEditBudgetSubmit = (values: Record<string, any>) => {
     if (!editingBudget) return;
     const limit = parseFloat(String(values.limit).replace(',', '.')) || editingBudget.limit;
@@ -182,7 +181,7 @@ export default function BudgetsScreen() {
                 color={savingsCapacity >= 0 ? theme.success : theme.error}
               />
               <Text style={styles.capacityLabel}>
-                Capacité d'épargne {incomeView === 'monthly' ? '/mois' : '/an'}
+                {t('budgetsScreen.savingsRatioSuffix')} {incomeView === 'monthly' ? '/mois' : '/an'}
               </Text>
               <Text style={[
                 styles.capacityValue,
@@ -197,8 +196,8 @@ export default function BudgetsScreen() {
         {budgetData.length === 0 ? (
           <EmptyState
             icon="wallet-outline"
-            title="Aucun budget"
-            subtitle="Créez des enveloppes pour contrôler vos dépenses"
+            title={t('budgetsScreen.emptyTitle')}
+            subtitle={t('budgetsScreen.emptySub')}
             action={{ label: t('budgetsUi.createBtn'), onPress: () => setShowAddModal(true) }}
           />
         ) : (
@@ -278,7 +277,7 @@ export default function BudgetsScreen() {
                       onPress={() => setNewBudget((p) => ({ ...p, category: cat.id }))}
                     >
                       <CategoryIcon category={cat.id} size="sm" />
-                      <Text style={styles.categoryLabel}>{cat.name}</Text>
+                      <Text style={styles.categoryLabel}>{t(`categoryLabels.${cat.id}`) || cat.name}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -296,7 +295,7 @@ export default function BudgetsScreen() {
                 onSubmitEditing={() => Keyboard.dismiss()}
               />
 
-              <Button title="Créer le budget" onPress={handleAddBudget} fullWidth size="lg" style={{ marginTop: Spacing.lg }} />
+              <Button title={t('budgetsScreen.createBudget')} onPress={handleAddBudget} fullWidth size="lg" style={{ marginTop: Spacing.lg }} />
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -316,12 +315,12 @@ export default function BudgetsScreen() {
           setActionsCtx(null);
           if (id) deleteBudget(id);
         }}
-        deleteConfirmTitle="Supprimer ce budget ?"
+        deleteConfirmTitle={t('budgetsScreen.deleteConfirm')}
       />
       <EntityEditModal
         visible={!!editingBudget}
         onClose={() => setEditingBudgetId(null)}
-        title="Modifier le budget"
+        title={t('budgetsScreen.editTitle')}
         fields={BUDGET_EDIT_FIELDS}
         initialValues={{
           category: editingBudget?.category || 'courses',

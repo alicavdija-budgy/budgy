@@ -4,7 +4,6 @@
  * était référencée dans l'index Legal mais l'écran n'existait pas → 404).
  * Apple Review exige un point de contact clair.
  *
- * @i18n-technical-file
  *
  * ⚠ Residual FR-CH fallback labels / EditField props / examples;
  * multi-locale wrapping deferred to v3.9.1 backlog.
@@ -117,7 +116,7 @@ export default function SupportScreen() {
         </TouchableOpacity>
 
         <View style={styles.faq}>
-          <Text style={styles.faqTitle}>{t('legalSupport.title') || 'Questions fréquentes'}</Text>
+          <Text style={styles.faqTitle}>{t('legalScreen.faqTitle')}</Text>
           <FAQ q={t('legalSupport.q1')} a={t('legalSupport.a1')} />
           <FAQ q={t('legalSupport.q2')} a={t('legalSupport.a2')} />
           <FAQ q={t('legalSupport.q3')} a={t('legalSupport.a3')} />

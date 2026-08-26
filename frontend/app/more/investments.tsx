@@ -3,7 +3,6 @@
  * Inspired by Revolut Wealth · Apple Stocks · Copilot Money.
  * Local data, deterministic mock pricing engine, dark/light aware.
  *
- * @i18n-technical-file
  *
  * ⚠ Residual FR-CH fallback labels / EditField props / examples;
  * multi-locale wrapping deferred to v3.9.1 backlog.
@@ -181,7 +180,7 @@ function AddSheet({
           <Text style={styles.fieldLabel}>{t('invest.fieldName')}</Text>
           <TextInput
             value={name} onChangeText={setName}
-            placeholder={type === 'crypto' ? 'Bitcoin' : type === 'cash' ? t('investmentsUi.savingsAccount') : 'Vanguard S&P 500'}
+            placeholder={type === 'crypto' ? 'Bitcoin' : type === 'cash' ? t('investmentsUi.savingsAccount') : 'Vanguard S&P 500'} // i18n-technical (ETF brand example)
             placeholderTextColor={theme.textTertiary} style={styles.input}
           />
         </View>
@@ -254,18 +253,18 @@ export default function InvestmentsScreen() {
     [editingAssetId, summary.assets]
   );
   const ASSET_EDIT_FIELDS: EditField[] = useMemo(() => [
-    { key: 'name', label: 'Nom', type: 'text', icon: 'pricetag-outline', placeholder: 'Vanguard FTSE All-World', required: true },
-    { key: 'ticker', label: 'Ticker (optionnel)', type: 'text', icon: 'code-outline', placeholder: 'VWRL' },
-    { key: 'type', label: 'Type', type: 'select', options: [
+    { key: 'name', label: t('common.title'), type: 'text', icon: 'pricetag-outline', placeholder: 'Vanguard FTSE All-World', required: true }, // i18n-technical placeholder (ETF brand)
+    { key: 'ticker', label: `${t('common.ticker') || 'Ticker'} (${t('common.optional') || 'optional'})`, type: 'text', icon: 'code-outline', placeholder: 'VWRL' },
+    { key: 'type', label: t('common.type') || 'Type', type: 'select', options: [
       { value: 'etf', label: 'ETF', color: TYPE_META.etf.color },
-      { value: 'stock', label: 'Action', color: TYPE_META.stock.color },
+      { value: 'stock', label: t('investmentsUi.stock') || 'Stock', color: TYPE_META.stock.color },
       { value: 'crypto', label: 'Crypto', color: TYPE_META.crypto.color },
       { value: 'cash', label: 'Cash', color: TYPE_META.cash.color },
     ] },
     { key: 'quantity', label: t('investmentsUi.quantity'), type: 'number', icon: 'layers-outline', placeholder: '10', required: true },
-    { key: 'avgPrice', label: 'Prix moyen d\'achat (CHF)', type: 'number', icon: 'cash-outline', placeholder: '100', required: true },
-    { key: 'manualPrice', label: 'Prix actuel manuel (optionnel)', type: 'number', icon: 'pulse-outline', placeholder: 'auto' },
-  ], []);
+    { key: 'avgPrice', label: t('investmentsScreen.avgBuyPriceLabel', { currency: 'CHF' }), type: 'number', icon: 'cash-outline', placeholder: '100', required: true },
+    { key: 'manualPrice', label: t('investmentsScreen.manualPriceLabel'), type: 'number', icon: 'pulse-outline', placeholder: 'auto' },
+  ], [t]);
   const handleEditAssetSubmit = (values: Record<string, any>) => {
     if (!editingAsset) return;
     const qty = parseFloat(String(values.quantity).replace(',', '.')) || editingAsset.quantity;
@@ -393,10 +392,10 @@ export default function InvestmentsScreen() {
             {/* Tutorial mini-cards */}
             <View style={styles.tutoRow}>
               {[
-                { emoji: '📈', label: 'ETF', sub: 'Vanguard, iShares' },
-                { emoji: '🏢', label: 'Actions', sub: t('investmentsUi.stocksPh') },
+                { emoji: '📈', label: 'ETF', sub: t('investmentsScreen.etfExamples') },
+                { emoji: '🏢', label: t('investmentsUi.stock') || 'Actions', sub: t('investmentsUi.stocksPh') },
                 { emoji: '₿', label: 'Crypto', sub: t('investmentsUi.cryptoPh') },
-                { emoji: '🥇', label: t('investmentsUi.metalsPh'), sub: 'Or, argent' },
+                { emoji: '🥇', label: t('investmentsUi.metalsPh'), sub: t('investmentsScreen.metalsExamples') },
               ].map((x) => (
                 <View key={x.label} style={styles.tutoCard}>
                   <Text style={styles.tutoEmoji}>{x.emoji}</Text>

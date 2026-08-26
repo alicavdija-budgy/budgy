@@ -22,7 +22,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../src/constants/theme';
 import { useStore } from '../src/stores/useStore';
-import { CANTONS, CURRENCIES, type CantonCode } from '../src/data/swiss-data';
+import { CANTONS, CURRENCIES, getCantonName, type CantonCode } from '../src/data/swiss-data';
 import { Button } from '../src/components/ui';
 import { useTranslation } from '../src/hooks/useTranslation';
 import type { HouseholdType } from '../src/types';
@@ -55,7 +55,7 @@ export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { setPreferences, addIncome } = useStore();
-  const { t } = useTranslation();
+  const { t, lang } = useTranslation();
 
   const [step, setStep] = useState<Step>('slides');
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -328,7 +328,7 @@ export default function OnboardingScreen() {
                     style={[styles.cantonName, canton === code && styles.cantonNameSelected]}
                     numberOfLines={1}
                   >
-                    {CANTONS[code].name}
+                    {getCantonName(code as CantonCode, lang)}
                   </Text>
                 </TouchableOpacity>
               ))}

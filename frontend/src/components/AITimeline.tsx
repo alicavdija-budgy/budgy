@@ -1,11 +1,8 @@
 /**
  * BUDGY — AI Timeline (proactive insights feed) — i18n & theme aware
  *
- * @i18n-technical-file
- *
- * ⚠ The `PRETTY` map holds internal category → label mappings whose values
- * are passed as `t(titleKey, { cat: meta.label })` parameters. Multi-locale
- * mapping is planned via i18n keys `timeline.cat.*` (v3.9.1 backlog).
+ * Category labels for insight titles are resolved at render time through
+ * useTranslation() → t(`categoryLabels.<id>`), never stored as FR literals.
  */
 import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Platform, Pressable } from 'react-native';
@@ -120,23 +117,23 @@ function generateInsights({ transactions, incomes, recurring, goals }: GenInput)
   if (topCat && monthExpenses > 0) {
     const [cat, amt] = topCat;
     const share = (amt / monthExpenses) * 100;
-    const PRETTY: Record<string, { label: string; tip: 'good' | 'watch' }> = {
-      alimentation:   { label: 'alimentation', tip: 'good' },
-      restaurant:     { label: 'restaurants',  tip: 'watch' },
-      restaurants:    { label: 'restaurants',  tip: 'watch' },
-      essence:        { label: 'transport',    tip: 'watch' },
-      transport:      { label: 'transport',    tip: 'watch' },
-      shopping:       { label: 'shopping',     tip: 'watch' },
-      loisirs:        { label: 'loisirs',      tip: 'watch' },
-      logement:       { label: 'logement',     tip: 'good' },
-      sante:          { label: 'santé',        tip: 'good' },
-      assurance:      { label: 'assurances',   tip: 'good' },
+    const PRETTY: Record<string, { key: string; tip: 'good' | 'watch' }> = {
+      alimentation:   { key: 'courses',     tip: 'good' },
+      restaurant:     { key: 'restaurant',  tip: 'watch' },
+      restaurants:    { key: 'restaurant',  tip: 'watch' },
+      essence:        { key: 'transport',   tip: 'watch' },
+      transport:      { key: 'transport',   tip: 'watch' },
+      shopping:       { key: 'shopping',    tip: 'watch' },
+      loisirs:        { key: 'loisirs',     tip: 'watch' },
+      logement:       { key: 'maison',      tip: 'good' },
+      sante:          { key: 'sante',       tip: 'good' },        // i18n-technical (category id)
+      assurance:      { key: 'abonnements', tip: 'good' },
     };
-    const meta = PRETTY[cat] || { label: cat, tip: 'good' as const };
+    const meta = PRETTY[cat] || { key: cat, tip: 'good' as const };
     if (meta.tip === 'good' && share <= 35) {
       out.push({
         id: 'cat-good', tone: 'positive', icon: 'checkmark-circle',
-        titleKey: 'timeline.insCatGood', titleParams: { cat: meta.label },
+        titleKey: 'timeline.insCatGood', titleParams: { cat: meta.key },
         subKey: 'timeline.insCatGoodSub', subParams: { p: Math.round(share) }, weight: 55,
       });
     } else if (share >= 30) {
@@ -145,7 +142,7 @@ function generateInsights({ transactions, incomes, recurring, goals }: GenInput)
         id: 'cat-watch', tone: isWatch ? 'warning' : 'info', icon: 'pie-chart',
         titleKey: 'timeline.insCatWatch', titleParams: { cat: cat[0].toUpperCase() + cat.slice(1), p: Math.round(share) },
         subKey: isWatch ? 'timeline.insCatWatchSubWatch' : 'timeline.insCatWatchSubInfo',
-        subParams: { cat: meta.label }, delta: `${Math.round(share)}%`, weight: 65,
+        subParams: { cat: meta.key }, delta: `${Math.round(share)}%`, weight: 65,
       });
     }
   }
@@ -233,6 +230,16 @@ function generateInsights({ transactions, incomes, recurring, goals }: GenInput)
 
 function InsightCard({ insight, index, theme, isLight, t }: { insight: Insight; index: number; theme: any; isLight: boolean; t: any }) {
   const tone = TONE[insight.tone];
+  // If titleParams.cat / subParams.cat is a category id, resolve it via i18n.
+  const resolveCat = (params?: Record<string, any>) => {
+    if (!params || !params.cat) return params;
+    const raw = String(params.cat);
+    const translated = t(`categoryLabels.${raw}`);
+    if (translated && translated !== `categoryLabels.${raw}`) {
+      return { ...params, cat: translated };
+    }
+    return params;
+  };
   return (
     <Animated.View
       entering={FadeInDown.duration(420).delay(80 + index * 70).springify().damping(16)}
@@ -270,11 +277,11 @@ function InsightCard({ insight, index, theme, isLight, t }: { insight: Insight; 
         </View>
         <View style={styles.cardBody}>
           <Text style={[styles.cardTitle, { color: theme.text }]} numberOfLines={2}>
-            {t(insight.titleKey, insight.titleParams)}
+            {t(insight.titleKey, resolveCat(insight.titleParams))}
           </Text>
           {!!insight.subKey && (
             <Text style={[styles.cardSub, { color: theme.textSecondary }]} numberOfLines={2}>
-              {t(insight.subKey, insight.subParams)}
+              {t(insight.subKey, resolveCat(insight.subParams))}
             </Text>
           )}
         </View>

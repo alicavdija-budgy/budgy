@@ -1,19 +1,14 @@
 /**
  * BUDGY - Corner Editor (manual 4-corner crop)
  *
- * @i18n-technical-file
- *
- * ⚠ Emits three FR-CH internal alert messages ("Image non chargée", "La
- * sélection est trop petite", "Impossible d'appliquer le recadrage"). These
- * are error diagnostics passed to native Alert.alert during crop; multi-locale
- * copy will land in v3.9.1 under `scanner.cornerEditor.*`.
- *
  * Lets the user adjust 4 corners over a captured image (Apple Notes style).
  * On apply, returns the bounding box of the 4 points and a cropped + scaled
  * image via expo-image-manipulator. This is a pragmatic, cross-platform
  * approach: a true perspective transform is not available client-side in
  * React Native without a heavy native module, so we crop to the smallest
  * bounding rectangle. The result is still a clear, focused document image.
+ *
+ * All user-visible strings routed through useTranslation().
  *
  * Usage:
  *   <CornerEditor
@@ -53,6 +48,7 @@ import Animated, {
 import Svg, { Polygon, Line, Circle } from 'react-native-svg';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Colors } from '../constants/theme';
+import { useTranslation } from '../hooks/useTranslation';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -72,6 +68,7 @@ const STROKE = 'rgba(52,211,153,0.95)';
 const FILL = 'rgba(52,211,153,0.12)';
 
 export default function CornerEditor({ imageUri, onCancel, onApply }: Props) {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const [imageBox, setImageBox] = useState<{ w: number; h: number } | null>(null);
   const [imgNatural, setImgNatural] = useState<{ w: number; h: number } | null>(null);
@@ -173,7 +170,7 @@ export default function CornerEditor({ imageUri, onCancel, onApply }: Props) {
 
   const handleApply = async () => {
     if (!imgNatural) {
-      Alert.alert('Erreur', 'Image non chargée.');
+      Alert.alert(t('common.error'), t('cornerEditor.imageNotLoaded'));
       return;
     }
     setBusy(true);
@@ -202,7 +199,7 @@ export default function CornerEditor({ imageUri, onCancel, onApply }: Props) {
       const cropH = Math.min(imgNatural.h - cropY, Math.round((maxY - minY) * scaleY));
 
       if (cropW < 50 || cropH < 50) {
-        Alert.alert('Trop petit', 'La sélection est trop petite, ajustez les coins.');
+        Alert.alert(t('common.error'), t('cornerEditor.selectionTooSmall'));
         setBusy(false);
         return;
       }
@@ -239,7 +236,7 @@ export default function CornerEditor({ imageUri, onCancel, onApply }: Props) {
         onApply(result?.uri || imageUri);
       }
     } catch (e: any) {
-      Alert.alert('Erreur', e?.message || 'Impossible d\'appliquer le recadrage.');
+      Alert.alert(t('common.error'), e?.message || t('cornerEditor.cropError'));
     } finally {
       setBusy(false);
     }
@@ -252,8 +249,8 @@ export default function CornerEditor({ imageUri, onCancel, onApply }: Props) {
           <Ionicons name="close" size={24} color="#FFF" />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>Ajuster les coins</Text>
-          <Text style={styles.headerSub}>Faites glisser les 4 points</Text>
+          <Text style={styles.headerTitle}>{t('cornerEditor.adjustTitle')}</Text>
+          <Text style={styles.headerSub}>{t('cornerEditor.adjustSub')}</Text>
         </View>
         <TouchableOpacity onPress={handleAuto} style={styles.iconBtn}>
           <Ionicons name="scan" size={22} color="#FFF" />
@@ -303,7 +300,7 @@ export default function CornerEditor({ imageUri, onCancel, onApply }: Props) {
       <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
         <TouchableOpacity style={styles.btnGhost} onPress={onCancel}>
           <Ionicons name="arrow-back" size={20} color="#FFF" />
-          <Text style={styles.btnGhostTxt}>Annuler</Text>
+          <Text style={styles.btnGhostTxt}>{t('common.cancel')}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.btnPrimary} onPress={handleApply} disabled={busy}>
           <LinearGradient
@@ -317,7 +314,7 @@ export default function CornerEditor({ imageUri, onCancel, onApply }: Props) {
             ) : (
               <>
                 <Ionicons name="checkmark" size={22} color="#0E1530" />
-                <Text style={styles.btnPrimTxt}>Recadrer</Text>
+                <Text style={styles.btnPrimTxt}>{t('cornerEditor.apply')}</Text>
               </>
             )}
           </LinearGradient>

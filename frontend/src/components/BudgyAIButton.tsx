@@ -1,11 +1,8 @@
 /**
  * BUDGY — Central AI Button (Premium edition)
  *
- * @i18n-technical-file
- *
- * ⚠ Only string in this file is the `accessibilityLabel="Assistant IA Budgy"`
- * for VoiceOver. Brand name + role descriptor; multi-locale a11y labels
- * will be routed through i18n key `aiButton.a11yLabel` in v3.9.1.
+ * The only user-visible string is the VoiceOver a11y label — routed through
+ * useTranslation() → `budgyAI.title`.
  *
  * Inspiration: Apple Intelligence · ChatGPT iOS · Revolut Ultra · Arc · Nothing OS.
  *
@@ -33,6 +30,7 @@ import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Defs, LinearGradient as SvgGradient, Stop, Text as SvgText } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
+import { useTranslation } from '../hooks/useTranslation';
 
 // ── Palette — never push above these intensities to keep the "luxe discret" feel
 const ACCENT = '#16E0C6';
@@ -49,6 +47,7 @@ interface Props {
 }
 
 export default function BudgyAIButton({ onPress, loading, disabled }: Props) {
+  const { t } = useTranslation();
   // Press scale (spring)
   const pressScale = useRef(new Animated.Value(1)).current;
   // Slow breathing (organic)
@@ -148,7 +147,7 @@ export default function BudgyAIButton({ onPress, loading, disabled }: Props) {
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
         accessibilityRole="button"
-        accessibilityLabel="Assistant IA Budgy"
+        accessibilityLabel={t('budgyAI.title')}
         testID="budgy-ai-button"
         style={styles.hitbox}
         hitSlop={8}

@@ -4,11 +4,9 @@
  * Fallback complet pour quand l'OCR échoue ou que l'utilisateur préfère saisir
  * manuellement (cas Suisse fréquent: tickets froissés, encre pâle, photos floues).
  *
- * @i18n-technical-file
- *
- * ⚠ FR-CH inlined default alerts (galerie/caméra permission text) + merchant
- * placeholder listing Swiss brands as examples. Full multi-locale copy via
- * i18n keys `receiptManual.*` — v3.9.1 backlog.
+ * All user-visible strings routed through useTranslation(); date input is
+ * formatted with the current locale from DATE_LOCALES[lang]. Category and
+ * payment method labels come from `categoryLabels.*` / `paymentMethods.*`.
  */
 import React, { useState, useMemo } from 'react';
 import {
@@ -22,6 +20,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../src/hooks/useTheme';
 import { useTranslation } from '../../src/hooks/useTranslation';
+import { DATE_LOCALES } from '../../src/i18n/translations';
 import type { ThemePalette } from '../../src/constants/palettes';
 import { BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
 import { useStore } from '../../src/stores/useStore';
@@ -32,7 +31,8 @@ import { normalizeImageForUpload } from '../../src/lib/imageUpload';
 import type { ReceiptType } from '../../src/types';
 
 export default function AddReceiptManualScreen() {
-  const { t } = useTranslation();
+  const { t, lang } = useTranslation();
+  const locale = DATE_LOCALES[lang];
   const theme = useTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
@@ -41,7 +41,7 @@ export default function AddReceiptManualScreen() {
 
   const [merchant, setMerchant] = useState('');
   const [amount, setAmount] = useState('');
-  const [date, setDate] = useState(new Date().toLocaleDateString('fr-CH'));
+  const [date, setDate] = useState(new Date().toLocaleDateString(locale));
   const [category, setCategory] = useState('courses');
   const [paymentMethod, setPaymentMethod] = useState('card');
   const [type, setType] = useState<ReceiptType>('ticket');
@@ -53,7 +53,7 @@ export default function AddReceiptManualScreen() {
     try {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) {
-        Alert.alert('Photos', 'Autorisez l\'accès à la galerie pour joindre une photo.');
+        Alert.alert(t('addReceipt.photoLibraryTitle'), t('addReceipt.photoLibraryMsg'));
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -66,7 +66,7 @@ export default function AddReceiptManualScreen() {
         if (norm.base64) setPhotoDataUrl(`data:image/jpeg;base64,${norm.base64}`);
       }
     } catch (e: any) {
-      Alert.alert('Erreur', e?.message || t('receiptManual.photoFail'));
+      Alert.alert(t('common.error'), e?.message || t('receiptManual.photoFail'));
     }
   };
 
@@ -74,7 +74,7 @@ export default function AddReceiptManualScreen() {
     try {
       const perm = await ImagePicker.requestCameraPermissionsAsync();
       if (!perm.granted) {
-        Alert.alert('Caméra', 'Autorisez l\'accès à la caméra pour prendre une photo.');
+        Alert.alert(t('addReceipt.cameraTitle'), t('addReceipt.cameraMsg'));
         return;
       }
       const result = await ImagePicker.launchCameraAsync({ quality: 0.7 });
@@ -83,7 +83,7 @@ export default function AddReceiptManualScreen() {
         if (norm.base64) setPhotoDataUrl(`data:image/jpeg;base64,${norm.base64}`);
       }
     } catch (e: any) {
-      Alert.alert('Erreur', e?.message || 'Capture impossible.');
+      Alert.alert(t('common.error'), e?.message || t('addReceipt.captureErrorTitle'));
     }
   };
 
@@ -91,11 +91,11 @@ export default function AddReceiptManualScreen() {
     const merchantTrim = merchant.trim();
     const amt = parseFloat(amount.replace(',', '.'));
     if (!merchantTrim) {
-      Alert.alert('Commerce manquant', t('receiptManual.errMerchant'));
+      Alert.alert(t('addReceipt.merchantMissingTitle'), t('addReceipt.merchantMissingMsg'));
       return;
     }
     if (!amt || isNaN(amt) || amt <= 0) {
-      Alert.alert('Montant invalide', t('receiptManual.errAmount'));
+      Alert.alert(t('addReceipt.amountInvalidTitle'), t('addReceipt.amountInvalidMsg'));
       return;
     }
     setSaving(true);
@@ -136,7 +136,7 @@ export default function AddReceiptManualScreen() {
       try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
       router.back();
     } catch (e: any) {
-      Alert.alert('Erreur', e?.message || 'Sauvegarde impossible.');
+      Alert.alert(t('addReceipt.saveErrorTitle'), e?.message || t('addReceipt.saveErrorMsg'));
     } finally {
       setSaving(false);
     }
@@ -152,7 +152,7 @@ export default function AddReceiptManualScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
           <Ionicons name="chevron-back" size={24} color={theme.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>Ajout manuel</Text>
+        <Text style={styles.title}>{t('addReceipt.titleManual')}</Text>
         <View style={{ width: 36 }} />
       </View>
 
@@ -161,7 +161,7 @@ export default function AddReceiptManualScreen() {
         keyboardShouldPersistTaps="handled"
       >
         {/* Type toggle */}
-        <Text style={styles.label}>Type</Text>
+        <Text style={styles.label}>{t('addReceipt.typeLabel')}</Text>
         <View style={styles.typeRow}>
           <TouchableOpacity
             style={[styles.typeBtn, type === 'ticket' && styles.typeBtnOn]}
@@ -169,10 +169,10 @@ export default function AddReceiptManualScreen() {
           >
             <Text style={styles.typeEmoji}>🛒</Text>
             <Text style={[styles.typeLabel, type === 'ticket' && styles.typeLabelOn]}>
-              Ticket de caisse
+              {t('addReceipt.typeReceipt')}
             </Text>
             <Text style={[styles.typeHint, type === 'ticket' && { color: theme.primary }]}>
-              Crée aussi une dépense
+              {t('addReceipt.typeReceiptHint')}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -181,29 +181,29 @@ export default function AddReceiptManualScreen() {
           >
             <Text style={styles.typeEmoji}>💼</Text>
             <Text style={[styles.typeLabel, type === 'remboursement' && styles.typeLabelOn]}>
-              Remboursement
+              {t('addReceipt.typeRefund')}
             </Text>
             <Text style={[styles.typeHint, type === 'remboursement' && { color: theme.primary }]}>
-              À refacturer
+              {t('addReceipt.typeReinvoice')}
             </Text>
           </TouchableOpacity>
         </View>
 
         {/* Merchant */}
-        <Text style={styles.label}>Commerce *</Text>
+        <Text style={styles.label}>{t('addReceipt.merchantLabel')}</Text>
         <View style={styles.inputWrap}>
           <Ionicons name="storefront-outline" size={20} color={theme.textTertiary} />
           <TextInput
             style={styles.input}
             value={merchant}
             onChangeText={setMerchant}
-            placeholder="Migros, Coop, Pharmacie..."
+            placeholder={t('addReceipt.merchantPlaceholder')}
             placeholderTextColor={theme.textTertiary}
           />
         </View>
 
         {/* Amount */}
-        <Text style={styles.label}>Montant *</Text>
+        <Text style={styles.label}>{t('addReceipt.amountLabel')}</Text>
         <View style={styles.inputWrap}>
           <Text style={styles.currencyTag}>CHF</Text>
           <TextInput
@@ -217,20 +217,20 @@ export default function AddReceiptManualScreen() {
         </View>
 
         {/* Date */}
-        <Text style={styles.label}>Date</Text>
+        <Text style={styles.label}>{t('addReceipt.dateLabel')}</Text>
         <View style={styles.inputWrap}>
           <Ionicons name="calendar-outline" size={20} color={theme.textTertiary} />
           <TextInput
             style={styles.input}
             value={date}
             onChangeText={setDate}
-            placeholder="JJ.MM.AAAA"
+            placeholder={t('addReceipt.datePlaceholder')}
             placeholderTextColor={theme.textTertiary}
           />
         </View>
 
         {/* Category */}
-        <Text style={styles.label}>Catégorie</Text>
+        <Text style={styles.label}>{t('addReceipt.categoryLabel')}</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View style={styles.chipRow}>
             {EXPENSE_CATEGORIES.slice(0, 10).map((c) => (
@@ -241,7 +241,7 @@ export default function AddReceiptManualScreen() {
               >
                 <CategoryIcon category={c.id} size="sm" showBackground={false} />
                 <Text style={[styles.chipText, category === c.id && { color: c.color }]}>
-                  {c.name}
+                  {t(`categoryLabels.${c.id}`) || c.name}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -251,7 +251,7 @@ export default function AddReceiptManualScreen() {
         {/* Payment method (only for tickets) */}
         {type === 'ticket' && (
           <>
-            <Text style={styles.label}>Moyen de paiement</Text>
+            <Text style={styles.label}>{t('addReceipt.paymentLabel')}</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               <View style={styles.chipRow}>
                 {PAYMENT_METHODS.slice(0, 8).map((p) => (
@@ -262,7 +262,7 @@ export default function AddReceiptManualScreen() {
                   >
                     <Ionicons name={p.icon as any} size={14} color={p.color} />
                     <Text style={[styles.chipText, paymentMethod === p.id && { color: p.color }]}>
-                      {p.name}
+                      {t(`paymentMethods.${p.id}`) || p.name}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -272,20 +272,20 @@ export default function AddReceiptManualScreen() {
         )}
 
         {/* Note */}
-        <Text style={styles.label}>Note (optionnel)</Text>
+        <Text style={styles.label}>{t('addReceipt.notesFieldLabel')}</Text>
         <View style={styles.inputWrap}>
           <Ionicons name="document-text-outline" size={20} color={theme.textTertiary} />
           <TextInput
             style={styles.input}
             value={note}
             onChangeText={setNote}
-            placeholder="Détails supplémentaires"
+            placeholder={t('addReceipt.notesLabel')}
             placeholderTextColor={theme.textTertiary}
           />
         </View>
 
         {/* Photo attachment (optional) */}
-        <Text style={styles.label}>Pièce jointe (optionnel)</Text>
+        <Text style={styles.label}>{t('addReceipt.attachmentLabel')}</Text>
         {photoDataUrl ? (
           <View style={styles.photoPreview}>
             <Image source={{ uri: photoDataUrl }} style={styles.photoImg} resizeMode="cover" />
@@ -297,11 +297,11 @@ export default function AddReceiptManualScreen() {
           <View style={styles.photoActions}>
             <TouchableOpacity style={styles.photoBtn} onPress={pickFromCamera}>
               <Ionicons name="camera-outline" size={20} color={theme.primary} />
-              <Text style={styles.photoBtnTxt}>Caméra</Text>
+              <Text style={styles.photoBtnTxt}>{t('addReceipt.cameraBtn')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.photoBtn} onPress={pickFromGallery}>
               <Ionicons name="images-outline" size={20} color={theme.primary} />
-              <Text style={styles.photoBtnTxt}>Galerie</Text>
+              <Text style={styles.photoBtnTxt}>{t('addReceipt.photoLibraryTitle')}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -310,7 +310,7 @@ export default function AddReceiptManualScreen() {
       {/* Sticky CTA */}
       <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
         <Button
-          title={saving ? 'Enregistrement...' : type === 'ticket' ? t('receiptManual.saveTicket') : t('receiptManual.saveReimb')}
+          title={saving ? t('addReceipt.saving') : type === 'ticket' ? t('receiptManual.saveTicket') : t('receiptManual.saveReimb')}
           onPress={handleSave}
           loading={saving}
           fullWidth

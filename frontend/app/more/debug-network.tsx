@@ -3,7 +3,6 @@
  *
  * Outil de diagnostic visible dans l'app (TestFlight inclus).
  *
- * @i18n-technical-file
  *
  * ⚠ Developer diagnostic screen. UI text is FR-CH only by design (used by
  * engineering / QA in TestFlight builds, not part of the released user flow).
@@ -35,17 +34,17 @@ type Probe = {
 };
 
 const PROBES_INITIAL: Probe[] = [
-  { label: 'Health', method: 'GET', path: '/api/health', status: 'idle' },
-  { label: 'IAP Health', method: 'GET', path: '/api/iap/health', status: 'idle' },
+  { label: 'Health', method: 'GET', path: '/api/health', status: 'idle' }, // i18n-technical (dev probe)
+  { label: 'IAP Health', method: 'GET', path: '/api/iap/health', status: 'idle' }, // i18n-technical (dev probe)
   {
-    label: 'Email Parse',
+    label: 'Email Parse', // i18n-technical (dev probe)
     method: 'POST',
     path: '/api/email/parse',
-    body: { content: 'Swisscom facture CHF 50 du 30.04.2026' },
+    body: { content: 'Swisscom facture CHF 50 du 30.04.2026' }, // i18n-technical (backend test payload)
     status: 'idle',
   },
   {
-    label: 'Optimizer',
+    label: 'Optimizer', // i18n-technical (dev probe)
     method: 'POST',
     path: '/api/optimizer/analyze',
     body: {
@@ -120,7 +119,7 @@ export default function DebugNetworkScreen() {
     const report = [
       `Budgy DebugNetwork report`,
       `App: ${appVersion}  SDK: ${sdkVersion}  Channel: ${releaseChannel}`,
-      `Backend URL: ${baseUrl || '(NOT CONFIGURED)'}`,
+      `Backend URL: ${baseUrl || '(NOT CONFIGURED)'}`, // i18n-technical (clipboard report)
       `Network: type=${netState.type}, online=${isOnline}, reachable=${isReachable}`,
       `Platform: ${Platform.OS} ${Platform.Version}`,
       `---`,
@@ -144,14 +143,14 @@ export default function DebugNetworkScreen() {
       <ScrollView contentContainerStyle={{ padding: Spacing.lg, paddingBottom: insets.bottom + 100 }}>
         <Card style={styles.infoCard}>
           <Text style={styles.h2}>Configuration runtime</Text>
-          <Row label="App version" value={String(appVersion)} />
-          <Row label="Expo SDK" value={String(sdkVersion)} />
-          <Row label="Channel" value={String(releaseChannel)} />
-          <Row label="Platform" value={`${Platform.OS} ${String(Platform.Version)}`} />
-          <Row label="Backend URL" value={baseUrl || t('smallUi.debugNotConfigured')} mono />
-          <Row label="Network type" value={netState.type || '?'} />
-          <Row label="Online" value={isOnline ? 'oui' : 'non'} highlight={!isOnline} />
-          <Row label="Reachable" value={isReachable === false ? 'non' : isReachable ? 'oui' : '?'} highlight={isReachable === false} />
+          <Row label="App version" value={String(appVersion)} /> {/* i18n-technical (dev diagnostic) */}
+          <Row label="Expo SDK" value={String(sdkVersion)} /> {/* i18n-technical */}
+          <Row label="Channel" value={String(releaseChannel)} /> {/* i18n-technical */}
+          <Row label="Platform" value={`${Platform.OS} ${String(Platform.Version)}`} /> {/* i18n-technical */}
+          <Row label="Backend URL" value={baseUrl || t('smallUi.debugNotConfigured')} mono /> {/* i18n-technical */}
+          <Row label="Network type" value={netState.type || '?'} /> {/* i18n-technical */}
+          <Row label="Online" value={isOnline ? 'oui' : 'non'} highlight={!isOnline} /> {/* i18n-technical */}
+          <Row label="Reachable" value={isReachable === false ? 'non' : isReachable ? 'oui' : '?'} highlight={isReachable === false} /> {/* i18n-technical */}
         </Card>
 
         <Card style={styles.infoCard}>
@@ -159,7 +158,7 @@ export default function DebugNetworkScreen() {
             <Text style={styles.h2}>Tests endpoints ({probes.length})</Text>
             <TouchableOpacity onPress={runAll} disabled={running} style={[styles.refreshBtn, running && { opacity: 0.5 }]}>
               <Ionicons name="refresh" size={16} color={theme.primary} />
-              <Text style={styles.refreshTxt}>{running ? 'En cours...' : 'Re-tester'}</Text>
+              <Text style={styles.refreshTxt}>{running ? t('smallUi.debugInProgress') : 'Re-tester'}</Text>
             </TouchableOpacity>
           </View>
           {probes.map((p, i) => (
@@ -189,7 +188,7 @@ export default function DebugNetworkScreen() {
         </Card>
 
         <Button
-          title="Copier le rapport"
+          title={t('debugNetwork.copyReport')}
           variant="secondary"
           onPress={copyToClipboard}
           fullWidth

@@ -1,13 +1,12 @@
 /**
  * BUDGY — Language Onboarding Modal
  *
- * @i18n-technical-file
- *
- * ⚠ This modal INTENTIONALLY renders the "Welcome / Choose your language"
+ * This modal INTENTIONALLY renders the "Welcome / Choose your language"
  * headline in ALL 4 supported languages (FR/EN/DE/IT) at once so the user
- * can recognize their own language before the app boots. The strings are
- * therefore language SAMPLES by design, not user-visible copy to translate.
- * Same for the native language names displayed in the picker.
+ * can recognize their own language before the app boots. The `WELCOME`
+ * literals below are language SAMPLES by design (never localized further)
+ * and are annotated line-by-line as `// i18n-technical`. Same for the
+ * native language names displayed in the picker.
  */
 
 import React, { useMemo, useState, useEffect } from 'react';
@@ -35,17 +34,17 @@ const LANGUAGES: Array<{
   nativeName: string;
   englishName: string;
 }> = [
-  { code: 'fr', flag: '🇫🇷', nativeName: 'Français', englishName: 'French' },
-  { code: 'en', flag: '🇬🇧', nativeName: 'English', englishName: 'English' },
-  { code: 'de', flag: '🇩🇪', nativeName: 'Deutsch', englishName: 'German' },
-  { code: 'it', flag: '🇮🇹', nativeName: 'Italiano', englishName: 'Italian' },
+  { code: 'fr', flag: '🇫🇷', nativeName: 'Français', englishName: 'French' },       // i18n-technical
+  { code: 'en', flag: '🇬🇧', nativeName: 'English', englishName: 'English' },       // i18n-technical
+  { code: 'de', flag: '🇩🇪', nativeName: 'Deutsch', englishName: 'German' },        // i18n-technical
+  { code: 'it', flag: '🇮🇹', nativeName: 'Italiano', englishName: 'Italian' },      // i18n-technical
 ];
 
 const WELCOME: Record<Language, { title: string; subtitle: string; cta: string }> = {
-  fr: { title: 'Bienvenue sur Budgy', subtitle: 'Choisissez votre langue', cta: 'Continuer' },
-  en: { title: 'Welcome to Budgy', subtitle: 'Choose your language', cta: 'Continue' },
-  de: { title: 'Willkommen bei Budgy', subtitle: 'Wählen Sie Ihre Sprache', cta: 'Weiter' },
-  it: { title: 'Benvenuto su Budgy', subtitle: 'Scegli la tua lingua', cta: 'Continua' },
+  fr: { title: 'Bienvenue sur Budgy', subtitle: 'Choisissez votre langue', cta: 'Continuer' },        // i18n-technical
+  en: { title: 'Welcome to Budgy', subtitle: 'Choose your language', cta: 'Continue' },               // i18n-technical
+  de: { title: 'Willkommen bei Budgy', subtitle: 'Wählen Sie Ihre Sprache', cta: 'Weiter' },          // i18n-technical
+  it: { title: 'Benvenuto su Budgy', subtitle: 'Scegli la tua lingua', cta: 'Continua' },             // i18n-technical
 };
 
 /** Detect device locale without any extra dependency. */

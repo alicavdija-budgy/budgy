@@ -6,12 +6,9 @@
  * Pro gating : source canonique = usePremiumStore.hasPremiumAccess()
  * (couvre isPro + trial actif + provisional après achat).
  *
- * @i18n-technical-file
- *
- * ⚠ EditField labels + delete/edit-modal fallback titles remain FR-CH here;
- * they are internal defaults piped into the shared EntityEditModal /
- * EntityActionsSheet components. Multi-locale wrapping via i18n keys
- * `expenses.edit*` / `expenses.tx*` is planned for v3.9.1.
+ * All user-visible strings routed through useTranslation() including EditField
+ * labels, delete/edit modal titles, categories and payment methods (localised
+ * via categoryLabels.* and paymentMethods.*). Date formatting is locale-aware.
  */
 
 import React, { useState, useMemo } from 'react';
@@ -40,6 +37,7 @@ import BrandLogo from '../../src/components/BrandLogo';
 import { formatNumber } from '../../src/utils/calculations';
 import { EXPENSE_CATEGORIES, PAYMENT_METHODS } from '../../src/data/swiss-data';
 import { useTranslation } from '../../src/hooks/useTranslation';
+import { DATE_LOCALES } from '../../src/i18n/translations';
 import { EntityActionsSheet, type EntityActionsContext } from '../../src/components/EntityActionsSheet';
 import { EntityEditModal, type EditField } from '../../src/components/EntityEditModal';
 
@@ -65,7 +63,10 @@ export default function ExpensesScreen() {
 
   const [activeTab, setActiveTab] = useState<Tab>('daily');
   const [showAddModal, setShowAddModal] = useState(false);
-  const { t } = useTranslation();
+  const { t, lang } = useTranslation();
+  const locale = DATE_LOCALES[lang];
+  const CUR = preferences.currency;
+  const paymentLabelFor = (id?: string) => id ? t(`paymentMethods.${id}`) : '';
   const [newExpense, setNewExpense] = useState({
     title: '',
     amount: '',
@@ -82,13 +83,13 @@ export default function ExpensesScreen() {
     [editingTxId, transactions]
   );
   const TX_EDIT_FIELDS: EditField[] = useMemo(() => [
-    { key: 'title', label: 'Titre', type: 'text', icon: 'document-text-outline', placeholder: 'Migros', required: true },
-    { key: 'amount', label: 'Montant (CHF)', type: 'number', icon: 'cash-outline', placeholder: '0.00', required: true },
-    { key: 'date', label: 'Date', type: 'text', icon: 'calendar-outline', placeholder: '15.04.2026' },
-    { key: 'category', label: 'Catégorie', type: 'select', options: EXPENSE_CATEGORIES.slice(0, 12).map((c) => ({ value: c.id, label: c.name, color: c.color })) },
-    { key: 'paymentMethod', label: 'Moyen de paiement', type: 'select', options: PAYMENT_METHODS.map((p) => ({ value: p.id, label: p.name, color: p.color, icon: p.icon })) },
-    { key: 'note', label: 'Note (optionnel)', type: 'multiline', placeholder: 'Détails...' },
-  ], []);
+    { key: 'title', label: t('common.title'), type: 'text', icon: 'document-text-outline', placeholder: 'Migros', required: true },
+    { key: 'amount', label: `${t('common.amount')} (${CUR})`, type: 'number', icon: 'cash-outline', placeholder: '0.00', required: true },
+    { key: 'date', label: t('common.date'), type: 'text', icon: 'calendar-outline', placeholder: '15.04.2026' },
+    { key: 'category', label: t('expensesScreen.editCategoryLabel'), type: 'select', options: EXPENSE_CATEGORIES.slice(0, 12).map((c) => ({ value: c.id, label: t(`categoryLabels.${c.id}`) || c.name, color: c.color })) },
+    { key: 'paymentMethod', label: t('expensesScreen.editPaymentLabel'), type: 'select', options: PAYMENT_METHODS.map((p) => ({ value: p.id, label: t(`paymentMethods.${p.id}`) || p.name, color: p.color, icon: p.icon })) },
+    { key: 'note', label: t('expensesScreen.editNotesLabel'), type: 'multiline', placeholder: '' },
+  ], [t, CUR]);
   const handleEditTxSubmit = (values: Record<string, any>) => {
     if (!editingTx) return;
     const amt = parseFloat(String(values.amount).replace(',', '.')) || editingTx.amount;
@@ -104,8 +105,6 @@ export default function ExpensesScreen() {
     });
     setEditingTxId(null);
   };
-
-  const CUR = preferences.currency;
 
   const totalDaily = useMemo(() => {
     return transactions.reduce((sum, t) => sum + t.amount, 0);
@@ -126,7 +125,7 @@ export default function ExpensesScreen() {
       id: `tx_${Date.now()}`,
       title: newExpense.title,
       amount: parseFloat(newExpense.amount),
-      date: now.toLocaleDateString('fr-CH'),
+      date: now.toLocaleDateString(locale),
       category: newExpense.category,
       createdAt: now.getTime(),
       updatedAt: now.getTime(),
@@ -232,8 +231,8 @@ export default function ExpensesScreen() {
               <Ionicons name="scan" size={22} color={theme.primary} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.importBannerTitle}>Importer une facture</Text>
-              <Text style={styles.importBannerSub}>Scanner · PDF · Photo — Devient une dépense</Text>
+              <Text style={styles.importBannerTitle}>{t('expensesScreen.importTitle')}</Text>
+              <Text style={styles.importBannerSub}>{t('expensesScreen.importSubtitle')}</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={theme.textTertiary} />
           </TouchableOpacity>
@@ -291,7 +290,7 @@ export default function ExpensesScreen() {
                             color={PAYMENT_METHODS.find(p => p.id === tx.paymentMethod)?.color || theme.textTertiary}
                           />
                           <Text style={styles.paymentBadgeText}>
-                            {PAYMENT_METHODS.find(p => p.id === tx.paymentMethod)?.name || tx.paymentMethod}
+                            {paymentLabelFor(tx.paymentMethod) || tx.paymentMethod}
                           </Text>
                         </View>
                       )}
@@ -413,7 +412,7 @@ export default function ExpensesScreen() {
                       onPress={() => setNewExpense((p) => ({ ...p, category: cat.id }))}
                     >
                       <CategoryIcon category={cat.id} size="sm" />
-                      <Text style={styles.categoryLabel}>{cat.name}</Text>
+                      <Text style={styles.categoryLabel}>{t(`categoryLabels.${cat.id}`) || cat.name}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -449,7 +448,7 @@ export default function ExpensesScreen() {
                       onPress={() => setNewExpense((p) => ({ ...p, paymentMethod: pm.id }))}
                     >
                       <Ionicons name={pm.icon as any} size={18} color={pm.color} />
-                      <Text style={styles.categoryLabel}>{pm.name}</Text>
+                      <Text style={styles.categoryLabel}>{paymentLabelFor(pm.id) || pm.name}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -481,12 +480,12 @@ export default function ExpensesScreen() {
           setTxActionsCtx(null);
           if (id) deleteTransaction(id);
         }}
-        deleteConfirmTitle="Supprimer cette dépense ?"
+        deleteConfirmTitle={t('expensesScreen.deleteConfirmTitle')}
       />
       <EntityEditModal
         visible={!!editingTx}
         onClose={() => setEditingTxId(null)}
-        title="Modifier la dépense"
+        title={t('expensesScreen.editEntityTitle')}
         fields={TX_EDIT_FIELDS}
         initialValues={{
           title: editingTx?.title || '',

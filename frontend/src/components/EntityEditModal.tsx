@@ -1,19 +1,15 @@
 /**
  * BUDGY — EntityEditModal
  *
- * @i18n-technical-file
- *
- * ⚠ Uses generic FR-CH default for switch hint ("Activé"/"Désactivé") and
- * submit label. Every caller passes its own translated `title` and can
- * override `submitLabel`. Multi-locale switch labels via i18n key
- * `common.enabled` / `common.disabled` — v3.9.1 backlog.
- *
  * Generic, schema-driven edit modal used for editing all 9 entity types:
  * investments, crypto, recurring, budgets, incomes, expenses, tickets, invoices, contracts.
  *
  * The caller passes an array of `EditField` definitions and an initial values
  * object; this component renders the inputs and returns the updated values via
  * `onSubmit(values)`. Avoids duplicating Modal + form boilerplate 9 times.
+ *
+ * Switch labels + default submit label are localised via useTranslation.
+ * Callers must pass an already-translated `title` and can override `submitLabel`.
  *
  * NOTE: Use this for SIMPLE edit forms (text + number + date + dropdown).
  * For complex multi-step flows, keep a dedicated screen.
@@ -26,6 +22,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../hooks/useTheme';
+import { useTranslation } from '../hooks/useTranslation';
 import type { ThemePalette } from '../constants/palettes';
 import { BorderRadius, Spacing, FontSizes, FontWeights } from '../constants/theme';
 import { Button } from './ui';
@@ -62,8 +59,9 @@ export function EntityEditModal({
   fields,
   initialValues,
   onSubmit,
-  submitLabel = 'Enregistrer',
+  submitLabel,
 }: Props) {
+  const { t } = useTranslation();
   const theme = useTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
@@ -133,7 +131,7 @@ export function EntityEditModal({
                         trackColor={{ false: theme.cardBorder, true: theme.primary }}
                       />
                       <Text style={styles.switchHint}>
-                        {values[f.key] ? 'Activé' : 'Désactivé'}
+                        {values[f.key] ? t('common.enabled') : t('common.disabled')}
                       </Text>
                     </View>
                   ) : f.type === 'select' && f.options ? (
@@ -196,7 +194,7 @@ export function EntityEditModal({
               ))}
 
               <Button
-                title={submitLabel}
+                title={submitLabel ?? t('common.save')}
                 onPress={handleSubmit}
                 fullWidth
                 size="lg"

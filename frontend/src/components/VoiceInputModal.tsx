@@ -1,11 +1,7 @@
 /**
  * BUDGY — Voice Input Modal (Premium edition)
  *
- * @i18n-technical-file
- *
- * ⚠ FR-CH default strings for mic permission denial, live listening button
- * label ("Arrêter/Démarrer la dictée"), and result preview placeholder
- * "Dépense". Multi-locale copy routed via i18n keys `voice.*` — v3.9.1 backlog.
+ * All user-visible strings are routed through useTranslation().
  *
  * UX inspired by Apple Intelligence / ChatGPT Voice / Siri Wave:
  *   1. Tap the big mic button → start listening (haptic + start beep)
@@ -259,7 +255,7 @@ export default function VoiceInputModal({ visible, onClose }: Props) {
     // Ask permissions first (no-op on web)
     const perm = await requestSttPermissions();
     if (!perm.granted) {
-      setPermError(perm.reason || 'Permission micro refusée');
+      setPermError(perm.reason || t('voiceInputModal.micPermissionDenied'));
       setPhase('idle');
       Alert.alert(t('voice.errPermission'), t('voice.errPermMsg'));
       return;
@@ -423,7 +419,7 @@ export default function VoiceInputModal({ visible, onClose }: Props) {
     successHaptic();
     setPhase('saving');
     try {
-      const t = parsed.type;
+      const type = parsed.type;
       const amount = parsed.amount || 0;
       let dateStr = parsed.date || '';
       const todayStr = new Date().toISOString().slice(0, 10);
@@ -433,10 +429,10 @@ export default function VoiceInputModal({ visible, onClose }: Props) {
       }
       const now = Date.now();
 
-      if (t === 'income') {
+      if (type === 'income') {
         addIncome({
           id: `inc_${now}`,
-          title: parsed.merchant || parsed.category || 'Revenu',
+          title: parsed.merchant || parsed.category || t('incomesScreen.typeSalary'),
           amount,
           type: 'occasional',
           frequency: 'monthly',
@@ -445,10 +441,10 @@ export default function VoiceInputModal({ visible, onClose }: Props) {
           icon: 'cash',
           createdAt: now,
         } as any);
-      } else if (t === 'subscription' || parsed.recurring) {
+      } else if (type === 'subscription' || parsed.recurring) {
         addRecurringExpense({
           id: `rec_${now}`,
-          title: parsed.merchant || parsed.category || 'Abonnement',
+          title: parsed.merchant || parsed.category || t('quickAdd.defaultSubscription'),
           amount,
           frequency: 'monthly',
           category: parsed.category || 'abonnement',
@@ -460,7 +456,7 @@ export default function VoiceInputModal({ visible, onClose }: Props) {
       } else {
         addTransaction({
           id: `txn_${now}`,
-          title: parsed.merchant || parsed.category || 'Dépense',
+          title: parsed.merchant || parsed.category || t('voiceInputModal.expenseLabel'),
           amount,
           category: parsed.category || 'autre',
           date: dateStr,
@@ -581,7 +577,7 @@ export default function VoiceInputModal({ visible, onClose }: Props) {
                 onPress={onMicPress}
                 accessibilityRole="button"
                 accessibilityLabel={
-                  phase === 'listening' ? 'Arrêter la dictée' : 'Démarrer la dictée'
+                  phase === 'listening' ? t('voiceInputModal.stopDictation') : t('voiceInputModal.startDictation')
                 }
                 disabled={phase === 'parsing' || phase === 'saving'}
                 style={({ pressed }) => [{ opacity: pressed ? 0.9 : 1 }]}

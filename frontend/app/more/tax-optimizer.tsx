@@ -2,7 +2,6 @@
  * BUDGY - Swiss Tax Optimizer (Premium)
  * Family-aware questionnaire → auto-computes deductions, LAMal premium, IFD + ICC.
  *
- * @i18n-technical-file
  *
  * ⚠ Residual FR-CH fallback labels / EditField props / examples;
  * multi-locale wrapping deferred to v3.9.1 backlog.
@@ -93,7 +92,7 @@ export default function TaxOptimizerScreen() {
         const msg = r.offline
           ? t('taxUi.offlineTitle')
           : t('taxUi.servDown');
-        Alert.alert('Calcul impossible', msg);
+        Alert.alert(t('taxOptimizer.calcErrorTitle'), msg);
         return;
       }
       setResult(r.data);
@@ -249,13 +248,13 @@ export default function TaxOptimizerScreen() {
                 style={styles.input}
                 value={form.transport_costs}
                 onChangeText={(t) => setForm((p) => ({ ...p, transport_costs: t }))}
-                placeholder="0 (max CHF 3'200)"
+                placeholder={t('taxOptimizer.pillarLegend', { val: '0', max: "3'200" })}
                 placeholderTextColor={theme.textTertiary}
                 keyboardType="numeric"
               />
 
               <Button
-                title="Calculer mes impôts →"
+                title={t('taxOptimizer.computeCta')}
                 onPress={run}
                 fullWidth size="lg"
                 loading={loading}
@@ -340,7 +339,7 @@ export default function TaxOptimizerScreen() {
               )}
 
               <Button
-                title="Modifier ma situation"
+                title={t('taxOptimizer.editSituation')}
                 onPress={() => setStep('form')}
                 fullWidth size="lg" variant="secondary"
                 style={{ marginTop: Spacing.lg }}

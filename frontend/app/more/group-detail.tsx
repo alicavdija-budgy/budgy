@@ -2,7 +2,6 @@
  * GUARDIAN MONEY CHF - Group Detail (Splitwise-style)
  * Add expenses, see members, view balances and settlements.
  *
- * @i18n-technical-file
  *
  * ⚠ Residual FR-CH fallback labels / EditField props / examples;
  * multi-locale wrapping deferred to v3.9.1 backlog.
@@ -264,9 +263,9 @@ export default function GroupDetailScreen() {
         {expenses.length === 0 ? (
           <EmptyState
             icon="cash-outline"
-            title="Aucune dépense"
-            subtitle="Ajoutez la première dépense partagée du groupe."
-            actionLabel="+ Ajouter une dépense"
+            title={t('groupDetail.emptyTitle')}
+            subtitle={t('groupDetail.emptySub')}
+            actionLabel={t('groupDetail.addExpense')}
             onAction={openAdd}
           />
         ) : (
@@ -325,7 +324,7 @@ export default function GroupDetailScreen() {
                 style={styles.input}
                 value={title}
                 onChangeText={setTitle}
-                placeholder="Ex: Pizza, Essence, Internet..."
+                placeholder={t('groupDetail.titlePh')}
                 placeholderTextColor={theme.textTertiary}
               />
 
@@ -386,7 +385,7 @@ export default function GroupDetailScreen() {
               </View>
             </ScrollView>
             <Button
-              title="Ajouter la dépense"
+              title={t('groupDetail.addCta')}
               onPress={handleAddExpense}
               fullWidth
               size="lg"

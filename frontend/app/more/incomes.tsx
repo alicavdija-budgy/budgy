@@ -3,7 +3,6 @@
  * Full CRUD for user income sources (salary, freelance, bonus, rental, etc.)
  * Supports monthly, quarterly, and yearly frequencies.
  *
- * @i18n-technical-file
  *
  * ⚠ Residual FR-CH fallback labels / EditField props / examples;
  * multi-locale wrapping deferred to v3.9.1 backlog.
@@ -29,19 +28,19 @@ import { EntityActionsSheet, type EntityActionsContext } from '../../src/compone
 import { EntityEditModal, type EditField } from '../../src/components/EntityEditModal';
 
 const INCOME_TYPES = [
-  { key: 'salary',     label: 'Salaire',         icon: 'briefcase',     color: '#06D6A0', emoji: '💼' },
-  { key: 'freelance',  label: 'Freelance',       icon: 'laptop',        color: '#7C3AED', emoji: '🧑‍💻' },
-  { key: 'rental',     label: 'Location',        icon: 'home',          color: '#F59E0B', emoji: '🏠' },
-  { key: 'investment', label: 'Investissements', icon: 'trending-up',   color: '#22D3EE', emoji: '📈' },
-  { key: 'bonus',      label: '13ème / Bonus',   icon: 'gift',          color: '#FBBF24', emoji: '🎁' },
-  { key: 'side',       label: 'Revenu annexe',   icon: 'sparkles',      color: '#EC4899', emoji: '✨' },
-  { key: 'other',      label: 'Autre',           icon: 'cash',          color: '#6B7280', emoji: '💰' },
+  { key: 'salary',     labelKey: 'incomesScreen.typeSalary',     icon: 'briefcase',     color: '#06D6A0', emoji: '💼' },
+  { key: 'freelance',  labelKey: 'incomesScreen.typeFreelance',  icon: 'laptop',        color: '#7C3AED', emoji: '🧑‍💻' },
+  { key: 'rental',     labelKey: 'incomesScreen.typeRental',     icon: 'home',          color: '#F59E0B', emoji: '🏠' },
+  { key: 'investment', labelKey: 'incomesScreen.typeInvestment', icon: 'trending-up',   color: '#22D3EE', emoji: '📈' },
+  { key: 'bonus',      labelKey: 'incomesScreen.bonusLabel',     icon: 'gift',          color: '#FBBF24', emoji: '🎁' },
+  { key: 'side',       labelKey: 'incomesScreen.typeSide',       icon: 'sparkles',      color: '#EC4899', emoji: '✨' },
+  { key: 'other',      labelKey: 'incomesScreen.typeOther',      icon: 'cash',          color: '#6B7280', emoji: '💰' },
 ];
 
 const FREQUENCIES = [
-  { key: 'monthly',   label: 'Mensuel',    mult: 12 },
-  { key: 'quarterly', label: 'Trimestriel', mult: 4 },
-  { key: 'yearly',    label: 'Annuel',      mult: 1 },
+  { key: 'monthly',   labelKey: 'incomesScreen.freqMonthly',   mult: 12 },
+  { key: 'quarterly', labelKey: 'incomesScreen.freqQuarterly', mult: 4 },
+  { key: 'yearly',    labelKey: 'incomesScreen.freqYearly',    mult: 1 },
 ] as const;
 
 export default function IncomesScreen() {
@@ -69,19 +68,19 @@ export default function IncomesScreen() {
     [editingIncomeId, incomes]
   );
   const INCOME_EDIT_FIELDS: EditField[] = useMemo(() => [
-    { key: 'title', label: 'Nom', type: 'text', placeholder: 'Salaire net', icon: 'briefcase-outline', required: true },
-    { key: 'amount', label: 'Montant (CHF)', type: 'number', icon: 'cash-outline', placeholder: '6500', required: true },
-    { key: 'category', label: t('incomesUi.category'), type: 'select', options: INCOME_TYPES.map((t) => ({ value: t.key, label: t.label, color: t.color, icon: t.icon })) },
-    { key: 'type', label: 'Nature', type: 'select', options: [
+    { key: 'title', label: t('common.title'), type: 'text', placeholder: t('incomesScreen.typeSalary'), icon: 'briefcase-outline', required: true },
+    { key: 'amount', label: `${t('common.amount')} (${preferences.currency})`, type: 'number', icon: 'cash-outline', placeholder: '6500', required: true },
+    { key: 'category', label: t('incomesUi.category'), type: 'select', options: INCOME_TYPES.map((it) => ({ value: it.key, label: t(it.labelKey), color: it.color, icon: it.icon })) },
+    { key: 'type', label: t('common.nature') || t('incomesUi.recurring'), type: 'select', options: [
       { value: 'recurring', label: t('incomesUi.recurring') },
-      { value: 'occasional', label: '⚡ Ponctuel' },
+      { value: 'occasional', label: '⚡ ' + (t('incomesUi.occasional') || t('common.occasional')) },
     ] },
     { key: 'frequency', label: t('incomesUi.frequency'), type: 'select', options: [
-      { value: 'monthly', label: 'Mensuel' },
-      { value: 'quarterly', label: 'Trimestriel' },
-      { value: 'yearly', label: 'Annuel' },
+      { value: 'monthly', label: t('incomesScreen.freqMonthly') },
+      { value: 'quarterly', label: t('incomesScreen.freqQuarterly') },
+      { value: 'yearly', label: t('incomesScreen.freqYearly') },
     ] },
-  ], []);
+  ], [t, preferences.currency]);
   const handleEditIncomeSubmit = (values: Record<string, any>) => {
     if (!editingIncome) return;
     const amt = parseFloat(String(values.amount).replace(',', '.')) || editingIncome.amount;
@@ -117,12 +116,12 @@ export default function IncomesScreen() {
 
   const handleAdd = () => {
     if (!form.title.trim() || !form.amount) {
-      Alert.alert('Champs manquants', t('incomesUi.errTitleMissing'));
+      Alert.alert(t('incomesScreen.missingFieldsTitle'), t('incomesUi.errTitleMissing'));
       return;
     }
     const amt = parseFloat(form.amount.replace(',', '.'));
     if (isNaN(amt) || amt <= 0) {
-      Alert.alert('Montant invalide', t('incomesUi.errInvalidAmount'));
+      Alert.alert(t('incomesScreen.invalidAmountTitle'), t('incomesUi.errInvalidAmount'));
       return;
     }
     addIncome({
@@ -191,19 +190,19 @@ export default function IncomesScreen() {
           <Animated.View entering={FadeInDown.duration(500).delay(100)}>
             <Text style={styles.sectionTitle}>Ajout rapide</Text>
             <View style={styles.quickGrid}>
-              {INCOME_TYPES.slice(0, 4).map((t) => (
+              {INCOME_TYPES.slice(0, 4).map((it) => (
                 <TouchableOpacity
-                  key={t.key}
+                  key={it.key}
                   style={styles.quickCard}
                   onPress={() => {
-                    setForm({ ...form, category: t.key, title: t.label });
+                    setForm({ ...form, category: it.key, title: t(it.labelKey) });
                     setShowModal(true);
                   }}
                 >
-                  <View style={[styles.quickIcon, { backgroundColor: `${t.color}25` }]}>
-                    <Text style={styles.quickEmoji}>{t.emoji}</Text>
+                  <View style={[styles.quickIcon, { backgroundColor: `${it.color}25` }]}>
+                    <Text style={styles.quickEmoji}>{it.emoji}</Text>
                   </View>
-                  <Text style={styles.quickLabel}>{t.label}</Text>
+                  <Text style={styles.quickLabel}>{t(it.labelKey)}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -211,7 +210,7 @@ export default function IncomesScreen() {
               icon="wallet-outline"
               title={t("incomesUi.emptyTitle")}
               subtitle={t("incomesUi.emptySub")}
-              action={{ label: '+ Ajouter mon salaire', onPress: () => setShowModal(true) }}
+              action={{ label: t('incomesScreen.addSalary'), onPress: () => setShowModal(true) }}
             />
           </Animated.View>
         )}
@@ -221,7 +220,8 @@ export default function IncomesScreen() {
           <>
             <Text style={styles.sectionTitle}>Sources de revenu ({incomes.length})</Text>
             {incomes.map((inc, idx) => {
-              const t = INCOME_TYPES.find((it) => it.key === inc.category) || INCOME_TYPES[6];
+              const cat = INCOME_TYPES.find((it) => it.key === inc.category) || INCOME_TYPES[6];
+              const catLabel = t(cat.labelKey);
               const freqLabel = inc.frequency === 'yearly' ? '/an'
                 : inc.frequency === 'quarterly' ? '/trim'
                 : inc.type === 'occasional' ? ' ponctuel'
@@ -236,23 +236,23 @@ export default function IncomesScreen() {
                     onLongPress={() => setActionsCtx({
                       id: inc.id,
                       title: inc.title,
-                      subtitle: `${CUR} ${formatNumber(inc.amount)}${freqLabel} · ${t.label}`,
-                      accent: t.color,
+                      subtitle: `${CUR} ${formatNumber(inc.amount)}${freqLabel} · ${catLabel}`,
+                      accent: cat.color,
                     })}
                   >
                   <Card style={styles.incCard}>
                     <View style={styles.incRow}>
-                      <View style={[styles.incIcon, { backgroundColor: `${t.color}25` }]}>
-                        <Text style={styles.incEmoji}>{t.emoji}</Text>
+                      <View style={[styles.incIcon, { backgroundColor: `${cat.color}25` }]}>
+                        <Text style={styles.incEmoji}>{cat.emoji}</Text>
                       </View>
                       <View style={{ flex: 1 }}>
                         <Text style={styles.incTitle}>{inc.title}</Text>
                         <Text style={styles.incMeta}>
-                          {t.label} · {inc.type === 'occasional' ? 'Ponctuel' : FREQUENCIES.find(f => f.key === inc.frequency)?.label}
+                          {catLabel} · {inc.type === 'occasional' ? 'Ponctuel' : t(FREQUENCIES.find(f => f.key === inc.frequency)?.labelKey || 'incomesScreen.freqMonthly')}
                         </Text>
                       </View>
                       <View style={styles.incAmountBox}>
-                        <Text style={[styles.incAmount, { color: t.color }]}>
+                        <Text style={[styles.incAmount, { color: cat.color }]}>
                           +{CUR} {formatNumber(inc.amount)}
                         </Text>
                         <Text style={styles.incFreq}>{freqLabel}</Text>
@@ -265,7 +265,7 @@ export default function IncomesScreen() {
                           id: inc.id,
                           title: inc.title,
                           subtitle: `${CUR} ${formatNumber(inc.amount)}${freqLabel}`,
-                          accent: t.color,
+                          accent: cat.color,
                         })}
                         style={styles.delBtn}
                       >
@@ -302,21 +302,21 @@ export default function IncomesScreen() {
               {/* Type selector */}
               <Text style={styles.label}>Type de revenu</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.typeScroll}>
-                {INCOME_TYPES.map((t) => (
+                {INCOME_TYPES.map((it) => (
                   <TouchableOpacity
-                    key={t.key}
+                    key={it.key}
                     style={[
                       styles.typeChip,
-                      form.category === t.key && { backgroundColor: `${t.color}30`, borderColor: t.color },
+                      form.category === it.key && { backgroundColor: `${it.color}30`, borderColor: it.color },
                     ]}
-                    onPress={() => setForm((p) => ({ ...p, category: t.key }))}
+                    onPress={() => setForm((p) => ({ ...p, category: it.key }))}
                   >
-                    <Text style={styles.typeEmoji}>{t.emoji}</Text>
+                    <Text style={styles.typeEmoji}>{it.emoji}</Text>
                     <Text style={[
                       styles.typeLabel,
-                      form.category === t.key && { color: t.color, fontWeight: FontWeights.bold },
+                      form.category === it.key && { color: it.color, fontWeight: FontWeights.bold },
                     ]}>
-                      {t.label}
+                      {t(it.labelKey)}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -328,7 +328,7 @@ export default function IncomesScreen() {
                 style={styles.input}
                 value={form.title}
                 onChangeText={(t) => setForm((p) => ({ ...p, title: t }))}
-                placeholder="Salaire net"
+                placeholder={t('incomesScreen.netSalary')}
                 placeholderTextColor={theme.textTertiary}
               />
 
@@ -344,11 +344,11 @@ export default function IncomesScreen() {
               />
 
               {/* Type: recurring / occasional */}
-              <Text style={styles.label}>Nature</Text>
+              <Text style={styles.label}>{t('common.nature')}</Text>
               <View style={styles.segmentRow}>
                 {[
                   { k: 'recurring', lbl: t('incomesUi.recurring') },
-                  { k: 'occasional', lbl: '⚡ Ponctuel' },
+                  { k: 'occasional', lbl: t('incomesScreen.occasionalTag') },
                 ].map((s) => (
                   <TouchableOpacity
                     key={s.k}
@@ -380,7 +380,7 @@ export default function IncomesScreen() {
                           styles.segmentLabel,
                           form.frequency === f.key && styles.segmentLabelActive,
                         ]}>
-                          {f.label}
+                          {t(f.labelKey)}
                         </Text>
                       </TouchableOpacity>
                     ))}

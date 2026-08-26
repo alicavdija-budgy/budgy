@@ -1,7 +1,6 @@
 /**
  * GUARDIAN MONEY CHF - Open Source Licenses
  *
- * @i18n-technical-file
  *
  * ⚠ Contains only library brand names, URLs and license identifiers (MIT).
  * Not UI copy — the surrounding chrome (header title, intro paragraph)
@@ -17,20 +16,21 @@ import { BorderRadius, Spacing, FontSizes, FontWeights } from '../../../src/cons
 import { useTheme } from '../../../src/hooks/useTheme';
 
 const LIBS = [
-  { name: 'React Native', license: 'MIT', url: 'https://reactnative.dev' },
-  { name: 'Expo', license: 'MIT', url: 'https://expo.dev' },
-  { name: 'Expo Router', license: 'MIT', url: 'https://expo.github.io/router' },
-  { name: 'Zustand', license: 'MIT', url: 'https://github.com/pmndrs/zustand' },
-  { name: 'Supabase JS', license: 'MIT', url: 'https://supabase.com' },
-  { name: 'React Native Reanimated', license: 'MIT', url: 'https://docs.swmansion.com/react-native-reanimated' },
-  { name: 'React Native SVG', license: 'MIT', url: 'https://github.com/software-mansion/react-native-svg' },
-  { name: 'Expo Camera', license: 'MIT', url: 'https://docs.expo.dev/versions/latest/sdk/camera' },
-  { name: 'Expo Local Authentication', license: 'MIT', url: 'https://docs.expo.dev/versions/latest/sdk/local-authentication' },
-  { name: 'Expo Secure Store', license: 'MIT', url: 'https://docs.expo.dev/versions/latest/sdk/securestore' },
-  { name: 'Ionicons', license: 'MIT', url: 'https://ionic.io/ionicons' },
-  { name: 'AsyncStorage', license: 'MIT', url: 'https://github.com/react-native-async-storage/async-storage' },
-  { name: 'FastAPI', license: 'MIT', url: 'https://fastapi.tiangolo.com' },
-  { name: 'Pydantic', license: 'MIT', url: 'https://docs.pydantic.dev' },
+  // OSS library names are trademark proper nouns, never translated.
+  { name: 'React Native', license: 'MIT', url: 'https://reactnative.dev' }, // i18n-technical
+  { name: 'Expo', license: 'MIT', url: 'https://expo.dev' }, // i18n-technical
+  { name: 'Expo Router', license: 'MIT', url: 'https://expo.github.io/router' }, // i18n-technical
+  { name: 'Zustand', license: 'MIT', url: 'https://github.com/pmndrs/zustand' }, // i18n-technical
+  { name: 'Supabase JS', license: 'MIT', url: 'https://supabase.com' }, // i18n-technical
+  { name: 'React Native Reanimated', license: 'MIT', url: 'https://docs.swmansion.com/react-native-reanimated' }, // i18n-technical
+  { name: 'React Native SVG', license: 'MIT', url: 'https://github.com/software-mansion/react-native-svg' }, // i18n-technical
+  { name: 'Expo Camera', license: 'MIT', url: 'https://docs.expo.dev/versions/latest/sdk/camera' }, // i18n-technical
+  { name: 'Expo Local Authentication', license: 'MIT', url: 'https://docs.expo.dev/versions/latest/sdk/local-authentication' }, // i18n-technical
+  { name: 'Expo Secure Store', license: 'MIT', url: 'https://docs.expo.dev/versions/latest/sdk/securestore' }, // i18n-technical
+  { name: 'Ionicons', license: 'MIT', url: 'https://ionic.io/ionicons' }, // i18n-technical
+  { name: 'AsyncStorage', license: 'MIT', url: 'https://github.com/react-native-async-storage/async-storage' }, // i18n-technical
+  { name: 'FastAPI', license: 'MIT', url: 'https://fastapi.tiangolo.com' }, // i18n-technical
+  { name: 'Pydantic', license: 'MIT', url: 'https://docs.pydantic.dev' }, // i18n-technical
 ];
 
 export default function LicensesScreen() {

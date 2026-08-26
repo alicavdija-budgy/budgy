@@ -2,11 +2,8 @@
  * GUARDIAN MONEY CHF - Savings Screen
  * Savings goals with progress tracking
  *
- * @i18n-technical-file
- *
- * ⚠ Residual FR-CH defaults on EntityEditModal EditField labels + delete
- * confirmation strings piped into EntityActionsSheet. Multi-locale i18n
- * wrapping is planned as v3.9.1 follow-up under `savings.editGoal*`.
+ * All user-visible strings routed through useTranslation() including
+ * EditField labels and EntityActionsSheet delete/edit fallbacks.
  */
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -63,11 +60,11 @@ export default function SavingsScreen() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const editingGoal = useMemo(() => savingsGoals.find((g) => g.id === editingId) || null, [savingsGoals, editingId]);
   const EDIT_GOAL_FIELDS: EditField[] = useMemo(() => [
-    { key: 'title', label: 'Titre', type: 'text', icon: 'flag-outline', placeholder: 'ex: Voyage Japon', required: true },
-    { key: 'target', label: `Montant cible (${preferences.currency})`, type: 'number', icon: 'flag-outline', placeholder: '5000', required: true, decimal: true },
-    { key: 'saved', label: `Déjà épargné (${preferences.currency})`, type: 'number', icon: 'wallet-outline', placeholder: '0', decimal: true },
-    { key: 'deadline', label: 'Date cible (YYYY-MM-DD)', type: 'text', icon: 'calendar-outline', placeholder: '2026-12-31' },
-  ], [preferences.currency]);
+    { key: 'title', label: t('common.title'), type: 'text', icon: 'flag-outline', placeholder: t('savingsScreen2.titlePlaceholder'), required: true },
+    { key: 'target', label: `${t('common.targetAmount') || t('common.amount')} (${preferences.currency})`, type: 'number', icon: 'flag-outline', placeholder: '5000', required: true, decimal: true },
+    { key: 'saved', label: `${t('savings.saved') || t('common.saved')} (${preferences.currency})`, type: 'number', icon: 'wallet-outline', placeholder: '0', decimal: true },
+    { key: 'deadline', label: t('savingsScreen2.targetDateLabel'), type: 'text', icon: 'calendar-outline', placeholder: '2026-12-31' },
+  ], [preferences.currency, t]);
   const handleEditGoalSubmit = (values: Record<string, any>) => {
     if (!editingGoal) return;
     const target = parseFloat(String(values.target).replace(',', '.')) || editingGoal.target;
@@ -549,13 +546,13 @@ export default function SavingsScreen() {
           setActionsCtx(null);
           if (id) deleteSavingsGoal(id);
         }}
-        deleteConfirmTitle="Supprimer cet objectif ?"
-        deleteConfirmMessage="L'historique de progression sera perdu."
+        deleteConfirmTitle={t('savingsScreen2.deleteConfirmTitle')}
+        deleteConfirmMessage={t('savingsScreen2.deleteConfirmMessage')}
       />
       <EntityEditModal
         visible={!!editingGoal}
         onClose={() => setEditingId(null)}
-        title="Modifier l'objectif"
+        title={t('savingsScreen2.editTitle')}
         fields={EDIT_GOAL_FIELDS}
         initialValues={{
           title: editingGoal?.title || '',

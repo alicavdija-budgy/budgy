@@ -2,7 +2,6 @@
  * GUARDIAN MONEY CHF - LAMal Subsidy Calculator
  * Estimates eligibility and amount of LAMal subsidy per canton.
  *
- * @i18n-technical-file
  *
  * ⚠ Residual FR-CH fallback labels / EditField props / examples;
  * multi-locale wrapping deferred to v3.9.1 backlog.
@@ -35,10 +34,10 @@ import { formatNumber } from '../../src/utils/calculations';
 import { apiFetchJson } from '../../src/lib/network';
 
 const HOUSEHOLD_OPTIONS = [
-  { id: 'single', emoji: '👤', label: 'Célibataire' },
-  { id: 'couple', emoji: '👫', label: 'Couple' },
-  { id: 'family', emoji: '👨‍👩‍👧', label: 'Famille' },
-  { id: 'single_parent', emoji: '👩‍👦', label: 'Parent solo' },
+  { id: 'single', emoji: '👤', labelKey: 'lamalSubsidyScreen.single' },
+  { id: 'couple', emoji: '👫', labelKey: 'lamalSubsidyScreen.couple' },
+  { id: 'family', emoji: '👨‍👩‍👧', labelKey: 'lamalSubsidyScreen.family' },
+  { id: 'single_parent', emoji: '👩‍👦', labelKey: 'lamalSubsidyScreen.singleParent' },
 ] as const;
 
 export default function LamalSubsidyScreen() {
@@ -158,7 +157,7 @@ export default function LamalSubsidyScreen() {
               <Text
                 style={[styles.hhLabel, household === h.id && styles.hhLabelActive]}
               >
-                {h.label}
+                {t(h.labelKey)}
               </Text>
             </TouchableOpacity>
           ))}

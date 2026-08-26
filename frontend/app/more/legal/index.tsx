@@ -2,7 +2,6 @@
  * GUARDIAN MONEY CHF - Legal Hub
  * Central screen with links to all legal pages (required by Apple & Google).
  *
- * @i18n-technical-file
  *
  * ⚠ Residual FR-CH fallback labels / EditField props / examples;
  * multi-locale wrapping deferred to v3.9.1 backlog.
@@ -37,8 +36,8 @@ export default function LegalScreen() {
     },
     {
       id: 'terms',
-      title: 'Conditions d’utilisation',
-      subtitle: 'CGU de l’application Budgy',
+      title: t('legalScreen.termsTitle'),
+      subtitle: t('legalScreen.cguTitle'),
       icon: 'document-text' as const,
       color: C.primary,
       route: '/more/legal/terms',
@@ -62,7 +61,7 @@ export default function LegalScreen() {
     {
       id: 'licenses',
       title: t('legalIndex.licensesTitle'),
-      subtitle: 'Bibliothèques utilisées dans l’application',
+      subtitle: t('legalScreen.licensesSub'),
       icon: 'code-slash' as const,
       color: C.purple,
       route: '/more/legal/licenses',

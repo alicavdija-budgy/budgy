@@ -4,7 +4,6 @@
  * i18n complet (FR/DE/EN/IT) via useTranslation('siriAssistant').
  * Wording strict : « Compatible avec Siri via Raccourcis iOS » — jamais « Siri natif ».
  *
- * @i18n-technical-file
  *
  * ⚠ Contains only:
  *   • Two deeplink URL templates (`SIRI_LINK`, `GOOGLE_LINK`) — data, not UI.
@@ -41,16 +40,16 @@ import { useTheme } from '../../src/hooks/useTheme';
 import { useTranslation } from '../../src/hooks/useTranslation';
 import type { ThemePalette } from '../../src/constants/palettes';
 
-const SIRI_LINK = 'budgy://quick-add?text=[Texte%20dicté]&source=siri';
+const SIRI_LINK = 'budgy://quick-add?text=[Texte%20dicté]&source=siri'; // i18n-technical (deep-link URL)
 const GOOGLE_LINK =
-  'budgy://quick-add?text=[Texte%20dicté]&source=google_assistant';
+  'budgy://quick-add?text=[Texte%20dicté]&source=google_assistant'; // i18n-technical (deep-link URL)
 
-const EXAMPLES: string[] = [
-  'Ajoute 25 CHF chez Migros',
-  'Salaire 3200 CHF',
-  'Netflix 18 CHF chaque mois',
-  'Facture Swisscom 89 CHF',
-  'Contrat assurance voiture 95 CHF',
+const EXAMPLE_KEYS: string[] = [
+  'siriAssistant.example1',
+  'siriAssistant.example2',
+  'siriAssistant.example3',
+  'siriAssistant.example4',
+  'siriAssistant.example5',
 ];
 
 export default function SiriAssistantScreen() {
@@ -124,7 +123,7 @@ export default function SiriAssistantScreen() {
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.actionBtn, { backgroundColor: C.secondary }]}
-            onPress={() => openQuickAdd('Ajoute 25 CHF chez Migros')}
+            onPress={() => openQuickAdd(t('siriAssistant.voiceExample'))}
           >
             <Ionicons name="flash" size={18} color="#fff" />
             <Text style={styles.actionBtnText}>{t('siriAssistant.testExample')}</Text>
@@ -185,20 +184,23 @@ export default function SiriAssistantScreen() {
             <Text style={styles.sectionTitle}>{t('siriAssistant.sectionExamples')}</Text>
           </View>
           <View style={styles.card}>
-            {EXAMPLES.map((phrase, i) => (
-              <TouchableOpacity
-                key={i}
-                style={[styles.exampleRow, i === EXAMPLES.length - 1 && { borderBottomWidth: 0 }]}
-                onPress={() => openQuickAdd(phrase)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.exampleQuoteWrap}>
-                  <Ionicons name="chatbubble-outline" size={14} color={C.primary} />
-                </View>
-                <Text style={styles.exampleText}>« {phrase} »</Text>
-                <Ionicons name="chevron-forward" size={16} color={C.textSecondary} />
-              </TouchableOpacity>
-            ))}
+            {EXAMPLE_KEYS.map((key, i) => {
+              const phrase = t(key);
+              return (
+                <TouchableOpacity
+                  key={i}
+                  style={[styles.exampleRow, i === EXAMPLE_KEYS.length - 1 && { borderBottomWidth: 0 }]}
+                  onPress={() => openQuickAdd(phrase)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.exampleQuoteWrap}>
+                    <Ionicons name="chatbubble-outline" size={14} color={C.primary} />
+                  </View>
+                  <Text style={styles.exampleText}>« {phrase} »</Text>
+                  <Ionicons name="chevron-forward" size={16} color={C.textSecondary} />
+                </TouchableOpacity>
+              );
+            })}
           </View>
           <Text style={styles.helpText}>{t('siriAssistant.helpText')}</Text>
         </View>

@@ -49,6 +49,21 @@ export const CANTONS = {
 
 export type CantonCode = keyof typeof CANTONS;
 
+/**
+ * Locale-aware canton display name.
+ * Falls back to French if the target locale is not covered.
+ *
+ * Note: Italian and English are not (yet) covered by dedicated fields; they
+ * fall back to `nameFr` because the canton names are proper Swiss nouns and
+ * the FR spelling is universally understood in bilingual/trilingual regions.
+ */
+export function getCantonName(code: CantonCode, lang: 'fr' | 'en' | 'de' | 'it' = 'fr'): string {
+  const c = CANTONS[code];
+  if (!c) return code;
+  if (lang === 'de') return (c as any).nameDE || c.name;
+  return c.name; // FR/EN/IT → French display
+}
+
 // LAMal Insurance companies with price indices
 export const INSURERS = [
   { id: 'css', name: 'CSS', color: '#009fe3', logo: 'C', rating: 4.2, cantons: 'all',

@@ -2,10 +2,8 @@
  * BUDGY - Premium / Subscription State
  * Tracks trial, subscription, usage triggers and PER-FEATURE quotas for paywall.
  *
- * @i18n-technical-file
- *
- * ⚠ Contains only dev-only console messages, stable ProFeature identifiers
- * and internal enum values. No UI text.
+ * All literal strings in this store are either console-only diagnostics
+ * (dev-mode) or stable ProFeature identifiers — never rendered as UI copy.
  *
  * Free Preview Mode:
  *   Chaque feature Pro a un quota gratuit d'essai (ex: 1 facture, 2 charges récurrentes,
@@ -177,10 +175,10 @@ export const usePremiumStore = create<PremiumState>()(
       startTrial: () => {
         if (__DEV__) {
           // eslint-disable-next-line no-console
-          console.warn(
-            '[Premium] startTrial() is intentionally a no-op since v3.9.0. ' +
-              'Free trials must come from the Apple Introductory Offer via ' +
-              'iap.purchase(). No local Pro activation is allowed.'
+          console.warn( // i18n-technical (dev diagnostic only)
+            '[Premium] startTrial() is intentionally a no-op since v3.9.0. ' + // i18n-technical
+              'Free trials must come from the Apple Introductory Offer via ' + // i18n-technical
+              'iap.purchase(). No local Pro activation is allowed.' // i18n-technical
           );
         }
       },

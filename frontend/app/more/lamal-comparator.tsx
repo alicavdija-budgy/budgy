@@ -19,7 +19,7 @@ import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src
 import { useTheme } from '../../src/hooks/useTheme';
 import type { ThemePalette } from '../../src/constants/palettes';
 import { Card, Badge, ProgressBar } from '../../src/components/ui';
-import { CANTONS, FRANCHISES, INSURANCE_MODELS, type CantonCode } from '../../src/data/swiss-data';
+import { CANTONS, FRANCHISES, INSURANCE_MODELS, getCantonName, type CantonCode } from '../../src/data/swiss-data';
 import { formatNumber } from '../../src/utils/calculations';
 import { useTranslation } from '../../src/hooks/useTranslation';
 import {
@@ -55,7 +55,7 @@ export default function LamalComparatorScreen() {
   const premiums = useMemo(() => calculatePriminfoPremium(canton, franchise, model, age), [canton, franchise, model, age]);
   const insurerList = useMemo(() => getTopInsurers(canton, franchise, model, age, TOP_N), [canton, franchise, model, age]);
   const cantonRanking = useMemo(() => getCantonRanking(franchise, model, age), [franchise, model, age]);
-  const { t } = useTranslation();
+  const { t, lang } = useTranslation();
 
   const subsidy = useMemo(() => {
     const cd = CANTONS[canton];
@@ -81,7 +81,7 @@ export default function LamalComparatorScreen() {
    * Les données réelles servent uniquement aux calculs internes ;
    * l'utilisateur ne voit jamais de nom commercial.
    */
-  const anonInsurer = (idx: number) => `Assureur ${String.fromCharCode(65 + (idx % 26))}`;
+  const anonInsurer = (idx: number) => t('lamalComparator.insurerAnonymous', { letter: String.fromCharCode(65 + (idx % 26)) });
 
   const tabs: { key: Tab; label: string; icon: string }[] = [
     { key: 'compare', label: t('lamalUi.comparePremiums'), icon: 'list' },
@@ -106,7 +106,7 @@ export default function LamalComparatorScreen() {
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {/* Config */}
         <Card style={styles.configCard}>
-          <Text style={styles.label}>Canton</Text>
+          <Text style={styles.label}>{t('lamalComparator.cantonLabel')}</Text>
           <View style={styles.cantonGrid}>
             {ALL_CANTONS.map(c => (
               <TouchableOpacity key={c} style={[styles.chip, canton === c && styles.chipOn]} onPress={() => setCanton(c)}>
@@ -147,7 +147,7 @@ export default function LamalComparatorScreen() {
             <Ionicons name="shield-checkmark" size={14} color={theme.success} />
             <Text style={styles.srcTxt}>{t('lamal.dataSource')}</Text>
           </View>
-          <Text style={styles.heroLabel}>{t('lamal.bestOffer', { c: CANTONS[canton]?.name })}</Text>
+          <Text style={styles.heroLabel}>{t('lamal.bestOffer', { c: getCantonName(canton, lang) })}</Text>
           <View style={styles.heroAmtRow}>
             <Text style={styles.heroAmt}>{cheapest ? formatNumber(cheapest.premium) : '—'}</Text>
             <View>
@@ -190,7 +190,7 @@ export default function LamalComparatorScreen() {
         {/* Assureurs Tab */}
         {activeTab === 'compare' && (
           <>
-            <Text style={styles.secTitle}>{t('lamal.topInsurers', { n: TOP_N, c: CANTONS[canton]?.name })}</Text>
+            <Text style={styles.secTitle}>{t('lamal.topInsurers', { n: TOP_N, c: getCantonName(canton, lang) })}</Text>
             <Text style={styles.secSub}>{t('lamal.franchiseLabel', { n: formatNumber(franchise), m: INSURANCE_MODELS.find(m => m.value === model)?.label })}</Text>
 
             {insurerList.map((item, idx) => {

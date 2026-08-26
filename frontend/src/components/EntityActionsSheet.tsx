@@ -1,17 +1,15 @@
 /**
  * BUDGY — EntityActionsSheet
  *
- * @i18n-technical-file
- *
- * ⚠ FR-CH default `deleteConfirmTitle` / `deleteConfirmMessage` props. Every
- * consumer passes explicit translated strings; defaults are only used if a
- * caller forgets to pass them (safety net).
- *
  * Reusable bottom sheet that surfaces Edit / Delete actions for any list item
  * (transactions, invoices, contracts, recurring, receipts, investments, etc.).
  *
  * Why? Avoids duplicating Modal + Alert boilerplate across 9+ screens and keeps
  * UX 100% consistent everywhere (animation, haptics, confirmation, dark/light).
+ *
+ * All user-visible strings are routed through useTranslation(); callers can
+ * override defaults with translated deleteConfirmTitle / deleteConfirmMessage
+ * props.
  *
  * Usage:
  *   const [actions, setActions] = useState<EntityActionsContext | null>(null);
@@ -32,6 +30,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../hooks/useTheme';
+import { useTranslation } from '../hooks/useTranslation';
 import type { ThemePalette } from '../constants/palettes';
 import { BorderRadius, Spacing, FontSizes, FontWeights } from '../constants/theme';
 
@@ -50,7 +49,7 @@ interface Props {
   onClose: () => void;
   onEdit?: () => void;
   onDelete: () => void;
-  /** Custom title to display on the delete confirmation alert */
+  /** Custom title to display on the delete confirmation alert (already translated) */
   deleteConfirmTitle?: string;
   deleteConfirmMessage?: string;
 }
@@ -60,9 +59,10 @@ export function EntityActionsSheet({
   onClose,
   onEdit,
   onDelete,
-  deleteConfirmTitle = 'Supprimer cet élément ?',
-  deleteConfirmMessage = 'Cette action est irréversible.',
+  deleteConfirmTitle,
+  deleteConfirmMessage,
 }: Props) {
+  const { t } = useTranslation();
   const theme = useTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
@@ -80,12 +80,12 @@ export function EntityActionsSheet({
       try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning); } catch {}
     }
     Alert.alert(
-      deleteConfirmTitle,
-      deleteConfirmMessage,
+      deleteConfirmTitle ?? t('entitySheet.deleteTitle'),
+      deleteConfirmMessage ?? t('entitySheet.deleteMessage'),
       [
-        { text: 'Annuler', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Supprimer',
+          text: t('common.delete'),
           style: 'destructive',
           onPress: () => {
             if (Platform.OS !== 'web') {
@@ -135,8 +135,8 @@ export function EntityActionsSheet({
                 <Ionicons name="create-outline" size={22} color={theme.primary} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.actionLabel}>Modifier</Text>
-                <Text style={styles.actionHint}>Changer les informations</Text>
+                <Text style={styles.actionLabel}>{t('common.edit')}</Text>
+                <Text style={styles.actionHint}>{t('entitySheet.editHint')}</Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={theme.textTertiary} />
             </TouchableOpacity>
@@ -147,15 +147,15 @@ export function EntityActionsSheet({
               <Ionicons name="trash-outline" size={22} color={theme.error} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.actionLabel, { color: theme.error }]}>Supprimer</Text>
-              <Text style={styles.actionHint}>L'élément sera retiré définitivement</Text>
+              <Text style={[styles.actionLabel, { color: theme.error }]}>{t('common.delete')}</Text>
+              <Text style={styles.actionHint}>{t('entitySheet.deleteHint')}</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={theme.textTertiary} />
           </TouchableOpacity>
 
           {/* Cancel */}
           <TouchableOpacity style={styles.cancelBtn} onPress={onClose} activeOpacity={0.7}>
-            <Text style={styles.cancelTxt}>Annuler</Text>
+            <Text style={styles.cancelTxt}>{t('common.cancel')}</Text>
           </TouchableOpacity>
         </Pressable>
       </Pressable>

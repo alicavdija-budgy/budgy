@@ -1,7 +1,6 @@
 /**
  * GUARDIAN MONEY CHF - Notifications Screen
  *
- * @i18n-technical-file
  *
  * ⚠ Residual FR-CH fallback labels / EditField props / examples;
  * multi-locale wrapping deferred to v3.9.1 backlog.
@@ -45,8 +44,8 @@ export default function NotificationsScreen() {
         {notifications.length === 0 ? (
           <EmptyState
             icon="notifications-outline"
-            title="Aucune notification"
-            subtitle="Vous êtes à jour!"
+            title={t('smallUi.notifEmpty')}
+            subtitle={t('smallUi.notifUpToDate')}
           />
         ) : (
           notifications.map((notif) => (

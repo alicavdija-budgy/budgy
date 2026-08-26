@@ -1,14 +1,14 @@
 /**
- * BUDGY v3.9.0 Build 74 — More Screen (fully redesigned).
+ * BUDGY v3.9.0 — More screen (fintech premium, clean hierarchy).
  *
- * Design principles (Apple 2.1(b) compliant + modern banking UX):
- *   - Compact profile (~80-90 px)
- *   - ONE single Pro hero card for Free users (no duplicate promo cards)
- *   - 2-col grid of Smart Tools (all Pro-tagged) — tap = paywall for Free
- *   - Compact section lists for Finance / Documents / Account / Help
- *   - No emoji-in-header labels, no rainbow icons
- *   - No hardcoded price / "7 days" — StoreKit is the ONLY source of price copy
- *   - Uses central FEATURES catalog — single source of truth
+ * Design mandate (this iteration):
+ *   • NO more Pro-tools grid on this page — those live on the dedicated /pro screen
+ *   • Strong, single Budgy Pro hero card (large, elegant, one CTA → /pro)
+ *   • Section lists for "My finances", "Documents & sharing", "Account & security",
+ *     "Help & info" — same visual language, minimal noise
+ *   • Icons: unified Ionicons only; no rainbow palette. Each row uses ONE accent tone.
+ *   • Compact profile at the top with clear FREE / PRO badge
+ *   • No hardcoded price / trial — StoreKit remains the sole source of truth
  */
 
 import React, { useMemo } from 'react';
@@ -23,34 +23,24 @@ import { BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constan
 import { useTheme } from '../../src/hooks/useTheme';
 import { useStore } from '../../src/stores/useStore';
 import { usePremiumStore } from '../../src/stores/usePremiumStore';
-import { usePaywall } from '../../src/hooks/usePaywall';
 import { useTranslation } from '../../src/hooks/useTranslation';
 import PressScale from '../../src/components/PressScale';
 import {
-  FEATURES,
   featuresByGroup,
   type BudgyFeature,
-  type FeatureGroup,
 } from '../../src/config/features';
 
-// ── Accent resolver ──────────────────────────────────────────────────────
-const accentOf = (C: any, accent: BudgyFeature['accent']): string => {
-  const map: Record<string, string> = {
-    primary: C.primary,
-    secondary: C.secondary,
-    success: C.success,
-    warning: C.warning,
-    error: C.error,
-    info: C.info,
-    pink: C.pink,
-    gold: C.gold,
-    purple: C.purple,
-    teal: C.teal,
-    cyan: C.cyan,
-    orange: C.orange,
-  };
-  return map[accent] || C.primary;
-};
+// Slim finance list — Savings surfaces at top (soft entry point)
+const SAVINGS_ROUTE: BudgyFeature = {
+  id: 'savings',
+  route: '/(tabs)/savings',
+  tier: 'free',
+  titleKey: 'moreV2.savings',
+  subtitleKey: 'moreV2.savingsSub',
+  icon: 'flag',
+  accent: 'success',
+  group: 'finance',
+} as any;
 
 export default function MoreScreen() {
   const insets = useSafeAreaInsets();
@@ -64,7 +54,6 @@ export default function MoreScreen() {
     (s) => s.trialEndsAt !== null && s.trialEndsAt > Date.now() && !s.plan
   );
   const trialEndsAt = usePremiumStore((s) => s.trialEndsAt);
-  const paywall = usePaywall();
   const { t } = useTranslation();
 
   const styles = useMemo(() => makeStyles(C), [C]);
@@ -72,17 +61,11 @@ export default function MoreScreen() {
   const getInitials = (name: string) =>
     name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
 
-  const goTo = (f: BudgyFeature) => {
-    if (f.tier === 'pro' && !isPro) {
-      // FREE user → paywall
-      paywall.open('manual');
-      return;
-    }
-    router.push(f.route as any);
-  };
-
-  const smartTools = featuresByGroup('tools');
-  const finance = featuresByGroup('finance');
+  // Finance list — insert Savings BEFORE the catalog "budgets/incomes/..." group
+  const finance = useMemo(() => {
+    const catalog = featuresByGroup('finance');
+    return [SAVINGS_ROUTE, ...catalog];
+  }, []);
   const documents = featuresByGroup('documents');
   const account = featuresByGroup('account');
   const help = featuresByGroup('help');
@@ -93,7 +76,7 @@ export default function MoreScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* ── A. COMPACT PROFILE ─────────────────────────────────────── */}
+        {/* ── A. Compact profile ─────────────────────────────────── */}
         <Animated.View entering={FadeInDown.duration(300)}>
           <View style={styles.profileCard}>
             <LinearGradient
@@ -112,155 +95,117 @@ export default function MoreScreen() {
                 {user?.email || ''}
               </Text>
             </View>
-            <View style={isPro ? styles.proTag : styles.freeTag}>
-              <Text style={isPro ? styles.proTagText : styles.freeTagText}>
-                {isPro ? 'PRO' : t('moreV2.freeAccount')}
-              </Text>
-            </View>
+            {isPro ? (
+              <View style={styles.proBadgeElegant}>
+                <Ionicons name="diamond" size={11} color="#FFF" />
+                <Text style={styles.proBadgeElegantText}>PRO</Text>
+              </View>
+            ) : (
+              <View style={styles.freeTag}>
+                <Text style={styles.freeTagText}>{t('moreV2.freeAccount')}</Text>
+              </View>
+            )}
           </View>
         </Animated.View>
 
-        {/* ── B. SINGLE PRO HERO (Free users only) ──────────────────── */}
-        {!isPro && (
-          <Animated.View
-            entering={FadeInDown.duration(400).delay(80)}
-            style={{ marginBottom: Spacing.xl }}
-          >
-            <TouchableOpacity
-              activeOpacity={0.92}
-              onPress={() => paywall.open('manual')}
-              accessibilityRole="button"
-              accessibilityLabel={t('moreV2.proHeroCta')}
-            >
-              <LinearGradient
-                colors={['#0F766E', '#22D3EE']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.proHero}
-              >
-                <View style={styles.proHeroTop}>
-                  <View style={styles.proHeroIconWrap}>
-                    <Ionicons name="sparkles" size={20} color="#FFFFFF" />
-                  </View>
-                  <Text style={styles.proHeroBrand}>{t('moreV2.proHeroTitle')}</Text>
-                </View>
-                <Text style={styles.proHeroTitle}>{t('moreV2.proHeroSub')}</Text>
-                <Text style={styles.proHeroDetails}>
-                  {t('moreV2.proHeroDetails')}
-                </Text>
-                <View style={styles.proHeroCtaRow}>
-                  <Text style={styles.proHeroCta}>{t('moreV2.proHeroCta')}</Text>
-                  <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
-                </View>
-              </LinearGradient>
-            </TouchableOpacity>
-          </Animated.View>
-        )}
-
-        {/* Trial banner (user in trial) */}
-        {isTrial && trialEndsAt && (
-          <Animated.View entering={FadeInDown.duration(300).delay(80)}>
-            <View style={styles.trialBanner}>
-              <Ionicons name="time" size={16} color={C.success} />
-              <Text style={styles.trialText}>
-                {t('moreV2.trialActive', {
-                  n: Math.max(
-                    0,
-                    Math.ceil((trialEndsAt - Date.now()) / (24 * 3600 * 1000))
-                  ),
-                })}
-              </Text>
-              <TouchableOpacity onPress={() => paywall.open('manual')}>
-                <Text style={styles.trialCta}>{t('more.subscribe')}</Text>
-              </TouchableOpacity>
-            </View>
-          </Animated.View>
-        )}
-
-        {/* ── C. SMART TOOLS GRID ──────────────────────────────────── */}
-        <SectionTitle title={t('moreV2.smartTools')} />
+        {/* ── B. Budgy Pro hero — SINGLE call-to-action to /pro ─── */}
         <Animated.View
-          entering={FadeInDown.duration(350).delay(120)}
-          style={styles.toolsGrid}
+          entering={FadeInDown.duration(400).delay(80)}
+          style={{ marginBottom: Spacing.md }}
         >
-          {smartTools.map((f) => {
-            const accent = accentOf(C, f.accent);
-            const locked = f.tier === 'pro' && !isPro;
-            return (
-              <PressScale
-                key={f.id}
-                onPress={() => goTo(f)}
-                style={[styles.toolCard, { borderColor: C.cardBorder }]}
-                haptic="selection"
-                accessibilityRole="button"
-                accessibilityLabel={t(f.titleKey)}
-              >
-                <View style={[styles.toolIconWrap, { backgroundColor: `${accent}22` }]}>
-                  <Ionicons name={f.icon} size={20} color={accent} />
+          <TouchableOpacity
+            activeOpacity={0.92}
+            onPress={() => router.push('/pro' as any)}
+            accessibilityRole="button"
+            accessibilityLabel={
+              isPro ? t('proScreen.ctaManage') : t('proScreen.ctaDiscover')
+            }
+          >
+            <LinearGradient
+              colors={
+                isPro
+                  ? ['#064E3B', '#0F766E', '#22D3EE']
+                  : ['#0F766E', '#14B8A6', '#22D3EE']
+              }
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.proHero}
+            >
+              {/* Ambient decorative blobs (pure JS shapes) */}
+              <View style={styles.heroBlobA} />
+              <View style={styles.heroBlobB} />
+
+              <View style={styles.proHeroTop}>
+                <View style={styles.proHeroIconWrap}>
+                  <Ionicons name="diamond" size={16} color="#FFFFFF" />
                 </View>
-                <Text style={styles.toolTitle} numberOfLines={2}>
-                  {t(f.titleKey)}
+                <Text style={styles.proHeroBrand}>
+                  {t('proScreen.heroBrand')}
                 </Text>
-                <View style={styles.toolBadgeRow}>
-                  {locked ? (
-                    <View style={styles.lockPill}>
-                      <Ionicons name="lock-closed" size={9} color={C.textTertiary} />
-                      <Text style={styles.proBadgeTiny}>PRO</Text>
-                    </View>
-                  ) : f.tier === 'pro' ? (
-                    <View style={[styles.proBadgeSmall, { backgroundColor: `${C.secondary}25` }]}>
-                      <Text style={[styles.proBadgeTiny, { color: C.secondary }]}>PRO</Text>
-                    </View>
-                  ) : null}
-                </View>
-              </PressScale>
-            );
-          })}
+                {isPro && (
+                  <View style={styles.proHeroStatusChip}>
+                    <View style={styles.proHeroStatusDot} />
+                    <Text style={styles.proHeroStatusText}>
+                      {t('proScreen.matrix.priority').split(' ')[0].toUpperCase() /* placeholder short */}
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              <Text style={styles.proHeroTitle}>
+                {isPro
+                  ? t('more.subscriptionActive')
+                  : t('proScreen.heroTitle')}
+              </Text>
+              <Text style={styles.proHeroDetails}>
+                {t('proScreen.heroSub')}
+              </Text>
+
+              <View style={styles.proHeroCtaRow}>
+                <Text style={styles.proHeroCta}>
+                  {isPro
+                    ? t('proScreen.ctaManage')
+                    : t('proScreen.ctaDiscover')}
+                </Text>
+                <Ionicons name="arrow-forward" size={17} color="#FFFFFF" />
+              </View>
+            </LinearGradient>
+          </TouchableOpacity>
         </Animated.View>
 
-        {/* ── D. MY FINANCES ──────────────────────────────────────── */}
-        <SectionTitle title={t('moreV2.myFinances')} />
-        <MenuList
-          items={finance}
-          onPress={goTo}
-          isPro={isPro}
-          C={C}
-          t={t}
-          styles={styles}
-        />
+        {/* Trial banner */}
+        {isTrial && trialEndsAt && (
+          <View style={styles.trialBanner}>
+            <Ionicons name="time" size={16} color={C.success} />
+            <Text style={styles.trialText}>
+              {t('moreV2.trialActive', {
+                n: Math.max(
+                  0,
+                  Math.ceil((trialEndsAt - Date.now()) / (24 * 3600 * 1000))
+                ),
+              })}
+            </Text>
+            <TouchableOpacity onPress={() => router.push('/pro' as any)}>
+              <Text style={styles.trialCta}>{t('more.subscribe')}</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
-        {/* ── E. DOCUMENTS & SHARING ─────────────────────────────── */}
-        <SectionTitle title={t('moreV2.documentsSharing')} />
-        <MenuList
-          items={documents}
-          onPress={goTo}
-          isPro={isPro}
-          C={C}
-          t={t}
-          styles={styles}
-        />
+        {/* ── C. My finances ─────────────────────────────────────── */}
+        <SectionTitle title={t('moreV2.myFinances')} C={C} />
+        <MenuList items={finance} isPro={isPro} C={C} t={t} router={router} styles={styles} />
 
-        {/* ── F. ACCOUNT & SECURITY ─────────────────────────────── */}
-        <SectionTitle title={t('moreV2.accountSecurity')} />
-        <MenuList
-          items={account}
-          onPress={goTo}
-          isPro={isPro}
-          C={C}
-          t={t}
-          styles={styles}
-        />
+        {/* ── D. Documents & sharing ─────────────────────────────── */}
+        <SectionTitle title={t('moreV2.documentsSharing')} C={C} />
+        <MenuList items={documents} isPro={isPro} C={C} t={t} router={router} styles={styles} />
 
-        {/* ── G. HELP & LEGAL ────────────────────────────────────── */}
-        <SectionTitle title={t('moreV2.helpInfo')} />
-        <MenuList
-          items={help}
-          onPress={goTo}
-          isPro={isPro}
-          C={C}
-          t={t}
-          styles={styles}
-        />
+        {/* ── E. Account & security ──────────────────────────────── */}
+        <SectionTitle title={t('moreV2.accountSecurity')} C={C} />
+        <MenuList items={account} isPro={isPro} C={C} t={t} router={router} styles={styles} />
+
+        {/* ── F. Help & info ─────────────────────────────────────── */}
+        <SectionTitle title={t('moreV2.helpInfo')} C={C} />
+        <MenuList items={help} isPro={isPro} C={C} t={t} router={router} styles={styles} />
 
         {/* Footer */}
         <View style={styles.footer}>
@@ -278,18 +223,20 @@ export default function MoreScreen() {
 
 // ── Sub-components ───────────────────────────────────────────────────────
 
-function SectionTitle({ title }: { title: string }) {
-  const C = useTheme();
+function SectionTitle({ title, C }: { title: string; C: any }) {
   return (
-    <Text style={{
-      color: C.textSecondary,
-      fontSize: 13,
-      fontWeight: FontWeights.semibold,
-      marginTop: Spacing.lg,
-      marginBottom: Spacing.sm,
-      marginLeft: Spacing.xs,
-      letterSpacing: -0.1,
-    }}>
+    <Text
+      style={{
+        color: C.textSecondary,
+        fontSize: 12,
+        fontWeight: FontWeights.black,
+        marginTop: Spacing.lg,
+        marginBottom: Spacing.sm,
+        marginLeft: 4,
+        textTransform: 'uppercase',
+        letterSpacing: 1,
+      }}
+    >
       {title}
     </Text>
   );
@@ -297,31 +244,39 @@ function SectionTitle({ title }: { title: string }) {
 
 function MenuList({
   items,
-  onPress,
   isPro,
   C,
   t,
+  router,
   styles,
 }: {
   items: BudgyFeature[];
-  onPress: (f: BudgyFeature) => void;
   isPro: boolean;
   C: any;
   t: (k: string, p?: any) => string;
+  router: ReturnType<typeof useRouter>;
   styles: any;
 }) {
   if (items.length === 0) return null;
+  const goTo = (f: BudgyFeature) => {
+    // Special: "subscription" always → /pro (never straight to paywall)
+    if (f.id === 'subscription') return router.push('/pro' as any);
+    if (f.tier === 'pro' && !isPro) {
+      router.push('/pro' as any);
+      return;
+    }
+    router.push(f.route as any);
+  };
   return (
     <View style={styles.menuCard}>
       {items.map((f, i) => {
-        const accent = accentOf(C, f.accent);
         const locked = f.tier === 'pro' && !isPro;
         const subtitle = f.subtitleKey ? t(f.subtitleKey) : undefined;
         return (
-          <PressScale
+          <TouchableOpacity
             key={f.id}
-            haptic="selection"
-            onPress={() => onPress(f)}
+            activeOpacity={0.7}
+            onPress={() => goTo(f)}
             style={[
               styles.menuItem,
               i < items.length - 1 && styles.menuItemBorder,
@@ -330,31 +285,22 @@ function MenuList({
             accessibilityLabel={t(f.titleKey)}
           >
             <View style={styles.menuItemInner}>
-              <View style={[styles.menuIcon, { backgroundColor: `${accent}20` }]}>
-                <Ionicons name={f.icon} size={18} color={accent} />
+              <View style={styles.menuIcon}>
+                <Ionicons name={f.icon} size={17} color={C.textSecondary} />
               </View>
               <View style={styles.menuContent}>
                 <View style={styles.menuTitleRow}>
                   <Text style={styles.menuTitle} numberOfLines={1}>
                     {t(f.titleKey)}
                   </Text>
-                  {f.tier === 'pro' && (
-                    <View style={locked ? styles.lockPill : styles.proBadgeSmall}>
-                      {locked && (
-                        <Ionicons
-                          name="lock-closed"
-                          size={9}
-                          color={C.textTertiary}
-                        />
-                      )}
-                      <Text
-                        style={[
-                          styles.proBadgeTiny,
-                          !locked && { color: C.secondary },
-                        ]}
-                      >
-                        PRO
-                      </Text>
+                  {locked && (
+                    <View style={styles.lockChip}>
+                      <Ionicons name="lock-closed" size={9} color={C.textTertiary} />
+                    </View>
+                  )}
+                  {!locked && f.tier === 'pro' && (
+                    <View style={styles.proChipDiscrete}>
+                      <Text style={styles.proChipText}>PRO</Text>
                     </View>
                   )}
                 </View>
@@ -366,7 +312,7 @@ function MenuList({
               </View>
               <Ionicons name="chevron-forward" size={16} color={C.textTertiary} />
             </View>
-          </PressScale>
+          </TouchableOpacity>
         );
       })}
     </View>
@@ -374,35 +320,39 @@ function MenuList({
 }
 
 // ── Styles ────────────────────────────────────────────────────────────────
-
 const makeStyles = (C: any) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: C.background },
-    content: { padding: Spacing.lg, maxWidth: 760, alignSelf: 'stretch', width: '100%' },
+    content: {
+      padding: Spacing.lg,
+      maxWidth: 760,
+      alignSelf: 'stretch',
+      width: '100%',
+    },
 
-    // Profile — compact
+    // Profile
     profileCard: {
       flexDirection: 'row',
       alignItems: 'center',
       backgroundColor: C.card,
       borderWidth: 1,
       borderColor: C.cardBorder,
-      borderRadius: BorderRadius.xl,
+      borderRadius: 16,
       padding: 14,
       marginBottom: Spacing.lg,
     },
     avatar: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
+      width: 46,
+      height: 46,
+      borderRadius: 23,
       alignItems: 'center',
       justifyContent: 'center',
       marginRight: 12,
     },
     avatarText: {
       color: '#FFF',
-      fontSize: FontSizes.md,
-      fontWeight: FontWeights.bold,
+      fontSize: 15,
+      fontWeight: FontWeights.black,
     },
     profileInfo: { flex: 1 },
     profileName: {
@@ -416,17 +366,20 @@ const makeStyles = (C: any) =>
       fontSize: 12,
       marginTop: 2,
     },
-    proTag: {
-      backgroundColor: C.secondary,
-      paddingVertical: 4,
-      paddingHorizontal: 10,
+    proBadgeElegant: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingVertical: 5,
+      paddingHorizontal: 9,
       borderRadius: 999,
+      backgroundColor: '#0F766E',
     },
-    proTagText: {
-      color: '#1C1917',
+    proBadgeElegantText: {
+      color: '#FFF',
       fontSize: 10,
       fontWeight: FontWeights.black,
-      letterSpacing: 0.5,
+      letterSpacing: 1,
     },
     freeTag: {
       backgroundColor: C.cardHover,
@@ -443,15 +396,35 @@ const makeStyles = (C: any) =>
       letterSpacing: 0.3,
     },
 
-    // Pro hero — single card, elegant gradient
+    // Hero
     proHero: {
-      borderRadius: BorderRadius.xl,
-      padding: 18,
+      borderRadius: 22,
+      padding: 20,
+      overflow: 'hidden',
+      minHeight: 158,
+    },
+    heroBlobA: {
+      position: 'absolute',
+      right: -28,
+      top: -28,
+      width: 120,
+      height: 120,
+      borderRadius: 60,
+      backgroundColor: 'rgba(255,255,255,0.08)',
+    },
+    heroBlobB: {
+      position: 'absolute',
+      right: 40,
+      bottom: -30,
+      width: 70,
+      height: 70,
+      borderRadius: 35,
+      backgroundColor: 'rgba(255,255,255,0.06)',
     },
     proHeroTop: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 10,
+      gap: 8,
       marginBottom: 8,
     },
     proHeroIconWrap: {
@@ -466,20 +439,42 @@ const makeStyles = (C: any) =>
       color: '#FFFFFF',
       fontSize: 13,
       fontWeight: FontWeights.black,
-      letterSpacing: 1,
+      letterSpacing: 1.2,
+    },
+    proHeroStatusChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      marginLeft: 'auto',
+      backgroundColor: 'rgba(0,0,0,0.28)',
+      paddingVertical: 3,
+      paddingHorizontal: 7,
+      borderRadius: 999,
+    },
+    proHeroStatusDot: {
+      width: 6, height: 6, borderRadius: 3, backgroundColor: '#34D399',
+    },
+    proHeroStatusText: {
+      color: '#FFFFFF',
+      fontSize: 9.5,
+      fontWeight: FontWeights.black,
+      letterSpacing: 0.5,
     },
     proHeroTitle: {
       color: '#FFFFFF',
-      fontSize: 20,
+      fontSize: 21,
       fontWeight: FontWeights.black,
       letterSpacing: -0.5,
-      lineHeight: 24,
+      lineHeight: 25,
+      marginTop: 4,
+      maxWidth: 280,
     },
     proHeroDetails: {
       color: 'rgba(255,255,255,0.85)',
       fontSize: 13,
       fontWeight: FontWeights.medium,
       marginTop: 6,
+      lineHeight: 17,
     },
     proHeroCtaRow: {
       flexDirection: 'row',
@@ -490,9 +485,11 @@ const makeStyles = (C: any) =>
     proHeroCta: {
       color: '#FFFFFF',
       fontSize: 14,
-      fontWeight: FontWeights.bold,
+      fontWeight: FontWeights.black,
+      letterSpacing: -0.1,
     },
 
+    // Trial
     trialBanner: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -507,46 +504,12 @@ const makeStyles = (C: any) =>
     trialText: { flex: 1, color: C.text, fontSize: 13, fontWeight: '600' },
     trialCta: { color: '#34D399', fontSize: 13, fontWeight: '800' },
 
-    // Tools 2-col grid
-    toolsGrid: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 10,
-    },
-    toolCard: {
-      width: '48%',
-      minHeight: 92,
-      backgroundColor: C.card,
-      borderWidth: 1,
-      borderRadius: BorderRadius.lg,
-      padding: 12,
-      justifyContent: 'space-between',
-    },
-    toolIconWrap: {
-      width: 34,
-      height: 34,
-      borderRadius: 10,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    toolTitle: {
-      color: C.text,
-      fontSize: 13,
-      fontWeight: FontWeights.bold,
-      letterSpacing: -0.2,
-      marginTop: 8,
-    },
-    toolBadgeRow: {
-      flexDirection: 'row',
-      marginTop: 6,
-    },
-
-    // Menu lists (finance / documents / account / help)
+    // Menu lists — monochrome icons, minimal chrome
     menuCard: {
       backgroundColor: C.card,
       borderWidth: 1,
       borderColor: C.cardBorder,
-      borderRadius: BorderRadius.xl,
+      borderRadius: 16,
       overflow: 'hidden',
     },
     menuItem: {},
@@ -558,13 +521,14 @@ const makeStyles = (C: any) =>
       flexDirection: 'row',
       alignItems: 'center',
       paddingVertical: 12,
-      paddingHorizontal: Spacing.md,
-      gap: Spacing.md,
+      paddingHorizontal: 14,
+      gap: 12,
     },
     menuIcon: {
-      width: 32,
-      height: 32,
-      borderRadius: 10,
+      width: 30,
+      height: 30,
+      borderRadius: 9,
+      backgroundColor: C.cardHover,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -587,28 +551,24 @@ const makeStyles = (C: any) =>
       marginTop: 1,
     },
 
-    proBadgeSmall: {
-      paddingVertical: 2,
-      paddingHorizontal: 7,
-      borderRadius: 999,
-      backgroundColor: 'rgba(52,211,153,0.15)',
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 3,
-    },
-    lockPill: {
-      paddingVertical: 2,
-      paddingHorizontal: 7,
-      borderRadius: 999,
+    lockChip: {
+      width: 18,
+      height: 18,
+      borderRadius: 5,
       backgroundColor: C.cardHover,
       borderWidth: 1,
       borderColor: C.cardBorder,
-      flexDirection: 'row',
       alignItems: 'center',
-      gap: 3,
+      justifyContent: 'center',
     },
-    proBadgeTiny: {
-      color: C.textTertiary,
+    proChipDiscrete: {
+      paddingVertical: 1,
+      paddingHorizontal: 6,
+      borderRadius: 4,
+      backgroundColor: 'rgba(15,118,110,0.15)',
+    },
+    proChipText: {
+      color: '#14B8A6',
       fontSize: 9,
       fontWeight: FontWeights.black,
       letterSpacing: 0.5,

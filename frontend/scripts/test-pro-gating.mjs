@@ -74,11 +74,11 @@ scenario('2. FEATURES catalog matches Apple 2.1(b) tier matrix', () => {
 
   const mustBePro = [
     'ai-optimizer', 'savings-radar', 'budgy-score', 'predict',
-    'calendar', 'tax', 'budgets', 'investments',
+    'calendar', 'tax', 'investments',
     'export-pdf', 'email-import', 'cloud-sync', 'family',
   ];
   const mustBeFree = [
-    'incomes', 'recurring', 'debts', 'invoices', 'lamal',
+    'incomes', 'recurring', 'debts', 'invoices', 'lamal', 'budgets',
     'receipts', 'documents', 'security', 'settings', 'notifications',
     'subscription', 'legal',
   ];

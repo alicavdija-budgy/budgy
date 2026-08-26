@@ -47,7 +47,7 @@ export const FEATURES: BudgyFeature[] = [
   { id: 'predict',        route: '/more/predict',             tier: 'pro',  titleKey: 'more.predict',           subtitleKey: 'more.predictSub',       icon: 'analytics',           accent: 'secondary', group: 'tools' },
   { id: 'calendar',       route: '/more/financial-calendar',  tier: 'pro',  titleKey: 'moreExt.calendarTitle',                                          icon: 'calendar',           accent: 'info',    group: 'tools' },
   { id: 'tax',            route: '/more/tax-optimizer',       tier: 'pro',  titleKey: 'more.taxOpt',            subtitleKey: 'more.taxOptSub',        icon: 'calculator',          accent: 'primary', group: 'tools' },
-  { id: 'budgets',        route: '/more/budgets',             tier: 'pro',  titleKey: 'more.budgets',           subtitleKey: 'more.budgetsSub',       icon: 'wallet',              accent: 'warning', group: 'tools' },
+  { id: 'budgets',        route: '/more/budgets',             tier: 'free', titleKey: 'more.budgets',           subtitleKey: 'more.budgetsSub',       icon: 'wallet',              accent: 'warning', group: 'finance' },
   { id: 'investments',    route: '/more/investments',         tier: 'pro',  titleKey: 'more.investments',                                              icon: 'trending-up',        accent: 'success', group: 'tools' },
   { id: 'export-pdf',     route: '/more/export-pdf',          tier: 'pro',  titleKey: 'more.exportPdf',                                                icon: 'document-text',      accent: 'teal',    group: 'tools' },
   { id: 'email-import',   route: '/more/email-import',        tier: 'pro',  titleKey: 'more.emailImport',       subtitleKey: 'more.emailImportSub',   icon: 'mail-open',          accent: 'purple',  group: 'tools' },
@@ -71,7 +71,7 @@ export const FEATURES: BudgyFeature[] = [
   { id: 'notifications',  route: '/more/notifications',       tier: 'free', titleKey: 'featuresCatalog.notifications',                                icon: 'notifications',      accent: 'warning', group: 'account' },
 
   // Aide & informations
-  { id: 'subscription',   route: '/paywall',                  tier: 'free', titleKey: 'more.subscription',                                             icon: 'flash',              accent: 'secondary', group: 'help' },
+  { id: 'subscription',   route: '/pro',                      tier: 'free', titleKey: 'more.subscription',                                             icon: 'diamond',            accent: 'secondary', group: 'help' },
   { id: 'legal',          route: '/more/legal',               tier: 'free', titleKey: 'more.legal',             subtitleKey: 'more.legalSub',         icon: 'shield-half',         accent: 'info',    group: 'help' },
 ];
 

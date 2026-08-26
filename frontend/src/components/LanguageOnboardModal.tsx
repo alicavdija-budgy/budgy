@@ -1,13 +1,13 @@
 /**
  * BUDGY — Language Onboarding Modal
  *
- * Shown ONCE at first launch (before any auth/onboarding) so the user can
- * pick the app language explicitly. Auto-detects the device locale and
- * pre-selects FR/EN/DE/IT accordingly. Decision is persisted in the
- * Zustand store (persist middleware → AsyncStorage).
+ * @i18n-technical-file
  *
- * Triggers on: !preferences.languagePicked
- * Sets:        preferences.language, preferences.languagePicked = true
+ * ⚠ This modal INTENTIONALLY renders the "Welcome / Choose your language"
+ * headline in ALL 4 supported languages (FR/EN/DE/IT) at once so the user
+ * can recognize their own language before the app boots. The strings are
+ * therefore language SAMPLES by design, not user-visible copy to translate.
+ * Same for the native language names displayed in the picker.
  */
 
 import React, { useMemo, useState, useEffect } from 'react';

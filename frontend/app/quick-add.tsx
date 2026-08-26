@@ -24,6 +24,8 @@
  * Android setup:
  *   App Actions / Assistant deep-link to `intent://quick-add?text=...&source=google_assistant#Intent;scheme=budgy;...`
  *   (Configuration in AndroidManifest after EAS prebuild.)
+ *
+ * All user-visible strings are routed through `useTranslation()`.
  */
 import React, { useEffect, useMemo, useState } from 'react';
 import {
@@ -44,13 +46,6 @@ import { useStore } from '../src/stores/useStore';
 import { Button } from '../src/components/ui';
 import { humanizeError } from '../src/lib/errorSanitizer';
 
-const SOURCE_LABELS: Record<SmartInputSource, string> = {
-  text: 'Saisie manuelle',
-  keyboard_voice: 'Dictée clavier',
-  siri: 'Siri Shortcut',
-  google_assistant: 'Google Assistant',
-};
-
 const SOURCE_ICONS: Record<SmartInputSource, keyof typeof Ionicons.glyphMap> = {
   text: 'create',
   keyboard_voice: 'mic',
@@ -64,6 +59,13 @@ export default function QuickAddScreen() {
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const router = useRouter();
+
+  const SOURCE_LABELS: Record<SmartInputSource, string> = {
+    text: t('quickAdd.sourceText'),
+    keyboard_voice: t('quickAdd.keyboardDict'),
+    siri: t('quickAdd.sourceSiri'),
+    google_assistant: t('quickAdd.sourceGoogleAssistant'),
+  };
 
   const params = useLocalSearchParams<{ text?: string; source?: string }>();
   const incomingText = (params.text || '').toString();
@@ -89,7 +91,7 @@ export default function QuickAddScreen() {
         try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
       }
     } catch (e: any) {
-      Alert.alert('Analyse impossible', humanizeError(e).message);
+      Alert.alert(t('quickAdd.analyzeError'), humanizeError(e).message);
     } finally {
       setParsing(false);
     }
@@ -105,15 +107,15 @@ export default function QuickAddScreen() {
 
   const commit = () => {
     if (!result || !result.ok) return;
-    const t = result.type || 'expense';
+    const type = result.type || 'expense';
     const id = `qa_${Date.now()}`;
     const now = new Date().toISOString().slice(0, 10);
 
     try {
-      if (t === 'income') {
+      if (type === 'income') {
         addIncome({
           id,
-          title: result.merchant || 'Revenu',
+          title: result.merchant || t('quickAdd.defaultIncome'),
           amount: result.amount || 0,
           type: 'occasional',
           category: result.category || 'other',
@@ -121,10 +123,10 @@ export default function QuickAddScreen() {
           icon: 'cash',
           createdAt: Date.now(),
         });
-      } else if (t === 'subscription') {
+      } else if (type === 'subscription') {
         addRecurringExpense({
           id,
-          title: result.merchant || 'Abonnement',
+          title: result.merchant || t('quickAdd.defaultSubscription'),
           amount: result.amount || 0,
           category: result.category || 'subscription',
           frequency: 'monthly',
@@ -136,7 +138,7 @@ export default function QuickAddScreen() {
       } else {
         addTransaction({
           id,
-          title: result.merchant || 'Dépense',
+          title: result.merchant || t('quickAdd.defaultExpense'),
           amount: -(result.amount || 0),
           date: now,
           category: result.category || 'other',
@@ -147,7 +149,7 @@ export default function QuickAddScreen() {
       try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
       router.replace('/');
     } catch (e: any) {
-      Alert.alert('Sauvegarde impossible', humanizeError(e).message);
+      Alert.alert(t('quickAdd.saveError'), humanizeError(e).message);
     }
   };
 
@@ -161,7 +163,7 @@ export default function QuickAddScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
           <Ionicons name="close" size={26} color={theme.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>Ajout Intelligent</Text>
+        <Text style={styles.title}>{t('quickAdd.smartTitle')}</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -175,12 +177,12 @@ export default function QuickAddScreen() {
           <Text style={[styles.sourceBadgeTxt, { color: theme.primary }]}>{SOURCE_LABELS[source]}</Text>
         </View>
 
-        <Text style={styles.label}>Décrivez votre opération</Text>
+        <Text style={styles.label}>{t('quickAdd.describe')}</Text>
         <TextInput
           style={styles.input}
           value={text}
           onChangeText={setText}
-          placeholder="ex: Ajoute 25 CHF chez Migros"
+          placeholder={t('quickAdd.placeholder')}
           placeholderTextColor={theme.textTertiary}
           multiline
           autoFocus={!incomingText}
@@ -189,7 +191,7 @@ export default function QuickAddScreen() {
 
         {!result && (
           <Button
-            title="Analyser"
+            title={t('quickAdd.analyze')}
             icon="sparkles"
             onPress={parse}
             disabled={!text.trim() || parsing}
@@ -203,7 +205,7 @@ export default function QuickAddScreen() {
         {parsing && !result && (
           <View style={styles.parsingBox}>
             <ActivityIndicator size="small" color={theme.primary} />
-            <Text style={styles.parsingTxt}>Analyse en cours…</Text>
+            <Text style={styles.parsingTxt}>{t('quickAdd.analyzing')}</Text>
           </View>
         )}
 
@@ -221,7 +223,7 @@ export default function QuickAddScreen() {
                   color={theme.primary}
                 />
                 <Text style={styles.previewBadgeTxt}>
-                  {result.type === 'income' ? 'REVENU' : result.type === 'subscription' ? 'ABONNEMENT' : 'DÉPENSE'}
+                  {result.type === 'income' ? t('quickAdd.incomeUpper') : result.type === 'subscription' ? t('quickAdd.subscriptionUpper') : t('quickAdd.expenseUpper')}
                 </Text>
               </View>
               <Text style={styles.previewMerchant} numberOfLines={1}>
@@ -239,7 +241,7 @@ export default function QuickAddScreen() {
                 <View style={[styles.metaChip, { backgroundColor: `${theme.primary}15` }]}>
                   <Ionicons name="analytics" size={11} color={theme.primary} />
                   <Text style={[styles.metaTxt, { color: theme.primary }]}>
-                    {result.resolvedBy === 'local' ? 'Hors-ligne' : 'IA serveur'}
+                    {result.resolvedBy === 'local' ? t('quickAdd.offline') : t('quickAdd.serverAI')}
                     {result.confidence ? ` · ${Math.round(result.confidence * 100)}%` : ''}
                   </Text>
                 </View>
@@ -248,14 +250,14 @@ export default function QuickAddScreen() {
 
             <View style={{ flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.md }}>
               <Button
-                title="Réessayer"
+                title={t('quickAdd.retry')}
                 variant="secondary"
                 icon="refresh"
                 onPress={() => { setResult(null); parse(); }}
                 style={{ flex: 1 }}
               />
               <Button
-                title="Ajouter"
+                title={t('quickAdd.add')}
                 icon="checkmark"
                 onPress={commit}
                 style={{ flex: 1 }}
@@ -276,13 +278,13 @@ export default function QuickAddScreen() {
         {/* Examples */}
         {!result && !parsing && (
           <>
-            <Text style={[styles.label, { marginTop: Spacing.xl }]}>Exemples</Text>
+            <Text style={[styles.label, { marginTop: Spacing.xl }]}>{t('quickAdd.examplesTitle')}</Text>
             {[
               t('quickAdd.example1'),
               t('quickAdd.example2'),
-              'Netflix 18 CHF',
-              'Facture Swisscom 89 CHF',
-              'Assurance voiture 95 CHF',
+              t('quickAdd.exampleNetflix'),
+              t('quickAdd.exampleSwisscom'),
+              t('quickAdd.exampleCarInsurance'),
             ].map((ex) => (
               <TouchableOpacity
                 key={ex}

@@ -98,7 +98,13 @@ export function CategoryIcon({ category, size = 'md', showBackground = true }: C
   );
 }
 
-export function getCategoryName(categoryId: string): string {
+export function getCategoryName(categoryId: string, t?: (k: string) => string): string {
+  // Prefer i18n label when a translator is provided by the caller.
+  if (t) {
+    const key = `categoryLabels.${categoryId}`;
+    const translated = t(key);
+    if (translated && translated !== key) return translated;
+  }
   const expense = EXPENSE_CATEGORIES.find(c => c.id === categoryId);
   if (expense) return expense.name;
   

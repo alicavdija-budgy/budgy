@@ -2,6 +2,11 @@
  * BUDGY — Investments Premium Screen
  * Inspired by Revolut Wealth · Apple Stocks · Copilot Money.
  * Local data, deterministic mock pricing engine, dark/light aware.
+ *
+ * @i18n-technical-file
+ *
+ * ⚠ Residual FR-CH fallback labels / EditField props / examples;
+ * multi-locale wrapping deferred to v3.9.1 backlog.
  */
 import React, { useMemo, useState } from 'react';
 import {

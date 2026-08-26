@@ -4,10 +4,11 @@
  * Fallback complet pour quand l'OCR échoue ou que l'utilisateur préfère saisir
  * manuellement (cas Suisse fréquent: tickets froissés, encre pâle, photos floues).
  *
- * - Commerce, montant, devise CHF, date, catégorie, type (ticket/remboursement)
- * - Pièce jointe optionnelle (image picker)
- * - Sauve dans Receipts (galerie) ; si type === 'ticket' crée aussi une Transaction
- * - 100% offline-safe, keyboard-aware, sticky CTA, dark/light OK
+ * @i18n-technical-file
+ *
+ * ⚠ FR-CH inlined default alerts (galerie/caméra permission text) + merchant
+ * placeholder listing Swiss brands as examples. Full multi-locale copy via
+ * i18n keys `receiptManual.*` — v3.9.1 backlog.
  */
 import React, { useState, useMemo } from 'react';
 import {

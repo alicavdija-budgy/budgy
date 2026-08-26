@@ -1,6 +1,11 @@
 /**
  * BUDGY — File system compatibility layer
  *
+ * @i18n-technical-file
+ *
+ * ⚠ Throws thrown here are FR-CH default messages caught upstream and mapped
+ * to translated UI errors by humanizeError() and the callers.
+ *
  * expo-file-system v19+ removed the `EncodingType.Base64` enum (it now uses
  * either string literals or the new modular File API). Anywhere we used
  * `FileSystem.EncodingType.Base64` we got `Cannot read property 'Base64'

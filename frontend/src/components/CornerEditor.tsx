@@ -1,6 +1,13 @@
 /**
  * BUDGY - Corner Editor (manual 4-corner crop)
  *
+ * @i18n-technical-file
+ *
+ * ⚠ Emits three FR-CH internal alert messages ("Image non chargée", "La
+ * sélection est trop petite", "Impossible d'appliquer le recadrage"). These
+ * are error diagnostics passed to native Alert.alert during crop; multi-locale
+ * copy will land in v3.9.1 under `scanner.cornerEditor.*`.
+ *
  * Lets the user adjust 4 corners over a captured image (Apple Notes style).
  * On apply, returns the bounding box of the 4 points and a cropped + scaled
  * image via expo-image-manipulator. This is a pragmatic, cross-platform

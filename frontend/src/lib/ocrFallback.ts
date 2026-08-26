@@ -1,11 +1,11 @@
 /**
  * BUDGY — Frontend OCR fallback regex for Swiss receipts
  *
- * When the backend OCR/IA returns low-quality extraction, we run these
- * locally on the rawText to RESCUE basic fields (merchant, total, date, category)
- * BEFORE giving up and forcing manual entry.
+ * @i18n-technical-file
  *
- * Pure functions, no dependencies, never throws.
+ * ⚠ TECHNICAL DATA — matcher keywords for locally rescuing merchant / amount /
+ * date / category from raw OCR text when the AI extraction is unreliable.
+ * Not UI text.
  */
 
 const SWISS_MERCHANTS_KEYWORDS: Record<string, string[]> = {

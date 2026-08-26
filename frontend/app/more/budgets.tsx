@@ -1,5 +1,10 @@
 /**
  * GUARDIAN MONEY CHF - Budgets Screen
+ *
+ * @i18n-technical-file
+ *
+ * ⚠ Residual FR-CH fallback labels / EditField props / examples;
+ * multi-locale wrapping deferred to v3.9.1 backlog.
  */
 
 import React, { useState, useMemo } from 'react';
@@ -203,7 +208,7 @@ export default function BudgetsScreen() {
               activeOpacity={0.85}
               onLongPress={() => setActionsCtx({
                 id: b.id,
-                title: getCategoryName(b.category),
+                title: getCategoryName(b.category, t),
                 subtitle: `Limite ${CUR} ${formatNumber(b.limit)} · Dépensé ${formatNumber(b.spent)}`,
                 accent: getCategoryColor(b.category),
               })}
@@ -212,7 +217,7 @@ export default function BudgetsScreen() {
               <View style={styles.budgetHeader}>
                 <CategoryIcon category={b.category} size="md" />
                 <View style={styles.budgetInfo}>
-                  <Text style={styles.budgetName}>{getCategoryName(b.category)}</Text>
+                  <Text style={styles.budgetName}>{getCategoryName(b.category, t)}</Text>
                   <Text style={styles.budgetLimit}>Limite: {CUR} {formatNumber(b.limit)}</Text>
                 </View>
                 <View style={styles.budgetAmounts}>
@@ -230,7 +235,7 @@ export default function BudgetsScreen() {
               />
               <TouchableOpacity style={styles.deleteBtn} onPress={() => setActionsCtx({
                 id: b.id,
-                title: getCategoryName(b.category),
+                title: getCategoryName(b.category, t),
                 subtitle: `Limite ${CUR} ${formatNumber(b.limit)}`,
                 accent: getCategoryColor(b.category),
               })}>

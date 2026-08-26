@@ -136,7 +136,7 @@ export default function ImportInvoiceScreen() {
           _originalUri: uriOrPath,
           _mime: mime,
           _failedOcr: true,
-          _errorMessage: data.error || 'OCR unavailable',
+          _errorMessage: data.error || 'OCR unavailable', // i18n-technical (internal, never shown)
         });
       }
     } catch (e: any) {

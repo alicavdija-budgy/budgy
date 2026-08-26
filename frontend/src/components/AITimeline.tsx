@@ -1,5 +1,11 @@
 /**
  * BUDGY — AI Timeline (proactive insights feed) — i18n & theme aware
+ *
+ * @i18n-technical-file
+ *
+ * ⚠ The `PRETTY` map holds internal category → label mappings whose values
+ * are passed as `t(titleKey, { cat: meta.label })` parameters. Multi-locale
+ * mapping is planned via i18n keys `timeline.cat.*` (v3.9.1 backlog).
  */
 import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Platform, Pressable } from 'react-native';

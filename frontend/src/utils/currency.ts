@@ -4,6 +4,9 @@
  * converted on display via the useMoney() hook.
  *
  * Static FX rates (mid-market, refreshable later via API).
+ *
+ * The `label` field on SUPPORTED_CURRENCIES is a translation key
+ * (`currencies.<code>`) resolved by the UI via useTranslation.
  */
 
 export type Currency = 'CHF' | 'EUR' | 'USD';
@@ -28,9 +31,9 @@ export const CURRENCY_FLAG: Record<Currency, string> = {
 };
 
 export const SUPPORTED_CURRENCIES: { code: Currency; flag: string; label: string; symbol: string }[] = [
-  { code: 'CHF', flag: '🇨🇭', label: 'Franc suisse', symbol: 'CHF' },
-  { code: 'EUR', flag: '🇪🇺', label: 'Euro', symbol: '€' },
-  { code: 'USD', flag: '🇺🇸', label: 'US Dollar', symbol: '$' },
+  { code: 'CHF', flag: '🇨🇭', label: 'currencies.CHF', symbol: 'CHF' },
+  { code: 'EUR', flag: '🇪🇺', label: 'currencies.EUR', symbol: '€' },
+  { code: 'USD', flag: '🇺🇸', label: 'currencies.USD', symbol: '$' },
 ];
 
 /** Convert from CHF base to target currency */

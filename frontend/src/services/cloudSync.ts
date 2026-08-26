@@ -2,6 +2,11 @@
  * GUARDIAN MONEY CHF - Cloud Sync Service
  * Syncs all local Zustand data to/from Supabase tables.
  *
+ * @i18n-technical-file
+ *
+ * ⚠ Returns stable internal reason strings via `.error` fields. Cloud sync
+ * UI (more/cloud-sync.tsx) maps them to translated messages at display time.
+ *
  * Strategy:
  *  - Push: local store → Supabase (upsert on user_id+id)
  *  - Pull: Supabase → local store (replaces local arrays)

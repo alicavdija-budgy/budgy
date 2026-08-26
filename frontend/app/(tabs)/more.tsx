@@ -51,9 +51,9 @@ export default function MoreScreen() {
       items: [
         { id: 'ai-optimizer', title: t('more.aiOptimizer'), subtitle: t('more.aiOptimizerSub'), icon: 'sparkles', color: C.pink, route: '/more/ai-optimizer', badge: 'NEW', pro: true, feature: 'ai' },
         { id: 'savings-radar', title: t('moreExt.savingsRadar'), subtitle: t('moreExt.savingsRadarSub'), icon: 'radio', color: C.gold, route: '/more/savings-radar', badge: 'PRO', pro: true, feature: 'ai' },
-        { id: 'budgy-score', title: 'Score Budgy', subtitle: t('moreExt.budgyScoreSub'), icon: 'speedometer', color: C.gold, route: '/more/budgy-score', badge: 'NEW' },
+        { id: 'budgy-score', title: t('moreExt.budgyScoreTitle'), subtitle: t('moreExt.budgyScoreSub'), icon: 'speedometer', color: C.gold, route: '/more/budgy-score', badge: 'NEW' },
         { id: 'predict', title: t('more.predict'), subtitle: t('more.predictSub'), icon: 'analytics', color: C.secondary, route: '/more/predict', pro: true, feature: 'predict' },
-        { id: 'calendar', title: 'Calendrier financier', subtitle: t('moreExt.calendarSub'), icon: 'calendar', color: C.info, route: '/more/financial-calendar' },
+        { id: 'calendar', title: t('moreExt.calendarTitle'), subtitle: t('moreExt.calendarSub'), icon: 'calendar', color: C.info, route: '/more/financial-calendar' },
         { id: 'siri-assistant', title: t('moreExt.siriTitle'), subtitle: t('moreExt.siriSub'), icon: 'mic', color: C.cyan, route: '/more/siri-assistant' },
       ],
     },

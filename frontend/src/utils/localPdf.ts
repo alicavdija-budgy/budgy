@@ -1,6 +1,13 @@
 /**
  * BUDGY — Local PDF HTML generator.
  *
+ * @i18n-technical-file
+ *
+ * ⚠ HTML template baked into the generated PDF document. The exported
+ * "Note de frais" is a Swiss administrative document intentionally written
+ * in French (fr-CH primary locale). Multi-locale PDF export is a future
+ * feature — not blocking the audit.
+ *
  * Generates a complete HTML document for expo-print on the DEVICE,
  * without needing a backend roundtrip. This means PDF export works
  * fully offline (perfect for travel, planes, weak Wi-Fi).

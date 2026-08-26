@@ -4,6 +4,11 @@
  * Maps merchant names → {color, category, emoji, initials}
  * Used by BrandLogo component to render branded tiles safely (colored circles + initials),
  * avoiding trademark infringement while remaining recognizable.
+ *
+ * @i18n-technical-file
+ *
+ * ⚠ TECHNICAL DATA — brand names, matching keywords and internal category IDs.
+ * Never translated: brand names are proper nouns, keywords are matcher tokens.
  */
 
 export interface Brand {

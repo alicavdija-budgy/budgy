@@ -1,4 +1,5 @@
 // @ts-nocheck
+// @i18n-technical-file — HTML meta content and CSS reset strings.
 import { ScrollViewStyleReset } from "expo-router/html";
 import type { PropsWithChildren } from "react";
 

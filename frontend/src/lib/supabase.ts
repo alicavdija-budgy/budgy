@@ -1,6 +1,15 @@
 /**
  * GUARDIAN MONEY CHF - Supabase Client
  * Handles authentication and database operations
+ *
+ * @i18n-technical-file
+ *
+ * ⚠ TECHNICAL — Contains only:
+ *   • SQL DDL statements (RLS policy names, column identifiers) that MUST
+ *     stay in English to match the database schema.
+ *   • One internal proxy error ('Supabase not configured') that is caught
+ *     and mapped to a translated UI error by the callers.
+ * Never rendered directly to the user.
  */
 
 import { createClient } from '@supabase/supabase-js';

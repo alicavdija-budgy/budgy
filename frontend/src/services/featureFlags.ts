@@ -1,6 +1,12 @@
 /**
  * BUDGY — Feature flags & freemium gating
  *
+ * @i18n-technical-file
+ *
+ * ⚠ `upgradeReason` strings are stable internal identifiers used by soft-gate
+ * banners. The consuming components (SoftPaywall, paywall CTA, etc.) map
+ * them to translated copy at render time via i18n keys under `pro.*`.
+ *
  * Lightweight, non-destructive layer that decides at RUNTIME whether a user
  * can access a given feature. Reads `user.isPro` from the Zustand store, plus
  * tracks monthly usage counters for limited free-tier features (e.g. Voice).

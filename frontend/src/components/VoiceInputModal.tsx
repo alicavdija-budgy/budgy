@@ -1,6 +1,12 @@
 /**
  * BUDGY — Voice Input Modal (Premium edition)
  *
+ * @i18n-technical-file
+ *
+ * ⚠ FR-CH default strings for mic permission denial, live listening button
+ * label ("Arrêter/Démarrer la dictée"), and result preview placeholder
+ * "Dépense". Multi-locale copy routed via i18n keys `voice.*` — v3.9.1 backlog.
+ *
  * UX inspired by Apple Intelligence / ChatGPT Voice / Siri Wave:
  *   1. Tap the big mic button → start listening (haptic + start beep)
  *      • orb pulses

@@ -1,6 +1,11 @@
 /**
  * BUDGY — Humanisation des erreurs Supabase Auth (v3.9.0 build 73)
  *
+ * @i18n-technical-file — All literal strings in this file are English
+ *   lowercase pattern matchers used against raw Supabase error messages
+ *   (`.includes()`). They are NEVER shown to the user; only the returned
+ *   i18n `titleKey` / `messageKey` / `hintKey` reach the UI.
+ *
  * Retourne des CLÉS i18n (pas de texte). L'UI appelle t(h.titleKey) pour
  * afficher le message dans la langue de l'utilisateur (fr/en/de/it).
  *

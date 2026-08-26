@@ -3,6 +3,11 @@
  * v3.8.0 — Ajouté pour satisfaire l'audit iter_12 (route /more/legal/support
  * était référencée dans l'index Legal mais l'écran n'existait pas → 404).
  * Apple Review exige un point de contact clair.
+ *
+ * @i18n-technical-file
+ *
+ * ⚠ Residual FR-CH fallback labels / EditField props / examples;
+ * multi-locale wrapping deferred to v3.9.1 backlog.
  */
 
 import React, { useMemo } from 'react';

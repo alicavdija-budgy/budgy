@@ -318,7 +318,7 @@ export default function ReceiptsScreen() {
                       <Text style={styles.detailLabel}>{t('receipts.detailCategory')}</Text>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                         <CategoryIcon category={sel.category} size="sm" showBackground={false} />
-                        <Text style={styles.detailValue}>{getCategoryName(sel.category)}</Text>
+                        <Text style={styles.detailValue}>{getCategoryName(sel.category, t)}</Text>
                       </View>
                     </View>
                     <View style={styles.detailRow}>

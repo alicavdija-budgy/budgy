@@ -64,7 +64,7 @@ export default function LockScreen({
           return;
         }
         setAttempts((a) => a + 1);
-        setError('Code incorrect');
+        setError(t('lockScreen.wrongCode'));
         if (Platform.OS !== 'web') {
           try { Vibration.vibrate(120); } catch {}
         }
@@ -91,8 +91,8 @@ export default function LockScreen({
       >
         <Ionicons name="shield-checkmark" size={32} color={Colors.text} />
       </LinearGradient>
-      <Text style={styles.title}>Budgy verrouillé</Text>
-      <Text style={styles.subtitle}>Saisissez votre code à 6 chiffres</Text>
+      <Text style={styles.title}>{t('lockScreen.title')}</Text>
+      <Text style={styles.subtitle}>{t('lockScreen.subtitle')}</Text>
 
       <View style={styles.dotsRow}>
         {dots.map((filled, i) => (
@@ -149,7 +149,7 @@ export default function LockScreen({
 
       {attempts >= 3 && (
         <Text style={styles.helpText}>
-          Trop d’erreurs ? Fermez et rouvrez l’app.
+          {t('lockScreen.tooManyErrors')}
         </Text>
       )}
     </LinearGradient>

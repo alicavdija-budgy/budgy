@@ -362,7 +362,7 @@ export default function AIOptimizerScreen() {
         throw new Error(r.offline ? 'offline' : `HTTP ${r.status}`);
       }
       const data = r.data;
-      if (!data.success) throw new Error(data.error || 'Analysis failed');
+      if (!data.success) throw new Error(data.error || 'Analysis failed'); // i18n-technical
 
       const enriched = enrichWithLocalProposals(data, store, monthlyIncome, t, CUR);
       setResult(enriched);

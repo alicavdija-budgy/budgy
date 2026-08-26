@@ -1,6 +1,11 @@
 /**
  * GUARDIAN MONEY CHF - LAMal Subsidy Calculator
  * Estimates eligibility and amount of LAMal subsidy per canton.
+ *
+ * @i18n-technical-file
+ *
+ * ⚠ Residual FR-CH fallback labels / EditField props / examples;
+ * multi-locale wrapping deferred to v3.9.1 backlog.
  */
 
 import React, { useState, useMemo } from 'react';

@@ -5,6 +5,13 @@
  *
  * Pro gating : source canonique = usePremiumStore.hasPremiumAccess()
  * (couvre isPro + trial actif + provisional après achat).
+ *
+ * @i18n-technical-file
+ *
+ * ⚠ EditField labels + delete/edit-modal fallback titles remain FR-CH here;
+ * they are internal defaults piped into the shared EntityEditModal /
+ * EntityActionsSheet components. Multi-locale wrapping via i18n keys
+ * `expenses.edit*` / `expenses.tx*` is planned for v3.9.1.
  */
 
 import React, { useState, useMemo } from 'react';

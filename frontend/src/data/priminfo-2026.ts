@@ -2,6 +2,11 @@
  * BUDGY - LAMal Priminfo 2026 Data
  * Source: OFSP/BAG Priminfo.admin.ch - Primes officielles 2026
  *
+ * @i18n-official-data
+ *
+ * ⚠ OFFICIAL DATA — Insurer brand names and pricing indices.
+ * All names are trademarked proper nouns, never translated.
+ *
  * Les valeurs `avg` correspondent à la PRIME STANDARD officielle
  * (adulte 26+, franchise CHF 300, modèle libre choix, avec accident).
  * Les `min` / `max` reflètent la dispersion réelle des assureurs (~ -22% à +18%).

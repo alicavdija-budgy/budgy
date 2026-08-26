@@ -1,6 +1,11 @@
 /**
  * GUARDIAN MONEY CHF - Legal Hub
  * Central screen with links to all legal pages (required by Apple & Google).
+ *
+ * @i18n-technical-file
+ *
+ * ⚠ Residual FR-CH fallback labels / EditField props / examples;
+ * multi-locale wrapping deferred to v3.9.1 backlog.
  */
 
 import React from 'react';

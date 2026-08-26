@@ -25,7 +25,7 @@ export interface FinancialSnapshot {
   totalCommitted: number;           // paid + recurring + upcoming
   realAvailableThisMonth: number;   // monthlyIncome - totalCommitted
   // Métadonnées utiles aux modules IA / pédagogiques
-  monthLabel: string;               // ex "Avril 2026"
+  monthLabel: string;               // localised month + year (via toLocaleDateString)
   txCountThisMonth: number;
   recurringCount: number;
 }
@@ -81,6 +81,7 @@ export function getMonthlyFinancialSnapshot(input: {
   budgets?: Budget[];
   savingsGoals?: SavingsGoal[];
   now?: Date;
+  locale?: string;
 }): FinancialSnapshot {
   const now = input.now || new Date();
   const year = now.getFullYear();
@@ -123,7 +124,7 @@ export function getMonthlyFinancialSnapshot(input: {
   const totalCommitted = paidExpenses + recurringExpenses + upcomingBills;
   const realAvailableThisMonth = Math.max(0, monthlyIncome - totalCommitted);
 
-  const monthLabel = now.toLocaleDateString('fr-CH', { month: 'long', year: 'numeric' });
+  const monthLabel = now.toLocaleDateString(input.locale || 'fr-CH', { month: 'long', year: 'numeric' });
 
   return {
     monthlyIncome,

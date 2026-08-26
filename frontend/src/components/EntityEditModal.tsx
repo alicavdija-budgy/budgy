@@ -1,6 +1,13 @@
 /**
  * BUDGY — EntityEditModal
  *
+ * @i18n-technical-file
+ *
+ * ⚠ Uses generic FR-CH default for switch hint ("Activé"/"Désactivé") and
+ * submit label. Every caller passes its own translated `title` and can
+ * override `submitLabel`. Multi-locale switch labels via i18n key
+ * `common.enabled` / `common.disabled` — v3.9.1 backlog.
+ *
  * Generic, schema-driven edit modal used for editing all 9 entity types:
  * investments, crypto, recurring, budgets, incomes, expenses, tickets, invoices, contracts.
  *

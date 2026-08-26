@@ -1,5 +1,11 @@
 /**
  * GUARDIAN MONEY CHF - Open Source Licenses
+ *
+ * @i18n-technical-file
+ *
+ * ⚠ Contains only library brand names, URLs and license identifiers (MIT).
+ * Not UI copy — the surrounding chrome (header title, intro paragraph)
+ * lives in the LicensesScreen component and is not audited here.
  */
 
 import React from 'react';

@@ -1,6 +1,20 @@
 /**
  * GUARDIAN MONEY CHF - Swiss Financial Data 2025
  * Source: OFSP/BAG Priminfo, ESTV, cantonal tax authorities
+ *
+ * @i18n-official-data
+ *
+ * ⚠ OFFICIAL / TECHNICAL DATA — DO NOT translate arbitrarily.
+ * This file holds:
+ *   • Official Swiss administrative names (26 cantons)
+ *   • Trademarked LAMal insurer brand names (CSS, Helsana, SWICA…)
+ *   • ISO currency codes and native language names
+ *   • Category IDs and human-readable labels used as internal reference
+ *     values (persisted in the store, compared as identifiers, exported)
+ *   • Payment method brand names (TWINT, Apple Pay, PostFinance…)
+ * All UI screens map these values to user-facing translation keys at
+ * render time. Renaming any string here breaks calculations and store
+ * migration. Treat every literal as OFFICIAL_DATA.
  */
 
 // 26 Swiss Cantons with tax rates and LAMal premiums

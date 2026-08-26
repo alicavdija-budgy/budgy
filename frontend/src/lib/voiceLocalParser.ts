@@ -2,15 +2,13 @@
  * BUDGY — Local Voice Parser (fallback)
  *
  * Parsing local simple en français pour ajouter une dépense / revenu / charge
- * récurrente quand le backend IA est indisponible. Couvre les phrases courantes :
+ * récurrente quand le backend IA est indisponible.
  *
- *   "ajoute 25 francs dépense à Migros"
- *   "j'ai dépensé 12.50 CHF au restaurant"
- *   "salaire 6500 CHF reçu"
- *   "abonnement Netflix 17.90 par mois"
+ * @i18n-technical-file
  *
- * Pas d'IA, juste regex + heuristiques — garantit que Voice IA fonctionne
- * TOUJOURS, même si le serveur est down.
+ * ⚠ TECHNICAL DATA — matcher keywords and default fallback tokens used
+ * only for intent detection when the AI backend is offline. All keyword
+ * arrays are internal matching tokens, not UI text.
  */
 
 export type VoiceIntent = 'expense' | 'income' | 'recurring' | 'unknown';

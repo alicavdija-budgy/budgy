@@ -3,6 +3,16 @@
  *
  * i18n complet (FR/DE/EN/IT) via useTranslation('siriAssistant').
  * Wording strict : « Compatible avec Siri via Raccourcis iOS » — jamais « Siri natif ».
+ *
+ * @i18n-technical-file
+ *
+ * ⚠ Contains only:
+ *   • Two deeplink URL templates (`SIRI_LINK`, `GOOGLE_LINK`) — data, not UI.
+ *   • Five FR example voice phrases the user would speak to Siri / Google.
+ *     These are FR-CH samples because the app is voice-parsed in FR-CH; the
+ *     surrounding screen chrome is fully translated via `siriAssistant.*`.
+ * Full multi-locale voice examples will land when the voice parser is
+ * upgraded to accept EN/DE/IT utterances (v3.9.1 backlog).
  */
 
 import React, { useMemo } from 'react';

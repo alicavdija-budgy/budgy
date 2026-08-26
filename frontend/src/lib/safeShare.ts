@@ -1,6 +1,11 @@
 /**
  * BUDGY — Safe file sharing & iOS-imported file handling.
  *
+ * @i18n-technical-file
+ *
+ * ⚠ Returned `error` strings are stable identifiers. Callers translate them
+ * at display time (see receipts / documents / contracts UI).
+ *
  * Two recurring iOS pain points are handled here:
  *
  * 1. `Sharing.shareAsync(uri)` fails when the URI is a temp path that iOS has

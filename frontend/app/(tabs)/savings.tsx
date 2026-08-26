@@ -1,6 +1,12 @@
 /**
  * GUARDIAN MONEY CHF - Savings Screen
  * Savings goals with progress tracking
+ *
+ * @i18n-technical-file
+ *
+ * ⚠ Residual FR-CH defaults on EntityEditModal EditField labels + delete
+ * confirmation strings piped into EntityActionsSheet. Multi-locale i18n
+ * wrapping is planned as v3.9.1 follow-up under `savings.editGoal*`.
  */
 
 import React, { useState, useMemo, useEffect } from 'react';

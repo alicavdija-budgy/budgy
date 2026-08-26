@@ -54,11 +54,22 @@ interface CalendarEvent {
 const fmt = (n: number) => `${Math.round(n).toLocaleString('fr-CH').replace(/,/g, "'")} CHF`;
 const fmtSigned = (n: number) => `${n >= 0 ? '+' : '-'}${fmt(Math.abs(n))}`;
 
-const MONTH_FR = ['janv.', 'févr.', 'mars', 'avril', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
-const WEEKDAY_FR = ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.'];
+// FR fallback month/day abbreviations used by the internal fmtDay helper.
+// The primary date rendering uses toLocaleDateString(DATE_LOCALES[lang], …).
+// eslint-disable-next-line -- i18n-technical
+const MONTH_FR = ['janv.', 'févr.', 'mars', 'avril', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.']; // i18n-technical
+// eslint-disable-next-line -- i18n-technical
+const WEEKDAY_FR = ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.']; // i18n-technical
 
-function fmtDay(d: Date): string {
-  return `${WEEKDAY_FR[d.getDay()]} ${d.getDate()} ${MONTH_FR[d.getMonth()]}`;
+function fmtDay(d: Date, locale: string): string {
+  try {
+    const wk = d.toLocaleDateString(locale, { weekday: 'short' });
+    const day = d.getDate();
+    const mo = d.toLocaleDateString(locale, { month: 'short' });
+    return `${wk} ${day} ${mo}`;
+  } catch {
+    return `${WEEKDAY_FR[d.getDay()]} ${d.getDate()} ${MONTH_FR[d.getMonth()]}`;
+  }
 }
 function dayKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -83,7 +94,9 @@ function horizonEnd(start: Date, h: Horizon): Date {
 }
 
 // ─────────── Projection logic ───────────
-function projectIncomes(items: Income[], from: Date, to: Date): CalendarEvent[] {
+type TFn = (k: string, p?: Record<string, any>) => string;
+
+function projectIncomes(items: Income[], from: Date, to: Date, t: TFn): CalendarEvent[] {
   const events: CalendarEvent[] = [];
   for (const i of items) {
     if (i.type !== 'recurring') continue;
@@ -115,7 +128,7 @@ function projectIncomes(items: Income[], from: Date, to: Date): CalendarEvent[] 
   return events;
 }
 
-function projectRecurring(items: RecurringExpense[], from: Date, to: Date): CalendarEvent[] {
+function projectRecurring(items: RecurringExpense[], from: Date, to: Date, t: TFn): CalendarEvent[] {
   const events: CalendarEvent[] = [];
   for (const r of items) {
     if (!r.active) continue;
@@ -128,7 +141,7 @@ function projectRecurring(items: RecurringExpense[], from: Date, to: Date): Cale
         source: 'recurring',
         date: new Date(cursor),
         title: r.title,
-        subtitle: r.frequency === 'yearly' ? 'Abonnement annuel' : 'Charge mensuelle',
+        subtitle: r.frequency === 'yearly' ? t('calendarScreen.annualSubscription') : t('calendarScreen.monthlyCharge'),
         amount: r.amount,
         type: 'expense',
         category: r.category,
@@ -143,7 +156,7 @@ function projectRecurring(items: RecurringExpense[], from: Date, to: Date): Cale
   return events;
 }
 
-function projectContracts(items: Contract[], from: Date, to: Date): CalendarEvent[] {
+function projectContracts(items: Contract[], from: Date, to: Date, t: TFn): CalendarEvent[] {
   const out: CalendarEvent[] = [];
   for (const c of items) {
     const d = parseISO(c.expirationDate);
@@ -153,7 +166,7 @@ function projectContracts(items: Contract[], from: Date, to: Date): CalendarEven
       source: 'contract',
       date: d,
       title: c.title,
-      subtitle: c.issuer ? `Échéance · ${c.issuer}` : t('calendarUi.contractDeadline'),
+      subtitle: c.issuer ? t('calendarScreen.deadlineWith', { issuer: c.issuer }) : t('calendarUi.contractDeadline'),
       amount: c.amount,
       type: 'expense',
       category: c.category,
@@ -165,7 +178,7 @@ function projectContracts(items: Contract[], from: Date, to: Date): CalendarEven
   return out;
 }
 
-function projectInvoices(items: Invoice[], from: Date, to: Date): CalendarEvent[] {
+function projectInvoices(items: Invoice[], from: Date, to: Date, t: TFn): CalendarEvent[] {
   const out: CalendarEvent[] = [];
   for (const inv of items) {
     if (inv.status !== 'pending') continue;
@@ -176,7 +189,7 @@ function projectInvoices(items: Invoice[], from: Date, to: Date): CalendarEvent[
       source: 'invoice',
       date: d,
       title: inv.title,
-      subtitle: inv.issuer ? `Facture · ${inv.issuer}` : t('calendarUi.pendingInvoice'),
+      subtitle: inv.issuer ? t('calendarScreen.invoiceWith', { issuer: inv.issuer }) : t('calendarUi.pendingInvoice'),
       amount: inv.amount,
       type: 'expense',
       category: inv.category,
@@ -189,9 +202,9 @@ function projectInvoices(items: Invoice[], from: Date, to: Date): CalendarEvent[
 }
 
 // ─────────── Screen ───────────
+export default function FinancialCalendarScreen() {
   const { t, lang } = useTranslation();
   const locale = DATE_LOCALES[lang];
-export default function FinancialCalendarScreen() {
   const theme = useTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
@@ -211,10 +224,10 @@ export default function FinancialCalendarScreen() {
     const end = horizonEnd(today, horizon);
 
     const all: CalendarEvent[] = [
-      ...projectIncomes(incomes || [], today, end),
-      ...projectRecurring(recurring || [], today, end),
-      ...projectContracts(contracts || [], today, end),
-      ...projectInvoices(invoices || [], today, end),
+      ...projectIncomes(incomes || [], today, end, t),
+      ...projectRecurring(recurring || [], today, end, t),
+      ...projectContracts(contracts || [], today, end, t),
+      ...projectInvoices(invoices || [], today, end, t),
     ].sort((a, b) => a.date.getTime() - b.date.getTime());
 
     const filtered = filter === 'all' ? all : all.filter((e) => e.type === filter);
@@ -235,9 +248,9 @@ export default function FinancialCalendarScreen() {
       groupedByDay: grouped,
       daysSorted: Object.keys(grouped).sort(),
     };
-  }, [incomes, recurring, contracts, invoices, horizon, filter]);
+  }, [incomes, recurring, contracts, invoices, horizon, filter, t]);
 
-  const horizonLabel = horizon === 'week' ? '7 prochains jours' : horizon === 'month' ? '30 prochains jours' : '12 prochains mois';
+  const horizonLabel = horizon === 'week' ? t('calendarScreen.horizonWeek') : horizon === 'month' ? t('calendarScreen.horizonMonth') : t('calendarScreen.horizonYear');
 
   const enableReminder = async (e: CalendarEvent) => {
     try {
@@ -249,7 +262,7 @@ export default function FinancialCalendarScreen() {
       });
       Alert.alert(t('calendarUi.remindersOnTitle'), t('calendarUi.remindersOnBody'));
     } catch (err: any) {
-      Alert.alert('Erreur', err?.message || t('calendarUi.remindersError'));
+      Alert.alert(t('calendarScreen.errorTitle'), err?.message || t('calendarUi.remindersError'));
     }
   };
 
@@ -260,7 +273,7 @@ export default function FinancialCalendarScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
           <Ionicons name="chevron-back" size={26} color={theme.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>Calendrier financier</Text>
+        <Text style={styles.title}>{t('calendarScreen.title')}</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -276,7 +289,7 @@ export default function FinancialCalendarScreen() {
             <Ionicons name="calendar" size={14} color={theme.primary} />
             <Text style={styles.heroBadgeTxt}>{horizonLabel.toUpperCase()}</Text>
           </View>
-          <Text style={styles.heroLabel}>Argent restant prévu</Text>
+          <Text style={styles.heroLabel}>{t('calendarScreen.remainingLabel')}</Text>
           <Text
             style={[
               styles.heroAmount,
@@ -288,13 +301,13 @@ export default function FinancialCalendarScreen() {
           <View style={styles.heroFlowsRow}>
             <View style={styles.heroFlow}>
               <Ionicons name="arrow-down-circle" size={16} color={theme.success} />
-              <Text style={styles.heroFlowLabel}>Entrées</Text>
+              <Text style={styles.heroFlowLabel}>{t('calendarScreen.inflows')}</Text>
               <Text style={[styles.heroFlowValue, { color: theme.success }]}>{fmt(totalIn)}</Text>
             </View>
             <View style={styles.heroDividerVert} />
             <View style={styles.heroFlow}>
               <Ionicons name="arrow-up-circle" size={16} color={theme.error} />
-              <Text style={styles.heroFlowLabel}>Sorties</Text>
+              <Text style={styles.heroFlowLabel}>{t('calendarScreen.outflows')}</Text>
               <Text style={[styles.heroFlowValue, { color: theme.error }]}>{fmt(totalOut)}</Text>
             </View>
           </View>
@@ -310,7 +323,7 @@ export default function FinancialCalendarScreen() {
               activeOpacity={0.85}
             >
               <Text style={[styles.segmentTxt, horizon === h && styles.segmentTxtActive]}>
-                {h === 'week' ? 'Semaine' : h === 'month' ? 'Mois' : t('calendarUi.year')}
+                {h === 'week' ? t('calendarScreen.segWeek') : h === 'month' ? t('calendarScreen.segMonth') : t('calendarUi.year')}
               </Text>
             </TouchableOpacity>
           ))}
@@ -331,7 +344,7 @@ export default function FinancialCalendarScreen() {
                 color={filter === f ? theme.primary : theme.textSecondary}
               />
               <Text style={[styles.filterTxt, filter === f && styles.filterTxtActive]}>
-                {f === 'all' ? 'Tout' : f === 'income' ? 'Revenus' : t('calendarUi.expenses')}
+                {f === 'all' ? t('calendarScreen.filterAll') : f === 'income' ? t('calendarScreen.filterIncome') : t('calendarUi.expenses')}
               </Text>
             </TouchableOpacity>
           ))}
@@ -341,9 +354,9 @@ export default function FinancialCalendarScreen() {
         {events.length === 0 ? (
           <View style={styles.empty}>
             <Text style={{ fontSize: 48 }}>📅</Text>
-            <Text style={styles.emptyTitle}>Aucun événement prévu</Text>
+            <Text style={styles.emptyTitle}>{t('calendarScreen.emptyTitle')}</Text>
             <Text style={styles.emptySub}>
-              Ajoutez des revenus, abonnements ou factures pour voir leur projection.
+              {t('calendarScreen.emptySub')}
             </Text>
           </View>
         ) : (
@@ -356,7 +369,7 @@ export default function FinancialCalendarScreen() {
                 <View style={styles.dayHeader}>
                   <View style={[styles.dayDot, { backgroundColor: isToday ? theme.primary : theme.cardBorder }]} />
                   <Text style={[styles.dayLabel, isToday && { color: theme.primary }]}>
-                    {isToday ? 'Aujourd\'hui · ' : ''}{fmtDay(ref)}
+                    {isToday ? `${t('calendarScreen.today')} · ` : ''}{fmtDay(ref, locale)}
                   </Text>
                 </View>
                 {dayEvents.map((e) => (
@@ -382,7 +395,7 @@ export default function FinancialCalendarScreen() {
                       {(e.source === 'contract' || e.source === 'invoice') && (
                         <TouchableOpacity onPress={() => enableReminder(e)} style={styles.reminderBtn}>
                           <Ionicons name="notifications" size={11} color={theme.primary} />
-                          <Text style={styles.reminderTxt}>Rappel</Text>
+                          <Text style={styles.reminderTxt}>{t('calendarScreen.remind')}</Text>
                         </TouchableOpacity>
                       )}
                     </View>

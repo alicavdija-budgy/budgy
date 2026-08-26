@@ -1,6 +1,12 @@
 /**
  * BUDGY — Apple StoreKit / In-App Purchase Service (react-native-iap)
  *
+ * @i18n-technical-file
+ *
+ * ⚠ Contains only stable internal error codes returned in {ok:false,
+ * error:'iap_not_configured'|'network_error'|'transaction_not_found'|...}.
+ * Any UI-visible message is translated by the caller (see useIAP.ts / paywall).
+ *
  * Wraps the native IAP layer with:
  *   - Web / Expo Go safe fallback (no-op — keeps bundler happy)
  *   - Product fetching for the Budgy Pro subscription group

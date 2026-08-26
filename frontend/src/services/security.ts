@@ -1,6 +1,13 @@
 /**
  * BUDGY v3.9.0 — Security service (PIN + biometric + panic mode).
  *
+ * @i18n-technical-file
+ *
+ * ⚠ Contains only default prompt strings for LocalAuthentication. Callers
+ * pass a translated `reason` argument at call time to display in the OS
+ * biometric prompt; the FR-CH default here is a safety fallback used when
+ * no `reason` is provided (never reached in production). Not UI text.
+ *
  * Security upgrade (v3.9.0):
  *   • PIN hashing uses PBKDF2-SHA256 with 200k iterations + per-user salt
  *     (previously: unsalted SHA-256 of "guardian-<pin>").

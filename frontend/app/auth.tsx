@@ -116,7 +116,7 @@ export default function AuthScreen() {
           });
 
           if (error) {
-            if (error.message.includes('confirmation email') || error.message.includes('sending')) {
+            if (error.message.includes('confirmation email') || error.message.includes('sending')) { // i18n-technical
               loginAsLocalUser(`local_${Date.now()}`, emailClean, name.trim(), false, true);
               return;
             }
@@ -172,7 +172,7 @@ export default function AuthScreen() {
   const handleDemoMode = async () => {
     setLoading(true);
     try {
-      setUser({ id: 'demo_user', email: 'demo@guardian.app', name: 'Marie Dupont', createdAt: Date.now(), isPro: true, isDemo: true });
+      setUser({ id: 'demo_user', email: 'demo@guardian.app', name: t('authExtra.demoName'), createdAt: Date.now(), isPro: true, isDemo: true });
       setPro(true);
       // Phase 1: no seed data — demo mode also starts empty
       setPreferences({ onboarded: true });
@@ -253,7 +253,7 @@ export default function AuthScreen() {
 
             {mode === 'register' && (
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Confirmer le mot de passe</Text>
+                <Text style={styles.label}>{t('authExtra.confirmPasswordLabel')}</Text>
                 <View style={[styles.inputContainer, errors.confirmPassword && styles.inputError]}>
                   <Ionicons name="lock-closed-outline" size={20} color={Colors.textTertiary} />
                   <TextInput testID="auth-confirm-password" style={styles.input} value={confirmPassword} onChangeText={setConfirmPassword} placeholder="••••••••" placeholderTextColor={Colors.textTertiary} secureTextEntry={!showPassword} />
@@ -269,7 +269,7 @@ export default function AuthScreen() {
           {isSupabaseConfigured() && (
             <View style={styles.cloudBadge}>
               <Ionicons name="cloud-done" size={14} color={Colors.success} />
-              <Text style={styles.cloudText}>Cloud sync activé</Text>
+              <Text style={styles.cloudText}>{t('authExtra.cloudSyncEnabled')}</Text>
             </View>
           )}
 

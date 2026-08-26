@@ -55,12 +55,12 @@ export default function RecurringScreen() {
     [editingRecId, recurringExpenses]
   );
   const REC_EDIT_FIELDS: EditField[] = useMemo(() => [
-    { key: 'title', label: 'Titre', type: 'text', icon: 'document-text-outline', placeholder: 'Netflix', required: true },
-    { key: 'amount', label: 'Montant (CHF)', type: 'number', icon: 'cash-outline', placeholder: '17.90', required: true },
+    { key: 'title', label: t('recurringScreen.titleField'), type: 'text', icon: 'document-text-outline', placeholder: 'Netflix', required: true },
+    { key: 'amount', label: t('recurringScreen.amountCHF', { currency: 'CHF' }), type: 'number', icon: 'cash-outline', placeholder: '17.90', required: true },
     { key: 'category', label: t('recurringUi.category'), type: 'select', options: EXPENSE_CATEGORIES.slice(0, 12).map((c) => ({ value: c.id, label: c.name, color: c.color })) },
     { key: 'dayOfMonth', label: t('recurringUi.dayOfMonth'), type: 'number', icon: 'calendar-outline', placeholder: '8' },
-    { key: 'active', label: 'Actif', type: 'switch' },
-  ], []);
+    { key: 'active', label: t('recurringScreen.active'), type: 'switch' },
+  ], [t]);
   const handleEditRecSubmit = (values: Record<string, any>) => {
     if (!editingRec) return;
     const amt = parseFloat(String(values.amount).replace(',', '.')) || editingRec.amount;
@@ -102,17 +102,17 @@ export default function RecurringScreen() {
   );
 
   const getPriority = (amount: number): { label: string; emoji: string; color: string } => {
-    if (monthlyIncome <= 0) return { label: 'Impact inconnu', emoji: 'ℹ️', color: theme.textTertiary };
+    if (monthlyIncome <= 0) return { label: t('recurringScreen.unknownImpact'), emoji: 'ℹ️', color: theme.textTertiary };
     const pct = (amount / monthlyIncome) * 100;
     if (pct >= 20) return { label: t('recurringUi.highImpact'), emoji: '🔥', color: theme.error };
-    if (pct >= 10) return { label: 'Impact moyen', emoji: '⚠️', color: theme.warning };
+    if (pct >= 10) return { label: t('recurringScreen.mediumImpact'), emoji: '⚠️', color: theme.warning };
     if (pct >= 5)  return { label: t('recurringUi.modImpact'), emoji: '🟡', color: '#EAB308' };
-    return { label: 'Faible impact', emoji: '✅', color: theme.success };
+    return { label: t('recurringScreen.lowImpact'), emoji: '✅', color: theme.success };
   };
 
   const handleAdd = () => {
     if (!newRec.title || !newRec.amount) {
-      Alert.alert('Erreur', t('recurringUi.errAllFields'));
+      Alert.alert(t('recurringScreen.errTitle'), t('recurringUi.errAllFields'));
       return;
     }
     addRecurringExpense({
@@ -136,7 +136,7 @@ export default function RecurringScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>Récurrents</Text>
+        <Text style={styles.title}>{t('recurringScreen.title')}</Text>
         <TouchableOpacity style={styles.addButton} onPress={() => setShowAddModal(true)}>
           <Ionicons name="add" size={24} color={theme.text} />
         </TouchableOpacity>
@@ -149,9 +149,9 @@ export default function RecurringScreen() {
             colors={totalPctIncome >= 50 ? [theme.error, theme.errorDark] as any : theme.gradientPrimary as any}
             style={styles.heroSummary}
           >
-            <Text style={styles.heroLabel}>CHARGES FIXES MENSUELLES</Text>
+            <Text style={styles.heroLabel}>{t('recurringScreen.heroLabel')}</Text>
             <Text style={styles.heroAmount}>{CUR} {formatNumber(totalMonthly)}</Text>
-            <Text style={styles.heroYearly}>≈ {CUR} {formatNumber(totalYearly)} / an</Text>
+            <Text style={styles.heroYearly}>{t('recurringScreen.heroYearly', { currency: CUR, amount: formatNumber(totalYearly) })}</Text>
 
             {monthlyIncome > 0 && (
               <>
@@ -160,16 +160,16 @@ export default function RecurringScreen() {
                 </View>
                 <View style={styles.heroBarRow}>
                   <Text style={styles.heroBarText}>
-                    {totalPctIncome.toFixed(1)}% de vos revenus
+                    {t('recurringScreen.pctOfIncome', { n: totalPctIncome.toFixed(1) })}
                   </Text>
                   <Text style={styles.heroBarStatus}>
-                    {totalPctIncome >= 50 ? t('recurringUi.tooHigh') : totalPctIncome >= 30 ? t('recurringUi.high') : '✅ Sain'}
+                    {totalPctIncome >= 50 ? t('recurringUi.tooHigh') : totalPctIncome >= 30 ? t('recurringUi.high') : t('recurringScreen.healthy')}
                   </Text>
                 </View>
               </>
             )}
 
-            <Text style={styles.heroCount}>{recurringExpenses.filter(r => r.active).length} abonnements actifs</Text>
+            <Text style={styles.heroCount}>{t('recurringScreen.activeSubs', { n: recurringExpenses.filter(r => r.active).length })}</Text>
           </LinearGradient>
         </Animated.View>
 
@@ -178,7 +178,7 @@ export default function RecurringScreen() {
             icon="refresh-outline"
             title={t("recurringUi.emptyTitle")}
             subtitle={t("recurringUi.emptySub")}
-            action={{ label: 'Ajouter', onPress: () => setShowAddModal(true) }}
+            action={{ label: t('recurringScreen.addBtn'), onPress: () => setShowAddModal(true) }}
           />
         ) : (
           sorted.map((rec, idx) => {
@@ -204,7 +204,7 @@ export default function RecurringScreen() {
                         <Text style={styles.recTitle}>{rec.title}</Text>
                         <Text style={styles.recPriorityEmoji}>{priority.emoji}</Text>
                       </View>
-                      <Text style={styles.recDate}>Le {rec.dayOfMonth} de chaque mois</Text>
+                      <Text style={styles.recDate}>{t('recurringScreen.dayOfMonthLine', { day: rec.dayOfMonth })}</Text>
                     </View>
                     <View style={styles.recRight}>
                       <Text style={styles.recAmount}>{CUR} {formatNumber(rec.amount)}</Text>
@@ -225,9 +225,9 @@ export default function RecurringScreen() {
                       </View>
                       <View style={styles.recImpactRow}>
                         <Text style={[styles.recImpactText, { color: barColor }]}>
-                          {pctOfIncome.toFixed(1)}% du revenu · {priority.label}
+                          {t('recurringScreen.pctRevenuePriority', { n: pctOfIncome.toFixed(1), priority: priority.label })}
                         </Text>
-                        <Text style={styles.recYearly}>{CUR} {formatNumber(rec.amount * 12)}/an</Text>
+                        <Text style={styles.recYearly}>{t('recurringScreen.yearlyPerAmount', { currency: CUR, amount: formatNumber(rec.amount * 12) })}</Text>
                       </View>
                     </View>
                   )}
@@ -262,7 +262,7 @@ export default function RecurringScreen() {
           <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Nouvel abonnement</Text>
+                <Text style={styles.modalTitle}>{t('recurringScreen.newSubscription')}</Text>
                 <TouchableOpacity onPress={() => { Keyboard.dismiss(); setShowAddModal(false); }}>
                   <Ionicons name="close" size={24} color={theme.text} />
                 </TouchableOpacity>
@@ -273,7 +273,7 @@ export default function RecurringScreen() {
                 contentContainerStyle={{ paddingBottom: Spacing.xl }}
               >
 
-            <Text style={styles.inputLabel}>Titre</Text>
+            <Text style={styles.inputLabel}>{t('recurringScreen.titleField')}</Text>
             <TextInput
               style={styles.input}
               value={newRec.title}
@@ -284,7 +284,7 @@ export default function RecurringScreen() {
 
             <View style={styles.inputRow}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.inputLabel}>Montant ({CUR})</Text>
+                <Text style={styles.inputLabel}>{t('recurringScreen.amountCHF', { currency: CUR })}</Text>
                 <TextInput
                   style={styles.input}
                   value={newRec.amount}
@@ -295,7 +295,7 @@ export default function RecurringScreen() {
                 />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.inputLabel}>Jour du mois</Text>
+                <Text style={styles.inputLabel}>{t('recurringScreen.dayOfMonthLabel')}</Text>
                 <TextInput
                   style={styles.input}
                   value={newRec.dayOfMonth}
@@ -307,7 +307,7 @@ export default function RecurringScreen() {
               </View>
             </View>
 
-            <Button title="Ajouter" onPress={handleAdd} fullWidth size="lg" style={{ marginTop: Spacing.lg }} />
+            <Button title={t('recurringScreen.addBtn')} onPress={handleAdd} fullWidth size="lg" style={{ marginTop: Spacing.lg }} />
               </ScrollView>
             </View>
           </TouchableWithoutFeedback>

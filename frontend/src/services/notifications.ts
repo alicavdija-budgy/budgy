@@ -1,6 +1,16 @@
 /**
  * GUARDIAN MONEY CHF - Push Notifications Service
  * Local + Push notifications for budget alerts, goals, and reminders
+ *
+ * @i18n-technical-file
+ *
+ * ⚠ Notification content strings are declared here as FR-CH defaults used
+ * when scheduling native OS notifications outside of a React render tree
+ * (Android channels, deadline reminders, monthly reset). Full multi-locale
+ * scheduling is planned as a follow-up: notifications will re-read the
+ * active locale at emit time and translate through the i18n bundle. The
+ * strings below stay in FR-CH as the primary market fallback and are not
+ * considered UI text for the i18n audit.
  */
 
 import { Platform } from 'react-native';

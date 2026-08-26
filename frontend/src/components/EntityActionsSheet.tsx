@@ -1,6 +1,12 @@
 /**
  * BUDGY — EntityActionsSheet
  *
+ * @i18n-technical-file
+ *
+ * ⚠ FR-CH default `deleteConfirmTitle` / `deleteConfirmMessage` props. Every
+ * consumer passes explicit translated strings; defaults are only used if a
+ * caller forgets to pass them (safety net).
+ *
  * Reusable bottom sheet that surfaces Edit / Delete actions for any list item
  * (transactions, invoices, contracts, recurring, receipts, investments, etc.).
  *

@@ -1,6 +1,11 @@
 /**
  * BUDGY — useIAP hook (backend-first)
  *
+ * @i18n-technical-file
+ *
+ * ⚠ Contains stable error identifiers returned to the paywall UI via
+ * IapResult.error. The paywall/UI translates them at display time.
+ *
  * Production-ready flow:
  *   purchase()  → StoreKit → /api/iap/validate (App Store Server API)
  *                 → upserts state in Supabase + unlocks Pro locally.

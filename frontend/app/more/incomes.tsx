@@ -2,6 +2,11 @@
  * BUDGY - Income Management Screen
  * Full CRUD for user income sources (salary, freelance, bonus, rental, etc.)
  * Supports monthly, quarterly, and yearly frequencies.
+ *
+ * @i18n-technical-file
+ *
+ * ⚠ Residual FR-CH fallback labels / EditField props / examples;
+ * multi-locale wrapping deferred to v3.9.1 backlog.
  */
 
 import React, { useState, useMemo } from 'react';

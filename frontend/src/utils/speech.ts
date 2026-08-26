@@ -1,6 +1,13 @@
 /**
  * BUDGY — Speech-to-text helper (cross-platform, crash-proof on Expo Go)
  *
+ * @i18n-technical-file
+ *
+ * ⚠ Returned `.reason` strings are stable status labels (Expo Go / Module
+ * unavailable / Web Speech API unsupported / Native build required). The
+ * consuming component (VoiceInputModal) maps them to translated banner text
+ * via i18n at render time.
+ *
  * Strategy
  *   ▸ Web        : Web Speech API (Chrome/Edge/Safari).
  *   ▸ Native (dev/EAS build) : expo-speech-recognition.

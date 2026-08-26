@@ -1,6 +1,12 @@
 /**
  * BUDGY — Central AI Button (Premium edition)
  *
+ * @i18n-technical-file
+ *
+ * ⚠ Only string in this file is the `accessibilityLabel="Assistant IA Budgy"`
+ * for VoiceOver. Brand name + role descriptor; multi-locale a11y labels
+ * will be routed through i18n key `aiButton.a11yLabel` in v3.9.1.
+ *
  * Inspiration: Apple Intelligence · ChatGPT iOS · Revolut Ultra · Arc · Nothing OS.
  *
  * Visuals:

@@ -1,6 +1,16 @@
 /**
  * BUDGY — Error sanitizer
  *
+ * @i18n-technical-file
+ *
+ * ⚠ Central mapping table from raw technical errors → HumanizedError.
+ * Titles and messages here are FR-CH defaults used when no `t` translator
+ * is available at call time (background jobs, module init). All UI-visible
+ * error displays go through `t('errors.<code>')` in the calling components.
+ *
+ * Full multi-locale error codes are planned as a follow-up (v3.9.1): each
+ * pattern will emit a stable `code` field and the UI will translate.
+ *
  * Converts ANY raw technical error (litellm.BadRequestError, OpenAIException,
  * HTTP 404, JSON Parse error, unsupported image format, gpt-4o-mini, etc.)
  * into a clean human message suitable for display in the app.

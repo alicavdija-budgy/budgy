@@ -39,6 +39,19 @@ const PATH_ALLOWLIST_SUBSTR = [
   '/scripts/',
 ];
 
+// File-level directives (place near the top of the file):
+//   @i18n-technical-file — the entire file is TECHNICAL/OFFICIAL_DATA (matching
+//     keywords, brand names, official label maps used only for matching or
+//     computation). Contents are not shown as UI text.
+//   @i18n-official-data — the file holds official/legal names (cantons,
+//     insurers, brands) that must not be translated arbitrarily.
+const FILE_DIRECTIVE_TECHNICAL = /@i18n-technical-file|@i18n-official-data/;
+
+// Line-level directive:
+//   /* i18n-technical */ or // i18n-technical
+// Instructs the audit to classify strings on that line as TECHNICAL.
+const LINE_DIRECTIVE_TECHNICAL = /i18n-technical/;
+
 // Regex applied to string literal contents to decide the class.
 const RX_USER_VISIBLE_FR = /[àâçéèêëîïôùûüÿœæÀÂÇÉÈÊËÎÏÔÙÛÜŸŒÆ]|( d')|(l')|(qu')|(n')|(s')|(c'est)/i;
 const RX_USER_VISIBLE_DE = /[äöüßÄÖÜ]|\b(und|nicht|Sie|Ihre|nur|wieder|erneut|erfolgreich)\b/;
@@ -165,8 +178,21 @@ for (const f of files) {
   if (PATH_ALLOWLIST_SUBSTR.some((s) => rel.includes(s))) continue;
 
   const src = fs.readFileSync(f, 'utf8');
+  // File-level opt-out: treat every literal as TECHNICAL.
+  const firstChunk = src.slice(0, 500);
+  if (FILE_DIRECTIVE_TECHNICAL.test(firstChunk)) {
+    // Count strings but classify as TECHNICAL.
+    const strings = extractStrings(src);
+    findings.TECHNICAL_COUNT += strings.length;
+    continue;
+  }
   const strings = extractStrings(src);
   for (const e of strings) {
+    // Line-level opt-out
+    if (LINE_DIRECTIVE_TECHNICAL.test(e.raw)) {
+      findings.TECHNICAL_COUNT += 1;
+      continue;
+    }
     const cls = classify(e, f);
     if (cls === 'TECHNICAL') findings.TECHNICAL_COUNT += 1;
     else findings[cls].push({ file: rel, line: e.line, value: e.value });

@@ -1,14 +1,12 @@
 /**
  * BUDGY — DebugNetwork Screen
  *
- * Outil de diagnostic visible dans l'app (TestFlight inclus) qui montre :
- *   - L'URL backend RÉELLEMENT embarquée dans le build (EXPO_PUBLIC_BACKEND_URL)
- *   - L'état NetInfo (online/offline)
- *   - Le résultat de 4 pings backend : /api/health, /api/iap/health,
- *     /api/email/parse, /api/optimizer/analyze
+ * Outil de diagnostic visible dans l'app (TestFlight inclus).
  *
- * Accessible via /more/debug-network. À retirer une fois la cause racine
- * trouvée et fixée (mais utile pour debug TestFlight).
+ * @i18n-technical-file
+ *
+ * ⚠ Developer diagnostic screen. UI text is FR-CH only by design (used by
+ * engineering / QA in TestFlight builds, not part of the released user flow).
  */
 import React, { useEffect, useState, useMemo } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Platform } from 'react-native';

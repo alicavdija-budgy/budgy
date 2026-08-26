@@ -2,6 +2,11 @@
  * BUDGY - Premium / Subscription State
  * Tracks trial, subscription, usage triggers and PER-FEATURE quotas for paywall.
  *
+ * @i18n-technical-file
+ *
+ * ⚠ Contains only dev-only console messages, stable ProFeature identifiers
+ * and internal enum values. No UI text.
+ *
  * Free Preview Mode:
  *   Chaque feature Pro a un quota gratuit d'essai (ex: 1 facture, 2 charges récurrentes,
  *   1 simulation fiscale, 1 analyse IA...). Une fois dépassé, le paywall s'active.

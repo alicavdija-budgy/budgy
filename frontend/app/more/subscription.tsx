@@ -98,7 +98,7 @@ export default function SubscriptionScreen() {
           <View style={styles.statusRow}>
             <Ionicons name="lock-closed" size={22} color={theme.textTertiary} />
             <View style={{ flex: 1 }}>
-              <Text style={styles.statusTitle}>{t('more.freePlan') || 'Plan gratuit'}</Text>
+              <Text style={styles.statusTitle}>{t('more.freePlan') || t('subscriptionScreen.freePlan')}</Text>
               <Text style={styles.statusSub}>{t('more.tryProSub') || t('subscriptionUi.tryPro')}</Text>
             </View>
           </View>
@@ -114,13 +114,13 @@ export default function SubscriptionScreen() {
             <Text style={[styles.statusTitle, { color: theme.success }]}>
               {isTrial
                 ? (t('more.trialActive') || t('subscriptionUi.trialActive'))
-                : `Budgy Pro ${plan === 'annual' ? '· ' + (t('more.yearly') || 'Annuel') : plan === 'monthly' ? '· ' + (t('more.monthly') || 'Mensuel') : ''}`}
+                : `Budgy Pro ${plan === 'annual' ? '· ' + (t('more.yearly') || t('subscriptionScreen.yearly')) : plan === 'monthly' ? '· ' + (t('more.monthly') || t('subscriptionScreen.monthly')) : ''}`}
             </Text>
             <Text style={styles.statusSub}>
               {isTrial && trialEndsAt
                 ? `${t('more.trialEnds') || t('subscriptionUi.endsOn')} ${new Date(trialEndsAt).toLocaleDateString()}`
                 : subscriptionStartedAt
-                ? `${t('more.activeSince') || 'Depuis le'} ${new Date(subscriptionStartedAt).toLocaleDateString()}`
+                ? `${t('more.activeSince') || t('subscriptionScreen.activeSince')} ${new Date(subscriptionStartedAt).toLocaleDateString()}`
                 : (t('more.thanks') || t('subscriptionUi.thanks'))}
             </Text>
           </View>
@@ -135,7 +135,7 @@ export default function SubscriptionScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>Abonnement</Text>
+        <Text style={styles.title}>{t('subscriptionScreen.title')}</Text>
         <View style={{ width: 40 }} />
       </View>
 

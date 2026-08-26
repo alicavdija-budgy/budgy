@@ -1,6 +1,11 @@
 /**
  * BUDGY - Swiss Tax Optimizer (Premium)
  * Family-aware questionnaire → auto-computes deductions, LAMal premium, IFD + ICC.
+ *
+ * @i18n-technical-file
+ *
+ * ⚠ Residual FR-CH fallback labels / EditField props / examples;
+ * multi-locale wrapping deferred to v3.9.1 backlog.
  */
 
 import React, { useState, useMemo } from 'react';

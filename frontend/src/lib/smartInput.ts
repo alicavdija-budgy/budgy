@@ -1,6 +1,11 @@
 /**
  * BUDGY — Smart Input Service
  *
+ * @i18n-technical-file
+ *
+ * ⚠ Returned `.error` strings are stable identifiers. UI translates them
+ * at display time.
+ *
  * Single entry point for adding any operation (expense, income, subscription)
  * regardless of the source channel. The UI (Ajout Intelligent / dictation /
  * Siri Shortcut / Android App Action) just sends text + source; this service

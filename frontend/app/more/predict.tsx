@@ -100,7 +100,7 @@ export default function PredictScreen() {
     categoryPredictions.forEach(p => {
       if (p.budget > 0 && p.predicted > p.budget) {
         result.push({
-          id: `a_${p.category}`, title: t('predict.budgetExceeded', { category: getCategoryName(p.category) }),
+          id: `a_${p.category}`, title: t('predict.budgetExceeded', { category: getCategoryName(p.category, t) }),
           message: t('predict.predictedVsBudget', { predicted: formatNumber(p.predicted), budget: formatNumber(p.budget) }),
           severity: p.predicted > p.budget * 1.3 ? 'high' : 'medium', icon: 'warning',
         });
@@ -125,7 +125,7 @@ Taux d'épargne: ${savingsRate.toFixed(0)}%
 Canton: ${preferences.canton}
 Devise: ${preferences.currency}
 Objectifs d'épargne: ${useStore.getState().savingsGoals.length}
-Budgets: ${budgets.map(b => `${getCategoryName(b.category)}: ${formatNumber(b.limit)}`).join(', ')}
+Budgets: ${budgets.map(b => `${getCategoryName(b.category, t)}: ${formatNumber(b.limit)}`).join(', ')}
 Alertes actives: ${alerts.length}`;
   }, [monthlyIncome, totalExpenses, totalPredicted, savingsRate, preferences, budgets, alerts]);
 
@@ -146,7 +146,7 @@ Alertes actives: ${alerts.length}`;
           financial_context: financialContext,
         }),
       }, { timeoutMs: 35000, retries: 1, silent: true });
-      if (!r.ok || !r.data?.response) throw new Error('API error');
+      if (!r.ok || !r.data?.response) throw new Error('API error'); // i18n-technical
       addChatMessage({
         id: `msg_${Date.now()}_ai`,
         role: 'assistant',
@@ -422,7 +422,7 @@ Alertes actives: ${alerts.length}`;
                       <View style={styles.predHead}>
                         <CategoryIcon category={p.category} size="sm" />
                         <View style={{ flex: 1 }}>
-                          <Text style={styles.predName}>{getCategoryName(p.category)}</Text>
+                          <Text style={styles.predName}>{getCategoryName(p.category, t)}</Text>
                           <Text style={styles.predConfidence}>{t('predict.confidence', { n: Math.round((p.confidence || 0.5) * 100) })}</Text>
                         </View>
                         <View style={{ alignItems: 'flex-end' }}>

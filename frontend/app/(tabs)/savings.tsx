@@ -26,6 +26,8 @@ import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src
 import { useTheme } from '../../src/hooks/useTheme';
 import type { ThemePalette } from '../../src/constants/palettes';
 import { useStore } from '../../src/stores/useStore';
+import { usePremiumStore } from '../../src/stores/usePremiumStore';
+import { usePaywall } from '../../src/hooks/usePaywall';
 import { Card, Button, ProgressBar, EmptyState } from '../../src/components/ui';
 import { formatNumber, pct } from '../../src/utils/calculations';
 import { SAVINGS_TEMPLATES } from '../../src/data/swiss-data';
@@ -52,6 +54,13 @@ export default function SavingsScreen() {
   } = useStore();
   const { t, lang } = useTranslation();
   const dateLocale = DATE_LOCALES[lang] || 'fr-CH';
+
+  // v3.9.0 Build 74 — Free tier limits (1 goal). Additional goals require Pro.
+  const isPro = usePremiumStore(
+    (s) => s.isPro || (s.trialEndsAt !== null && s.trialEndsAt > Date.now())
+  );
+  const paywall = usePaywall();
+  const canCreateGoal = isPro || savingsGoals.length < 1;
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState<string | null>(null);
@@ -190,9 +199,18 @@ export default function SavingsScreen() {
         <Text style={styles.title}>🎯 {t('savings.title')}</Text>
         <TouchableOpacity
           style={styles.addButton}
-          onPress={() => setShowAddModal(true)}
+          onPress={() => {
+            // v3.9.0 Build 74 — Free tier: 1 goal max. Second click → paywall.
+            if (!canCreateGoal) {
+              paywall.open('manual');
+              return;
+            }
+            setShowAddModal(true);
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={t('savingsV2.createGoal')}
         >
-          <Ionicons name="add" size={24} color={theme.text} />
+          <Ionicons name={canCreateGoal ? 'add' : 'lock-closed'} size={22} color={theme.text} />
         </TouchableOpacity>
       </View>
 
@@ -226,12 +244,70 @@ export default function SavingsScreen() {
 
         {/* Goals List */}
         {savingsGoals.length === 0 ? (
-          <EmptyState
-            icon="flag-outline"
-            title={t('savings.noGoals')}
-            subtitle={t('savings.startNow')}
-            action={{ label: t('common.create'), onPress: () => setShowAddModal(true) }}
-          />
+          <View style={{ paddingVertical: Spacing.xl }}>
+            <View style={{ alignItems: 'center', paddingHorizontal: Spacing.lg }}>
+              <View style={{
+                width: 96, height: 96, borderRadius: 48,
+                backgroundColor: `${theme.primary}18`,
+                alignItems: 'center', justifyContent: 'center',
+                marginBottom: Spacing.lg,
+              }}>
+                <Ionicons name="flag" size={44} color={theme.primary} />
+              </View>
+              <Text style={{
+                color: theme.text, fontSize: FontSizes.xl,
+                fontWeight: FontWeights.bold, textAlign: 'center',
+                letterSpacing: -0.3,
+              }}>
+                {t('savingsV2.heroQuestion')}
+              </Text>
+              <Text style={{
+                color: theme.textSecondary, fontSize: FontSizes.md,
+                textAlign: 'center', marginTop: Spacing.sm,
+                lineHeight: 20, maxWidth: 320,
+              }}>
+                {t('savingsV2.heroSub')}
+              </Text>
+              <Button
+                title={t('savingsV2.createGoal')}
+                onPress={() => setShowAddModal(true)}
+                size="lg"
+                style={{ marginTop: Spacing.xl, minWidth: 220 }}
+              />
+              <Text style={{
+                color: theme.textTertiary, fontSize: FontSizes.sm,
+                marginTop: Spacing.xl, fontWeight: FontWeights.semibold,
+              }}>
+                {t('savingsV2.someIdeas')}
+              </Text>
+              <View style={{
+                flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center',
+                gap: 8, marginTop: Spacing.sm,
+              }}>
+                {SAVINGS_TEMPLATES.slice(0, 6).map((tpl, i) => (
+                  <TouchableOpacity
+                    key={i}
+                    onPress={() => { handleSelectTemplate(tpl); setShowAddModal(true); }}
+                    style={{
+                      flexDirection: 'row', alignItems: 'center', gap: 6,
+                      backgroundColor: theme.card,
+                      borderWidth: 1, borderColor: theme.cardBorder,
+                      paddingHorizontal: 12, paddingVertical: 8,
+                      borderRadius: 999,
+                    }}
+                  >
+                    <Text style={{ fontSize: 16 }}>{tpl.emoji}</Text>
+                    <Text style={{
+                      color: theme.text, fontSize: 12,
+                      fontWeight: FontWeights.semibold,
+                    }}>
+                      {tpl.title}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </View>
         ) : (
           savingsGoals.map((goal) => {
             const progress = pct(goal.saved, goal.target);
@@ -342,6 +418,47 @@ export default function SavingsScreen() {
               </TouchableOpacity>
             );
           })
+        )}
+
+        {/* v3.9.0 Build 74 — Free tier upsell (1 goal reached) */}
+        {!isPro && savingsGoals.length >= 1 && (
+          <TouchableOpacity
+            activeOpacity={0.92}
+            onPress={() => paywall.open('manual')}
+            style={{
+              marginTop: Spacing.md,
+              backgroundColor: theme.card,
+              borderWidth: 1, borderColor: theme.cardBorder,
+              borderRadius: BorderRadius.xl,
+              padding: Spacing.lg,
+              flexDirection: 'row', alignItems: 'center', gap: Spacing.md,
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={t('savingsV2.unlockGoals')}
+          >
+            <View style={{
+              width: 44, height: 44, borderRadius: 12,
+              backgroundColor: `${theme.secondary}20`,
+              alignItems: 'center', justifyContent: 'center',
+            }}>
+              <Ionicons name="lock-closed" size={20} color={theme.secondary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{
+                color: theme.text, fontSize: FontSizes.md,
+                fontWeight: FontWeights.bold, letterSpacing: -0.2,
+              }}>
+                {t('savingsV2.free1GoalLimit')}
+              </Text>
+              <Text style={{
+                color: theme.textSecondary, fontSize: FontSizes.xs,
+                marginTop: 3, lineHeight: 16,
+              }}>
+                {t('savingsV2.free1GoalLimitBody')}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={theme.textTertiary} />
+          </TouchableOpacity>
         )}
 
         <View style={{ height: 100 }} />

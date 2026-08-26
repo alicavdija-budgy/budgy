@@ -36,16 +36,22 @@ export type ProFeature =
 //         tax (Optimisation fiscale avancée), export (PDF Premium / Excel).
 //   FREE : invoices, recurring, analytics, investments (qu'on libère
 //          intégralement), cloud (reste Pro / activé via session Supabase).
+// v3.9.0 Build 74 — APPLE 2.1(b) STRICT.
+// NO Pro route may be unlocked via a "free preview" counter. A Pro feature
+// is Pro. Period. This map now ONLY reflects the *tier* boundary: 0 for Pro,
+// unlimited for genuinely-free features. The `canUseFeature()` selector
+// keeps behaving the same — it just never returns true for Pro features
+// unless the user has a real subscription confirmed by the backend.
 export const FREE_QUOTAS: Record<ProFeature, number> = {
-  ai: 1,          // 1 analyse IA gratuite (Économiseur + Radar)
-  tax: 1,         // 1 simulation fiscale avancée gratuite
-  export: 1,      // 1 export PDF/Excel gratuit
-  cloud: 0,       // Cloud sync = Pro
-  invoices: 999999,    // FREE — illimité (Factures dans le plan gratuit)
-  recurring: 999999,   // FREE — illimité (Charges récurrentes gratuites)
-  analytics: 999999,   // FREE — illimité (Analytics basiques)
-  predict: 1,     // 1 prédiction Coach gratuite
-  investments: 999999, // FREE — illimité (vue Investissements)
+  ai: 0,               // PRO — no free preview
+  tax: 0,              // PRO — no free preview
+  export: 0,           // PRO — no free preview
+  cloud: 0,            // PRO
+  predict: 0,          // PRO — no free preview
+  invoices: 999999,    // FREE
+  recurring: 999999,   // FREE
+  analytics: 999999,   // FREE
+  investments: 0,      // PRO (portfolio tracker) — no free preview
 };
 
 export interface PremiumState {

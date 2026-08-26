@@ -124,10 +124,10 @@ export default function AuthScreen() {
           });
 
           if (error) {
-            if (error.message.includes('confirmation email') || error.message.includes('sending')) { // i18n-technical
-              loginAsLocalUser(`local_${Date.now()}`, emailClean, name.trim(), false, true);
-              return;
-            }
+            // v3.9.0 Build 74 — NO silent local fallback in production.
+            // A confirmation-email failure MUST surface a real error.
+            // Otherwise the user thinks he has a cloud account when he doesn't
+            // — meaning no receipt validation, no cross-device restore, no IAP.
             throw error;
           }
 
@@ -158,9 +158,15 @@ export default function AuthScreen() {
           // Pull cloud data in background to hydrate local store
           triggerCloudSync(false);
         }
-      } else {
+      } else if (__DEV__) {
+        // v3.9.0 Build 74 — DEV-ONLY offline fallback. Never runs in production
+        // TestFlight/App Store builds. Ensures cloud misconfiguration surfaces
+        // instead of silently creating a fake local account.
         await new Promise(r => setTimeout(r, 400));
         loginAsLocalUser(`local_${Date.now()}`, emailClean, mode === 'register' ? name.trim() : emailClean.split('@')[0], false, mode === 'register');
+      } else {
+        // Production: cloud unavailable → surface the real error, stay logged out.
+        throw new Error(t('auth.cloudUnavailable'));
       }
     } catch (error: any) {
       const h = humanizeAuthError(error, mode === 'register' ? 'signUp' : 'signIn');

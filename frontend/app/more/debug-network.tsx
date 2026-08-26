@@ -18,6 +18,7 @@ import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
 import Constants from 'expo-constants';
 import { useTheme } from '../../src/hooks/useTheme';
+import { useTranslation } from '../../src/hooks/useTranslation';
 import type { ThemePalette } from '../../src/constants/palettes';
 import { BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
 import { Button, Card } from '../../src/components/ui';
@@ -58,6 +59,7 @@ const PROBES_INITIAL: Probe[] = [
 ];
 
 export default function DebugNetworkScreen() {
+  const { t } = useTranslation();
   const theme = useTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
@@ -148,7 +150,7 @@ export default function DebugNetworkScreen() {
           <Row label="Expo SDK" value={String(sdkVersion)} />
           <Row label="Channel" value={String(releaseChannel)} />
           <Row label="Platform" value={`${Platform.OS} ${String(Platform.Version)}`} />
-          <Row label="Backend URL" value={baseUrl || '(non configuré)'} mono />
+          <Row label="Backend URL" value={baseUrl || t('smallUi.debugNotConfigured')} mono />
           <Row label="Network type" value={netState.type || '?'} />
           <Row label="Online" value={isOnline ? 'oui' : 'non'} highlight={!isOnline} />
           <Row label="Reachable" value={isReachable === false ? 'non' : isReachable ? 'oui' : '?'} highlight={isReachable === false} />

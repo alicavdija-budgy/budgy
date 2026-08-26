@@ -84,11 +84,11 @@ export default function SettingsScreen() {
               }
 
               // 4. Visual confirmation + redirect to login
-              Alert.alert('✓ Déconnexion réussie', '', [
+              Alert.alert(t('smallUi.settingsSignOutOk'), '', [
                 { text: 'OK', onPress: () => router.replace('/auth' as any) },
               ]);
             } catch (e: any) {
-              Alert.alert('Erreur', e?.message || 'Impossible de se déconnecter. Réessayez.');
+              Alert.alert('Erreur', e?.message || t('smallUi.settingsSignOutErr'));
             } finally {
               setLoggingOut(false);
             }
@@ -244,7 +244,7 @@ export default function SettingsScreen() {
             <Ionicons name="log-out-outline" size={20} color={theme.warning} />
           )}
           <Text style={styles.logoutText}>
-            {loggingOut ? 'Déconnexion...' : t('settings.logout')}
+            {loggingOut ? t('smallUi.settingsSigningOut') : t('settings.logout')}
           </Text>
         </TouchableOpacity>
 

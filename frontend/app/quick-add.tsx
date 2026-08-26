@@ -37,6 +37,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { BorderRadius, Spacing, FontSizes, FontWeights } from '../src/constants/theme';
 import { useTheme } from '../src/hooks/useTheme';
+import { useTranslation } from '../src/hooks/useTranslation';
 import type { ThemePalette } from '../src/constants/palettes';
 import { smartInput, type SmartInputSource, type SmartInputResult } from '../src/lib/smartInput';
 import { useStore } from '../src/stores/useStore';
@@ -58,6 +59,7 @@ const SOURCE_ICONS: Record<SmartInputSource, keyof typeof Ionicons.glyphMap> = {
 };
 
 export default function QuickAddScreen() {
+  const { t } = useTranslation();
   const theme = useTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
@@ -266,7 +268,7 @@ export default function QuickAddScreen() {
           <View style={styles.errBox}>
             <Ionicons name="alert-circle" size={20} color={theme.error} />
             <Text style={styles.errTxt}>
-              {result.error || 'Impossible de comprendre cette phrase. Réessayez avec un montant et un commerçant.'}
+              {result.error || t('quickAdd.parseError')}
             </Text>
           </View>
         )}
@@ -276,8 +278,8 @@ export default function QuickAddScreen() {
           <>
             <Text style={[styles.label, { marginTop: Spacing.xl }]}>Exemples</Text>
             {[
-              'Ajoute 25 CHF chez Migros',
-              'Salaire 3200 CHF',
+              t('quickAdd.example1'),
+              t('quickAdd.example2'),
               'Netflix 18 CHF',
               'Facture Swisscom 89 CHF',
               'Assurance voiture 95 CHF',

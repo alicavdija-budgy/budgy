@@ -20,6 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
+import { useTranslation } from '../../src/hooks/useTranslation';
 import { useTheme } from '../../src/hooks/useTheme';
 import type { ThemePalette } from '../../src/constants/palettes';
 import { useStore } from '../../src/stores/useStore';
@@ -36,6 +37,7 @@ const HOUSEHOLD_OPTIONS = [
 ] as const;
 
 export default function LamalSubsidyScreen() {
+  const { t } = useTranslation();
   const theme = useTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
@@ -194,7 +196,7 @@ export default function LamalSubsidyScreen() {
         </View>
 
         <Button
-          title={loading ? 'Calcul...' : 'Calculer mes subsides'}
+          title={loading ? 'Calcul...' : t('lamalUi.calcSubsidies')}
           onPress={calculate}
           loading={loading}
           icon="calculator"
@@ -223,7 +225,7 @@ export default function LamalSubsidyScreen() {
                 color={theme.text}
               />
               <Text style={styles.resultTitle}>
-                {result.eligible ? 'Vous êtes éligible !' : 'Pas de subside attendu'}
+                {result.eligible ? t('lamalUi.eligible') : t('lamalUi.notEligible')}
               </Text>
               {result.eligible && (
                 <>

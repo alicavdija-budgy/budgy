@@ -58,7 +58,7 @@ export default function RecurringScreen() {
     { key: 'title', label: 'Titre', type: 'text', icon: 'document-text-outline', placeholder: 'Netflix', required: true },
     { key: 'amount', label: 'Montant (CHF)', type: 'number', icon: 'cash-outline', placeholder: '17.90', required: true },
     { key: 'category', label: t('recurringUi.category'), type: 'select', options: EXPENSE_CATEGORIES.slice(0, 12).map((c) => ({ value: c.id, label: c.name, color: c.color })) },
-    { key: 'dayOfMonth', label: 'Jour du mois (1-31)', type: 'number', icon: 'calendar-outline', placeholder: '8' },
+    { key: 'dayOfMonth', label: t('recurringUi.dayOfMonth'), type: 'number', icon: 'calendar-outline', placeholder: '8' },
     { key: 'active', label: 'Actif', type: 'switch' },
   ], []);
   const handleEditRecSubmit = (values: Record<string, any>) => {
@@ -112,7 +112,7 @@ export default function RecurringScreen() {
 
   const handleAdd = () => {
     if (!newRec.title || !newRec.amount) {
-      Alert.alert('Erreur', 'Veuillez remplir tous les champs');
+      Alert.alert('Erreur', t('recurringUi.errAllFields'));
       return;
     }
     addRecurringExpense({
@@ -176,8 +176,8 @@ export default function RecurringScreen() {
         {recurringExpenses.length === 0 ? (
           <EmptyState
             icon="refresh-outline"
-            title="Aucun récurrent"
-            subtitle="Ajoutez vos abonnements et charges fixes"
+            title={t("recurringUi.emptyTitle")}
+            subtitle={t("recurringUi.emptySub")}
             action={{ label: 'Ajouter', onPress: () => setShowAddModal(true) }}
           />
         ) : (
@@ -328,7 +328,7 @@ export default function RecurringScreen() {
           setActionsCtx(null);
           if (id) deleteRecurringExpense(id);
         }}
-        deleteConfirmTitle="Supprimer cet abonnement ?"
+        deleteConfirmTitle={t("recurringUi.deleteConfirmTitle")}
       />
       <EntityEditModal
         visible={!!editingRec}

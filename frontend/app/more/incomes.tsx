@@ -112,12 +112,12 @@ export default function IncomesScreen() {
 
   const handleAdd = () => {
     if (!form.title.trim() || !form.amount) {
-      Alert.alert('Champs manquants', 'Veuillez remplir le titre et le montant');
+      Alert.alert('Champs manquants', t('incomesUi.errTitleMissing'));
       return;
     }
     const amt = parseFloat(form.amount.replace(',', '.'));
     if (isNaN(amt) || amt <= 0) {
-      Alert.alert('Montant invalide', 'Saisissez un montant valide');
+      Alert.alert('Montant invalide', t('incomesUi.errInvalidAmount'));
       return;
     }
     addIncome({
@@ -204,8 +204,8 @@ export default function IncomesScreen() {
             </View>
             <EmptyState
               icon="wallet-outline"
-              title="Aucun revenu ajouté"
-              subtitle="Ajoutez votre salaire pour débloquer le budget en temps réel"
+              title={t("incomesUi.emptyTitle")}
+              subtitle={t("incomesUi.emptySub")}
               action={{ label: '+ Ajouter mon salaire', onPress: () => setShowModal(true) }}
             />
           </Animated.View>
@@ -384,7 +384,7 @@ export default function IncomesScreen() {
               )}
 
               <Button
-                title="Ajouter le revenu"
+                title={t("incomesUi.addCta")}
                 onPress={handleAdd}
                 fullWidth size="lg"
                 style={{ marginTop: Spacing.xl }}
@@ -408,12 +408,12 @@ export default function IncomesScreen() {
           setActionsCtx(null);
           if (id) deleteIncome(id);
         }}
-        deleteConfirmTitle="Supprimer ce revenu ?"
+        deleteConfirmTitle={t("incomesUi.deleteConfirmTitle")}
       />
       <EntityEditModal
         visible={!!editingIncome}
         onClose={() => setEditingIncomeId(null)}
-        title="Modifier le revenu"
+        title={t("incomesUi.editTitle")}
         fields={INCOME_EDIT_FIELDS}
         initialValues={{
           title: editingIncome?.title || '',

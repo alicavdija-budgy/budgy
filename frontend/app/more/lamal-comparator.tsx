@@ -84,10 +84,10 @@ export default function LamalComparatorScreen() {
   const anonInsurer = (idx: number) => `Assureur ${String.fromCharCode(65 + (idx % 26))}`;
 
   const tabs: { key: Tab; label: string; icon: string }[] = [
-    { key: 'compare', label: 'Comparer mes primes', icon: 'list' },
-    { key: 'subsidy', label: 'Vérifier mon droit aux subsides', icon: 'heart' },
-    { key: 'optimize', label: 'Optimiser ma franchise', icon: 'flash' },
-    { key: 'ranking', label: 'Économie potentielle', icon: 'trending-down' },
+    { key: 'compare', label: t('lamalUi.comparePremiums'), icon: 'list' },
+    { key: 'subsidy', label: t('lamalUi.checkSubsidies'), icon: 'heart' },
+    { key: 'optimize', label: t('lamalUi.optimizeDeductible'), icon: 'flash' },
+    { key: 'ranking', label: t('lamalUi.potentialSavings'), icon: 'trending-down' },
   ];
 
   return (

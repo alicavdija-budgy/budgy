@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
+import { useTranslation } from '../../src/hooks/useTranslation';
 import { useTheme } from '../../src/hooks/useTheme';
 import type { ThemePalette } from '../../src/constants/palettes';
 import { useStore } from '../../src/stores/useStore';
@@ -32,6 +33,7 @@ import { EntityActionsSheet, type EntityActionsContext } from '../../src/compone
 import { EntityEditModal, type EditField } from '../../src/components/EntityEditModal';
 
 export default function BudgetsScreen() {
+  const { t } = useTranslation();
   const theme = useTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
@@ -50,8 +52,8 @@ export default function BudgetsScreen() {
     [editingBudgetId, budgets]
   );
   const BUDGET_EDIT_FIELDS: EditField[] = useMemo(() => [
-    { key: 'category', label: 'Catégorie', type: 'select', options: EXPENSE_CATEGORIES.slice(0, 12).map((c) => ({ value: c.id, label: c.name, color: c.color })) },
-    { key: 'limit', label: 'Limite mensuelle (CHF)', type: 'number', icon: 'cash-outline', placeholder: '500', required: true },
+    { key: 'category', label: t('budgetsUi.category'), type: 'select', options: EXPENSE_CATEGORIES.slice(0, 12).map((c) => ({ value: c.id, label: c.name, color: c.color })) },
+    { key: 'limit', label: t('budgetsUi.monthLimit'), type: 'number', icon: 'cash-outline', placeholder: '500', required: true },
   ], []);
   const handleEditBudgetSubmit = (values: Record<string, any>) => {
     if (!editingBudget) return;
@@ -101,7 +103,7 @@ export default function BudgetsScreen() {
 
   const handleAddBudget = () => {
     if (!newBudget.limit) {
-      Alert.alert('Erreur', 'Veuillez entrer un montant');
+      Alert.alert('Erreur', t('budgetsUi.errAmount'));
       return;
     }
 
@@ -192,7 +194,7 @@ export default function BudgetsScreen() {
             icon="wallet-outline"
             title="Aucun budget"
             subtitle="Créez des enveloppes pour contrôler vos dépenses"
-            action={{ label: 'Créer', onPress: () => setShowAddModal(true) }}
+            action={{ label: t('budgetsUi.createBtn'), onPress: () => setShowAddModal(true) }}
           />
         ) : (
           budgetData.map((b) => (

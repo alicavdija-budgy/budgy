@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../src/constants/theme';
+import { useTranslation } from '../src/hooks/useTranslation';
 import { useStore } from '../src/stores/useStore';
 import { verifyPin, requestBiometric } from '../src/services/security';
 
@@ -25,6 +26,7 @@ export default function LockScreen({
 }: {
   onUnlock: (decoy: boolean) => void;
 }) {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { security } = useStore();
   const [pin, setPin] = useState('');
@@ -33,7 +35,7 @@ export default function LockScreen({
 
   const tryBiometric = async () => {
     if (!security.biometricEnabled) return;
-    const ok = await requestBiometric('Déverrouiller Budgy');
+    const ok = await requestBiometric(t('smallUi.lockUnlock'));
     if (ok) onUnlock(false);
   };
 

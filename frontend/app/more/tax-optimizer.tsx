@@ -14,6 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
+import { useTranslation } from '../../src/hooks/useTranslation';
 import { useTheme } from '../../src/hooks/useTheme';
 import type { ThemePalette } from '../../src/constants/palettes';
 import { Card, Button } from '../../src/components/ui';
@@ -43,6 +44,7 @@ interface Result {
 }
 
 export default function TaxOptimizerScreen() {
+  const { t } = useTranslation();
   const theme = useTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
@@ -84,15 +86,15 @@ export default function TaxOptimizerScreen() {
       }, { timeoutMs: 35000, retries: 1, silent: true });
       if (!r.ok || !r.data) {
         const msg = r.offline
-          ? 'Mode hors-ligne. Connectez-vous à Internet pour simuler vos impôts.'
-          : 'Le simulateur est momentanément indisponible. Réessayez dans quelques instants.';
+          ? t('taxUi.offlineTitle')
+          : t('taxUi.servDown');
         Alert.alert('Calcul impossible', msg);
         return;
       }
       setResult(r.data);
       setStep('result');
     } catch (e: any) {
-      Alert.alert('Erreur', humanErrorMessage(e, 'Impossible de calculer'));
+      Alert.alert('Erreur', humanErrorMessage(e, t('taxUi.calcError')));
     } finally {
       setLoading(false);
     }
@@ -151,9 +153,9 @@ export default function TaxOptimizerScreen() {
               <Text style={styles.sectionTitle}>3. Situation familiale</Text>
               <View style={styles.segmentRow}>
                 {[
-                  { k: 'single', lbl: '👤 Célibataire' },
-                  { k: 'married', lbl: '💍 Marié(e)' },
-                  { k: 'partnership', lbl: '🏳️‍🌈 Pacsé(e)' },
+                  { k: 'single', lbl: t('taxUi.single') },
+                  { k: 'married', lbl: t('taxUi.married') },
+                  { k: 'partnership', lbl: t('taxUi.pacs') },
                 ].map((s) => (
                   <TouchableOpacity
                     key={s.k}

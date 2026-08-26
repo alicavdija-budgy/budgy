@@ -21,6 +21,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
+import { useTranslation } from '../../src/hooks/useTranslation';
 import { useTheme } from '../../src/hooks/useTheme';
 import type { ThemePalette } from '../../src/constants/palettes';
 import { useStore } from '../../src/stores/useStore';
@@ -89,6 +90,7 @@ function simplifySettlements(
 }
 
 export default function GroupDetailScreen() {
+  const { t } = useTranslation();
   const theme = useTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
@@ -147,11 +149,11 @@ export default function GroupDetailScreen() {
   const handleAddExpense = () => {
     const amt = parseFloat(amount.replace(',', '.'));
     if (!title.trim() || !amt || amt <= 0) {
-      Alert.alert('Erreur', 'Saisissez titre et montant valides.');
+      Alert.alert('Erreur', t('groupDetail.errValidTitleAmount'));
       return;
     }
     if (involved.length === 0) {
-      Alert.alert('Erreur', 'Sélectionnez au moins une personne concernée.');
+      Alert.alert('Erreur', t('groupDetail.errPickMember'));
       return;
     }
     const shares: Record<string, number> = {};
@@ -172,7 +174,7 @@ export default function GroupDetailScreen() {
   };
 
   const onDeleteGroup = () => {
-    Alert.alert('Supprimer le groupe ?', 'Toutes les dépenses seront supprimées.', [
+    Alert.alert(t('groupDetail.deleteConfirmTitle'), t('groupDetail.deleteConfirmBody'), [
       { text: 'Annuler', style: 'cancel' },
       {
         text: 'Supprimer', style: 'destructive', onPress: () => {

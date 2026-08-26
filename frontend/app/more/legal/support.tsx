@@ -112,11 +112,11 @@ export default function SupportScreen() {
         </TouchableOpacity>
 
         <View style={styles.faq}>
-          <Text style={styles.faqTitle}>Questions fréquentes</Text>
-          <FAQ q="Comment fonctionne le mode hors ligne ?" a="Budgy enregistre vos données localement dans un stockage chiffré (MMKV). Elles se synchronisent avec vos autres appareils dès votre prochaine connexion." />
-          <FAQ q="Puis-je annuler mon abonnement à tout moment ?" a="Oui. L'abonnement s'annule directement depuis les Réglages iCloud/Apple ID > Abonnements. Aucun engagement." />
-          <FAQ q="Mes données bancaires sont-elles connectées ?" a="Non. Budgy fonctionne 100 % en saisie manuelle ou par import de documents. Aucune connexion bancaire externe. Vos identifiants ne sont jamais demandés." />
-          <FAQ q="L'IA est-elle privée ?" a="Les analyses IA sont anonymisées avant envoi et jamais liées à votre identité. Vous pouvez désactiver l'IA dans les Réglages." />
+          <Text style={styles.faqTitle}>{t('legalSupport.title') || 'Questions fréquentes'}</Text>
+          <FAQ q={t('legalSupport.q1')} a={t('legalSupport.a1')} />
+          <FAQ q={t('legalSupport.q2')} a={t('legalSupport.a2')} />
+          <FAQ q={t('legalSupport.q3')} a={t('legalSupport.a3')} />
+          <FAQ q={t('legalSupport.q4')} a={t('legalSupport.a4')} />
         </View>
       </ScrollView>
     </View>

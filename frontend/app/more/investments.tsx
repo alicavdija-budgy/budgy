@@ -176,7 +176,7 @@ function AddSheet({
           <Text style={styles.fieldLabel}>{t('invest.fieldName')}</Text>
           <TextInput
             value={name} onChangeText={setName}
-            placeholder={type === 'crypto' ? 'Bitcoin' : type === 'cash' ? 'Compte épargne' : 'Vanguard S&P 500'}
+            placeholder={type === 'crypto' ? 'Bitcoin' : type === 'cash' ? t('investmentsUi.savingsAccount') : 'Vanguard S&P 500'}
             placeholderTextColor={theme.textTertiary} style={styles.input}
           />
         </View>
@@ -257,7 +257,7 @@ export default function InvestmentsScreen() {
       { value: 'crypto', label: 'Crypto', color: TYPE_META.crypto.color },
       { value: 'cash', label: 'Cash', color: TYPE_META.cash.color },
     ] },
-    { key: 'quantity', label: 'Quantité', type: 'number', icon: 'layers-outline', placeholder: '10', required: true },
+    { key: 'quantity', label: t('investmentsUi.quantity'), type: 'number', icon: 'layers-outline', placeholder: '10', required: true },
     { key: 'avgPrice', label: 'Prix moyen d\'achat (CHF)', type: 'number', icon: 'cash-outline', placeholder: '100', required: true },
     { key: 'manualPrice', label: 'Prix actuel manuel (optionnel)', type: 'number', icon: 'pulse-outline', placeholder: 'auto' },
   ], []);
@@ -389,9 +389,9 @@ export default function InvestmentsScreen() {
             <View style={styles.tutoRow}>
               {[
                 { emoji: '📈', label: 'ETF', sub: 'Vanguard, iShares' },
-                { emoji: '🏢', label: 'Actions', sub: 'Nestlé, Roche, UBS' },
-                { emoji: '₿', label: 'Crypto', sub: 'BTC, ETH, SOL' },
-                { emoji: '🥇', label: 'Métaux', sub: 'Or, argent' },
+                { emoji: '🏢', label: 'Actions', sub: t('investmentsUi.stocksPh') },
+                { emoji: '₿', label: 'Crypto', sub: t('investmentsUi.cryptoPh') },
+                { emoji: '🥇', label: t('investmentsUi.metalsPh'), sub: 'Or, argent' },
               ].map((x) => (
                 <View key={x.label} style={styles.tutoCard}>
                   <Text style={styles.tutoEmoji}>{x.emoji}</Text>
@@ -557,12 +557,12 @@ export default function InvestmentsScreen() {
           setActionsCtx(null);
           if (id) removeAsset(id);
         }}
-        deleteConfirmTitle="Supprimer cet actif ?"
+        deleteConfirmTitle={t('investmentsUi.deleteConfirmTitle')}
       />
       <EntityEditModal
         visible={!!editingAsset}
         onClose={() => setEditingAssetId(null)}
-        title="Modifier l'investissement"
+        title={t('investmentsUi.editTitle')}
         fields={ASSET_EDIT_FIELDS}
         initialValues={{
           name: editingAsset?.name || '',

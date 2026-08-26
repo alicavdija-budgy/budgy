@@ -20,6 +20,7 @@ import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../src/hooks/useTheme';
+import { useTranslation } from '../../src/hooks/useTranslation';
 import type { ThemePalette } from '../../src/constants/palettes';
 import { BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
 import { useStore } from '../../src/stores/useStore';
@@ -30,6 +31,7 @@ import { normalizeImageForUpload } from '../../src/lib/imageUpload';
 import type { ReceiptType } from '../../src/types';
 
 export default function AddReceiptManualScreen() {
+  const { t } = useTranslation();
   const theme = useTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
@@ -63,7 +65,7 @@ export default function AddReceiptManualScreen() {
         if (norm.base64) setPhotoDataUrl(`data:image/jpeg;base64,${norm.base64}`);
       }
     } catch (e: any) {
-      Alert.alert('Erreur', e?.message || 'Impossible de joindre la photo.');
+      Alert.alert('Erreur', e?.message || t('receiptManual.photoFail'));
     }
   };
 
@@ -88,11 +90,11 @@ export default function AddReceiptManualScreen() {
     const merchantTrim = merchant.trim();
     const amt = parseFloat(amount.replace(',', '.'));
     if (!merchantTrim) {
-      Alert.alert('Commerce manquant', 'Saisissez le nom du commerce.');
+      Alert.alert('Commerce manquant', t('receiptManual.errMerchant'));
       return;
     }
     if (!amt || isNaN(amt) || amt <= 0) {
-      Alert.alert('Montant invalide', 'Saisissez un montant valide (> 0).');
+      Alert.alert('Montant invalide', t('receiptManual.errAmount'));
       return;
     }
     setSaving(true);
@@ -307,7 +309,7 @@ export default function AddReceiptManualScreen() {
       {/* Sticky CTA */}
       <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
         <Button
-          title={saving ? 'Enregistrement...' : type === 'ticket' ? 'Enregistrer le ticket' : 'Enregistrer le remboursement'}
+          title={saving ? 'Enregistrement...' : type === 'ticket' ? t('receiptManual.saveTicket') : t('receiptManual.saveReimb')}
           onPress={handleSave}
           loading={saving}
           fullWidth

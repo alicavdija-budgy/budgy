@@ -12,9 +12,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { BorderRadius, Spacing, FontSizes, FontWeights } from '../../../src/constants/theme';
 import { useTheme } from '../../../src/hooks/useTheme';
+import { useTranslation } from '../../../src/hooks/useTranslation';
 import { Card } from '../../../src/components/ui';
 
 export default function LegalScreen() {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const C = useTheme();
@@ -22,8 +24,8 @@ export default function LegalScreen() {
   const items = [
     {
       id: 'privacy',
-      title: 'Politique de confidentialité',
-      subtitle: 'Comment vos données sont utilisées et protégées',
+      title: t('legalIndex.privacyTitle'),
+      subtitle: t('legalIndex.privacySub'),
       icon: 'shield-checkmark' as const,
       color: C.success,
       route: '/more/legal/privacy',
@@ -38,23 +40,23 @@ export default function LegalScreen() {
     },
     {
       id: 'disclaimer',
-      title: 'Avertissement & responsabilité',
-      subtitle: 'Limitation de responsabilité et usage',
+      title: t('legalIndex.disclaimerTitle'),
+      subtitle: t('legalIndex.disclaimerSub'),
       icon: 'warning' as const,
       color: C.warning,
       route: '/more/legal/disclaimer',
     },
     {
       id: 'sources',
-      title: 'Sources des données',
-      subtitle: 'Priminfo, OFSP, AFC, BNS — références',
+      title: t('legalIndex.sourcesTitle'),
+      subtitle: t('legalIndex.sourcesSub'),
       icon: 'library' as const,
       color: C.cyan,
       route: '/more/legal/sources',
     },
     {
       id: 'licenses',
-      title: 'Licences open source',
+      title: t('legalIndex.licensesTitle'),
       subtitle: 'Bibliothèques utilisées dans l’application',
       icon: 'code-slash' as const,
       color: C.purple,

@@ -24,6 +24,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
 import { useTheme } from '../../src/hooks/useTheme';
+import { useTranslation } from '../../src/hooks/useTranslation';
+import { DATE_LOCALES } from '../../src/i18n/translations';
 import type { ThemePalette } from '../../src/constants/palettes';
 import { useStore } from '../../src/stores/useStore';
 import type { Income, RecurringExpense, Contract, Invoice } from '../../src/types';
@@ -96,7 +98,7 @@ function projectIncomes(items: Income[], from: Date, to: Date): CalendarEvent[] 
           source: 'income',
           date: new Date(cursor),
           title: i.title,
-          subtitle: 'Revenu récurrent',
+          subtitle: t('calendarUi.recurringIncome'),
           amount: i.amount,
           type: 'income',
           category: i.category,
@@ -151,7 +153,7 @@ function projectContracts(items: Contract[], from: Date, to: Date): CalendarEven
       source: 'contract',
       date: d,
       title: c.title,
-      subtitle: c.issuer ? `Échéance · ${c.issuer}` : 'Échéance contrat',
+      subtitle: c.issuer ? `Échéance · ${c.issuer}` : t('calendarUi.contractDeadline'),
       amount: c.amount,
       type: 'expense',
       category: c.category,
@@ -174,7 +176,7 @@ function projectInvoices(items: Invoice[], from: Date, to: Date): CalendarEvent[
       source: 'invoice',
       date: d,
       title: inv.title,
-      subtitle: inv.issuer ? `Facture · ${inv.issuer}` : 'Facture en attente',
+      subtitle: inv.issuer ? `Facture · ${inv.issuer}` : t('calendarUi.pendingInvoice'),
       amount: inv.amount,
       type: 'expense',
       category: inv.category,
@@ -187,6 +189,8 @@ function projectInvoices(items: Invoice[], from: Date, to: Date): CalendarEvent[
 }
 
 // ─────────── Screen ───────────
+  const { t, lang } = useTranslation();
+  const locale = DATE_LOCALES[lang];
 export default function FinancialCalendarScreen() {
   const theme = useTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
@@ -243,9 +247,9 @@ export default function FinancialCalendarScreen() {
         dueDate: dayKey(e.date),
         amount: e.amount,
       });
-      Alert.alert('Rappels activés ✓', 'Vous serez notifié(e) J-7, J-1 et le jour J.');
+      Alert.alert(t('calendarUi.remindersOnTitle'), t('calendarUi.remindersOnBody'));
     } catch (err: any) {
-      Alert.alert('Erreur', err?.message || 'Impossible d\'activer les rappels.');
+      Alert.alert('Erreur', err?.message || t('calendarUi.remindersError'));
     }
   };
 
@@ -306,7 +310,7 @@ export default function FinancialCalendarScreen() {
               activeOpacity={0.85}
             >
               <Text style={[styles.segmentTxt, horizon === h && styles.segmentTxtActive]}>
-                {h === 'week' ? 'Semaine' : h === 'month' ? 'Mois' : 'Année'}
+                {h === 'week' ? 'Semaine' : h === 'month' ? 'Mois' : t('calendarUi.year')}
               </Text>
             </TouchableOpacity>
           ))}
@@ -327,7 +331,7 @@ export default function FinancialCalendarScreen() {
                 color={filter === f ? theme.primary : theme.textSecondary}
               />
               <Text style={[styles.filterTxt, filter === f && styles.filterTxtActive]}>
-                {f === 'all' ? 'Tout' : f === 'income' ? 'Revenus' : 'Dépenses'}
+                {f === 'all' ? 'Tout' : f === 'income' ? 'Revenus' : t('calendarUi.expenses')}
               </Text>
             </TouchableOpacity>
           ))}

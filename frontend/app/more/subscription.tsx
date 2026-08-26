@@ -99,7 +99,7 @@ export default function SubscriptionScreen() {
             <Ionicons name="lock-closed" size={22} color={theme.textTertiary} />
             <View style={{ flex: 1 }}>
               <Text style={styles.statusTitle}>{t('more.freePlan') || 'Plan gratuit'}</Text>
-              <Text style={styles.statusSub}>{t('more.tryProSub') || 'Essayez Budgy Pro 7 jours, sans engagement.'}</Text>
+              <Text style={styles.statusSub}>{t('more.tryProSub') || t('subscriptionUi.tryPro')}</Text>
             </View>
           </View>
         </Card>
@@ -113,15 +113,15 @@ export default function SubscriptionScreen() {
           <View style={{ flex: 1 }}>
             <Text style={[styles.statusTitle, { color: theme.success }]}>
               {isTrial
-                ? (t('more.trialActive') || 'Essai gratuit actif')
+                ? (t('more.trialActive') || t('subscriptionUi.trialActive'))
                 : `Budgy Pro ${plan === 'annual' ? '· ' + (t('more.yearly') || 'Annuel') : plan === 'monthly' ? '· ' + (t('more.monthly') || 'Mensuel') : ''}`}
             </Text>
             <Text style={styles.statusSub}>
               {isTrial && trialEndsAt
-                ? `${t('more.trialEnds') || 'Se termine le'} ${new Date(trialEndsAt).toLocaleDateString()}`
+                ? `${t('more.trialEnds') || t('subscriptionUi.endsOn')} ${new Date(trialEndsAt).toLocaleDateString()}`
                 : subscriptionStartedAt
                 ? `${t('more.activeSince') || 'Depuis le'} ${new Date(subscriptionStartedAt).toLocaleDateString()}`
-                : (t('more.thanks') || 'Merci pour votre confiance !')}
+                : (t('more.thanks') || t('subscriptionUi.thanks'))}
             </Text>
           </View>
         </View>
@@ -154,13 +154,13 @@ export default function SubscriptionScreen() {
             <Ionicons name="sparkles" size={44} color="#0E1530" />
           </LinearGradient>
           <Text style={styles.heroTitle}>Budgy Pro</Text>
-          <Text style={styles.heroSubtitle}>{t('more.heroSub') || 'Tout débloquer · 4.90 CHF/mois ou 39.90/an'}</Text>
+          <Text style={styles.heroSubtitle}>{t('more.heroSub') || t('subscriptionUi.unlockAll')}</Text>
         </View>
 
         {renderStatus()}
 
         <Card style={styles.featuresCard}>
-          <Text style={styles.featuresTitle}>{t('more.featuresTitle') || 'Ce que Pro inclut'}</Text>
+          <Text style={styles.featuresTitle}>{t('more.featuresTitle') || t('subscriptionUi.whatsIncluded')}</Text>
           {PRO_FEATURE_KEYS.map((k, idx) => (
             <View key={idx} style={styles.featureRow}>
               <Ionicons name="checkmark-circle" size={18} color={theme.success} />
@@ -178,7 +178,7 @@ export default function SubscriptionScreen() {
               style={styles.subscribeBtn}
             >
               <Ionicons name="rocket" size={18} color="#0E1530" />
-              <Text style={styles.subscribeText}>{t('more.discoverPlans') || 'Découvrir les offres'}</Text>
+              <Text style={styles.subscribeText}>{t('more.discoverPlans') || t('subscriptionUi.discoverOffers')}</Text>
             </LinearGradient>
           </TouchableOpacity>
         )}

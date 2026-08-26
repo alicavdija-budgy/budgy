@@ -1,0 +1,40 @@
+{
+  "summary": "Backend-only validation of Budgy v3.9.0 locale-aware endpoints (Coach IA, Email Parse, Scanner OCR). Ran full pytest suite: 144 passed, 1 skipped, 0 failed (10.35s). Smoke tested /api/health (200, version 3.9.0) and /api/iap/health (200, expected shape) via public EXPO_PUBLIC_BACKEND_URL. Zero regression on pre-existing 126 tests; all 18 new locale tests in test_v390_locale_endpoints.py PASS. Locale directive per language (fr/en/de/it) verified in system prompt; chat_sessions namespaced by (user_id, locale, session_id); DATA INTEGRITY - NEVER TRANSLATE clauses present in OCR + Email prompts; stable UPPER_SNAKE_CASE error codes (OCR_FAILED, IMAGE_TOO_SMALL, INVALID_BASE64, LLM_NOT_CONFIGURED, EMAIL_PARSE_FAILED) confirmed in code. Apple/IAP endpoints untouched.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_v390_locale_endpoints.py",
+    "/app/backend/tests/test_v390_security.py",
+    "/app/backend/tests/test_security_v3_9_0.py",
+    "/app/backend/tests/test_v390_p3_hardening.py",
+    "/app/backend/tests/test_v390_jwks_negcache_fix.py",
+    "/app/backend/tests/test_guardian_api.py",
+    "/app/test_reports/pytest/pytest_results_v390.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py exceeds 1500 lines - consider modularization in a future refactor (non-blocking for v3.9.0).",
+    "build_system_prompt(locale) correctly appends LANGUAGE DIRECTIVE to SYSTEM_PROMPT_BASE (server.py:249-252).",
+    "chat_sessions keyed by namespaced tuple (user_id, locale, session_id) prevents cross-locale bleed (server.py:301).",
+    "DATA INTEGRITY - NEVER TRANSLATE clauses present in both OCR (server.py:765) and Email (server.py:956) prompts.",
+    "All error paths return stable UPPER_SNAKE_CASE codes (LLM_NOT_CONFIGURED, IMAGE_TOO_SMALL, INVALID_BASE64, OCR_FAILED, EMAIL_PARSE_FAILED)."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "100%",
+    "frontend": "not tested (out of scope per request)"
+  },
+  "seed_data_creation": "None - locale tests use FakeChat monkeypatch and auth dependency override.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "v3.9.0 backend locale-aware endpoints fully green. Full suite: 144 passed, 1 skipped in 10.35s. Public health endpoints verified via curl at https://chf-guardian-wallet.preview.emergentagent.com. Frontend validation was performed statically by main agent (npm run audit:i18n / check:i18n / tsc --noEmit) and was explicitly out of scope for this run.",
+  "rca_of_issue": "N/A - no issues found. v3.9.0 locale rollout is production-ready from the backend perspective."
+}

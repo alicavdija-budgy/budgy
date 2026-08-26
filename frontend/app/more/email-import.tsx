@@ -34,6 +34,7 @@ import type { Contract } from '../../src/types';
 import { Card, Button } from '../../src/components/ui';
 import { humanizeError } from '../../src/lib/errorSanitizer';
 import { useTranslation } from '../../src/hooks/useTranslation';
+import { getApiLocale } from '../../src/utils/apiLocale';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://api.budgy.ch';
 
@@ -46,7 +47,7 @@ export default function ImportInvoiceScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ mode?: string }>();
   const { addInvoice, addContract } = useStore();
-  const { t } = useTranslation();
+  const { t, lang } = useTranslation();
 
   const initialMode: 'invoice' | 'contract' | null = useMemo(() => {
     const m = String(params.mode || '').toLowerCase();
@@ -71,8 +72,8 @@ export default function ImportInvoiceScreen() {
     try {
       const r = await safeFetchJson<any>(`${BACKEND_URL}/api/email/parse`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content, subject }),
+        headers: { 'Content-Type': 'application/json', 'Accept-Language': getApiLocale(lang) },
+        body: JSON.stringify({ content, subject, locale: getApiLocale(lang) }),
       }, { timeoutMs: 20000, retries: 1, silent: true });
       const data = r.data || { success: false, error: r.error };
       if (data.success) setResult({ ...data, _source: 'email' });
@@ -122,8 +123,8 @@ export default function ImportInvoiceScreen() {
       console.log('[email-import] OCR call, b64 length:', base64.length, 'mime:', mime);
       const r = await safeFetchJson<any>(`${BACKEND_URL}/api/scanner/ocr`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image_base64: `data:${mime};base64,${base64}` }),
+        headers: { 'Content-Type': 'application/json', 'Accept-Language': getApiLocale(lang) },
+        body: JSON.stringify({ image_base64: `data:${mime};base64,${base64}`, locale: getApiLocale(lang) }),
       }, { timeoutMs: 25000, retries: 1, silent: true });
       const data = r.data || { success: false, error: r.error };
       if (data.success) {

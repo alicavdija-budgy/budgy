@@ -202,32 +202,66 @@ async def config_status():
 # ──────────────────────────────────────────────────
 # COACH IA - GPT-4o-mini powered financial advisor
 # ──────────────────────────────────────────────────
-SYSTEM_PROMPT = """Tu es le Coach IA de Budgy, un conseiller financier suisse expert.
+SYSTEM_PROMPT_BASE = """You are the Budgy AI Coach, an expert Swiss financial advisor.
 
-RÈGLES STRICTES:
-- Réponds TOUJOURS en français
-- Sois concis (max 3-4 phrases)
-- Utilise des emojis pour rendre la conversation vivante
-- Donne des conseils pratiques et actionnables basés sur les données financières de l'utilisateur
-- Cite des chiffres spécifiques quand possible
-- Connais le système suisse: AVS, LPP, 3ème pilier, LAMal, IFD, ICC
-- Recommande priminfo.admin.ch pour les comparaisons LAMal
-- Ne fais JAMAIS de publicité pour un assureur spécifique
+STRICT RULES:
+- Be concise (max 3-4 sentences)
+- Use emojis to make the conversation lively
+- Give practical, actionable advice based on the user's financial data
+- Cite specific figures when possible
+- Master the Swiss system: AVS/AHV, LPP/BVG, 3rd pillar, LAMal/KVG, IFD, ICC
+- Recommend priminfo.admin.ch for LAMal comparisons
+- NEVER promote a specific insurer
 
 EXPERTISE:
-- Optimisation fiscale suisse (3ème pilier max CHF 7'258, rachats LPP)
-- Budget 50/30/20 adapté au coût de vie suisse
-- Épargne et investissement (ETF, pilier 3a, FIRE)
-- Gestion des dettes et prêts
-- Comparaison LAMal et optimisation franchise
-- Prévoyance retraite et planification financière
+- Swiss tax optimization (3rd pillar cap CHF 7'258, LPP buy-backs)
+- 50/30/20 budget adapted to the Swiss cost of living
+- Savings and investing (ETF, pillar 3a, FIRE)
+- Debt management and loans
+- LAMal comparison and franchise optimization
+- Retirement planning and financial planning
+
+DATA INTEGRITY:
+- NEVER translate proper nouns, merchant names, IBAN, references or raw amounts.
+- Merchant names, cantonal codes, currencies remain verbatim.
 """
+
+LANGUAGE_DIRECTIVES: dict[str, str] = {
+    "fr": (
+        "The user's selected Budgy locale is: fr. "
+        "Réponds ENTIÈREMENT en français, sauf si l'utilisateur demande explicitement une autre langue."
+    ),
+    "en": (
+        "The user's selected Budgy locale is: en. "
+        "Respond ENTIRELY in English unless the user explicitly asks for another language."
+    ),
+    "de": (
+        "The user's selected Budgy locale is: de. "
+        "Antworte VOLLSTÄNDIG auf Deutsch, es sei denn, der Benutzer bittet ausdrücklich um eine andere Sprache."
+    ),
+    "it": (
+        "The user's selected Budgy locale is: it. "
+        "Rispondi INTERAMENTE in italiano, salvo se l'utente chiede esplicitamente un'altra lingua."
+    ),
+}
+
+
+def build_system_prompt(locale: str) -> str:
+    """Build the coach system prompt with the requested locale directive."""
+    directive = LANGUAGE_DIRECTIVES.get(locale, LANGUAGE_DIRECTIVES["fr"])
+    return f"{SYSTEM_PROMPT_BASE}\n\nLANGUAGE DIRECTIVE:\n{directive}"
+
+
+# Legacy alias kept for existing tests referencing SYSTEM_PROMPT (French)
+SYSTEM_PROMPT = build_system_prompt("fr")
 
 
 class ChatRequest(BaseModel):
     session_id: str
     message: str
     financial_context: Optional[str] = None
+    # v3.9.0 — Selected Budgy locale (fr/en/de/it). Frontend is the source of truth.
+    locale: Optional[str] = "fr"
 
 
 class ChatResponse(BaseModel):
@@ -247,11 +281,16 @@ async def coach_chat(
 
     try:
         # v3.9.0 SECURITY: namespace session id by user to prevent context leaks
-        namespaced_session = f"{user.user_id}:{req.session_id}"
+        # v3.9.0 i18n: also namespace by locale so the coach never mixes languages
+        # within the same conversation window.
+        req_locale = (req.locale or "fr").lower()[:2]
+        if req_locale not in ("fr", "en", "de", "it"):
+            req_locale = "fr"
+        namespaced_session = f"{user.user_id}:{req_locale}:{req.session_id}"
         if namespaced_session not in chat_sessions:
-            system_msg = SYSTEM_PROMPT
+            system_msg = build_system_prompt(req_locale)
             if req.financial_context:
-                system_msg += f"\n\nCONTEXTE FINANCIER DE L'UTILISATEUR:\n{req.financial_context}"
+                system_msg += f"\n\nUSER FINANCIAL CONTEXT:\n{req.financial_context}"
 
             chat = LlmChat(
                 api_key=EMERGENT_LLM_KEY,
@@ -648,6 +687,10 @@ async def get_alerts(
 class OCRRequest(BaseModel):
     image_base64: str  # raw base64, no data: prefix
     mime_type: str = "image/jpeg"
+    # v3.9.0 — Budgy-selected locale (fr/en/de/it). Only affects LLM-facing UX
+    # explanations (e.g. category hints, ambiguity notes). Extracted DATA
+    # (merchant, amount, date, IBAN, raw_text) is preserved verbatim.
+    locale: Optional[str] = "fr"
 
 
 class OCRResponse(BaseModel):
@@ -717,7 +760,19 @@ RÈGLES MONTANT / CATÉGORIE :
   CFF/SBB/Uber = "transport", pharmacie/médecin = "sante",
   assurance = "assurance", loyer/bail = "loyer".
 
-Réponds UNIQUEMENT avec le JSON, sans markdown, sans commentaire."""
+Réponds UNIQUEMENT avec le JSON, sans markdown, sans commentaire.
+
+DATA INTEGRITY — NEVER TRANSLATE:
+- merchant, raw_text, currency and items[] MUST be preserved verbatim from the
+  document. Do NOT translate 'Migros', 'Coop', 'Rechnung', 'Facture Swisscom',
+  amounts, IBAN or references. These are user data, not UX copy.
+"""
+
+
+def _ocr_error_code(locale: str, code: str) -> str:
+    """Return a stable machine-readable error code. Frontend maps it to i18n."""
+    _ = locale  # reserved for future locale-aware LLM error strings
+    return code
 
 
 def parse_json_loose(text: str) -> dict:
@@ -746,7 +801,7 @@ async def scanner_ocr(
 ):
     """Extract structured data from a receipt image using vision LLM."""
     if not EMERGENT_LLM_KEY:
-        return OCRResponse(success=False, error="LLM key not configured")
+        return OCRResponse(success=False, error="LLM_NOT_CONFIGURED")
 
     # v3.9.0 SECURITY: enforce max image size (~ 8 MB base64)
     if len(req.image_base64 or "") > 12_000_000:
@@ -763,9 +818,9 @@ async def scanner_ocr(
     try:
         raw = base64.b64decode(img_b64[:200] + "=" * (-len(img_b64[:200]) % 4))
         if len(raw) < 50:
-            return OCRResponse(success=False, error="Image trop petite")
+            return OCRResponse(success=False, error="IMAGE_TOO_SMALL")
     except Exception:
-        return OCRResponse(success=False, error="Base64 invalide")
+        return OCRResponse(success=False, error="INVALID_BASE64")
 
     try:
         session_id = f"ocr_{uuid.uuid4().hex[:12]}"
@@ -785,7 +840,7 @@ async def scanner_ocr(
 
         data = parse_json_loose(response)
         if not data:
-            return OCRResponse(success=False, raw_text=response, error="JSON invalide retourné par le modèle")
+            return OCRResponse(success=False, raw_text=response, error="INVALID_JSON")
 
         # Coerce values
         amt_raw = data.get("total_amount")
@@ -817,7 +872,7 @@ async def scanner_ocr(
         )
     except Exception as e:
         log.exception("[ocr] failed: %s", e)
-        return OCRResponse(success=False, error="ocr_failed")
+        return OCRResponse(success=False, error="OCR_FAILED")
 
 
 # ──────────────────────────────────────────────────
@@ -827,6 +882,10 @@ class EmailParseRequest(BaseModel):
     content: str             # raw email text/html or pasted invoice
     subject: Optional[str] = ""
     from_addr: Optional[str] = ""
+    # v3.9.0 — Budgy-selected locale (fr/en/de/it). Extracted DATA (merchant,
+    # amount, currency, IBAN, reference, title) is preserved verbatim from the
+    # source document. Locale only affects downstream user-facing messages.
+    locale: Optional[str] = "fr"
 
 
 class EmailParseResponse(BaseModel):
@@ -892,7 +951,14 @@ INTERDICTIONS STRICTES :
   (ex: facture Swisscom d'un mois) — seulement pour le contrat signé.
 - Si tu hésites, retourne "unknown" et baisse confidence < 0.6.
 
-Mets null pour les champs manquants. Pas de markdown, pas de commentaire."""
+Mets null pour les champs manquants. Pas de markdown, pas de commentaire.
+
+DATA INTEGRITY — NEVER TRANSLATE:
+- title, issuer, iban, reference, qr_reference and currency MUST be preserved
+  VERBATIM from the source document. Do NOT translate 'Rechnung Nr. 123',
+  'Facture Swisscom', 'Migros', merchant names, addresses or amounts.
+- These are user data, not UX copy.
+"""
 
 
 @app.post("/api/email/parse", response_model=EmailParseResponse)
@@ -904,7 +970,7 @@ async def email_parse(
 ):
     """Parse an email/invoice text into a structured invoice."""
     if not EMERGENT_LLM_KEY:
-        return EmailParseResponse(success=False, error="LLM key not configured")
+        return EmailParseResponse(success=False, error="LLM_NOT_CONFIGURED")
 
     try:
         session_id = f"email_{uuid.uuid4().hex[:12]}"
@@ -923,7 +989,7 @@ async def email_parse(
         response = await chat.send_message(UserMessage(text=body))
         data = parse_json_loose(response)
         if not data:
-            return EmailParseResponse(success=False, error="JSON invalide")
+            return EmailParseResponse(success=False, error="INVALID_JSON")
 
         try:
             amt = float(data.get("amount")) if data.get("amount") is not None else None
@@ -957,7 +1023,7 @@ async def email_parse(
         )
     except Exception as e:
         log.exception("[email_parse] failed: %s", e)
-        return EmailParseResponse(success=False, error="email_parse_failed")
+        return EmailParseResponse(success=False, error="EMAIL_PARSE_FAILED")
 
 
 # ──────────────────────────────────────────────────

@@ -32,6 +32,7 @@ import { apiFetchJson } from '../../src/lib/network';
 import { CategoryIcon, getCategoryName } from '../../src/components/CategoryIcon';
 import { formatNumber, pct, predictMonthlyExpenses } from '../../src/utils/calculations';
 import { useTranslation } from '../../src/hooks/useTranslation';
+import { getApiLocale } from '../../src/utils/apiLocale';
 
 type Tab = 'predictions' | 'alerts' | 'cashflow' | 'insights' | 'coach';
 
@@ -43,7 +44,7 @@ export default function PredictScreen() {
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { t } = useTranslation();
+  const { t, lang } = useTranslation();
   const { preferences, transactions, incomes, budgets, chatHistory, addChatMessage, user } = useStore();
   const scrollRef = useRef<ScrollView>(null);
 
@@ -139,11 +140,12 @@ Alertes actives: ${alerts.length}`;
     try {
       const r = await apiFetchJson<{ response: string }>('/api/coach/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Accept-Language': getApiLocale(lang) },
         body: JSON.stringify({
           session_id: `budgy_${user?.id || 'anon'}`,
           message: userMsg,
           financial_context: financialContext,
+          locale: getApiLocale(lang),
         }),
       }, { timeoutMs: 35000, retries: 1, silent: true });
       if (!r.ok || !r.data?.response) throw new Error('API error'); // i18n-technical

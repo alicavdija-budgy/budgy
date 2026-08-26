@@ -39,6 +39,7 @@ import { Button } from '../src/components/ui';
 import { EXPENSE_CATEGORIES, PAYMENT_METHODS } from '../src/data/swiss-data';
 import { CategoryIcon } from '../src/components/CategoryIcon';
 import { useTranslation } from '../src/hooks/useTranslation';
+import { getApiLocale } from '../src/utils/apiLocale';
 import type { ReceiptType } from '../src/types';
 import { safeFetchJson, apiFetchJson } from '../src/lib/network';
 import { normalizeImageForUpload } from '../src/lib/imageUpload';
@@ -60,7 +61,7 @@ export default function ScannerModal() {
     params.forceType === 'ticket' || params.forceType === 'invoice' || params.forceType === 'contract' || params.forceType === 'remboursement'
       ? (params.forceType as ReceiptType)
       : null;
-  const { t } = useTranslation();
+  const { t, lang } = useTranslation();
   const { addTransaction, addReceipt, addInvoice } = useStore();
 
   const [permission, requestPermission] = useCameraPermissions();
@@ -122,8 +123,8 @@ export default function ScannerModal() {
       `/api/scanner/ocr`,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image_base64: b64, mime_type: 'image/jpeg' }),
+        headers: { 'Content-Type': 'application/json', 'Accept-Language': getApiLocale(lang) },
+        body: JSON.stringify({ image_base64: b64, mime_type: 'image/jpeg', locale: getApiLocale(lang) }),
       },
       { timeoutMs: 25000, retries: 1, silent: true }
     );

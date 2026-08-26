@@ -14,6 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../src/constants/theme';
 import { useStore } from '../src/stores/useStore';
+import { usePremiumStore } from '../src/stores/usePremiumStore';
 import { Button } from '../src/components/ui';
 import { supabase, isSupabaseConfigured } from '../src/lib/supabase';
 import { humanizeAuthError } from '../src/lib/authErrors';
@@ -65,15 +66,22 @@ export default function AuthScreen() {
   // Auth is handled exclusively by Supabase below — no client-side bypass.
 
   const loginAsLocalUser = (userId: string, emailAddr: string, userName: string, isPro: boolean, isNewAccount: boolean) => {
+    // v3.9.0 Build 74 — CRITICAL: reset any stale Premium entitlement from a
+    // previous account/demo BEFORE anchoring the new user. `isPro` passed in
+    // is intentionally ignored for Premium — the backend IAP sync is the
+    // ONLY source of truth. A new account MUST start FREE.
+    const premium = usePremiumStore.getState();
+    premium.resetForUserChange();
+    premium.attachToUser(userId);
+
     setUser({
       id: userId,
       email: emailAddr,
       name: userName,
       createdAt: Date.now(),
-      isPro,
+      isPro: false, // never seed Pro from client — backend IAP sync decides
     });
-    if (isPro) setPro(true);
-    
+
     if (isNewAccount) {
       // New account: go through onboarding, NO seed data
       setPreferences({ onboarded: false });
@@ -172,6 +180,14 @@ export default function AuthScreen() {
   const handleDemoMode = async () => {
     setLoading(true);
     try {
+      // v3.9.0 Build 74 — Demo mode is Pro locally, but strictly SCOPED to
+      // the synthetic 'demo_user' owner. Any real login afterwards will
+      // detect the userId mismatch and immediately wipe the demo Pro.
+      const premium = usePremiumStore.getState();
+      premium.resetForUserChange();
+      premium.attachToUser('demo_user');
+      premium.purchase('annual'); // demo grant — never leaks (owner=demo_user)
+
       setUser({ id: 'demo_user', email: 'demo@guardian.app', name: t('authExtra.demoName'), createdAt: Date.now(), isPro: true, isDemo: true });
       setPro(true);
       // Phase 1: no seed data — demo mode also starts empty

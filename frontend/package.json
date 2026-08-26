@@ -13,7 +13,9 @@
     "start:prod": "npm run build && npm run serve",
     "lint": "expo lint",
     "check:i18n": "node scripts/check-i18n.mjs",
-    "audit:i18n": "node scripts/audit-i18n.mjs"
+    "audit:i18n": "node scripts/audit-i18n.mjs",
+    "test:premium": "node scripts/test-premium.mjs",
+    "test:ai-optimizer": "node scripts/test-ai-optimizer.mjs"
   },
   "dependencies": {
     "@babel/runtime": "^7.20.6",

@@ -80,6 +80,68 @@ function loadIap() {
   }
 }
 
+// ── Diagnostics ──────────────────────────────────────────────────────────────
+/**
+ * v3.9.0 Build 74 — StoreKit diagnostics.
+ *
+ * Machine-readable snapshot of the last IAP init/fetch cycle. Used by
+ * TestFlight builds to distinguish between:
+ *   - STOREKIT_UNAVAILABLE   → native module not linked (Expo Go / web)
+ *   - INIT_FAILED            → initConnection threw / returned false
+ *   - PRODUCTS_NOT_FOUND     → connection OK, StoreKit returned 0 SKUs
+ *                              (App Store Connect not yet configured or
+ *                               "Cleared for Sale" is OFF)
+ *   - NETWORK_ERROR          → getSubscriptions threw (transient)
+ * NEVER contains PII. Product IDs, platform, error code/message only.
+ */
+export type IapDiagnosticCode =
+  | 'OK'
+  | 'STOREKIT_UNAVAILABLE'
+  | 'INIT_FAILED'
+  | 'PRODUCTS_NOT_FOUND'
+  | 'NETWORK_ERROR';
+
+export interface IapDiagnostics {
+  code: IapDiagnosticCode;
+  platform: string;
+  isIapAvailable: boolean;
+  initConnected: boolean | null;
+  requestedSkus: string[];
+  returnedProductIds: string[];
+  errorCode: string | null;
+  errorMessage: string | null;
+  at: number;
+}
+
+let LAST_DIAGNOSTICS: IapDiagnostics = {
+  code: 'STOREKIT_UNAVAILABLE',
+  platform: Platform.OS,
+  isIapAvailable: false,
+  initConnected: null,
+  requestedSkus: [...IAP_SKUS],
+  returnedProductIds: [],
+  errorCode: null,
+  errorMessage: null,
+  at: Date.now(),
+};
+
+export function getIapDiagnostics(): IapDiagnostics {
+  return LAST_DIAGNOSTICS;
+}
+
+function setDiagnostics(patch: Partial<IapDiagnostics>) {
+  LAST_DIAGNOSTICS = {
+    ...LAST_DIAGNOSTICS,
+    ...patch,
+    at: Date.now(),
+  };
+  if (__DEV__ || process.env.EXPO_PUBLIC_IAP_DIAGNOSTICS === '1') {
+    // TestFlight diagnostic logs — machine-readable, no PII.
+    // eslint-disable-next-line no-console
+    console.log('[IAP-DIAG]', JSON.stringify(LAST_DIAGNOSTICS));
+  }
+}
+
 export function isIapAvailable(): boolean {
   loadIap();
   return !!RNIap && Platform.OS !== 'web';
@@ -93,19 +155,52 @@ export function getIapUnavailableReason(): string | null {
 // ── Lifecycle ────────────────────────────────────────────────────────────────
 export async function initIap(): Promise<boolean> {
   loadIap();
-  if (!isIapAvailable()) return false;
+  if (!isIapAvailable()) {
+    setDiagnostics({
+      code: 'STOREKIT_UNAVAILABLE',
+      isIapAvailable: false,
+      initConnected: false,
+      returnedProductIds: [],
+      errorCode: 'not_available',
+      errorMessage: RNIapError || 'IAP native module not available',
+    });
+    return false;
+  }
   try {
     if (typeof RNIap?.initConnection !== 'function') {
       console.warn('[IAP] initConnection unavailable on this build');
+      setDiagnostics({
+        code: 'INIT_FAILED',
+        isIapAvailable: true,
+        initConnected: false,
+        returnedProductIds: [],
+        errorCode: 'init_missing',
+        errorMessage: 'initConnection is not a function on this build',
+      });
       return false;
     }
     await RNIap.initConnection();
     if (Platform.OS === 'android' && typeof RNIap?.flushFailedPurchasesCachedAsPendingAndroid === 'function') {
       await RNIap.flushFailedPurchasesCachedAsPendingAndroid();
     }
+    setDiagnostics({
+      code: 'OK',
+      isIapAvailable: true,
+      initConnected: true,
+      errorCode: null,
+      errorMessage: null,
+    });
     return true;
-  } catch (e) {
+  } catch (e: any) {
     console.warn('[IAP] initConnection failed', e);
+    setDiagnostics({
+      code: 'INIT_FAILED',
+      isIapAvailable: true,
+      initConnected: false,
+      returnedProductIds: [],
+      errorCode: e?.code || 'init_failed',
+      errorMessage: e?.message || String(e),
+    });
     return false;
   }
 }
@@ -121,16 +216,31 @@ export async function endIap(): Promise<void> {
 
 // ── Products ─────────────────────────────────────────────────────────────────
 export async function fetchSubscriptions(): Promise<IapProduct[]> {
-  if (!isIapAvailable()) return [];
+  if (!isIapAvailable()) {
+    setDiagnostics({
+      code: 'STOREKIT_UNAVAILABLE',
+      isIapAvailable: false,
+      returnedProductIds: [],
+      errorCode: 'not_available',
+      errorMessage: RNIapError || 'IAP native module not available',
+    });
+    return [];
+  }
   try {
     // react-native-iap v12+ uses `getSubscriptions({ skus })`. Older versions
     // used `getSubscriptions({ skus })` too — but some forks may have removed it.
     if (typeof RNIap?.getSubscriptions !== 'function') {
       console.warn('[IAP] getSubscriptions is not a function on this build');
+      setDiagnostics({
+        code: 'INIT_FAILED',
+        returnedProductIds: [],
+        errorCode: 'get_subscriptions_missing',
+        errorMessage: 'getSubscriptions is not a function on this build',
+      });
       return [];
     }
     const raw = await RNIap.getSubscriptions({ skus: IAP_SKUS });
-    return (raw || []).map((p: any) => ({
+    const products: IapProduct[] = (raw || []).map((p: any) => ({
       productId: p.productId,
       price: p.price,
       localizedPrice: p.localizedPrice || `${p.currency ?? ''} ${p.price}`.trim(),
@@ -140,8 +250,24 @@ export async function fetchSubscriptions(): Promise<IapProduct[]> {
       subscriptionPeriodUnitIOS: p.subscriptionPeriodUnitIOS,
       subscriptionPeriodNumberIOS: p.subscriptionPeriodNumberIOS,
     }));
-  } catch (e) {
+    setDiagnostics({
+      code: products.length > 0 ? 'OK' : 'PRODUCTS_NOT_FOUND',
+      returnedProductIds: products.map((p) => p.productId),
+      errorCode: products.length > 0 ? null : 'no_products',
+      errorMessage:
+        products.length > 0
+          ? null
+          : 'StoreKit returned 0 products for the requested SKUs',
+    });
+    return products;
+  } catch (e: any) {
     console.warn('[IAP] getSubscriptions failed', e);
+    setDiagnostics({
+      code: 'NETWORK_ERROR',
+      returnedProductIds: [],
+      errorCode: e?.code || 'network_error',
+      errorMessage: e?.message || String(e),
+    });
     return [];
   }
 }

@@ -31,6 +31,49 @@ const TAG = '[ai-optimizer]';
  * v3.9.0 build 73 — i18n: la fonction reçoit maintenant `t` pour
  * générer les titres/actions dans la langue de l'utilisateur.
  */
+/**
+ * v3.9.0 Build 74 — CRASH SAFETY.
+ * Normalise EVERY optimizer result (backend success, backend partial,
+ * offline, 500, invalid JSON, local fallback) to a shape the UI can render
+ * without crashing. Guarantees:
+ *   - proposals: Proposal[]  (never undefined)
+ *   - tips:      string[]    (never undefined)
+ *   - summary:   string      (never undefined)
+ *   - monthly_potential / yearly_potential : number (never NaN)
+ * Preserves any AI-provided proposals / tips as-is.
+ */
+function normalizeOptimizerResult(input: any): OptimizerResult {
+  const proposals = Array.isArray(input?.proposals) ? input.proposals : [];
+  const tips = Array.isArray(input?.tips)
+    ? input.tips.filter((t: any) => typeof t === 'string' && t.trim().length > 0)
+    : [];
+  const monthly = Number(
+    input?.monthly_potential ??
+    input?.total_monthly_potential ??
+    proposals.reduce(
+      (s: number, p: any) => s + Number(p?.potential_saving_monthly ?? p?.monthly_potential ?? 0),
+      0
+    )
+  );
+  const yearly = Number(
+    input?.yearly_potential ??
+    input?.total_annual_potential ??
+    proposals.reduce(
+      (s: number, p: any) => s + Number(p?.potential_saving_yearly ?? p?.annual_potential ?? 0),
+      0
+    )
+  );
+  return {
+    success: !!input?.success,
+    summary: typeof input?.summary === 'string' ? input.summary : '',
+    monthly_potential: Number.isFinite(monthly) ? monthly : 0,
+    yearly_potential: Number.isFinite(yearly) ? yearly : 0,
+    proposals,
+    tips,
+    error: typeof input?.error === 'string' ? input.error : undefined,
+  };
+}
+
 function enrichWithLocalProposals(
   data: any,
   store: any,
@@ -201,6 +244,11 @@ function enrichWithLocalProposals(
   return {
     ...data,
     proposals: existing,
+    // v3.9.0 Build 74 — Guarantee `tips` is always an array to prevent
+    // `Cannot read property 'length' of undefined` at render time.
+    tips: Array.isArray(data?.tips)
+      ? data.tips.filter((t: any) => typeof t === 'string' && t.trim().length > 0)
+      : [],
     total_monthly_potential: total_monthly,
     total_annual_potential: total_annual,
     monthly_potential: total_monthly,
@@ -365,7 +413,7 @@ export default function AIOptimizerScreen() {
       if (!data.success) throw new Error(data.error || 'Analysis failed'); // i18n-technical
 
       const enriched = enrichWithLocalProposals(data, store, monthlyIncome, t, CUR);
-      setResult(enriched);
+      setResult(normalizeOptimizerResult(enriched));
     } catch (e: any) {
       console.error(`${TAG} fatal:`, e);
       // Local fallback
@@ -378,7 +426,7 @@ export default function AIOptimizerScreen() {
       );
       enriched._local = true;
       enriched.summary = t('aiOptimizer.localSuggestions');
-      setResult(enriched);
+      setResult(normalizeOptimizerResult(enriched));
     } finally {
       setLoading(false);
     }
@@ -527,10 +575,10 @@ export default function AIOptimizerScreen() {
             {result.summary && <Text style={styles.summary}>{result.summary}</Text>}
 
             <Text style={styles.sectionTitle}>
-              {t('aiOptimizer.proposalsCount', { n: result.proposals.length })}
+              {t('aiOptimizer.proposalsCount', { n: (result.proposals ?? []).length })}
             </Text>
 
-            {result.proposals.map((p, idx) => {
+            {(result.proposals ?? []).map((p, idx) => {
               const meta = CATEGORY_META[p.category] || CATEGORY_META.other;
               const effort = EFFORT_META[p.effort] || EFFORT_META.medium;
               return (
@@ -568,10 +616,10 @@ export default function AIOptimizerScreen() {
               );
             })}
 
-            {result.tips.length > 0 && (
+            {(result.tips ?? []).length > 0 && (
               <Card style={styles.tipsCard}>
                 <Text style={styles.tipsTitle}>{t('aiOptimizer.tipsTitle')}</Text>
-                {result.tips.map((tip, i) => (
+                {(result.tips ?? []).map((tip, i) => (
                   <View key={i} style={styles.tipItem}>
                     <Text style={styles.tipBullet}>•</Text>
                     <Text style={styles.tipText}>{tip}</Text>

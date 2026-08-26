@@ -56,6 +56,13 @@ export interface PremiumState {
   trialEndsAt: number | null;
   subscriptionStartedAt: number | null;
 
+  // v3.9.0 Build 74 — USER-SCOPED entitlement guard.
+  // The Supabase userId that OWNS the current Premium entitlement. When we
+  // switch users (login/register/logout), if the incoming userId !== ownerUserId
+  // we MUST reset the entitlement — Premium can never leak across accounts.
+  // Null means "no entitlement is claimed by any user" (safe default).
+  ownerUserId: string | null;
+
   // PROVISIONAL Pro grant — used when Apple StoreKit returns a valid receipt
   // but the backend cannot validate immediately (e.g. transaction_not_found
   // because Apple Sandbox/TestFlight takes a few minutes to propagate the
@@ -98,6 +105,21 @@ export interface PremiumState {
   clearProvisional: () => void;
   restore: () => void;
   cancel: () => void;
+  /**
+   * v3.9.0 Build 74 — Full entitlement wipe used on account switch
+   * (logout / login / register / leaving demo). Removes any local Pro,
+   * provisional access, trial, plan, pending validation AND the ownerUserId
+   * anchor. Feature usage counters are also reset so a new account starts
+   * clean. Never grants Pro — safe to call at any time.
+   */
+  resetForUserChange: () => void;
+  /**
+   * v3.9.0 Build 74 — Anchor the current entitlement to a Supabase userId.
+   * Called right after login / demo start. If the incoming userId does not
+   * match the current ownerUserId (and ownerUserId is set), we reset first —
+   * this prevents "user A → logout → user B" from inheriting Pro.
+   */
+  attachToUser: (userId: string | null) => void;
   incrementTx: () => void;
   incrementBudget: () => void;
   markPaywallShown: () => void;
@@ -147,6 +169,7 @@ export const usePremiumStore = create<PremiumState>()(
       trialStartedAt: null,
       trialEndsAt: null,
       subscriptionStartedAt: null,
+      ownerUserId: null,
       provisionalProUntil: null,
       pendingValidation: null,
 
@@ -244,6 +267,52 @@ export const usePremiumStore = create<PremiumState>()(
         });
       },
 
+      /**
+       * v3.9.0 Build 74 — Full reset on account switch.
+       * Wipes every entitlement bit so a new account starts strictly FREE,
+       * plus resets feature-usage counters (each account gets its own free
+       * preview quotas). Never grants Pro.
+       */
+      resetForUserChange: () => {
+        set({
+          isPro: false,
+          plan: null,
+          trialStartedAt: null,
+          trialEndsAt: null,
+          subscriptionStartedAt: null,
+          provisionalProUntil: null,
+          pendingValidation: null,
+          ownerUserId: null,
+          featureUsage: { ...DEFAULT_USAGE },
+        });
+      },
+
+      /**
+       * v3.9.0 Build 74 — Anchor entitlement to a specific user.
+       * If ownerUserId is already set and different from userId, we assume
+       * this is a NEW account and reset entitlements first — Pro cannot leak
+       * across accounts. Then we tag the (possibly empty) entitlement with
+       * the new owner id so future account switches can detect drift.
+       */
+      attachToUser: (userId: string | null) => {
+        const s = get();
+        if (s.ownerUserId && userId && s.ownerUserId !== userId) {
+          set({
+            isPro: false,
+            plan: null,
+            trialStartedAt: null,
+            trialEndsAt: null,
+            subscriptionStartedAt: null,
+            provisionalProUntil: null,
+            pendingValidation: null,
+            featureUsage: { ...DEFAULT_USAGE },
+            ownerUserId: userId,
+          });
+          return;
+        }
+        set({ ownerUserId: userId });
+      },
+
       incrementTx: () => set((s) => ({ transactionCount: s.transactionCount + 1 })),
       incrementBudget: () => set((s) => ({ budgetCount: s.budgetCount + 1 })),
 
@@ -336,6 +405,7 @@ export const usePremiumStore = create<PremiumState>()(
         trialStartedAt: s.trialStartedAt,
         trialEndsAt: s.trialEndsAt,
         subscriptionStartedAt: s.subscriptionStartedAt,
+        ownerUserId: s.ownerUserId,
         provisionalProUntil: s.provisionalProUntil,
         pendingValidation: s.pendingValidation,
         installedAt: s.installedAt,

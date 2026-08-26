@@ -26,6 +26,7 @@ import { useMoney } from '../../src/hooks/useMoney';
 import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getSupabase, isSupabaseConfigured } from '../../src/lib/supabase';
+import { usePremiumStore } from '../../src/stores/usePremiumStore';
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
@@ -69,6 +70,14 @@ export default function SettingsScreen() {
               // 2. Wipe local Zustand state (user, transactions, prefs, sync queue, etc.)
               clearAllData();
               logout();
+
+              // 2b. v3.9.0 Build 74 — Wipe Premium entitlement so it never
+              // leaks to the next account signing in on this device.
+              try {
+                usePremiumStore.getState().resetForUserChange();
+              } catch (e) {
+                console.warn('[logout] premium reset failed (non-fatal):', e);
+              }
 
               // 3. Purge Supabase auth tokens cached in AsyncStorage
               try {

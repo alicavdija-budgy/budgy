@@ -32,9 +32,11 @@ import {
   fetchSubscriptionFromBackend,
   isIapAvailable,
   getIapUnavailableReason,
+  getIapDiagnostics,
   IAP_PRODUCT_IDS,
   IapProduct,
   IapPlan,
+  IapDiagnosticCode,
 } from '../services/iap';
 import { usePremiumStore } from '../stores/usePremiumStore';
 import { getSupabase } from '../lib/supabase';
@@ -53,6 +55,8 @@ export interface UseIapState {
   error: string | null;
   notConfigured: boolean;       // server returned 503
   missingEnv: string[];          // which env vars are missing on server
+  // v3.9.0 Build 74 — fine-grained diagnostic (never PII) for TestFlight.
+  diagnosticCode: IapDiagnosticCode;
 }
 
 export interface IapResult {
@@ -99,6 +103,7 @@ export function useIAP() {
     error: null,
     notConfigured: false,
     missingEnv: [],
+    diagnosticCode: getIapDiagnostics().code,
   });
 
   const setPhase = useCallback(
@@ -118,6 +123,7 @@ export function useIAP() {
         ready: false,
         available: false,
         reason: getIapUnavailableReason() || t('iapErrors.unavailable'),
+        diagnosticCode: getIapDiagnostics().code,
       }));
       return;
     }
@@ -134,8 +140,9 @@ export function useIAP() {
       monthly,
       annual,
       error: null,
+      diagnosticCode: getIapDiagnostics().code,
     }));
-  }, [setPhase]);
+  }, [setPhase, t]);
 
   useEffect(() => {
     reload();
@@ -364,16 +371,24 @@ export function useIAP() {
         setPhase('idle');
         return;
       }
-      // Reflect remote truth locally.
+      // v3.9.0 Build 74 — Backend truth is authoritative.
+      //   remote PRO + is_pro=true  → confirm Pro
+      //   remote anything else     → revoke local Pro (FREE/EXPIRED/REFUNDED)
+      // Exception: keep a valid provisional grant if the SAME transaction is
+      // still pending validation (Apple Sandbox propagation lag).
       if (remote.is_pro && remote.subscription_state === 'PRO') {
         const plan: IapPlan =
           remote.apple_product_id === IAP_PRODUCT_IDS.annual ? 'annual' : 'monthly';
         confirmPro(plan);
-      } else if (
-        remote.subscription_state === 'EXPIRED' ||
-        remote.subscription_state === 'REFUNDED'
-      ) {
-        cancelPro();
+      } else {
+        const local = usePremiumStore.getState();
+        const stillPendingValid =
+          !!local.pendingValidation &&
+          !!local.provisionalProUntil &&
+          local.provisionalProUntil > Date.now();
+        if (!stillPendingValid) {
+          cancelPro();
+        }
       }
       setPhase('idle');
     } catch {
@@ -403,15 +418,19 @@ export async function syncSubscriptionFromBackendOnce(): Promise<void> {
     const remote = await fetchSubscriptionFromBackend(userId);
     if (!remote) return;
     const store = usePremiumStore.getState();
+    // v3.9.0 Build 74 — Backend truth is authoritative (see syncFromBackend).
     if (remote.is_pro && remote.subscription_state === 'PRO') {
       const plan: IapPlan =
         remote.apple_product_id === IAP_PRODUCT_IDS.annual ? 'annual' : 'monthly';
       store.confirmPro(plan);
-    } else if (
-      remote.subscription_state === 'EXPIRED' ||
-      remote.subscription_state === 'REFUNDED'
-    ) {
-      store.cancel();
+    } else {
+      const stillPendingValid =
+        !!store.pendingValidation &&
+        !!store.provisionalProUntil &&
+        store.provisionalProUntil > Date.now();
+      if (!stillPendingValid) {
+        store.cancel();
+      }
     }
   } catch {}
 }

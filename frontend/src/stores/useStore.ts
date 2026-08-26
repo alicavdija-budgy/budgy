@@ -511,6 +511,7 @@ export const useStore = create<AppState>()(
       logout: () => set({
         user: null,
         isAuthenticated: false,
+        isPro: false, // v3.9.0 Build 74: never leak Pro across accounts
         preferences: { ...get().preferences, onboarded: false },
       }),
     }),

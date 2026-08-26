@@ -263,13 +263,16 @@ export async function pullAllFromCloud(): Promise<{ ok: boolean; pulled: number;
     const cur = useStore.getState();
     if (prefs.length > 0) {
       const p = prefs[0];
+      // v3.9.0 Build 74 — Do NOT hydrate `isPro` from cloud user_preferences.
+      // The Apple StoreKit + backend IAP sync (/api/iap/me) is the ONLY source
+      // of truth for Premium. If a stale `is_pro=true` sits in Supabase from
+      // a previous life, we do NOT want to grant Pro back on account switch.
       useStore.setState({
         preferences: {
           ...cur.preferences,
           ...p,
           onboarded: !!p.onboarded,
         },
-        isPro: !!p.isPro,
       });
     }
 

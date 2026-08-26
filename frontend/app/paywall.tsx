@@ -365,13 +365,29 @@ export default function PaywallScreen() {
             </View>
           )}
 
-          {/* ── Error state ───────────────────────────────────────────── */}
+          {/* ── Error state (fine-grained per StoreKit diagnostic) ────── */}
           {productsError && (
             <View style={styles.errorBox}>
               <Ionicons name="alert-circle" size={20} color="#F87171" />
               <View style={{ flex: 1 }}>
-                <Text style={styles.errorTitle}>{t('paywallTriggers.productsErrorTitle')}</Text>
-                <Text style={styles.errorBody}>{t('paywallTriggers.productsErrorBody')}</Text>
+                <Text style={styles.errorTitle}>
+                  {iap.diagnosticCode === 'PRODUCTS_NOT_FOUND'
+                    ? t('paywallTriggers.productsNotFoundTitle')
+                    : iap.diagnosticCode === 'STOREKIT_UNAVAILABLE'
+                      ? t('paywallTriggers.storekitUnavailableTitle')
+                      : iap.diagnosticCode === 'NETWORK_ERROR'
+                        ? t('paywallTriggers.networkErrorTitle')
+                        : t('paywallTriggers.productsErrorTitle')}
+                </Text>
+                <Text style={styles.errorBody}>
+                  {iap.diagnosticCode === 'PRODUCTS_NOT_FOUND'
+                    ? t('paywallTriggers.productsNotFoundBody')
+                    : iap.diagnosticCode === 'STOREKIT_UNAVAILABLE'
+                      ? t('paywallTriggers.storekitUnavailableBody')
+                      : iap.diagnosticCode === 'NETWORK_ERROR'
+                        ? t('paywallTriggers.networkErrorBody')
+                        : t('paywallTriggers.productsErrorBody')}
+                </Text>
               </View>
               <TouchableOpacity onPress={handleRetryLoad} style={styles.retryBtn}>
                 <Ionicons name="refresh" size={14} color="#0E1530" />

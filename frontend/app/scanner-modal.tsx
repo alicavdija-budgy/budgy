@@ -38,11 +38,11 @@ import { useStore } from '../src/stores/useStore';
 import { Button } from '../src/components/ui';
 import { EXPENSE_CATEGORIES, PAYMENT_METHODS } from '../src/data/swiss-data';
 import { CategoryIcon } from '../src/components/CategoryIcon';
+import { useTranslation } from '../src/hooks/useTranslation';
 import type { ReceiptType } from '../src/types';
 import { safeFetchJson, apiFetchJson } from '../src/lib/network';
 import { normalizeImageForUpload } from '../src/lib/imageUpload';
 import { AppErrorModal, buildErrorFromResult, type ErrorPayload } from '../src/components/AppErrorModal';
-import { useTranslation } from '../src/hooks/useTranslation';
 import { mergeOcrWithFallback } from '../src/lib/ocrFallback';
 
 const BACKEND_URL =
@@ -77,7 +77,7 @@ export default function ScannerModal() {
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState('courses');
   const [paymentMethod, setPaymentMethod] = useState('card');
-  const [note, setNote] = useState('Ajouté via scan');
+  const [note, setNote] = useState(t('scanner.addedViaScan'));
   const [receiptType, setReceiptType] = useState<ReceiptType>(lockedType || 'ticket');
   const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
   const [ocrError, setOcrError] = useState<string | null>(null);
@@ -104,8 +104,8 @@ export default function ScannerModal() {
       setStage('camera');
     } else {
       Alert.alert(
-        'Permission refusée',
-        "Autorisez l'accès à la caméra dans les réglages pour scanner vos tickets.",
+        t('scanner.permDeniedTitle'),
+        t('scanner.permDeniedBody'),
         [{ text: 'OK' }]
       );
     }
@@ -156,12 +156,12 @@ export default function ScannerModal() {
           const docType = String(data.document_type || '').toLowerCase();
           if (docType === 'contract') {
             Alert.alert(
-              'Contrat détecté',
-              'Ce document semble être un contrat (assurance, leasing, bail, abonnement…). Il sera mieux rangé dans Mon Classeur.',
+              t('scanner.contractDetectedTitle'),
+              t('scanner.contractDetectedBody'),
               [
-                { text: 'Continuer en ticket', style: 'cancel' },
+                { text: t('scanner.continueAsTicket'), style: 'cancel' },
                 {
-                  text: 'Ouvrir Mon Classeur',
+                  text: t('scanner.openBinder'),
                   onPress: () => {
                     try { router.back(); } catch {}
                     router.push('/more/contracts' as any);
@@ -170,11 +170,11 @@ export default function ScannerModal() {
               ],
             );
           } else if (data.needs_user_confirmation) {
-            setOcrError('Type de document à confirmer — vérifiez avant d\'enregistrer');
+            setOcrError(t('scanner.typeConfirmHint'));
           }
           if (!data.success && merged.rescued) {
             // Tell user we did our best — saisie manuelle still possible
-            setOcrError('Extraction partielle — vérifiez les champs ci-dessous');
+            setOcrError(t('scanner.partialExtractHint'));
           }
         } else {
           // OCR ran but extracted nothing usable — show inline banner only
@@ -234,11 +234,11 @@ export default function ScannerModal() {
   const handleSave = () => {
     const amt = parseFloat(amount.replace(',', '.'));
     if (!amt || amt <= 0) {
-      Alert.alert('Montant invalide', 'Saisissez un montant valide.');
+      Alert.alert(t('scanner.invalidAmountTitle'), t('scanner.invalidAmountBody'));
       return;
     }
     if (!title.trim()) {
-      Alert.alert('Titre manquant', 'Saisissez le nom du commerce.');
+      Alert.alert(t('scanner.missingTitleTitle'), t('scanner.missingTitleBody'));
       return;
     }
     setStage('saving');
@@ -340,7 +340,7 @@ export default function ScannerModal() {
             photo.
           </Text>
           <Button
-            title="Autoriser la caméra"
+            title={t('scanner.authorizeCamera')}
             onPress={handleRequestPermission}
             fullWidth
             size="lg"
@@ -554,7 +554,7 @@ export default function ScannerModal() {
               style={styles.input}
               value={title}
               onChangeText={setTitle}
-              placeholder="Ex: Migros, Coop, Pharmacie..."
+              placeholder={t('scanner.merchantPh')}
               placeholderTextColor={theme.textTertiary}
             />
           </View>
@@ -634,7 +634,7 @@ export default function ScannerModal() {
               style={styles.input}
               value={note}
               onChangeText={setNote}
-              placeholder="Détails supplémentaires"
+              placeholder={t('scanner.extraDetails')}
               placeholderTextColor={theme.textTertiary}
             />
           </View>
@@ -647,12 +647,12 @@ export default function ScannerModal() {
         <Button
           title={
             stage === 'saving'
-              ? 'Enregistrement...'
+              ? t('scanner.savingLabel')
               : receiptType === 'invoice'
-                ? 'Ajouter la facture'
+                ? t('scanner.addInvoiceCta')
                 : receiptType === 'contract'
-                  ? 'Ajouter le contrat'
-                  : 'Enregistrer la dépense'
+                  ? t('scanner.addContractCta')
+                  : t('scanner.saveExpense')
           }
           onPress={handleSave}
           fullWidth

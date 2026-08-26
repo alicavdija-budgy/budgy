@@ -1,31 +1,25 @@
 /**
  * GUARDIAN MONEY CHF - Export PDF Screen
  * Generate and share A4 expense reports with TVA 8.1%
+ * i18n complet (fr/en/de/it) — v3.9.0 build 73
  */
 
 import React, { useState, useMemo } from 'react';
 import {
-  View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Switch,
+  View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, Switch,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as Print from 'expo-print';
-import * as Sharing from 'expo-sharing';
 import { buildPdfHtml } from '../../src/utils/localPdf';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
 import { useStore } from '../../src/stores/useStore';
-import { Card, Button, Badge } from '../../src/components/ui';
+import { Card, Button } from '../../src/components/ui';
 import { formatNumber } from '../../src/utils/calculations';
 import { apiFetchJson, hasApiBaseUrl } from '../../src/lib/network';
-
-const periodLabel = (p: 'month' | 'quarter' | 'year' | 'all') => {
-  const m = new Date().toLocaleDateString('fr-CH', { month: 'long', year: 'numeric' });
-  if (p === 'month') return m;
-  if (p === 'quarter') return '3 derniers mois';
-  if (p === 'year') return new Date().getFullYear().toString();
-  return 'Tout l\'historique';
-};
+import { useTranslation } from '../../src/hooks/useTranslation';
+import { DATE_LOCALES } from '../../src/i18n/translations';
 
 type Source = 'pro' | 'all' | 'tickets' | 'documents';
 type Period = 'month' | 'quarter' | 'year' | 'all';
@@ -34,6 +28,16 @@ export default function ExportPDFScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, preferences, proExpenses, transactions, documents } = useStore();
+  const { t, lang } = useTranslation();
+  const locale = DATE_LOCALES[lang];
+
+  const periodLabel = (p: Period) => {
+    const m = new Date().toLocaleDateString(locale, { month: 'long', year: 'numeric' });
+    if (p === 'month') return m;
+    if (p === 'quarter') return t('exportPdf.periodQuarter');
+    if (p === 'year') return new Date().getFullYear().toString();
+    return t('exportPdf.periodAll');
+  };
 
   const [mode, setMode] = useState<'employee' | 'independent'>('employee');
   const [source, setSource] = useState<Source>('pro');
@@ -42,7 +46,6 @@ export default function ExportPDFScreen() {
   const [loading, setLoading] = useState(false);
   const [pdfReady, setPdfReady] = useState(false);
 
-  // Period filter
   const filterByPeriod = (date: string | number) => {
     const d = typeof date === 'string' ? new Date(date).getTime() : date;
     if (!d || isNaN(d)) return true;
@@ -54,12 +57,11 @@ export default function ExportPDFScreen() {
     return true;
   };
 
-  const allTransactions = useMemo(() => transactions.filter(t => filterByPeriod(t.date)), [transactions, period]);
+  const allTransactions = useMemo(() => transactions.filter(tx => filterByPeriod(tx.date)), [transactions, period]);
   const allProExpenses = useMemo(() => proExpenses.filter(e => filterByPeriod(e.date)), [proExpenses, period]);
   const allDocuments = useMemo(() => documents.filter(d => filterByPeriod(d.createdAt)), [documents, period]);
   const allTickets = useMemo(() => {
-    // Tickets = transactions/proExpenses qui ont un receipt photo
-    const txWithReceipt = allTransactions.filter((t: any) => t.receipt);
+    const txWithReceipt = allTransactions.filter((x: any) => x.receipt);
     const proWithReceipt = allProExpenses.filter((p: any) => p.receipt);
     return [...txWithReceipt, ...proWithReceipt];
   }, [allTransactions, allProExpenses]);
@@ -68,70 +70,52 @@ export default function ExportPDFScreen() {
     const list = source === 'pro' ? allProExpenses
               : source === 'all' ? allTransactions
               : source === 'tickets' ? allTickets
-              : []; // documents handled separately
+              : [];
     return list.map((e: any) => ({
-      date: e.date,
-      title: e.title,
-      amount: e.amount,
-      category: e.category,
-      justification: e.justification || '-',
-      receipt: e.receipt || undefined,
+      date: e.date, title: e.title, amount: e.amount, category: e.category,
+      justification: e.justification || '-', receipt: e.receipt || undefined,
     }));
   }, [source, allProExpenses, allTransactions, allTickets]);
 
   const selectedDocuments = source === 'documents' ? allDocuments : [];
-
   const totalHT = selectedExpenses.reduce((sum, e) => sum + e.amount, 0);
   const totalTVA = Math.round(totalHT * 8.1) / 100;
   const totalTTC = totalHT + totalTVA;
 
   const handleExport = async () => {
     if (selectedExpenses.length === 0 && selectedDocuments.length === 0) {
-      Alert.alert(
-        'Aucune donnée à exporter',
-        'Aucune donnée à exporter pour cette période. Modifiez la période ou ajoutez des dépenses.'
-      );
+      Alert.alert(t('exportPdf.noDataTitle'), t('exportPdf.noDataBody'));
       return;
     }
-
     setLoading(true);
-    const TAG = '[export-pdf]';
     try {
+      const p = periodLabel(period);
       const titleOverride =
-        source === 'tickets' ? `Tickets & reçus — ${periodLabel(period)}` :
-        source === 'documents' ? `Documents scannés — ${periodLabel(period)}` :
-        source === 'all' ? `Toutes les dépenses — ${periodLabel(period)}` :
-        `Note de frais — ${periodLabel(period)}`;
+        source === 'tickets' ? t('exportPdf.ticketsTitle', { period: p }) :
+        source === 'documents' ? t('exportPdf.docsTitle', { period: p }) :
+        source === 'all' ? t('exportPdf.allTitle', { period: p }) :
+        t('exportPdf.expenseReport', { period: p });
 
       const payload = {
-        user_name: user?.name || 'Utilisateur',
-        company: mode === 'employee' ? 'Mon Entreprise SA' : user?.name || 'Indépendant',
+        user_name: user?.name || t('exportPdf.userDefault'),
+        company: mode === 'employee' ? t('exportPdf.companyDefault') : user?.name || t('exportPdf.modeIndependent'),
         expenses: selectedExpenses,
-        mode,
-        canton: preferences.canton,
-        period: periodLabel(period),
+        mode, canton: preferences.canton, period: p,
         include_receipts: includeReceipts,
         documents: selectedDocuments.map((d: any) => ({
-          title: d.title,
-          category: d.category,
-          imageBase64: d.imageBase64,
+          title: d.title, category: d.category, imageBase64: d.imageBase64,
           pages: d.pages || [d.imageBase64],
         })),
         title_override: titleOverride,
       };
 
-      // ── 1. Generate HTML LOCALLY (works offline, fastest path) ──
       let html: string;
       try {
         html = buildPdfHtml(payload as any);
-        console.log(`${TAG} local HTML generated (${html.length} chars)`);
-      } catch (genErr: any) {
-        console.error(`${TAG} local generation failed:`, genErr);
-        throw new Error('Erreur lors de la création du PDF.');
+      } catch {
+        throw new Error(t('exportPdf.pdfCreateErr'));
       }
 
-      // ── 2. Try to enrich via backend if available (better template) ──
-      // Non-blocking: if backend fails or is slow, we keep the local HTML.
       if (hasApiBaseUrl()) {
         try {
           const r = await apiFetchJson<{ html?: string }>('/api/export/pdf', {
@@ -139,38 +123,19 @@ export default function ExportPDFScreen() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
           }, { timeoutMs: 8000, retries: 0, silent: true });
-          if (r.ok && r.data?.html && r.data.html.length > 200) {
-            html = r.data.html;
-            console.log(`${TAG} backend HTML used (${html.length} chars)`);
-          }
-        } catch (netErr: any) {
-          console.warn(`${TAG} backend unreachable, keeping local HTML:`, netErr?.message);
-        }
+          if (r.ok && r.data?.html && r.data.html.length > 200) html = r.data.html;
+        } catch {}
       }
 
-      // ── 3. HTML → PDF (always local, no internet needed) ──
-      console.log(`${TAG} printing to PDF...`);
       const { uri } = await Print.printToFileAsync({ html, base64: false });
-      console.log(`${TAG} PDF generated at`, uri);
-
-      // ── 4. Native share (safeShareFile copies to documentDirectory first) ──
       const { safeShareFile } = await import('../../src/lib/safeShare');
       const r = await safeShareFile(uri, {
-        mime: 'application/pdf',
-        dialogTitle: titleOverride,
-        name: titleOverride,
+        mime: 'application/pdf', dialogTitle: titleOverride, name: titleOverride,
       });
-      if (!r.ok && r.error) {
-        Alert.alert('Partage impossible', r.error);
-      }
-
+      if (!r.ok && r.error) Alert.alert(t('exportPdf.shareFail'), r.error);
       setPdfReady(true);
     } catch (error: any) {
-      console.error('[export-pdf] FATAL:', error);
-      Alert.alert(
-        'Export impossible',
-        error?.message || 'Une erreur est survenue lors de la génération du PDF. Réessayez.'
-      );
+      Alert.alert(t('exportPdf.exportImpossible'), error?.message || t('exportPdf.unknownExportErr'));
     } finally {
       setLoading(false);
     }
@@ -182,37 +147,30 @@ export default function ExportPDFScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={24} color={Colors.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>Export PDF</Text>
+        <Text style={styles.title}>{t('exportPdf.title')}</Text>
         <View style={{ width: 40 }} />
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-        {/* Preview */}
         <Card style={styles.previewCard}>
           <View style={styles.previewHeader}>
             <Ionicons name="flash" size={24} color={Colors.primary} />
             <Text style={styles.previewTitle}>BUDGY</Text>
           </View>
-          <Text style={styles.previewSubtitle}>Note de frais — {new Date().toLocaleDateString('fr-CH', { month: 'long', year: 'numeric' })}</Text>
+          <Text style={styles.previewSubtitle}>{t('exportPdf.reportSubtitle', { period: new Date().toLocaleDateString(locale, { month: 'long', year: 'numeric' }) })}</Text>
           <View style={styles.previewMeta}>
-            <Text style={styles.previewMetaTxt}>{user?.name || 'Utilisateur'}</Text>
-            <Text style={styles.previewMetaTxt}>Canton {preferences.canton}</Text>
+            <Text style={styles.previewMetaTxt}>{user?.name || t('exportPdf.userDefault')}</Text>
+            <Text style={styles.previewMetaTxt}>{t('exportPdf.cantonLabel', { code: preferences.canton })}</Text>
           </View>
         </Card>
 
-        {/* Mode Selection */}
-        <Text style={styles.sectionTitle}>Mode</Text>
+        <Text style={styles.sectionTitle}>{t('exportPdf.mode')}</Text>
         <View style={styles.modeRow}>
           {[
-            { value: 'employee' as const, label: 'Employé', icon: 'briefcase', desc: 'Remboursement frais pro' },
-            { value: 'independent' as const, label: 'Indépendant', icon: 'person', desc: 'Déduction fiscale' },
+            { value: 'employee' as const, label: t('exportPdf.modeEmployee'), icon: 'briefcase', desc: t('exportPdf.modeEmployeeDesc') },
+            { value: 'independent' as const, label: t('exportPdf.modeIndependent'), icon: 'person', desc: t('exportPdf.modeIndependentDesc') },
           ].map((m) => (
-            <TouchableOpacity
-              key={m.value}
-              style={[styles.modeCard, mode === m.value && styles.modeCardOn]}
-              onPress={() => setMode(m.value)}
-              testID={`mode-${m.value}`}
-            >
+            <TouchableOpacity key={m.value} style={[styles.modeCard, mode === m.value && styles.modeCardOn]} onPress={() => setMode(m.value)} testID={`mode-${m.value}`}>
               <Ionicons name={m.icon as any} size={24} color={mode === m.value ? Colors.primary : Colors.textTertiary} />
               <Text style={[styles.modeLabel, mode === m.value && { color: Colors.primary }]}>{m.label}</Text>
               <Text style={styles.modeDesc}>{m.desc}</Text>
@@ -220,127 +178,100 @@ export default function ExportPDFScreen() {
           ))}
         </View>
 
-        {/* Source Selection */}
-        <Text style={styles.sectionTitle}>Que souhaitez-vous exporter ?</Text>
+        <Text style={styles.sectionTitle}>{t('exportPdf.whatToExport')}</Text>
         <View style={styles.sourceGrid}>
           {[
-            { id: 'pro', label: 'Frais pro', icon: 'briefcase', count: allProExpenses.length, desc: 'Note de frais' },
-            { id: 'all', label: 'Toutes dépenses', icon: 'list', count: allTransactions.length, desc: 'Toutes transactions' },
-            { id: 'tickets', label: 'Tickets / reçus', icon: 'receipt', count: allTickets.length, desc: 'Avec photos' },
-            { id: 'documents', label: 'Documents', icon: 'folder', count: allDocuments.length, desc: 'Classeur scanné' },
+            { id: 'pro', label: t('exportPdf.srcPro'), icon: 'briefcase', count: allProExpenses.length, desc: t('exportPdf.srcProDesc') },
+            { id: 'all', label: t('exportPdf.srcAll'), icon: 'list', count: allTransactions.length, desc: t('exportPdf.srcAllDesc') },
+            { id: 'tickets', label: t('exportPdf.srcTickets'), icon: 'receipt', count: allTickets.length, desc: t('exportPdf.srcTicketsDesc') },
+            { id: 'documents', label: t('exportPdf.srcDocs'), icon: 'folder', count: allDocuments.length, desc: t('exportPdf.srcDocsDesc') },
           ].map((s) => (
-            <TouchableOpacity
-              key={s.id}
-              style={[styles.sourceCard, source === s.id && styles.sourceCardOn]}
-              onPress={() => setSource(s.id as Source)}
-            >
+            <TouchableOpacity key={s.id} style={[styles.sourceCard, source === s.id && styles.sourceCardOn]} onPress={() => setSource(s.id as Source)}>
               <Ionicons name={s.icon as any} size={20} color={source === s.id ? Colors.primary : Colors.textTertiary} />
               <Text style={[styles.sourceCardLabel, source === s.id && { color: Colors.primary }]}>{s.label}</Text>
-              <Text style={styles.sourceCardCount}>{s.count} {s.count === 1 ? 'élément' : 'éléments'}</Text>
+              <Text style={styles.sourceCardCount}>{s.count} {s.count === 1 ? t('exportPdf.itemOne') : t('exportPdf.itemMany')}</Text>
               <Text style={styles.sourceCardDesc}>{s.desc}</Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        {/* Period filter */}
-        <Text style={styles.sectionTitle}>Période</Text>
+        <Text style={styles.sectionTitle}>{t('exportPdf.period')}</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View style={styles.periodRow}>
             {([
-              { id: 'month', label: 'Ce mois' },
-              { id: 'quarter', label: '3 mois' },
-              { id: 'year', label: 'Année' },
-              { id: 'all', label: 'Tout' },
+              { id: 'month', label: t('exportPdf.pMonth') },
+              { id: 'quarter', label: t('exportPdf.pQuarter') },
+              { id: 'year', label: t('exportPdf.pYear') },
+              { id: 'all', label: t('exportPdf.pAll') },
             ] as const).map((p) => (
-              <TouchableOpacity
-                key={p.id}
-                style={[styles.periodChip, period === p.id && styles.periodChipOn]}
-                onPress={() => setPeriod(p.id)}
-              >
+              <TouchableOpacity key={p.id} style={[styles.periodChip, period === p.id && styles.periodChipOn]} onPress={() => setPeriod(p.id)}>
                 <Text style={[styles.periodTxt, period === p.id && { color: Colors.primary }]}>{p.label}</Text>
               </TouchableOpacity>
             ))}
           </View>
         </ScrollView>
 
-        {/* Include receipts toggle (only relevant for expense sources) */}
         {(source === 'pro' || source === 'all' || source === 'tickets') && (
           <View style={styles.toggleRow}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.toggleLabel}>📎 Joindre les photos / scans</Text>
-              <Text style={styles.toggleDesc}>Annexe avec tous les tickets en pleine page</Text>
+              <Text style={styles.toggleLabel}>{t('exportPdf.attachToggle')}</Text>
+              <Text style={styles.toggleDesc}>{t('exportPdf.attachToggleSub')}</Text>
             </View>
-            <Switch
-              value={includeReceipts}
-              onValueChange={setIncludeReceipts}
-              trackColor={{ false: '#374151', true: Colors.primary }}
-              thumbColor="#FFF"
-            />
+            <Switch value={includeReceipts} onValueChange={setIncludeReceipts} trackColor={{ false: '#374151', true: Colors.primary }} thumbColor="#FFF" />
           </View>
         )}
 
-        {/* Summary */}
         <Card style={styles.summaryCard}>
-          <Text style={styles.summaryTitle}>Récapitulatif</Text>
+          <Text style={styles.summaryTitle}>{t('exportPdf.summary')}</Text>
           {source === 'documents' ? (
             <>
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Documents scannés</Text>
-                <Text style={styles.summaryValue}>{selectedDocuments.length} fichier(s)</Text>
+                <Text style={styles.summaryLabel}>{t('exportPdf.docsScanned')}</Text>
+                <Text style={styles.summaryValue}>{t('exportPdf.filesCount', { n: selectedDocuments.length })}</Text>
               </View>
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Pages totales</Text>
-                <Text style={styles.summaryValue}>
-                  {selectedDocuments.reduce((acc: number, d: any) => acc + (d.pages?.length || 1), 0)}
-                </Text>
+                <Text style={styles.summaryLabel}>{t('exportPdf.pagesTotal')}</Text>
+                <Text style={styles.summaryValue}>{selectedDocuments.reduce((acc: number, d: any) => acc + (d.pages?.length || 1), 0)}</Text>
               </View>
             </>
           ) : (
             <>
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Dépenses</Text>
-                <Text style={styles.summaryValue}>{selectedExpenses.length} lignes</Text>
+                <Text style={styles.summaryLabel}>{t('exportPdf.expenses')}</Text>
+                <Text style={styles.summaryValue}>{t('exportPdf.lines', { n: selectedExpenses.length })}</Text>
               </View>
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Total HT</Text>
+                <Text style={styles.summaryLabel}>{t('exportPdf.totalHT')}</Text>
                 <Text style={styles.summaryValue}>CHF {formatNumber(totalHT, 2)}</Text>
               </View>
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>TVA 8.1%</Text>
+                <Text style={styles.summaryLabel}>{t('exportPdf.tva')}</Text>
                 <Text style={styles.summaryValue}>CHF {formatNumber(totalTVA, 2)}</Text>
               </View>
               <View style={[styles.summaryRow, styles.summaryTotal]}>
-                <Text style={styles.totalLabel}>Total TTC</Text>
+                <Text style={styles.totalLabel}>{t('exportPdf.totalTTC')}</Text>
                 <Text style={styles.totalValue}>CHF {formatNumber(totalTTC, 2)}</Text>
               </View>
             </>
           )}
         </Card>
 
-        {/* Export Actions */}
         <Button
-          title={loading ? 'Génération...' : 'Générer et partager le PDF'}
-          onPress={handleExport}
-          fullWidth
-          size="lg"
-          loading={loading}
-          icon="document-text"
+          title={loading ? t('exportPdf.generating') : t('exportPdf.generateCta')}
+          onPress={handleExport} fullWidth size="lg" loading={loading} icon="document-text"
           style={{ marginBottom: Spacing.md }}
         />
 
         {pdfReady && (
           <Card style={styles.successCard}>
             <Ionicons name="checkmark-circle" size={24} color={Colors.success} />
-            <Text style={styles.successTxt}>PDF généré avec succès!</Text>
+            <Text style={styles.successTxt}>{t('exportPdf.pdfReady')}</Text>
           </Card>
         )}
 
-        {/* Info */}
         <Card style={styles.infoCard}>
           <Ionicons name="information-circle" size={18} color={Colors.info} />
-          <Text style={styles.infoTxt}>
-            Le PDF est au format A4 avec en-tête Budgy, TVA suisse 8.1%, et espace pour signature. Compatible avec toutes les imprimantes et logiciels comptables.
-          </Text>
+          <Text style={styles.infoTxt}>{t('exportPdf.infoTxt')}</Text>
         </Card>
 
         <View style={{ height: 40 }} />
@@ -368,8 +299,6 @@ const styles = StyleSheet.create({
   modeCardOn: { backgroundColor: `${Colors.primary}12`, borderColor: Colors.primary },
   modeLabel: { color: Colors.text, fontSize: FontSizes.md, fontWeight: FontWeights.semibold, marginTop: Spacing.sm },
   modeDesc: { color: Colors.textTertiary, fontSize: FontSizes.xs, textAlign: 'center', marginTop: 4 },
-  sourceRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.lg },
-  sourceBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, paddingVertical: Spacing.md, borderRadius: BorderRadius.md, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder },
   sourceGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm, marginBottom: Spacing.lg },
   sourceCard: { width: '48%', padding: Spacing.md, borderRadius: BorderRadius.lg, backgroundColor: Colors.card, borderWidth: 1.5, borderColor: Colors.cardBorder, gap: 4 },
   sourceCardOn: { borderColor: Colors.primary, backgroundColor: 'rgba(52,211,153,0.08)' },
@@ -383,8 +312,6 @@ const styles = StyleSheet.create({
   toggleRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, padding: Spacing.md, borderRadius: BorderRadius.lg, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, marginBottom: Spacing.md },
   toggleLabel: { color: Colors.text, fontSize: 13, fontWeight: '700' },
   toggleDesc: { color: Colors.textSecondary, fontSize: 11, marginTop: 2 },
-  sourceBtnOn: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  sourceTxt: { color: Colors.textTertiary, fontSize: FontSizes.sm, fontWeight: FontWeights.semibold },
   summaryCard: { marginBottom: Spacing.lg },
   summaryTitle: { color: Colors.text, fontSize: FontSizes.md, fontWeight: FontWeights.bold, marginBottom: Spacing.md },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: Spacing.sm },

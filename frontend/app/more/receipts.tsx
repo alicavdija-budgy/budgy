@@ -30,6 +30,7 @@ import type { ReceiptType } from '../../src/types';
 import { EntityActionsSheet, type EntityActionsContext } from '../../src/components/EntityActionsSheet';
 import { EntityEditModal, type EditField } from '../../src/components/EntityEditModal';
 import { EXPENSE_CATEGORIES } from '../../src/data/swiss-data';
+import { useTranslation } from '../../src/hooks/useTranslation';
 
 type Filter = 'all' | ReceiptType;
 
@@ -38,6 +39,7 @@ export default function ReceiptsScreen() {
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { t } = useTranslation();
   const { receipts, deleteReceipt, updateReceipt, updateTransaction, deleteTransaction } = useStore();
   const [filter, setFilter] = useState<Filter>('all');
   const [search, setSearch] = useState('');
@@ -51,16 +53,16 @@ export default function ReceiptsScreen() {
     [editingReceiptId, receipts]
   );
   const RECEIPT_EDIT_FIELDS: EditField[] = useMemo(() => [
-    { key: 'merchant', label: 'Commerce', type: 'text', icon: 'storefront-outline', placeholder: 'Migros, Coop...', required: true },
-    { key: 'amount', label: 'Montant (CHF)', type: 'number', icon: 'cash-outline', placeholder: '0.00', required: true },
-    { key: 'date', label: 'Date', type: 'text', icon: 'calendar-outline', placeholder: 'AAAA-MM-JJ' },
-    { key: 'category', label: 'Catégorie', type: 'select', options: EXPENSE_CATEGORIES.slice(0, 12).map((c) => ({ value: c.id, label: c.name, color: c.color })) },
-    { key: 'type', label: 'Type', type: 'select', options: [
-      { value: 'ticket', label: '🛒 Ticket de caisse' },
-      { value: 'remboursement', label: '💼 Remboursement' },
+    { key: 'merchant', label: t('receipts.fieldMerchant'), type: 'text', icon: 'storefront-outline', placeholder: t('receipts.merchantPh'), required: true },
+    { key: 'amount', label: t('receipts.fieldAmount'), type: 'number', icon: 'cash-outline', placeholder: t('receipts.amountPh'), required: true },
+    { key: 'date', label: t('receipts.fieldDate'), type: 'text', icon: 'calendar-outline', placeholder: t('receipts.datePh') },
+    { key: 'category', label: t('receipts.fieldCategory'), type: 'select', options: EXPENSE_CATEGORIES.slice(0, 12).map((c) => ({ value: c.id, label: c.name, color: c.color })) },
+    { key: 'type', label: t('receipts.fieldType'), type: 'select', options: [
+      { value: 'ticket', label: t('receipts.typeTicket') },
+      { value: 'remboursement', label: t('receipts.typeReimb') },
     ] },
-    { key: 'note', label: 'Note (optionnel)', type: 'multiline', placeholder: 'Détails...' },
-  ], []);
+    { key: 'note', label: t('receipts.fieldNote'), type: 'multiline', placeholder: t('receipts.notePh') },
+  ], [t]);
   const handleEditReceiptSubmit = (values: Record<string, any>) => {
     if (!editingReceipt) return;
     const amt = parseFloat(String(values.amount).replace(',', '.')) || editingReceipt.amount;
@@ -118,20 +120,20 @@ export default function ReceiptsScreen() {
     const r = receipts.find((x) => x.id === id);
     const hasLinkedTx = !!(r?.transactionId && r.type === 'ticket');
     const message = hasLinkedTx
-      ? 'Cette action est irréversible. Une dépense est liée à ce reçu — voulez-vous aussi la supprimer ?'
-      : 'Cette action est irréversible.';
+      ? t('receipts.irreversibleWithTx')
+      : t('receipts.irreversible');
     if (hasLinkedTx) {
-      Alert.alert('Supprimer ce reçu ?', message, [
-        { text: 'Annuler', style: 'cancel' },
+      Alert.alert(t('receipts.deleteTitle'), message, [
+        { text: t('receipts.cancel'), style: 'cancel' },
         {
-          text: 'Reçu seulement',
+          text: t('receipts.receiptOnly'),
           onPress: () => {
             deleteReceipt(id);
             setSelected(null);
           },
         },
         {
-          text: 'Reçu + dépense',
+          text: t('receipts.receiptAndTx'),
           style: 'destructive',
           onPress: () => {
             if (r?.transactionId) deleteTransaction(r.transactionId);
@@ -141,10 +143,10 @@ export default function ReceiptsScreen() {
         },
       ]);
     } else {
-      Alert.alert('Supprimer ce reçu ?', message, [
-        { text: 'Annuler', style: 'cancel' },
+      Alert.alert(t('receipts.deleteTitle'), message, [
+        { text: t('receipts.cancel'), style: 'cancel' },
         {
-          text: 'Supprimer',
+          text: t('receipts.delete'),
           style: 'destructive',
           onPress: () => {
             deleteReceipt(id);
@@ -162,7 +164,7 @@ export default function ReceiptsScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
           <Ionicons name="chevron-back" size={24} color={theme.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>Tickets & Reçus</Text>
+        <Text style={styles.title}>{t('receipts.title')}</Text>
         <TouchableOpacity
           onPress={() => router.push('/scanner-modal')}
           style={styles.iconBtn}
@@ -179,14 +181,14 @@ export default function ReceiptsScreen() {
             onPress={() => router.push({ pathname: '/scanner-modal', params: { forceType: 'ticket' } })}
           >
             <Ionicons name="scan" size={20} color="#FFF" />
-            <Text style={styles.quickBtnTxtPrimary}>Scanner</Text>
+            <Text style={styles.quickBtnTxtPrimary}>{t('receipts.scanCta')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.quickBtn}
             onPress={() => router.push('/more/add-receipt-manual' as any)}
           >
             <Ionicons name="create-outline" size={20} color={theme.primary} />
-            <Text style={styles.quickBtnTxt}>Ajouter manuellement</Text>
+            <Text style={styles.quickBtnTxt}>{t('receipts.manualAdd')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -194,12 +196,12 @@ export default function ReceiptsScreen() {
         <View style={styles.statsRow}>
           <Card style={styles.statCard}>
             <Text style={styles.statEmoji}>🛒</Text>
-            <Text style={styles.statLabel}>Caisse</Text>
+            <Text style={styles.statLabel}>{t('receipts.statTicket')}</Text>
             <Text style={styles.statValue}>CHF {formatNumber(totals.ticket)}</Text>
           </Card>
           <Card style={styles.statCard}>
             <Text style={styles.statEmoji}>💼</Text>
-            <Text style={styles.statLabel}>Remboursements</Text>
+            <Text style={styles.statLabel}>{t('receipts.statReimb')}</Text>
             <Text style={[styles.statValue, { color: theme.warning }]}>
               CHF {formatNumber(totals.remb)}
             </Text>
@@ -213,7 +215,7 @@ export default function ReceiptsScreen() {
             style={styles.searchInput}
             value={search}
             onChangeText={setSearch}
-            placeholder="Rechercher un commerce..."
+            placeholder={t('receipts.searchPh')}
             placeholderTextColor={theme.textTertiary}
           />
         </View>
@@ -221,9 +223,9 @@ export default function ReceiptsScreen() {
         {/* Filter chips */}
         <View style={styles.chips}>
           {([
-            { id: 'all', label: 'Tous', emoji: '📑' },
-            { id: 'ticket', label: 'Caisse', emoji: '🛒' },
-            { id: 'remboursement', label: 'Remboursement', emoji: '💼' },
+            { id: 'all', label: t('receipts.filterAll'), emoji: '📑' },
+            { id: 'ticket', label: t('receipts.filterTicket'), emoji: '🛒' },
+            { id: 'remboursement', label: t('receipts.filterReimb'), emoji: '💼' },
           ] as const).map((f) => (
             <TouchableOpacity
               key={f.id}
@@ -244,8 +246,8 @@ export default function ReceiptsScreen() {
         {filtered.length === 0 ? (
           <EmptyState
             icon="receipt-outline"
-            title="Aucun reçu pour le moment"
-            subtitle="Scannez un ticket via le bouton scan central pour le retrouver ici."
+            title={t('receipts.emptyTitle')}
+            subtitle={t('receipts.emptySub')}
           />
         ) : (
           <View style={styles.grid}>
@@ -303,35 +305,35 @@ export default function ReceiptsScreen() {
                   <ZoomableImage source={{ uri: sel.imageBase64 }} style={styles.modalImage} resizeMode="contain" />
                   <View style={styles.zoomHintBar}>
                     <Ionicons name="resize" size={11} color={theme.textTertiary} />
-                    <Text style={styles.zoomHintTxt}>Pincez pour zoomer · Double-tap pour réinitialiser</Text>
+                    <Text style={styles.zoomHintTxt}>{t('receipts.zoomHint')}</Text>
                   </View>
                   <View style={styles.detailGrid}>
                     <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>Montant</Text>
+                      <Text style={styles.detailLabel}>{t('receipts.detailAmount')}</Text>
                       <Text style={styles.detailValue}>
                         CHF {formatNumber(sel.amount)}
                       </Text>
                     </View>
                     <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>Catégorie</Text>
+                      <Text style={styles.detailLabel}>{t('receipts.detailCategory')}</Text>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                         <CategoryIcon category={sel.category} size="sm" showBackground={false} />
                         <Text style={styles.detailValue}>{getCategoryName(sel.category)}</Text>
                       </View>
                     </View>
                     <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>Type</Text>
+                      <Text style={styles.detailLabel}>{t('receipts.detailType')}</Text>
                       <Text style={styles.detailValue}>
-                        {sel.type === 'ticket' ? '🛒 Ticket de caisse' : '💼 Remboursement'}
+                        {sel.type === 'ticket' ? t('receipts.typeTicket') : t('receipts.typeReimb')}
                       </Text>
                     </View>
                     <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>Date</Text>
+                      <Text style={styles.detailLabel}>{t('receipts.detailDate')}</Text>
                       <Text style={styles.detailValue}>{sel.date}</Text>
                     </View>
                     {sel.note && (
                       <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Note</Text>
+                        <Text style={styles.detailLabel}>{t('receipts.detailNote')}</Text>
                         <Text style={styles.detailValue}>{sel.note}</Text>
                       </View>
                     )}
@@ -339,7 +341,7 @@ export default function ReceiptsScreen() {
                 </ScrollView>
                 <View style={{ flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.lg }}>
                   <Button
-                    title="Modifier"
+                    title={t('receipts.editBtn')}
                     variant="secondary"
                     onPress={() => {
                       const id = sel.id;
@@ -350,7 +352,7 @@ export default function ReceiptsScreen() {
                     style={{ flex: 1 }}
                   />
                   <Button
-                    title="Supprimer"
+                    title={t('receipts.deleteBtn')}
                     variant="danger"
                     onPress={() => handleDelete(sel.id)}
                     icon="trash-outline"
@@ -369,7 +371,7 @@ export default function ReceiptsScreen() {
         onPress={() => router.push('/scanner-modal')}
         activeOpacity={0.85}
         accessibilityRole="button"
-        accessibilityLabel="Scanner un ticket"
+        accessibilityLabel={t('receipts.a11yScanTicket')}
         testID="receipts-scan-fab"
       >
         <View style={styles.fabInner}>
@@ -391,12 +393,12 @@ export default function ReceiptsScreen() {
           setActionsCtx(null);
           if (id) handleDelete(id);
         }}
-        deleteConfirmTitle="Supprimer ce reçu ?"
+        deleteConfirmTitle={t('receipts.deleteTitle')}
       />
       <EntityEditModal
         visible={!!editingReceipt}
         onClose={() => setEditingReceiptId(null)}
-        title="Modifier le reçu"
+        title={t('receipts.editModalTitle')}
         fields={RECEIPT_EDIT_FIELDS}
         initialValues={{
           merchant: editingReceipt?.merchant || '',

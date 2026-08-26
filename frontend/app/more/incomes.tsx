@@ -16,6 +16,7 @@ import { useRouter } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
 import { useTheme } from '../../src/hooks/useTheme';
+import { useTranslation } from '../../src/hooks/useTranslation';
 import { useStore } from '../../src/stores/useStore';
 import { Card, Button, EmptyState } from '../../src/components/ui';
 import { formatNumber } from '../../src/utils/calculations';
@@ -39,6 +40,7 @@ const FREQUENCIES = [
 ] as const;
 
 export default function IncomesScreen() {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const theme = useTheme();
@@ -64,12 +66,12 @@ export default function IncomesScreen() {
   const INCOME_EDIT_FIELDS: EditField[] = useMemo(() => [
     { key: 'title', label: 'Nom', type: 'text', placeholder: 'Salaire net', icon: 'briefcase-outline', required: true },
     { key: 'amount', label: 'Montant (CHF)', type: 'number', icon: 'cash-outline', placeholder: '6500', required: true },
-    { key: 'category', label: 'Catégorie', type: 'select', options: INCOME_TYPES.map((t) => ({ value: t.key, label: t.label, color: t.color, icon: t.icon })) },
+    { key: 'category', label: t('incomesUi.category'), type: 'select', options: INCOME_TYPES.map((t) => ({ value: t.key, label: t.label, color: t.color, icon: t.icon })) },
     { key: 'type', label: 'Nature', type: 'select', options: [
-      { value: 'recurring', label: '🔁 Récurrent' },
+      { value: 'recurring', label: t('incomesUi.recurring') },
       { value: 'occasional', label: '⚡ Ponctuel' },
     ] },
-    { key: 'frequency', label: 'Fréquence', type: 'select', options: [
+    { key: 'frequency', label: t('incomesUi.frequency'), type: 'select', options: [
       { value: 'monthly', label: 'Mensuel' },
       { value: 'quarterly', label: 'Trimestriel' },
       { value: 'yearly', label: 'Annuel' },
@@ -340,7 +342,7 @@ export default function IncomesScreen() {
               <Text style={styles.label}>Nature</Text>
               <View style={styles.segmentRow}>
                 {[
-                  { k: 'recurring', lbl: '🔁 Récurrent' },
+                  { k: 'recurring', lbl: t('incomesUi.recurring') },
                   { k: 'occasional', lbl: '⚡ Ponctuel' },
                 ].map((s) => (
                   <TouchableOpacity

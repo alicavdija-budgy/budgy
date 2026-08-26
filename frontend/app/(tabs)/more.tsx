@@ -50,19 +50,19 @@ export default function MoreScreen() {
       emoji: '🧠',
       items: [
         { id: 'ai-optimizer', title: t('more.aiOptimizer'), subtitle: t('more.aiOptimizerSub'), icon: 'sparkles', color: C.pink, route: '/more/ai-optimizer', badge: 'NEW', pro: true, feature: 'ai' },
-        { id: 'savings-radar', title: 'Radar d\'économies', subtitle: 'Identifiez les postes où économiser, sans pub ni partenaire', icon: 'radio', color: C.gold, route: '/more/savings-radar', badge: 'PRO', pro: true, feature: 'ai' },
-        { id: 'budgy-score', title: 'Score Budgy', subtitle: 'Mesurez et améliorez votre santé financière', icon: 'speedometer', color: C.gold, route: '/more/budgy-score', badge: 'NEW' },
+        { id: 'savings-radar', title: t('moreExt.savingsRadar'), subtitle: t('moreExt.savingsRadarSub'), icon: 'radio', color: C.gold, route: '/more/savings-radar', badge: 'PRO', pro: true, feature: 'ai' },
+        { id: 'budgy-score', title: 'Score Budgy', subtitle: t('moreExt.budgyScoreSub'), icon: 'speedometer', color: C.gold, route: '/more/budgy-score', badge: 'NEW' },
         { id: 'predict', title: t('more.predict'), subtitle: t('more.predictSub'), icon: 'analytics', color: C.secondary, route: '/more/predict', pro: true, feature: 'predict' },
-        { id: 'calendar', title: 'Calendrier financier', subtitle: 'Tous vos flux futurs, revenus et échéances', icon: 'calendar', color: C.info, route: '/more/financial-calendar' },
-        { id: 'siri-assistant', title: 'Siri & Assistant', subtitle: 'Compatible avec Siri et Google Assistant via raccourcis', icon: 'mic', color: C.cyan, route: '/more/siri-assistant' },
+        { id: 'calendar', title: 'Calendrier financier', subtitle: t('moreExt.calendarSub'), icon: 'calendar', color: C.info, route: '/more/financial-calendar' },
+        { id: 'siri-assistant', title: t('moreExt.siriTitle'), subtitle: t('moreExt.siriSub'), icon: 'mic', color: C.cyan, route: '/more/siri-assistant' },
       ],
     },
     {
-      title: 'Fiscalité & Santé',
+      title: t('moreExt.sectionTaxHealth'),
       emoji: '🏛️',
       items: [
         { id: 'tax', title: t('more.taxOpt'), subtitle: t('more.taxOptSub'), icon: 'calculator', color: C.primaryLight, route: '/more/tax-optimizer', pro: true, feature: 'tax' },
-        { id: 'lamal', title: 'LAMal & Subsides', subtitle: 'Comparer mes primes, vérifier mes subsides, optimiser ma franchise', icon: 'shield-checkmark', color: C.cyan, route: '/more/lamal-comparator' },
+        { id: 'lamal', title: t('moreExt.lamalTitle'), subtitle: t('moreExt.lamalSub'), icon: 'shield-checkmark', color: C.cyan, route: '/more/lamal-comparator' },
       ],
     },
     {
@@ -90,7 +90,7 @@ export default function MoreScreen() {
       title: t('more.sectionShare'),
       emoji: '👨‍👩‍👧‍👦',
       items: [
-        { id: 'family', title: 'Famille & Amis', subtitle: 'Dépenses, budgets, objectifs et contrats partagés', icon: 'people-circle', color: C.pink, route: '/more/family' },
+        { id: 'family', title: t('moreExt.familyTitle'), subtitle: t('moreExt.familySub'), icon: 'people-circle', color: C.pink, route: '/more/family' },
       ],
     },
     {
@@ -107,7 +107,7 @@ export default function MoreScreen() {
       items: [
         { id: 'subscription', title: t('more.subscription'), subtitle: isPro ? (isTrial ? t('more.subscriptionTrial', { d: new Date(trialEndsAt!).toLocaleDateString() }) : t('more.subscriptionActive')) : t('more.subscriptionFree'), icon: 'flash', color: C.secondary, route: '/paywall', badge: isPro ? 'PRO' : undefined },
         { id: 'settings', title: t('more.preferences'), subtitle: t('more.preferencesSub'), icon: 'settings', color: C.textSecondary, route: '/more/settings' },
-        ...(__DEV__ ? [{ id: 'debug-network', title: 'Diagnostic réseau', subtitle: 'Vérifier la connexion backend', icon: 'pulse' as const, color: C.warning, route: '/more/debug-network' }] : []),
+        ...(__DEV__ ? [{ id: 'debug-network', title: t('moreExt.debugNetwork'), subtitle: t('moreExt.debugNetworkSub'), icon: 'pulse' as const, color: C.warning, route: '/more/debug-network' }] : []),
         { id: 'legal', title: t('more.legal'), subtitle: t('more.legalSub'), icon: 'shield-half', color: C.info, route: '/more/legal' },
       ],
     },

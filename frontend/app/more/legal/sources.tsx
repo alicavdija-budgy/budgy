@@ -1,6 +1,7 @@
 /**
  * GUARDIAN MONEY CHF - Data sources attribution (Priminfo, OFSP, AFC, BNS, etc.)
- * This screen protects the publisher by properly citing public data sources.
+ * Official source names (OFSP/AFC/BNS/OFS/Priminfo) remain in their official form.
+ * i18n complet (fr/en/de/it) — v3.9.0 build 73.
  */
 
 import React from 'react';
@@ -10,56 +11,25 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { BorderRadius, Spacing, FontSizes, FontWeights } from '../../../src/constants/theme';
 import { useTheme } from '../../../src/hooks/useTheme';
+import { useTranslation } from '../../../src/hooks/useTranslation';
 
+// Source records: URLs and official identifiers are TECHNICAL and never translated.
+// Only `purposeKey` and `licenseKey` are localised via i18n.
 const SOURCES = [
-  {
-    name: 'OFSP – Office fédéral de la santé publique',
-    purpose: 'Barèmes officiels LAMal, primes de référence 2026, régions de primes, subsides cantonaux.',
-    url: 'https://www.bag.admin.ch',
-    license: 'Données publiques de la Confédération suisse (Open Government Data).',
-  },
-  {
-    name: 'Priminfo (OFSP)',
-    purpose: 'Primes d’assurance-maladie obligatoire (LAMal) par canton, assureur, franchise, modèle et tranche d’âge, millsimé 2026.',
-    url: 'https://www.priminfo.admin.ch',
-    license: 'Données publiques. Marques assureurs : propriété de leurs titulaires respectifs.',
-  },
-  {
-    name: 'AFC – Administration fédérale des contributions',
-    purpose: 'Barèmes de l’impôt fédéral direct (IFD), déductions standard, piliers 3a / 3b.',
-    url: 'https://www.estv.admin.ch',
-    license: 'Données publiques de la Confédération suisse.',
-  },
-  {
-    name: 'Administrations fiscales cantonales',
-    purpose: 'Barèmes ICC (impôts communaux et cantonaux) — 26 cantons.',
-    url: 'https://www.ch.ch/fr/imposition',
-    license: 'Données publiées par chaque canton.',
-  },
-  {
-    name: 'BNS – Banque nationale suisse',
-    purpose: 'Taux de référence, inflation, CPI — affichés à titre indicatif.',
-    url: 'https://www.snb.ch',
-    license: 'Données publiques SNB/BNS.',
-  },
-  {
-    name: 'OFS – Office fédéral de la statistique',
-    purpose: 'Indices des prix à la consommation, statistiques de ménages, données socio-économiques.',
-    url: 'https://www.bfs.admin.ch',
-    license: 'Données publiques de la Confédération suisse.',
-  },
-  {
-    name: 'Comparis / Moneyland / Bonus.ch',
-    purpose: 'Être cité uniquement à titre informatif si une donnée de référence croisée est pertinente — aucune donnée propriétaire n’est réutilisée.',
-    url: 'https://www.comparis.ch',
-    license: 'Contenus rédactionnels — non reproduits.',
-  },
-];
+  { id: 'ofsp',      url: 'https://www.bag.admin.ch' },
+  { id: 'priminfo',  url: 'https://www.priminfo.admin.ch' },
+  { id: 'afc',       url: 'https://www.estv.admin.ch' },
+  { id: 'cantons',   url: 'https://www.ch.ch/fr/imposition' },
+  { id: 'bns',       url: 'https://www.snb.ch' },
+  { id: 'ofs',       url: 'https://www.bfs.admin.ch' },
+  { id: 'comparis',  url: 'https://www.comparis.ch' },
+] as const;
 
 export default function SourcesScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const C = useTheme();
+  const { t } = useTranslation();
   const styles = makeStyles(C);
 
   return (
@@ -68,26 +38,23 @@ export default function SourcesScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
           <Ionicons name="chevron-back" size={26} color={C.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>Sources des données</Text>
+        <Text style={styles.title}>{t('legalSources.title')}</Text>
         <View style={{ width: 40 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Text style={styles.intro}>
-          Budgy exploite exclusivement des données publiques officielles. Toutes les sources sont
-          citées ci-dessous. L’application n’est affiliée à aucun des organismes mentionnés.
-        </Text>
+        <Text style={styles.intro}>{t('legalSources.intro')}</Text>
 
-        {SOURCES.map((src, idx) => (
-          <View key={idx} style={styles.sourceCard}>
+        {SOURCES.map((src) => (
+          <View key={src.id} style={styles.sourceCard}>
             <View style={styles.sourceHeader}>
               <Ionicons name="library" size={20} color={C.primary} />
-              <Text style={styles.sourceName}>{src.name}</Text>
+              <Text style={styles.sourceName}>{t(`legalSources.name_${src.id}` as any)}</Text>
             </View>
-            <Text style={styles.sourceLabel}>Usage dans l’application :</Text>
-            <Text style={styles.sourceText}>{src.purpose}</Text>
-            <Text style={styles.sourceLabel}>Licence / Origine :</Text>
-            <Text style={styles.sourceText}>{src.license}</Text>
+            <Text style={styles.sourceLabel}>{t('legalSources.usageLabel')}</Text>
+            <Text style={styles.sourceText}>{t(`legalSources.purpose_${src.id}` as any)}</Text>
+            <Text style={styles.sourceLabel}>{t('legalSources.licenseLabel')}</Text>
+            <Text style={styles.sourceText}>{t(`legalSources.license_${src.id}` as any)}</Text>
             <TouchableOpacity onPress={() => Linking.openURL(src.url).catch(() => {})}>
               <Text style={styles.sourceLink}>🔗 {src.url}</Text>
             </TouchableOpacity>
@@ -96,18 +63,15 @@ export default function SourcesScreen() {
 
         <View style={styles.noteBox}>
           <Ionicons name="information-circle" size={22} color={C.info} />
-          <Text style={styles.noteText}>
-            Les données publiques suisses sont librement réutilisables dans le respect de leur origine et d’une citation
-            appropriée (principe Open Government Data de la Confédération). Les noms et logos d’assureurs, banques ou
-            autres entités privées mentionnées restent la propriété de leurs titulaires respectifs et sont utilisés ici
-            uniquement à des fins de comparaison factuelle, sans endossement ni partenariat.
-          </Text>
+          <Text style={styles.noteText}>{t('legalSources.noteText')}</Text>
         </View>
 
-        <Text style={styles.h2}>Signaler une source manquante</Text>
+        <Text style={styles.h2}>{t('legalSources.reportTitle')}</Text>
         <Text style={styles.p}>
-          Si vous pensez qu’une donnée utilisée dans l’application n’est pas correctement attribuée, écrivez-nous à{'\n'}
-          <Text style={styles.b}>support@budgy.ch</Text> — nous corrigeons sous 72 heures.
+          {t('legalSources.reportBodyBefore')}
+          {'\n'}
+          <Text style={styles.b}>support@budgy.ch</Text>
+          {t('legalSources.reportBodyAfter')}
         </Text>
 
         <View style={{ height: 40 }} />

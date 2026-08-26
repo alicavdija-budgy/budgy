@@ -25,6 +25,7 @@ import { useRouter } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
 import { useTheme } from '../../src/hooks/useTheme';
+import { useTranslation } from '../../src/hooks/useTranslation';
 import type { ThemePalette } from '../../src/constants/palettes';
 import { useStore } from '../../src/stores/useStore';
 import { Card, Button, EmptyState } from '../../src/components/ui';
@@ -36,6 +37,7 @@ import { EntityActionsSheet, type EntityActionsContext } from '../../src/compone
 import { EntityEditModal, type EditField } from '../../src/components/EntityEditModal';
 
 export default function RecurringScreen() {
+  const { t } = useTranslation();
   const theme = useTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
@@ -55,7 +57,7 @@ export default function RecurringScreen() {
   const REC_EDIT_FIELDS: EditField[] = useMemo(() => [
     { key: 'title', label: 'Titre', type: 'text', icon: 'document-text-outline', placeholder: 'Netflix', required: true },
     { key: 'amount', label: 'Montant (CHF)', type: 'number', icon: 'cash-outline', placeholder: '17.90', required: true },
-    { key: 'category', label: 'Catégorie', type: 'select', options: EXPENSE_CATEGORIES.slice(0, 12).map((c) => ({ value: c.id, label: c.name, color: c.color })) },
+    { key: 'category', label: t('recurringUi.category'), type: 'select', options: EXPENSE_CATEGORIES.slice(0, 12).map((c) => ({ value: c.id, label: c.name, color: c.color })) },
     { key: 'dayOfMonth', label: 'Jour du mois (1-31)', type: 'number', icon: 'calendar-outline', placeholder: '8' },
     { key: 'active', label: 'Actif', type: 'switch' },
   ], []);
@@ -102,9 +104,9 @@ export default function RecurringScreen() {
   const getPriority = (amount: number): { label: string; emoji: string; color: string } => {
     if (monthlyIncome <= 0) return { label: 'Impact inconnu', emoji: 'ℹ️', color: theme.textTertiary };
     const pct = (amount / monthlyIncome) * 100;
-    if (pct >= 20) return { label: 'Impact élevé', emoji: '🔥', color: theme.error };
+    if (pct >= 20) return { label: t('recurringUi.highImpact'), emoji: '🔥', color: theme.error };
     if (pct >= 10) return { label: 'Impact moyen', emoji: '⚠️', color: theme.warning };
-    if (pct >= 5)  return { label: 'Impact modéré', emoji: '🟡', color: '#EAB308' };
+    if (pct >= 5)  return { label: t('recurringUi.modImpact'), emoji: '🟡', color: '#EAB308' };
     return { label: 'Faible impact', emoji: '✅', color: theme.success };
   };
 
@@ -161,7 +163,7 @@ export default function RecurringScreen() {
                     {totalPctIncome.toFixed(1)}% de vos revenus
                   </Text>
                   <Text style={styles.heroBarStatus}>
-                    {totalPctIncome >= 50 ? '🔥 Trop élevé' : totalPctIncome >= 30 ? '⚠️ Élevé' : '✅ Sain'}
+                    {totalPctIncome >= 50 ? t('recurringUi.tooHigh') : totalPctIncome >= 30 ? t('recurringUi.high') : '✅ Sain'}
                   </Text>
                 </View>
               </>
@@ -331,7 +333,7 @@ export default function RecurringScreen() {
       <EntityEditModal
         visible={!!editingRec}
         onClose={() => setEditingRecId(null)}
-        title="Modifier l'abonnement"
+        title={t('recurringUi.editSubTitle')}
         fields={REC_EDIT_FIELDS}
         initialValues={{
           title: editingRec?.title || '',

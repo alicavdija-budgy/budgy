@@ -20,6 +20,8 @@ import {
   pushAllToCloud, pullAllFromCloud, syncRoundTrip, isSignedInToSupabase,
 } from '../../src/services/cloudSync';
 import { isSupabaseConfigured } from '../../src/lib/supabase';
+import { useTranslation } from '../../src/hooks/useTranslation';
+import { DATE_LOCALES } from '../../src/i18n/translations';
 
 export default function CloudSyncScreen() {
   const theme = useTheme();
@@ -27,6 +29,8 @@ export default function CloudSyncScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const store = useStore();
+  const { t, lang } = useTranslation();
+  const locale = DATE_LOCALES[lang];
   const [signedIn, setSignedIn] = useState(false);
   const [working, setWorking] = useState<'push' | 'pull' | 'both' | null>(null);
   const [lastSync, setLastSync] = useState<{ at: Date; pushed: number; pulled: number } | null>(null);
@@ -52,15 +56,15 @@ export default function CloudSyncScreen() {
       : ['#7C2D12', '#9A3412'];
   const heroIcon = cloudReady ? 'cloud-done' : signInRequired ? 'cloud-outline' : 'cloud-offline';
   const heroTitleTxt = cloudReady
-    ? 'Cloud synchronisé ✨'
+    ? t('cloudSyncUi.heroReadyTitle')
     : signInRequired
-      ? 'Connectez-vous au cloud'
-      : 'Configuration cloud requise';
+      ? t('cloudSyncUi.heroSignInTitle')
+      : t('cloudSyncUi.heroConfigTitle');
   const heroSubTxt = cloudReady
-    ? 'Vos données sont protégées et synchronisées sur tous vos appareils'
+    ? t('cloudSyncUi.heroReadySub')
     : signInRequired
-      ? 'Activez la sync multi-appareil avec votre compte gratuit'
-      : 'Le cloud est désactivé — utilisez l\'app normalement, vos données restent en local';
+      ? t('cloudSyncUi.heroSignInSub')
+      : t('cloudSyncUi.heroConfigSub');
 
   const localCount =
     store.transactions.length + store.incomes.length + store.savingsGoals.length +
@@ -74,8 +78,8 @@ export default function CloudSyncScreen() {
     setWorking(null);
     if (r.ok) {
       setLastSync({ at: new Date(), pushed: r.pushed, pulled: 0 });
-      Alert.alert('Envoi réussi', `${r.pushed} éléments envoyés vers Supabase.`);
-    } else { setError(r.error || 'Erreur'); }
+      Alert.alert(t('cloudSyncUi.pushOkTitle'), t('cloudSyncUi.pushOkBody', { n: r.pushed }));
+    } else { setError(r.error || t('cloudSyncUi.errorGeneric')); }
   };
 
   const doPull = async () => {
@@ -84,8 +88,8 @@ export default function CloudSyncScreen() {
     setWorking(null);
     if (r.ok) {
       setLastSync({ at: new Date(), pushed: 0, pulled: r.pulled });
-      Alert.alert('Récupération réussie', `${r.pulled} éléments récupérés depuis Supabase.`);
-    } else { setError(r.error || 'Erreur'); }
+      Alert.alert(t('cloudSyncUi.pullOkTitle'), t('cloudSyncUi.pullOkBody', { n: r.pulled }));
+    } else { setError(r.error || t('cloudSyncUi.errorGeneric')); }
   };
 
   const doBoth = async () => {
@@ -94,7 +98,7 @@ export default function CloudSyncScreen() {
     setWorking(null);
     if (!r.error) {
       setLastSync({ at: new Date(), pushed: r.pushed, pulled: r.pulled });
-      Alert.alert('Sync complète', `↑ ${r.pushed} envoyés · ↓ ${r.pulled} récupérés`);
+      Alert.alert(t('cloudSyncUi.syncOkTitle'), t('cloudSyncUi.syncOkBody', { pushed: r.pushed, pulled: r.pulled }));
     } else { setError(r.error); }
   };
 
@@ -104,7 +108,7 @@ export default function CloudSyncScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
           <Ionicons name="chevron-back" size={24} color={theme.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>Sync Cloud</Text>
+        <Text style={styles.title}>{t('cloudSyncUi.title')}</Text>
         <View style={{ width: 36 }} />
       </View>
 
@@ -121,22 +125,22 @@ export default function CloudSyncScreen() {
         </LinearGradient>
 
         <Card style={styles.statCard}>
-          <Text style={styles.statTitle}>État local</Text>
+          <Text style={styles.statTitle}>{t('cloudSyncUi.localState')}</Text>
           <View style={styles.statRow}>
-            <Text style={styles.statLabel}>Éléments stockés</Text>
+            <Text style={styles.statLabel}>{t('cloudSyncUi.localItems')}</Text>
             <Text style={styles.statValue}>{localCount}</Text>
           </View>
           <View style={styles.statRow}>
-            <Text style={styles.statLabel}>Configuration Supabase</Text>
+            <Text style={styles.statLabel}>{t('cloudSyncUi.configLabel')}</Text>
             <Text style={[styles.statValue, { color: isSupabaseConfigured() ? theme.success : theme.error }]}>
-              {isSupabaseConfigured() ? 'OK' : 'Manquante'}
+              {isSupabaseConfigured() ? t('cloudSyncUi.configOk') : t('cloudSyncUi.configMissing')}
             </Text>
           </View>
           {lastSync && (
             <View style={styles.statRow}>
-              <Text style={styles.statLabel}>Dernière sync</Text>
+              <Text style={styles.statLabel}>{t('cloudSyncUi.lastSync')}</Text>
               <Text style={styles.statValue}>
-                {lastSync.at.toLocaleTimeString('fr-CH')}  ↑{lastSync.pushed} ↓{lastSync.pulled}
+                {t('cloudSyncUi.lastSyncFmt', { time: lastSync.at.toLocaleTimeString(locale), pushed: lastSync.pushed, pulled: lastSync.pulled })}
               </Text>
             </View>
           )}
@@ -151,9 +155,9 @@ export default function CloudSyncScreen() {
 
         {cloudReady ? (
           <>
-            <Text style={styles.sectionTitle}>Actions de sync</Text>
+            <Text style={styles.sectionTitle}>{t('cloudSyncUi.actionsTitle')}</Text>
             <Button
-              title={working === 'both' ? 'Sync en cours...' : 'Sync complète (recommandé)'}
+              title={working === 'both' ? t('cloudSyncUi.syncing') : t('cloudSyncUi.syncFull')}
               onPress={doBoth}
               loading={working === 'both'}
               disabled={!!working}
@@ -161,7 +165,7 @@ export default function CloudSyncScreen() {
               style={{ marginBottom: Spacing.md }}
             />
             <Button
-              title={working === 'push' ? 'Envoi...' : 'Envoyer mes données vers le cloud ↑'}
+              title={working === 'push' ? t('cloudSyncUi.sending') : t('cloudSyncUi.sendCta')}
               variant="secondary"
               onPress={doPush}
               loading={working === 'push'}
@@ -170,7 +174,7 @@ export default function CloudSyncScreen() {
               style={{ marginBottom: Spacing.md }}
             />
             <Button
-              title={working === 'pull' ? 'Récupération...' : 'Récupérer depuis le cloud ↓'}
+              title={working === 'pull' ? t('cloudSyncUi.pulling') : t('cloudSyncUi.pullCta')}
               variant="secondary"
               onPress={doPull}
               loading={working === 'pull'}
@@ -180,39 +184,28 @@ export default function CloudSyncScreen() {
           </>
         ) : signInRequired ? (
           <Button
-            title="Se connecter au cloud"
+            title={t('cloudSyncUi.signInCta')}
             onPress={() => router.push('/auth')}
             fullWidth size="lg" icon="log-in"
             style={{ marginTop: Spacing.lg }}
           />
         ) : (
           <View style={[styles.helpCard, { backgroundColor: `${theme.warning}10`, borderColor: theme.warning, borderWidth: 1, padding: Spacing.lg, marginTop: Spacing.lg, borderRadius: BorderRadius.lg }]}>
-            <Text style={[styles.helpTitle, { color: theme.warning }]}>Cloud désactivé sur cet appareil</Text>
-            <Text style={styles.helpText}>
-              La sync cloud n'est pas configurée. Vos données restent stockées localement sur votre iPhone — l'app fonctionne normalement sans cloud.
-            </Text>
+            <Text style={[styles.helpTitle, { color: theme.warning }]}>{t('cloudSyncUi.cloudDisabledTitle')}</Text>
+            <Text style={styles.helpText}>{t('cloudSyncUi.cloudDisabledBody')}</Text>
           </View>
         )}
 
         {working && <ActivityIndicator color={theme.primaryLight} style={{ marginTop: Spacing.lg }} />}
 
         <Card style={[styles.helpCard, { marginTop: Spacing.xl }]}>
-          <Text style={styles.helpTitle}>Sync automatique activée ✨</Text>
-          <Text style={styles.helpText}>
-            • 🔐 <Text style={styles.bold}>À la connexion</Text> : récupération automatique des données cloud{'\n'}
-            • 📲 <Text style={styles.bold}>Retour dans l'app</Text> : pull automatique (toutes les 30 s max){'\n'}
-            • 💾 <Text style={styles.bold}>Mise en arrière-plan</Text> : push automatique de vos changements{'\n'}
-            • 🔄 <Text style={styles.bold}>Sync manuelle</Text> : utilisez les boutons ci-dessus pour forcer
-          </Text>
+          <Text style={styles.helpTitle}>{t('cloudSyncUi.helpAutoTitle')}</Text>
+          <Text style={styles.helpText}>{t('cloudSyncUi.helpAutoBody')}</Text>
         </Card>
 
         <Card style={[styles.helpCard, { marginTop: Spacing.md }]}>
-          <Text style={styles.helpTitle}>Actions manuelles</Text>
-          <Text style={styles.helpText}>
-            • La <Text style={styles.bold}>sync complète</Text> envoie vos données puis récupère le cloud{'\n'}
-            • <Text style={styles.bold}>Envoyer ↑</Text> : vos données locales écrasent le cloud{'\n'}
-            • <Text style={styles.bold}>Récupérer ↓</Text> : le cloud écrase vos données locales
-          </Text>
+          <Text style={styles.helpTitle}>{t('cloudSyncUi.helpManualTitle')}</Text>
+          <Text style={styles.helpText}>{t('cloudSyncUi.helpManualBody')}</Text>
         </Card>
       </ScrollView>
     </View>

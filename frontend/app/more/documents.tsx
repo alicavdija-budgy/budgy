@@ -28,26 +28,28 @@ import { Card, EmptyState, Button } from '../../src/components/ui';
 import ZoomableImage from '../../src/components/ZoomableImage';
 import CornerEditor from '../../src/components/CornerEditor';
 import type { DocumentCategory } from '../../src/types';
+import { useTranslation } from '../../src/hooks/useTranslation';
+import { DATE_LOCALES } from '../../src/i18n/translations';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
 type FilterType = 'original' | 'bw' | 'sharp' | 'magic';
 
-const FILTERS: { id: FilterType; label: string; emoji: string }[] = [
-  { id: 'original', label: 'Original', emoji: '📷' },
-  { id: 'magic', label: 'Doc',      emoji: '✨' },
-  { id: 'bw',      label: 'N & B',   emoji: '⚫' },
-  { id: 'sharp',   label: 'Net',     emoji: '🔍' },
+const FILTER_KEYS: { id: FilterType; tKey: 'filterOriginal' | 'filterDoc' | 'filterBW' | 'filterSharp'; emoji: string }[] = [
+  { id: 'original', tKey: 'filterOriginal', emoji: '📷' },
+  { id: 'magic', tKey: 'filterDoc',      emoji: '✨' },
+  { id: 'bw',      tKey: 'filterBW',   emoji: '⚫' },
+  { id: 'sharp',   tKey: 'filterSharp',     emoji: '🔍' },
 ];
 
-const CATEGORIES: { id: DocumentCategory; label: string; emoji: string; color: string }[] = [
-  { id: 'contracts', label: 'Contrats', emoji: '📄', color: '#A78BFA' },
-  { id: 'insurance', label: 'Assurances', emoji: '🛡️', color: '#34D399' },
-  { id: 'banking', label: 'Bancaire', emoji: '🏦', color: '#60A5FA' },
-  { id: 'health', label: 'Santé', emoji: '💊', color: '#F87171' },
-  { id: 'tax', label: 'Fiscal', emoji: '📊', color: '#FBBF24' },
-  { id: 'identity', label: 'Identité', emoji: '🪪', color: '#F472B6' },
-  { id: 'other', label: 'Autres', emoji: '📁', color: '#9CA3AF' },
+const CATEGORY_KEYS: { id: DocumentCategory; tKey: 'catContracts' | 'catInsurance' | 'catBanking' | 'catHealth' | 'catTax' | 'catIdentity' | 'catOther'; emoji: string; color: string }[] = [
+  { id: 'contracts', tKey: 'catContracts', emoji: '📄', color: '#A78BFA' },
+  { id: 'insurance', tKey: 'catInsurance', emoji: '🛡️', color: '#34D399' },
+  { id: 'banking', tKey: 'catBanking', emoji: '🏦', color: '#60A5FA' },
+  { id: 'health', tKey: 'catHealth', emoji: '💊', color: '#F87171' },
+  { id: 'tax', tKey: 'catTax', emoji: '📊', color: '#FBBF24' },
+  { id: 'identity', tKey: 'catIdentity', emoji: '🪪', color: '#F472B6' },
+  { id: 'other', tKey: 'catOther', emoji: '📁', color: '#9CA3AF' },
 ];
 
 type Mode = 'list' | 'capture' | 'review' | 'crop' | 'edit' | 'detail';
@@ -57,6 +59,10 @@ export default function DocumentsScreen() {
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { t, lang } = useTranslation();
+  const locale = DATE_LOCALES[lang];
+  const FILTERS = useMemo(() => FILTER_KEYS.map((f) => ({ id: f.id, label: t(`documents.${f.tKey}`), emoji: f.emoji })), [t]);
+  const CATEGORIES = useMemo(() => CATEGORY_KEYS.map((c) => ({ id: c.id, label: t(`documents.${c.tKey}`), emoji: c.emoji, color: c.color })), [t]);
   const { documents, addDocument, deleteDocument } = useStore();
   const [permission, requestPermission] = useCameraPermissions();
   const [mode, setMode] = useState<Mode>('list');
@@ -101,12 +107,12 @@ export default function DocumentsScreen() {
 
   const startCapture = async () => {
     if (Platform.OS === 'web') {
-      Alert.alert('Indisponible sur le web', 'La capture par caméra ne fonctionne que sur mobile. Lancez Budgy sur votre iPhone/Android pour scanner.');
+      Alert.alert(t('documents.webUnavailableTitle'), t('documents.webUnavailableBody'));
       return;
     }
     if (!permission?.granted) {
       const r = await requestPermission();
-      if (!r.granted) { Alert.alert('Caméra', 'Autorisez l\'accès à la caméra pour scanner.'); return; }
+      if (!r.granted) { Alert.alert(t('documents.cameraTitle'), t('documents.cameraPermBody')); return; }
     }
     setPages([]);
     setMode('capture');
@@ -128,7 +134,7 @@ export default function DocumentsScreen() {
         setMode('review');
       }
     } catch (e: any) {
-      Alert.alert('Erreur', e?.message || 'Capture impossible');
+      Alert.alert(t('documents.errorTitle'), e?.message || t('documents.captureFailed'));
     } finally {
       setCapturing(false);
     }
@@ -220,7 +226,7 @@ export default function DocumentsScreen() {
 
   const finishCapture = () => {
     if (pages.length === 0) {
-      Alert.alert('Aucune page', 'Capturez au moins une page avant de continuer.');
+      Alert.alert(t('documents.noPagesTitle'), t('documents.noPagesBody'));
       return;
     }
     setMode('edit');
@@ -243,7 +249,7 @@ export default function DocumentsScreen() {
 
   const retakePage = (idx: number) => {
     if (Platform.OS === 'web') {
-      Alert.alert('Indisponible sur le web', 'La capture caméra fonctionne sur mobile.');
+      Alert.alert(t('documents.webUnavailableTitle'), t('documents.webUnavailableRetakeBody'));
       return;
     }
     setRetakeIndex(idx);
@@ -285,10 +291,10 @@ export default function DocumentsScreen() {
 <body>
 ${pageDataUrls.map((src, i) => `
   <div class="page">
-    <img src="${src}" alt="Page ${i + 1}" />
+    <img src="${src}" alt="${t('documents.pageLabel', { n: i + 1 })}" />
   </div>
 `).join('')}
-<div class="footer">Scanné avec Budgy · ${docTitle || 'Document'}</div>
+<div class="footer">${t('documents.footerPdf', { title: docTitle || t('documents.footerDefaultTitle') })}</div>
 </body>
 </html>`;
     const { uri } = await Print.printToFileAsync({ html, base64: false });
@@ -302,8 +308,8 @@ ${pageDataUrls.map((src, i) => `
   };
 
   const handleSave = async () => {
-    if (!title.trim()) { Alert.alert('Titre manquant', 'Donnez un nom à ce document.'); return; }
-    if (pages.length === 0) { Alert.alert('Pages manquantes', 'Scannez au moins une page.'); return; }
+    if (!title.trim()) { Alert.alert(t('documents.missingTitleTitle'), t('documents.missingTitleBody')); return; }
+    if (pages.length === 0) { Alert.alert(t('documents.missingPagesTitle'), t('documents.missingPagesBody')); return; }
 
     setGenerating(true);
     try {
@@ -333,9 +339,9 @@ ${pageDataUrls.map((src, i) => `
       // reset
       setTitle(''); setNote(''); setExpiresAt(''); setTagsInput('');
       setPages([]); setMode('list');
-      Alert.alert('✅ PDF créé', `Document "${title.trim()}" enregistré (${pages.length} page${pages.length > 1 ? 's' : ''}).`);
+      Alert.alert(t('documents.pdfCreatedTitle'), t('documents.pdfCreatedBody', { title: title.trim(), n: pages.length, s: pages.length > 1 ? 's' : '' }));
     } catch (e: any) {
-      Alert.alert('Erreur', e?.message || 'Impossible de générer le PDF.');
+      Alert.alert(t('documents.errorTitle'), e?.message || t('documents.pdfErrorBody'));
     } finally {
       setGenerating(false);
     }
@@ -344,7 +350,7 @@ ${pageDataUrls.map((src, i) => `
   const sharePdf = async (doc: typeof sel) => {
     if (!doc) return;
     if (!doc.pdfUri) {
-      Alert.alert('Pas de PDF', 'Ce document a été sauvegardé sans PDF.');
+      Alert.alert(t('documents.noPdfTitle'), t('documents.noPdfBody'));
       return;
     }
     try {
@@ -355,16 +361,16 @@ ${pageDataUrls.map((src, i) => `
         name: doc.title || 'document',
         dialogTitle: doc.title,
       } as any);
-      if (!r.ok && r.error) Alert.alert('Partage impossible', r.error);
+      if (!r.ok && r.error) Alert.alert(t('documents.shareFailedTitle'), r.error);
     } catch (e: any) {
-      Alert.alert('Erreur', e?.message || 'Partage impossible');
+      Alert.alert(t('documents.errorTitle'), e?.message || t('documents.shareFailedFallback'));
     }
   };
 
   const onDelete = (id: string) => {
-    Alert.alert('Supprimer ?', 'Le document sera définitivement effacé.', [
-      { text: 'Annuler', style: 'cancel' },
-      { text: 'Supprimer', style: 'destructive', onPress: () => { deleteDocument(id); setSelected(null); setMode('list'); } },
+    Alert.alert(t('documents.deleteTitle'), t('documents.deleteBody'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('common.delete'), style: 'destructive', onPress: () => { deleteDocument(id); setSelected(null); setMode('list'); } },
     ]);
   };
 
@@ -397,7 +403,7 @@ ${pageDataUrls.map((src, i) => `
           <View style={styles.pageCounterTop}>
             <Ionicons name="image" size={14} color="#FFF" />
             <Text style={styles.camTitle}>
-              {retakeIndex !== null ? `Refaire page ${retakeIndex + 1}` : 'Aperçu'}
+              {retakeIndex !== null ? t('documents.retakePagePrefix', { n: retakeIndex + 1 }) : t('documents.previewLabel')}
             </Text>
           </View>
           <View style={{ width: 44 }} />
@@ -412,7 +418,7 @@ ${pageDataUrls.map((src, i) => `
           {filterApplying && (
             <View style={styles.reviewBusy} pointerEvents="none">
               <ActivityIndicator color="#34D399" />
-              <Text style={styles.reviewBusyText}>Application du filtre...</Text>
+              <Text style={styles.reviewBusyText}>{t('documents.applyingFilter')}</Text>
             </View>
           )}
         </View>
@@ -425,7 +431,7 @@ ${pageDataUrls.map((src, i) => `
             disabled={filterApplying}
           >
             <Text style={styles.filterEmoji}>✂️</Text>
-            <Text style={styles.filterLabel}>Ajuster</Text>
+            <Text style={styles.filterLabel}>{t('documents.adjustLabel')}</Text>
           </TouchableOpacity>
           {FILTERS.map((f) => (
             <TouchableOpacity
@@ -446,7 +452,7 @@ ${pageDataUrls.map((src, i) => `
         <View style={[styles.reviewBottom, { paddingBottom: insets.bottom + 18 }]}>
           <TouchableOpacity style={styles.reviewBtnGhost} onPress={cancelShot}>
             <Ionicons name="refresh" size={20} color="#FFF" />
-            <Text style={styles.reviewBtnGhostTxt}>Reprendre</Text>
+            <Text style={styles.reviewBtnGhostTxt}>{t('documents.retakeBtn')}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.reviewBtnPrimary} onPress={validateShot}>
             <LinearGradient
@@ -457,7 +463,7 @@ ${pageDataUrls.map((src, i) => `
             >
               <Ionicons name="checkmark" size={22} color="#0E1530" />
               <Text style={styles.reviewBtnPrimTxt}>
-                {retakeIndex !== null ? 'Remplacer' : 'Valider'}
+                {retakeIndex !== null ? t('documents.replaceBtn') : t('documents.validateBtn')}
               </Text>
             </LinearGradient>
           </TouchableOpacity>
@@ -477,7 +483,7 @@ ${pageDataUrls.map((src, i) => `
           </TouchableOpacity>
           <View style={styles.pageCounterTop}>
             <Ionicons name="documents" size={14} color="#FFF" />
-            <Text style={styles.camTitle}>{pages.length} page{pages.length > 1 ? 's' : ''}</Text>
+            <Text style={styles.camTitle}>{pages.length > 1 ? t('documents.pageCountPlural', { n: pages.length }) : t('documents.pageCountSingular', { n: pages.length })}</Text>
           </View>
           <View style={{ width: 44 }} />
         </View>
@@ -494,7 +500,7 @@ ${pageDataUrls.map((src, i) => `
             <View style={styles.maskSide} />
           </View>
           <View style={styles.maskBottom}>
-            <Text style={styles.frameHint}>Cadrez le document dans le rectangle</Text>
+            <Text style={styles.frameHint}>{t('documents.frameHint')}</Text>
           </View>
         </View>
 
@@ -526,10 +532,10 @@ ${pageDataUrls.map((src, i) => `
         <View style={[styles.camBottom, { paddingBottom: insets.bottom + 18 }]}>
           <TouchableOpacity
             style={styles.smallActionBtn}
-            onPress={() => { if (pages.length > 0) setMode('edit'); else Alert.alert('Aucune page', 'Capturez au moins une page.'); }}
+            onPress={() => { if (pages.length > 0) setMode('edit'); else Alert.alert(t('documents.noPagesTitle'), t('documents.noPagesCameraBody')); }}
           >
             <Ionicons name="checkmark" size={20} color="#FFF" />
-            <Text style={styles.smallActionTxt}>Terminer</Text>
+            <Text style={styles.smallActionTxt}>{t('documents.doneBtn')}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.captureBtn} onPress={handleCapture} disabled={capturing}>
@@ -538,7 +544,7 @@ ${pageDataUrls.map((src, i) => `
 
           <TouchableOpacity style={styles.smallActionBtn} onPress={handleCapture} disabled={capturing}>
             <Ionicons name="add-circle" size={20} color="#FFF" />
-            <Text style={styles.smallActionTxt}>Page +</Text>
+            <Text style={styles.smallActionTxt}>{t('documents.pagePlus')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -553,7 +559,7 @@ ${pageDataUrls.map((src, i) => `
           <TouchableOpacity onPress={() => setMode('capture')} style={styles.iconBtn}>
             <Ionicons name="chevron-back" size={24} color={theme.text} />
           </TouchableOpacity>
-          <Text style={styles.title}>Nouveau PDF</Text>
+          <Text style={styles.title}>{t('documents.editHeader')}</Text>
           <View style={{ width: 36 }} />
         </View>
         <ScrollView contentContainerStyle={{ padding: Spacing.lg }} keyboardShouldPersistTaps="handled">
@@ -562,11 +568,11 @@ ${pageDataUrls.map((src, i) => `
           <View style={styles.pdfPreview}>
             <View style={styles.pdfHeader}>
               <Ionicons name="document-text" size={20} color={theme.primary} />
-              <Text style={styles.pdfHeaderTxt}>{pages.length} page{pages.length > 1 ? 's' : ''} scannée{pages.length > 1 ? 's' : ''}</Text>
+              <Text style={styles.pdfHeaderTxt}>{t('documents.scannedPagesLabel', { n: pages.length, s: pages.length > 1 ? 's' : '' })}</Text>
               <View style={{ flex: 1 }} />
               <TouchableOpacity style={styles.addPageMini} onPress={() => setMode('capture')}>
                 <Ionicons name="add" size={16} color={theme.primary} />
-                <Text style={styles.addPageMiniTxt}>Page</Text>
+                <Text style={styles.addPageMiniTxt}>{t('documents.pageBtn')}</Text>
               </TouchableOpacity>
             </View>
             <View style={styles.gridWrap}>
@@ -607,14 +613,14 @@ ${pageDataUrls.map((src, i) => `
               })}
               <TouchableOpacity style={styles.gridAddTile} onPress={() => setMode('capture')}>
                 <Ionicons name="add-circle" size={28} color={theme.primary} />
-                <Text style={styles.gridAddTxt}>Ajouter{'\n'}une page</Text>
+                <Text style={styles.gridAddTxt}>{t('documents.addPageMulti')}</Text>
               </TouchableOpacity>
             </View>
           </View>
 
-          <Text style={styles.label}>Titre</Text>
-          <TextInput style={styles.input} value={title} onChangeText={setTitle} placeholder="Ex: Bail logement, Contrat travail..." placeholderTextColor={theme.textTertiary} />
-          <Text style={styles.label}>Catégorie</Text>
+          <Text style={styles.label}>{t('documents.labelTitle')}</Text>
+          <TextInput style={styles.input} value={title} onChangeText={setTitle} placeholder={t('documents.placeholderTitle')} placeholderTextColor={theme.textTertiary} />
+          <Text style={styles.label}>{t('documents.labelCategory')}</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View style={styles.catRow}>
               {CATEGORIES.map((c) => (
@@ -625,14 +631,14 @@ ${pageDataUrls.map((src, i) => `
               ))}
             </View>
           </ScrollView>
-          <Text style={styles.label}>Tags (séparés par virgules)</Text>
-          <TextInput style={styles.input} value={tagsInput} onChangeText={setTagsInput} placeholder="voiture, urgent, 2025" placeholderTextColor={theme.textTertiary} />
-          <Text style={styles.label}>Date d'expiration (optionnel)</Text>
+          <Text style={styles.label}>{t('documents.labelTags')}</Text>
+          <TextInput style={styles.input} value={tagsInput} onChangeText={setTagsInput} placeholder={t('documents.placeholderTags')} placeholderTextColor={theme.textTertiary} />
+          <Text style={styles.label}>{t('documents.labelExpiresAt')}</Text>
           <TextInput style={styles.input} value={expiresAt} onChangeText={setExpiresAt} placeholder="YYYY-MM-DD" placeholderTextColor={theme.textTertiary} />
-          <Text style={styles.label}>Note (optionnel)</Text>
-          <TextInput style={[styles.input, { minHeight: 80, textAlignVertical: 'top' }]} value={note} onChangeText={setNote} placeholder="Informations complémentaires" placeholderTextColor={theme.textTertiary} multiline />
+          <Text style={styles.label}>{t('documents.labelNote')}</Text>
+          <TextInput style={[styles.input, { minHeight: 80, textAlignVertical: 'top' }]} value={note} onChangeText={setNote} placeholder={t('documents.placeholderNote')} placeholderTextColor={theme.textTertiary} multiline />
           <Button
-            title={generating ? 'Génération du PDF...' : 'Générer le PDF & enregistrer'}
+            title={generating ? t('documents.ctaGenerating') : t('documents.ctaGeneratePdf')}
             onPress={handleSave}
             loading={generating}
             fullWidth
@@ -661,19 +667,19 @@ ${pageDataUrls.map((src, i) => `
         <ScrollView contentContainerStyle={{ padding: Spacing.lg }}>
           <View style={styles.detailMeta}>
             <Text style={styles.detailCat}>{CATEGORIES.find((c) => c.id === sel.category)?.emoji} {CATEGORIES.find((c) => c.id === sel.category)?.label}</Text>
-            <Text style={styles.detailDate}>{new Date(sel.createdAt).toLocaleDateString('fr-CH')}</Text>
+            <Text style={styles.detailDate}>{new Date(sel.createdAt).toLocaleDateString(locale)}</Text>
           </View>
           {sel.pdfUri ? (
-            <Button title="Ouvrir / Partager le PDF" onPress={() => sharePdf(sel)} fullWidth icon="share" size="lg" style={{ marginBottom: Spacing.lg }} />
+            <Button title={t('documents.openSharePdf')} onPress={() => sharePdf(sel)} fullWidth icon="share" size="lg" style={{ marginBottom: Spacing.lg }} />
           ) : null}
-          <Text style={styles.label}>Pages ({(sel.pages || [sel.imageBase64]).length})</Text>
+          <Text style={styles.label}>{t('documents.pagesLabel', { n: (sel.pages || [sel.imageBase64]).length })}</Text>
           <View style={styles.zoomHint}>
             <Ionicons name="resize" size={12} color={theme.textTertiary} />
-            <Text style={styles.zoomHintTxt}>Pincez pour zoomer · Double-tap pour réinitialiser</Text>
+            <Text style={styles.zoomHintTxt}>{t('documents.zoomHint')}</Text>
           </View>
           {(sel.pages || [sel.imageBase64]).map((p, i) => (
             <View key={i} style={styles.detailPageCard}>
-              <View style={styles.detailPageNum}><Text style={styles.detailPageNumTxt}>Page {i + 1}</Text></View>
+              <View style={styles.detailPageNum}><Text style={styles.detailPageNumTxt}>{t('documents.pageLabel', { n: i + 1 })}</Text></View>
               <ZoomableImage
                 source={{ uri: p }}
                 style={styles.detailPageImg}
@@ -681,7 +687,7 @@ ${pageDataUrls.map((src, i) => `
               />
             </View>
           ))}
-          {sel.note ? (<><Text style={styles.label}>Note</Text><Text style={styles.detailNote}>{sel.note}</Text></>) : null}
+          {sel.note ? (<><Text style={styles.label}>{t('documents.noteLabel')}</Text><Text style={styles.detailNote}>{sel.note}</Text></>) : null}
           {sel.tags?.length ? (
             <View style={styles.tagsRow}>
               {sel.tags.map((t) => (<View key={t} style={styles.tagChip}><Text style={styles.tagTxt}>#{t}</Text></View>))}
@@ -699,7 +705,7 @@ ${pageDataUrls.map((src, i) => `
         <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
           <Ionicons name="chevron-back" size={24} color={theme.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>Mon classeur</Text>
+        <Text style={styles.title}>{t('documents.listTitle')}</Text>
         <TouchableOpacity onPress={startCapture} style={styles.iconBtn}>
           <Ionicons name="scan" size={22} color={theme.primary} />
         </TouchableOpacity>
@@ -710,19 +716,19 @@ ${pageDataUrls.map((src, i) => `
           style={styles.search}
           value={search}
           onChangeText={setSearch}
-          placeholder="Rechercher un document, un tag..."
+          placeholder={t('documents.searchPh')}
           placeholderTextColor={theme.textTertiary}
         />
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: Spacing.md }}>
           <View style={styles.filterRow}>
             <TouchableOpacity style={[styles.filterChip, filter === 'all' && styles.filterChipActive]} onPress={() => setFilter('all')}>
-              <Text style={[styles.filterText, filter === 'all' && styles.filterTextActive]}>Tous · {counts.all}</Text>
+              <Text style={[styles.filterText, filter === 'all' && styles.filterTextActive]}>{t('documents.filterAll', { n: counts.all })}</Text>
             </TouchableOpacity>
             {CATEGORIES.map((c) => (
               <TouchableOpacity key={c.id} style={[styles.filterChip, filter === c.id && { backgroundColor: `${c.color}30`, borderColor: c.color }]} onPress={() => setFilter(c.id)}>
                 <Text style={{ fontSize: 14 }}>{c.emoji}</Text>
-                <Text style={[styles.filterText, filter === c.id && { color: c.color }]}>{c.label} · {counts[c.id] || 0}</Text>
+                <Text style={[styles.filterText, filter === c.id && { color: c.color }]}>{t('documents.filterCategoryCount', { label: c.label, n: counts[c.id] || 0 })}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -732,11 +738,11 @@ ${pageDataUrls.map((src, i) => `
         <View style={styles.qaRow}>
           <TouchableOpacity style={[styles.qaBtn, styles.qaPrimary]} onPress={startCapture} activeOpacity={0.85}>
             <Ionicons name="scan" size={18} color="#FFF" />
-            <Text style={styles.qaTxtPrimary}>Scanner</Text>
+            <Text style={styles.qaTxtPrimary}>{t('documents.scanCta')}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.qaBtn} onPress={() => router.push('/more/email-import?mode=contract' as any)} activeOpacity={0.85}>
             <Ionicons name="document-attach" size={18} color={theme.primary} />
-            <Text style={styles.qaTxt}>Importer un contrat</Text>
+            <Text style={styles.qaTxt}>{t('documents.importContract')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -749,9 +755,9 @@ ${pageDataUrls.map((src, i) => `
               <View style={styles.emptyIconRing}>
                 <Ionicons name="folder-open" size={42} color={theme.primary} />
               </View>
-              <Text style={styles.emptyTitle}>Votre classeur premium</Text>
+              <Text style={styles.emptyTitle}>{t('documents.emptyHeroTitle')}</Text>
               <Text style={styles.emptySub}>
-                Centralisez vos contrats, factures, assurances et documents fiscaux. Scan multi-pages, recherche IA, rappels d'échéance — tout au même endroit.
+                {t('documents.emptyHeroSub')}
               </Text>
             </LinearGradient>
 
@@ -769,25 +775,25 @@ ${pageDataUrls.map((src, i) => `
             <View style={styles.emptyCtas}>
               <TouchableOpacity style={[styles.emptyCta, styles.emptyCtaPrimary]} onPress={startCapture} activeOpacity={0.85}>
                 <Ionicons name="scan" size={28} color="#FFF" />
-                <Text style={styles.emptyCtaTitle}>Scanner</Text>
-                <Text style={styles.emptyCtaSub}>Multi-pages PDF</Text>
+                <Text style={styles.emptyCtaTitle}>{t('documents.ctaScanTitle')}</Text>
+                <Text style={styles.emptyCtaSub}>{t('documents.ctaScanSub')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.emptyCta} onPress={() => router.push('/more/email-import?mode=contract' as any)} activeOpacity={0.85}>
                 <Ionicons name="cloud-upload" size={28} color={theme.primary} />
-                <Text style={[styles.emptyCtaTitle, { color: theme.primary }]}>Importer un contrat</Text>
-                <Text style={styles.emptyCtaSub}>PDF · Photo · Fichier</Text>
+                <Text style={[styles.emptyCtaTitle, { color: theme.primary }]}>{t('documents.ctaImportTitle')}</Text>
+                <Text style={styles.emptyCtaSub}>{t('documents.ctaImportSub')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.emptyCta} onPress={() => router.push('/more/add-contract' as any)} activeOpacity={0.85}>
                 <Ionicons name="document-text" size={28} color={theme.success} />
-                <Text style={[styles.emptyCtaTitle, { color: theme.success }]}>Contrat</Text>
-                <Text style={styles.emptyCtaSub}>Saisie manuelle</Text>
+                <Text style={[styles.emptyCtaTitle, { color: theme.success }]}>{t('documents.ctaManualTitle')}</Text>
+                <Text style={styles.emptyCtaSub}>{t('documents.ctaManualSub')}</Text>
               </TouchableOpacity>
             </View>
 
             {/* Pro tip */}
             <View style={styles.emptyTipRow}>
               <Ionicons name="sparkles" size={16} color={theme.warning} />
-              <Text style={styles.emptyTip}>Astuce — Scannez vos contrats (assurance, télécom, leasing) dès aujourd'hui pour activer les rappels d'échéance.</Text>
+              <Text style={styles.emptyTip}>{t('documents.emptyTip')}</Text>
             </View>
           </View>
         ) : (
@@ -810,7 +816,7 @@ ${pageDataUrls.map((src, i) => `
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.docTitle} numberOfLines={1}>{d.title}</Text>
-                  <Text style={styles.docMeta}>{cat?.label} · {new Date(d.createdAt).toLocaleDateString('fr-CH')}</Text>
+                  <Text style={styles.docMeta}>{cat?.label} · {new Date(d.createdAt).toLocaleDateString(locale)}</Text>
                   {d.tags?.length ? (
                     <Text style={styles.docTags} numberOfLines={1}>{d.tags.map(t => `#${t}`).join(' ')}</Text>
                   ) : null}

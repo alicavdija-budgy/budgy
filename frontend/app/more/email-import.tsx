@@ -8,6 +8,8 @@
  *
  * Tous les chemins convergent vers /api/email/parse (texte) ou /api/scanner/ocr (image/PDF).
  * AUCUN partage depuis Gmail, AUCUNE intent Mail, AUCUNE adresse email à configurer.
+ *
+ * i18n complet (fr/en/de/it) — v3.9.0 build 73.
  */
 
 import React, { useState, useMemo } from 'react';
@@ -31,6 +33,7 @@ import { useStore } from '../../src/stores/useStore';
 import type { Contract } from '../../src/types';
 import { Card, Button } from '../../src/components/ui';
 import { humanizeError } from '../../src/lib/errorSanitizer';
+import { useTranslation } from '../../src/hooks/useTranslation';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://api.budgy.ch';
 
@@ -43,10 +46,8 @@ export default function ImportInvoiceScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ mode?: string }>();
   const { addInvoice, addContract } = useStore();
+  const { t } = useTranslation();
 
-  // Mode = invoice|contract|null (choisi explicitement par l'utilisateur via
-  // les CTAs depuis Factures/Dépenses ou Contrats/Mon Classeur).
-  // Si null → afficher d'abord un sélecteur de type.
   const initialMode: 'invoice' | 'contract' | null = useMemo(() => {
     const m = String(params.mode || '').toLowerCase();
     return m === 'invoice' || m === 'contract' ? m : null;
@@ -54,19 +55,18 @@ export default function ImportInvoiceScreen() {
   const [mode, setMode] = useState<'invoice' | 'contract' | null>(initialMode);
 
   const [busy, setBusy] = useState(false);
-  const [busyLabel, setBusyLabel] = useState('Analyse...');
+  const [busyLabel, setBusyLabel] = useState(t('emailImport.busyAnalyzing'));
   const [result, setResult] = useState<any>(null);
-  // Pour la fallback "OCR a échoué mais on garde le fichier"
   const [pendingFile, setPendingFile] = useState<{ uri: string; mime: string } | null>(null);
 
   // ── Backend calls ──
   const parseEmailText = async (content: string, subject = '') => {
     if (content.trim().length < 20) {
-      Alert.alert('Contenu trop court', 'Pas assez de texte pour analyser.');
+      Alert.alert(t('emailImport.contentTooShortTitle'), t('emailImport.contentTooShortBody'));
       return;
     }
     setBusy(true);
-    setBusyLabel('IA analyse votre facture...');
+    setBusyLabel(t('emailImport.busyAiInvoice'));
     setResult(null);
     try {
       const r = await safeFetchJson<any>(`${BACKEND_URL}/api/email/parse`, {
@@ -77,14 +77,11 @@ export default function ImportInvoiceScreen() {
       const data = r.data || { success: false, error: r.error };
       if (data.success) setResult({ ...data, _source: 'email' });
       else Alert.alert(
-        'Impossible d\'importer cette facture',
-        data.error || 'Veuillez réessayer ou choisir un autre fichier.'
+        t('emailImport.importFailedTitle'),
+        data.error || t('emailImport.importFailedFallback')
       );
     } catch (e: any) {
-      Alert.alert(
-        'Connexion impossible',
-        'Vérifiez votre connexion Internet et réessayez.'
-      );
+      Alert.alert(t('emailImport.noConnectionTitle'), t('emailImport.noConnectionBody'));
     } finally {
       setBusy(false);
     }
@@ -92,7 +89,7 @@ export default function ImportInvoiceScreen() {
 
   const parseImageFile = async (uriOrPath: string) => {
     setBusy(true);
-    setBusyLabel('OCR + IA en cours...');
+    setBusyLabel(t('emailImport.busyOcrAi'));
     setResult(null);
     try {
       let base64 = '';
@@ -102,15 +99,10 @@ export default function ImportInvoiceScreen() {
         const m = /^data:([^;]+);/.exec(uriOrPath);
         if (m) mime = m[1];
       } else if (uriOrPath.toLowerCase().endsWith('.pdf') || uriOrPath.includes('application/pdf')) {
-        // PDF — for now send the raw PDF bytes; backend can OCR first page.
-        // Original PDF stays as attachment in the user's filesystem cache.
         base64 = await readAsBase64(uriOrPath);
         mime = 'application/pdf';
         console.log('[email-import] PDF detected, sending raw bytes for OCR');
       } else {
-        // ALWAYS normalize images (HEIC/HEIF → JPEG, resize, quality)
-        // This fixes the "unsupported image format" error from gpt-4o-mini
-        // on HEIC photos taken on iPhone (default iOS format).
         console.log('[email-import] normalizing image', uriOrPath);
         try {
           const norm = await normalizeImageForUpload(uriOrPath, {
@@ -119,16 +111,12 @@ export default function ImportInvoiceScreen() {
           });
           base64 = norm.base64 || '';
         } catch (normErr) {
-          // Fallback to raw read if normalize fails
           console.warn('[email-import] normalize failed, using raw:', normErr);
           base64 = await readAsBase64(uriOrPath);
         }
       }
       if (!base64) {
-        Alert.alert(
-          'Fichier vide',
-          'Impossible de lire ce fichier. Réessayez avec un autre.'
-        );
+        Alert.alert(t('emailImport.emptyFileTitle'), t('emailImport.emptyFileBody'));
         return;
       }
       console.log('[email-import] OCR call, b64 length:', base64.length, 'mime:', mime);
@@ -139,11 +127,8 @@ export default function ImportInvoiceScreen() {
       }, { timeoutMs: 25000, retries: 1, silent: true });
       const data = r.data || { success: false, error: r.error };
       if (data.success) {
-        // Keep the original URI as attachment for later preview
         setResult({ ...data, _source: 'photo', _originalUri: uriOrPath, _mime: mime });
       } else {
-        // OCR a échoué — on PRÉSERVE le fichier et on permet une saisie
-        // manuelle ; jamais d'écran cul-de-sac (DO OR DIE v3.7.26).
         setPendingFile({ uri: uriOrPath, mime });
         setResult({
           success: false,
@@ -151,14 +136,14 @@ export default function ImportInvoiceScreen() {
           _originalUri: uriOrPath,
           _mime: mime,
           _failedOcr: true,
-          _errorMessage: data.error || 'OCR indisponible',
+          _errorMessage: data.error || 'OCR unavailable',
         });
       }
     } catch (e: any) {
       console.error('[email-import] parseImageFile error:', e);
       const h = humanizeError(e, {
-        title: 'Import impossible',
-        message: 'Vérifiez votre connexion Internet et réessayez.',
+        title: t('emailImport.importImpossibleTitle'),
+        message: t('emailImport.importImpossibleBody'),
       });
       Alert.alert(h.title, h.message);
     } finally {
@@ -168,7 +153,6 @@ export default function ImportInvoiceScreen() {
 
   // ── Action handlers ──
   const handleScanner = () => {
-    // Scanner caméra (OCR direct sans passer par cette page)
     router.push('/scanner-modal');
   };
 
@@ -183,7 +167,7 @@ export default function ImportInvoiceScreen() {
       const file = res.assets[0];
       await parseImageFile(file.uri);
     } catch (e: any) {
-      const h = humanizeError(e, { title: 'Import PDF impossible' });
+      const h = humanizeError(e, { title: t('emailImport.pdfImpossibleTitle') });
       Alert.alert(h.title, h.message);
     }
   };
@@ -204,7 +188,7 @@ export default function ImportInvoiceScreen() {
         await parseImageFile(file.uri);
       }
     } catch (e: any) {
-      const h = humanizeError(e, { title: 'Import impossible' });
+      const h = humanizeError(e, { title: t('emailImport.importImpossibleTitle') });
       Alert.alert(h.title, h.message);
     }
   };
@@ -213,7 +197,7 @@ export default function ImportInvoiceScreen() {
     try {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) {
-        Alert.alert('Permission requise', 'Autorisez l\'accès aux photos pour importer.');
+        Alert.alert(t('emailImport.permissionRequiredTitle'), t('emailImport.permissionRequiredBody'));
         return;
       }
       const res = await ImagePicker.launchImageLibraryAsync({
@@ -225,7 +209,7 @@ export default function ImportInvoiceScreen() {
       const a = res.assets[0];
       await parseImageFile(a.uri);
     } catch (e: any) {
-      const h = humanizeError(e, { title: 'Import impossible' });
+      const h = humanizeError(e, { title: t('emailImport.importImpossibleTitle') });
       Alert.alert(h.title, h.message);
     }
   };
@@ -236,8 +220,8 @@ export default function ImportInvoiceScreen() {
     const isPhoto = result._source === 'photo';
     addInvoice({
       id: `inv_${Date.now()}`,
-      title: result.title || result.merchant || 'Facture',
-      issuer: result.issuer || result.merchant || 'Inconnu',
+      title: result.title || result.merchant || t('emailImport.defaultInvoiceTitle'),
+      issuer: result.issuer || result.merchant || t('emailImport.defaultUnknownIssuer'),
       amount: Number(result.amount) || Number(result.total) || Number(result.total_amount) || 0,
       currency: result.currency || 'CHF',
       dueDate: result.due_date || undefined,
@@ -249,7 +233,7 @@ export default function ImportInvoiceScreen() {
       source: isPhoto ? 'scan' : 'email',
       createdAt: Date.now(),
     });
-    Alert.alert('Facture importée ✓', 'Retrouvez-la dans Plus → Factures.');
+    Alert.alert(t('emailImport.invoiceSavedTitle'), t('emailImport.invoiceSavedBody'));
     setResult(null);
   };
 
@@ -261,54 +245,45 @@ export default function ImportInvoiceScreen() {
     oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
     const contract: Contract = {
       id: `ct_${Date.now()}`,
-      title: result.title || result.merchant || result.issuer || 'Contrat',
+      title: result.title || result.merchant || result.issuer || t('emailImport.defaultContractTitle'),
       issuer: result.issuer || result.merchant || undefined,
       amount: Number(result.amount) || Number(result.total_amount) || 0,
-      // Default to 1 year from today if no explicit expiration parsed
       expirationDate: oneYearLater.toISOString().split('T')[0],
       startDate: result.invoice_date || result.date || today.toISOString().split('T')[0],
       urgent: false,
       autoRenew: true,
       category: result.category || 'assurance',
       createdAt: Date.now(),
-      notes: 'Importé automatiquement (IA). Vérifiez les dates et la prime.',
+      notes: t('emailImport.importedByAiNote'),
     };
     addContract(contract);
     Alert.alert(
-      'Contrat ajouté à Mon Classeur ✓',
-      'Vérifiez la date d\'expiration et la prime dans Plus → Mon Classeur.',
+      t('emailImport.contractSavedTitle'),
+      t('emailImport.contractSavedBody'),
       [
-        { text: 'OK', style: 'cancel' },
-        { text: 'Ouvrir Mon Classeur', onPress: () => router.push('/more/contracts' as any) },
+        { text: t('emailImport.okBtn'), style: 'cancel' },
+        { text: t('emailImport.openBinderCta'), onPress: () => router.push('/more/contracts' as any) },
       ],
     );
     setResult(null);
   };
 
-  /**
-   * Routage par CONTEXTE UTILISATEUR (mode), pas par IA.
-   * v3.7.26 — DO OR DIE :
-   *   mode=invoice → toujours une facture, jamais un contrat
-   *   mode=contract → toujours un contrat, jamais une facture
-   *   mode=null → fallback rétro-compat (très rare en v3.7.26)
-   */
   const saveInvoice = () => {
     if (!result) return;
     if (mode === 'contract') return persistAsContract();
     if (mode === 'invoice') return persistAsInvoice();
 
-    // Fallback : si pas de mode, on retombe sur l'IA (legacy)
     const docType: string = (result.document_type || '').toLowerCase();
     if (docType === 'contract') return persistAsContract();
     if (docType === 'invoice' || docType === 'receipt') return persistAsInvoice();
 
     Alert.alert(
-      'Type de document à confirmer',
-      'Où souhaitez-vous l\'enregistrer ?',
+      t('emailImport.docTypeConfirmTitle'),
+      t('emailImport.docTypeConfirmBody'),
       [
-        { text: 'Annuler', style: 'cancel' },
-        { text: 'Contrat (Mon Classeur)', onPress: persistAsContract },
-        { text: 'Facture', onPress: persistAsInvoice },
+        { text: t('common.cancel'), style: 'cancel' },
+        { text: t('emailImport.pickContractOption'), onPress: persistAsContract },
+        { text: t('emailImport.pickInvoiceOption'), onPress: persistAsInvoice },
       ],
     );
   };
@@ -321,39 +296,44 @@ export default function ImportInvoiceScreen() {
       key: 'scan',
       icon: 'scan',
       gradient: ['#34D399', '#22D3EE'],
-      title: 'Scanner un document',
-      subtitle: 'Caméra · OCR IA · Le plus rapide',
+      title: t('emailImport.scanTitle'),
+      subtitle: t('emailImport.scanSub'),
       onPress: handleScanner,
-      tip: 'Idéal pour facture papier, ticket, contrat',
+      tip: t('emailImport.scanTip'),
     },
     {
       key: 'pdf',
       icon: 'document',
       gradient: ['#A78BFA', '#7C3AED'],
-      title: 'Choisir un PDF',
-      subtitle: 'Facture ou contrat reçu en PDF',
+      title: t('emailImport.pdfTitle'),
+      subtitle: t('emailImport.pdfSub'),
       onPress: handlePdfPicker,
-      tip: 'Files iOS, Drive, Dropbox, téléchargement web',
+      tip: t('emailImport.pdfTip'),
     },
     {
       key: 'file',
       icon: 'folder-open',
       gradient: ['#60A5FA', '#3B82F6'],
-      title: 'Importer depuis Fichiers',
-      subtitle: 'PDF · Image · Texte',
+      title: t('emailImport.fileTitle'),
+      subtitle: t('emailImport.fileSub'),
       onPress: handleFilePicker,
-      tip: 'Toutes vos sources cloud et locales',
+      tip: t('emailImport.fileTip'),
     },
     {
       key: 'photo',
       icon: 'images',
       gradient: ['#FBBF24', '#F59E0B'],
-      title: 'Prendre depuis la galerie',
-      subtitle: 'Photo déjà prise · OCR IA',
+      title: t('emailImport.photoTitle'),
+      subtitle: t('emailImport.photoSub'),
       onPress: handlePhotoPicker,
-      tip: 'Pratique pour une photo déjà dans vos pellicules',
+      tip: t('emailImport.photoTip'),
     },
   ];
+
+  const headerTitle =
+    mode === 'invoice' ? t('emailImport.titleInvoice')
+      : mode === 'contract' ? t('emailImport.titleContract')
+      : t('emailImport.titleGeneric');
 
   return (
     <KeyboardAvoidingView
@@ -364,17 +344,10 @@ export default function ImportInvoiceScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
           <Ionicons name="chevron-back" size={24} color={theme.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>
-          {mode === 'invoice' ? 'Importer une facture'
-            : mode === 'contract' ? 'Importer un contrat'
-            : 'Importer un document'}
-        </Text>
+        <Text style={styles.title}>{headerTitle}</Text>
         <View style={{ width: 36 }} />
       </View>
 
-      {/* Type selector (si mode pas fixé) — DO OR DIE v3.7.26 :
-          le type est décidé par le contexte (clic depuis Factures vs Contrats),
-          PAS par l'IA. */}
       {mode === null && (
         <ScrollView
           style={{ flex: 1 }}
@@ -382,10 +355,8 @@ export default function ImportInvoiceScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.hero}>
-            <Text style={styles.heroTitle}>Que voulez-vous importer ?</Text>
-            <Text style={styles.heroSub}>
-              Choisissez d'abord le type — Budgy le rangera au bon endroit.
-            </Text>
+            <Text style={styles.heroTitle}>{t('emailImport.chooseTypeTitle')}</Text>
+            <Text style={styles.heroSub}>{t('emailImport.chooseTypeSub')}</Text>
           </View>
           <TouchableOpacity
             style={[styles.methodCard, { marginBottom: Spacing.md }]}
@@ -400,8 +371,8 @@ export default function ImportInvoiceScreen() {
               <Ionicons name="receipt" size={26} color="#FFF" />
             </LinearGradient>
             <View style={{ flex: 1 }}>
-              <Text style={styles.methodTitle}>Importer une facture</Text>
-              <Text style={styles.methodSubtitle}>À payer ou déjà payée — Devient une dépense</Text>
+              <Text style={styles.methodTitle}>{t('emailImport.pickInvoiceTitle')}</Text>
+              <Text style={styles.methodSubtitle}>{t('emailImport.pickInvoiceSub')}</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={theme.textTertiary} />
           </TouchableOpacity>
@@ -418,8 +389,8 @@ export default function ImportInvoiceScreen() {
               <Ionicons name="document-text" size={26} color="#FFF" />
             </LinearGradient>
             <View style={{ flex: 1 }}>
-              <Text style={styles.methodTitle}>Importer un contrat</Text>
-              <Text style={styles.methodSubtitle}>Assurance, bail, leasing, abonnement signé — Va dans Mon Classeur</Text>
+              <Text style={styles.methodTitle}>{t('emailImport.pickContractTitle')}</Text>
+              <Text style={styles.methodSubtitle}>{t('emailImport.pickContractSub')}</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={theme.textTertiary} />
           </TouchableOpacity>
@@ -441,13 +412,11 @@ export default function ImportInvoiceScreen() {
           <View style={styles.heroIcon}>
             <Ionicons name="sparkles" size={26} color="#FBBF24" />
           </View>
-          <Text style={styles.heroTitle}>Importer un document en 1 tap</Text>
-          <Text style={styles.heroSub}>
-            Scanner, PDF, fichier ou galerie photo — l'IA détecte automatiquement s'il s'agit d'une facture ou d'un contrat.
-          </Text>
+          <Text style={styles.heroTitle}>{t('emailImport.heroTitle')}</Text>
+          <Text style={styles.heroSub}>{t('emailImport.heroSub')}</Text>
         </LinearGradient>
 
-        {/* 3 méthodes */}
+        {/* 4 méthodes */}
         {methods.map((m, idx) => (
           <TouchableOpacity key={m.key} onPress={m.onPress} activeOpacity={0.85} disabled={busy} style={styles.methodWrap}>
             <View style={styles.methodCard}>
@@ -473,23 +442,23 @@ export default function ImportInvoiceScreen() {
           const isContract = dt === 'contract';
           const needsConfirm = !!result.needs_user_confirmation;
           const detectedLabel =
-            needsConfirm ? '❓ Type incertain — à confirmer'
-            : isContract ? '📁 Contrat détecté (Mon Classeur)'
-            : dt === 'receipt' ? '🧾 Ticket détecté (Dépense)'
-            : '📄 Facture détectée';
+            needsConfirm ? t('emailImport.badgeUncertain')
+            : isContract ? t('emailImport.badgeContract')
+            : dt === 'receipt' ? t('emailImport.badgeReceipt')
+            : t('emailImport.badgeInvoice');
           const detectedColor =
             needsConfirm ? '#FBBF24'
             : isContract ? '#A78BFA'
             : '#34D399';
           const ctaLabel =
-            needsConfirm ? '✓ Confirmer et enregistrer'
-            : isContract ? '✓ Ajouter au Classeur'
-            : '✓ Enregistrer la facture';
+            needsConfirm ? t('emailImport.ctaConfirmSave')
+            : isContract ? t('emailImport.ctaAddToBinder')
+            : t('emailImport.ctaSaveInvoice');
           return (
             <View style={styles.resultCard}>
               <View style={styles.resultHeader}>
                 <Ionicons name="checkmark-circle" size={22} color={theme.success} />
-                <Text style={styles.resultTitle}>Document analysé</Text>
+                <Text style={styles.resultTitle}>{t('emailImport.resultTitle')}</Text>
                 <TouchableOpacity onPress={dismissResult} style={{ marginLeft: 'auto' }}>
                   <Ionicons name="close" size={20} color={theme.textTertiary} />
                 </TouchableOpacity>
@@ -497,16 +466,16 @@ export default function ImportInvoiceScreen() {
               <View style={[styles.docTypeBadge, { borderColor: detectedColor + '55', backgroundColor: detectedColor + '15' }]}>
                 <Text style={[styles.docTypeBadgeText, { color: detectedColor }]}>{detectedLabel}</Text>
                 {typeof result.confidence === 'number' ? (
-                  <Text style={styles.docTypeConfidence}>{Math.round((result.confidence || 0) * 100)}% conf.</Text>
+                  <Text style={styles.docTypeConfidence}>{t('emailImport.confidenceLabel', { n: Math.round((result.confidence || 0) * 100) })}</Text>
                 ) : null}
               </View>
-              {result.merchant || result.issuer ? <Row label="Émetteur" value={result.merchant || result.issuer} /> : null}
-              {result.title ? <Row label="Sujet" value={result.title} /> : null}
-              {result.amount || result.total || result.total_amount ? <Row label="Montant" value={`${result.currency || 'CHF'} ${result.amount || result.total || result.total_amount}`} highlight /> : null}
-              {result.due_date ? <Row label="Échéance" value={result.due_date} /> : null}
-              {result.invoice_date || result.date ? <Row label="Date" value={result.invoice_date || result.date} /> : null}
-              {result.iban ? <Row label="IBAN" value={result.iban} /> : null}
-              {result.reference ? <Row label="Référence" value={result.reference} /> : null}
+              {result.merchant || result.issuer ? <Row label={t('emailImport.rowIssuer')} value={result.merchant || result.issuer} /> : null}
+              {result.title ? <Row label={t('emailImport.rowSubject')} value={result.title} /> : null}
+              {result.amount || result.total || result.total_amount ? <Row label={t('emailImport.rowAmount')} value={`${result.currency || 'CHF'} ${result.amount || result.total || result.total_amount}`} highlight /> : null}
+              {result.due_date ? <Row label={t('emailImport.rowDueDate')} value={result.due_date} /> : null}
+              {result.invoice_date || result.date ? <Row label={t('emailImport.rowDate')} value={result.invoice_date || result.date} /> : null}
+              {result.iban ? <Row label={t('emailImport.rowIban')} value={result.iban} /> : null}
+              {result.reference ? <Row label={t('emailImport.rowReference')} value={result.reference} /> : null}
               <Button title={ctaLabel} onPress={saveInvoice} fullWidth size="lg" style={{ marginTop: Spacing.md }} />
             </View>
           );
@@ -514,13 +483,8 @@ export default function ImportInvoiceScreen() {
 
         {/* Tips card */}
         <Card style={styles.tipsCard}>
-          <Text style={styles.tipsTitle}>💡 Astuces</Text>
-          <Text style={styles.tipsText}>
-            • Scanner caméra : meilleure qualité OCR pour les tickets papier{'\n'}
-            • PDF : recommandé pour les factures et contrats électroniques{'\n'}
-            • L'IA détecte automatiquement Facture vs Contrat et range au bon endroit{'\n'}
-            • Tout reste en local sur votre appareil — aucune donnée vendue
-          </Text>
+          <Text style={styles.tipsTitle}>{t('emailImport.tipsTitle')}</Text>
+          <Text style={styles.tipsText}>{t('emailImport.tipsBody')}</Text>
         </Card>
       </ScrollView>
 

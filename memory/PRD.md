@@ -1,46 +1,26 @@
-# Guardian Money CHF v3.5 Final - PRD
+# Budgy — PRD v3.9.0 build 73
 
-## Complete Feature Set (15+ modules)
+## Objectifs de session
+- Zéro chaîne `USER_VISIBLE` hardcodée dans l'app (i18n stricte fr/en/de/it)
+- Zéro régression Apple Review 2.1(b) (StoreKit strict, pas de bypass Premium)
+- Zéro régression Supabase (URLs de prod, aucune clé service_role hardcodée, EAS Secrets)
+- Build 73 maintenu (pas d'incrément)
 
-### Core
-1. **Auth** — Supabase email/password + local fallback + Demo mode + "Cloud sync activé"
-2. **Onboarding** — 4 slides + 26 cantons grid + 7 currencies + 6 goals
-3. **Dashboard** — Patrimoine, Guardian Score, SVG Donut chart, Bar chart, Budget rings, Quick actions, Notifications
+## Avancée session actuelle
+- USER_VISIBLE : 619 → **450** (−169)
+- 6 écrans passés à 0 hardcode : `email-import`, `family`, `documents`, `add-contract`, `invoices`, `predict`
+- 4 nouvelles namespaces i18n créées avec parité FR/EN/DE/IT stricte : `emailImport`, `addContract`, `documents`, `invoices`, `predict` + extensions `family`
+- TypeScript : PASS · check-i18n : PASS (1387 clés, 38 namespaces, 0 erreur)
+- Formats locale : `toLocaleDateString('fr-CH')` → locale dynamique via `DATE_LOCALES[lang]` dans `family.tsx` et `documents.tsx`
 
-### Financial Management
-4. **Dépenses** — 3 tabs (Quotidien/Pro/Contrats), 10 payment methods (Apple Pay, TWINT, Google Pay, Samsung Pay, Carte, Cash, E-Banking, PostFinance, LSV/DD, Autre)
-5. **Épargne** — 12 Swiss templates, auto-save, deposits, progress tracking
-6. **Budgets** — Category-based envelopes with ring progress
-7. **Récurrents** — Subscription management with toggle
-8. **Dettes** — Debt tracking with repayment schedule
-9. **Investissements** — Portfolio tracking (PRO)
+## Reste à faire (P0)
+- Batch 4 : `export-pdf.tsx` (19), `cloud-sync.tsx` (16)
+- Top files restants : `legal/sources.tsx` (20), `scanner-modal.tsx` (17), `receipts.tsx` (14), `incomes.tsx` (12), `recurring.tsx` (11), `investments.tsx` (11), `financial-calendar.tsx` (11), `quick-add.tsx` (10), `add-receipt-manual.tsx` (10)
+- `src/data/swiss-data.ts` (61) — attention labels UI seulement, PAS les codes techniques
 
-### Swiss Modules
-10. **Swiss Tax Optimizer** — IFD + ICC for 15 cantons, 3rd pillar max CHF 7'258, canton ranking
-11. **Comparateur LAMal Priminfo 2026** — 15 real insurers, ALL 26 cantons grid, franchises 300-2500, subsidy calculator, canton ranking
-12. **Export PDF A4** — Notes de frais avec en-tête Guardian, TVA 8.1%, mode employé/indépendant, signature
-
-### AI & Social
-13. **Guardian Predict IA** — 5 tabs: Predictions, Alerts, Cash Flow, Insights, **GPT-4o-mini Coach** (real LLM with financial context)
-14. **Mode Famille** — 8-char invite codes, max 6 members, share via OS native
-15. **Notifications Push** — Budget alerts (high/medium/low), goal milestones, monthly reminders, LAMal deadline (Nov 30)
-
-### Settings & Pro
-16. **Settings** — 8 languages, 7 currencies, logout, data deletion
-17. **Subscription** — Freemium (5 tx) / Pro CHF 7.90/mois
-
-## Backend API Endpoints
-- GET /api/health
-- POST /api/coach/chat (GPT-4o-mini)
-- POST /api/export/pdf (HTML A4 generation)
-- POST /api/family/create | /api/family/join | GET /api/family/{code}
-- POST /api/alerts/check-budgets | GET /api/alerts/{user_id}
-
-## Tech Stack
-- Expo SDK 54 + React Native + Expo Router
-- Supabase Auth + DB (self-hosted)
-- FastAPI backend + GPT-4o-mini via Emergent LLM
-- Zustand + AsyncStorage (offline-first)
-- expo-notifications, expo-print, expo-sharing
-- react-native-svg (custom charts)
-- Priminfo 2026 official OFSP data
+## Règles préservées
+- StoreKit paywall : `iap.purchase()` inchangé, `startTrial()` neutralisé, prix Apple dynamiques
+- Product IDs : `com.budgy.ch.budgy.monthly` / `com.budgy.ch.budgy.annual`
+- Version 3.9.0 · Build 73 · iPad maxWidth 560
+- Supabase URLs prod : `https://supabase.budgy.ch` + `https://api.budgy.ch`
+- `EXPO_PUBLIC_SUPABASE_ANON_KEY` toujours via EAS environment

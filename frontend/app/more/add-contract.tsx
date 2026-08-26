@@ -27,16 +27,17 @@ import { Button } from '../../src/components/ui';
 import { EXPENSE_CATEGORIES } from '../../src/data/swiss-data';
 import { scheduleDeadlineRemindersForEntity } from '../../src/services/notifications';
 import type { DocumentCategory } from '../../src/types';
+import { useTranslation } from '../../src/hooks/useTranslation';
 
-const CONTRACT_TYPES = [
-  { id: 'abonnements', label: 'Téléphone / Internet', emoji: '📱' },
-  { id: 'assurances', label: 'Assurance', emoji: '🛡️' },
-  { id: 'logement', label: 'Logement / Loyer', emoji: '🏠' },
-  { id: 'transports', label: 'Transport / Auto', emoji: '🚗' },
-  { id: 'sante', label: 'Santé / Mutuelle', emoji: '💊' },
-  { id: 'energie', label: 'Énergie', emoji: '⚡' },
-  { id: 'autre', label: 'Autre', emoji: '📄' },
-];
+const CONTRACT_TYPE_KEYS = [
+  { id: 'abonnements', tKey: 'typePhone', emoji: '📱' },
+  { id: 'assurances', tKey: 'typeInsurance', emoji: '🛡️' },
+  { id: 'logement', tKey: 'typeHousing', emoji: '🏠' },
+  { id: 'transports', tKey: 'typeTransport', emoji: '🚗' },
+  { id: 'sante', tKey: 'typeHealth', emoji: '💊' },
+  { id: 'energie', tKey: 'typeEnergy', emoji: '⚡' },
+  { id: 'autre', tKey: 'typeOther', emoji: '📄' },
+] as const;
 
 function toISODate(s: string): string | null {
   if (!s) return null;
@@ -52,6 +53,11 @@ export default function AddContractScreen() {
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { t } = useTranslation();
+  const CONTRACT_TYPES = useMemo(
+    () => CONTRACT_TYPE_KEYS.map((c) => ({ id: c.id, label: t(`addContract.${c.tKey}`), emoji: c.emoji })),
+    [t]
+  );
   const params = useLocalSearchParams<{
     title?: string;
     issuer?: string;
@@ -84,14 +90,14 @@ export default function AddContractScreen() {
   const [saving, setSaving] = useState(false);
 
   const handleAdd = () => {
-    const t = title.trim();
+    const tt = title.trim();
     const amt = parseFloat(amount.replace(',', '.'));
-    if (!t) {
-      Alert.alert('Nom manquant', 'Saisissez le nom du contrat.');
+    if (!tt) {
+      Alert.alert(t('addContract.missingNameTitle'), t('addContract.missingNameBody'));
       return;
     }
     if (!amt || isNaN(amt) || amt <= 0) {
-      Alert.alert('Montant invalide', 'Saisissez un montant valide.');
+      Alert.alert(t('addContract.invalidAmountTitle'), t('addContract.invalidAmountBody'));
       return;
     }
     setSaving(true);
@@ -111,7 +117,7 @@ export default function AddContractScreen() {
           : 'contracts';
         addDocument({
           id: documentId,
-          title: t,
+          title: tt,
           category: docCategory,
           imageBase64: params.photoUri,
           pages: [params.photoUri],
@@ -125,7 +131,7 @@ export default function AddContractScreen() {
 
       addContract({
         id,
-        title: t,
+        title: tt,
         amount: amt,
         expirationDate,
         urgent: false,
@@ -145,29 +151,25 @@ export default function AddContractScreen() {
       if (iso) {
         scheduleDeadlineRemindersForEntity(id, {
           type: 'contract',
-          name: t,
+          name: tt,
           dueDate: iso,
           amount: amt,
         }).catch(() => {});
       }
       try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
       const msg = documentId
-        ? (iso
-            ? 'Document ajouté à Mon Classeur. Rappels d\'échéance programmés (J-90, J-30, J-7 et J-1).'
-            : 'Document ajouté à Mon Classeur et à vos contrats.')
-        : (iso
-            ? 'Rappels d\'échéance programmés (J-90, J-30, J-7 et J-1).'
-            : 'Contrat ajouté à votre classeur.');
+        ? (iso ? t('addContract.msgDocReminders') : t('addContract.msgDocOnly'))
+        : (iso ? t('addContract.msgRemindersOnly') : t('addContract.msgContractOnly'));
       Alert.alert(
-        'Contrat ajouté ✓',
+        t('addContract.successTitle'),
         msg,
         [{
-          text: 'Voir dans Mon Classeur',
+          text: t('addContract.viewInBinder'),
           onPress: () => router.replace('/more/documents' as any),
         }]
       );
     } catch (e: any) {
-      Alert.alert('Erreur', e?.message || 'Sauvegarde impossible.');
+      Alert.alert(t('addContract.errorTitle'), e?.message || t('addContract.saveError'));
     } finally {
       setSaving(false);
     }
@@ -181,7 +183,7 @@ export default function AddContractScreen() {
           <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
             <Ionicons name="close" size={24} color={theme.text} />
           </TouchableOpacity>
-          <Text style={styles.titleHeader}>Vérification</Text>
+          <Text style={styles.titleHeader}>{t('addContract.headerVerify')}</Text>
           <View style={{ width: 36 }} />
         </View>
         <ScrollView contentContainerStyle={{ padding: Spacing.lg, paddingBottom: 140 }}>
@@ -191,8 +193,8 @@ export default function AddContractScreen() {
               <Ionicons name="sparkles" size={22} color={theme.primary} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.iaTitle}>Champs détectés par l'IA</Text>
-              <Text style={styles.iaSub}>Vérifiez les informations avant ajout</Text>
+              <Text style={styles.iaTitle}>{t('addContract.iaTitle')}</Text>
+              <Text style={styles.iaSub}>{t('addContract.iaSub')}</Text>
             </View>
           </LinearGradient>
 
@@ -201,7 +203,7 @@ export default function AddContractScreen() {
             <View style={styles.photoCard}>
               <Image source={{ uri: params.photoUri }} style={styles.photoImg} resizeMode="cover" />
               <View style={styles.photoBadge}>
-                <Text style={styles.photoBadgeTxt}>📄 Document scanné</Text>
+                <Text style={styles.photoBadgeTxt}>{t('addContract.badgeScanned')}</Text>
               </View>
             </View>
           )}
@@ -209,12 +211,12 @@ export default function AddContractScreen() {
           {/* Extracted fields display */}
           <View style={styles.fieldsCard}>
             {[
-              { label: 'Nom du contrat', value: title || '—', icon: 'document-text-outline' },
-              { label: 'Fournisseur', value: issuer || '—', icon: 'business-outline' },
-              { label: 'Type', value: CONTRACT_TYPES.find(c => c.id === category)?.label || '—', icon: 'pricetag-outline' },
-              { label: 'Montant', value: amount ? `CHF ${amount}` : '—', icon: 'cash-outline', highlight: true },
-              { label: 'Date d\'échéance', value: dueDate || '—', icon: 'calendar-outline', highlight: !!dueDate },
-              { label: 'Renouvellement', value: autoRenew ? 'Automatique' : 'Manuel', icon: 'refresh-outline' },
+              { label: t('addContract.fieldContractName'), value: title || t('addContract.dashValue'), icon: 'document-text-outline' },
+              { label: t('addContract.fieldProvider'), value: issuer || t('addContract.dashValue'), icon: 'business-outline' },
+              { label: t('addContract.fieldType'), value: CONTRACT_TYPES.find(c => c.id === category)?.label || t('addContract.dashValue'), icon: 'pricetag-outline' },
+              { label: t('addContract.fieldAmount'), value: amount ? `CHF ${amount}` : t('addContract.dashValue'), icon: 'cash-outline', highlight: true },
+              { label: t('addContract.fieldDueDate'), value: dueDate || t('addContract.dashValue'), icon: 'calendar-outline', highlight: !!dueDate },
+              { label: t('addContract.fieldRenewal'), value: autoRenew ? t('addContract.renewalAuto') : t('addContract.renewalManual'), icon: 'refresh-outline' },
             ].map((f, i) => (
               <View key={i} style={[styles.fieldRow, i === 0 && { borderTopWidth: 0 }]}>
                 <Ionicons name={f.icon as any} size={18} color={theme.textTertiary} />
@@ -230,7 +232,7 @@ export default function AddContractScreen() {
             <View style={styles.notifTip}>
               <Ionicons name="notifications" size={18} color={theme.success} />
               <Text style={styles.notifTipTxt}>
-                Vous recevrez des rappels à J-90, J-30, J-7 et J-1 avant l'échéance.
+                {t('addContract.reminderTip')}
               </Text>
             </View>
           )}
@@ -239,7 +241,7 @@ export default function AddContractScreen() {
         {/* Sticky CTAs */}
         <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
           <Button
-            title="Modifier avant ajout"
+            title={t('addContract.ctaEditBeforeAdd')}
             variant="secondary"
             onPress={() => setEditing(true)}
             fullWidth
@@ -247,7 +249,7 @@ export default function AddContractScreen() {
             style={{ marginBottom: Spacing.sm }}
           />
           <Button
-            title="Ajouter le contrat"
+            title={t('addContract.ctaAddContract')}
             onPress={handleAdd}
             loading={saving}
             fullWidth
@@ -270,7 +272,7 @@ export default function AddContractScreen() {
           <Ionicons name="chevron-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <Text style={styles.titleHeader}>
-          {hasExtractedData ? 'Modifier le contrat' : 'Nouveau contrat'}
+          {hasExtractedData ? t('addContract.headerEdit') : t('addContract.headerNew')}
         </Text>
         <View style={{ width: 36 }} />
       </View>
@@ -279,95 +281,95 @@ export default function AddContractScreen() {
         contentContainerStyle={{ padding: Spacing.lg, paddingBottom: 140 }}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={styles.label}>Nom du contrat *</Text>
+        <Text style={styles.label}>{t('addContract.labelContractName')}</Text>
         <View style={styles.inputWrap}>
           <Ionicons name="document-text-outline" size={20} color={theme.textTertiary} />
           <TextInput
             style={styles.input}
             value={title}
             onChangeText={setTitle}
-            placeholder="Sunrise mobile, Bail logement..."
+            placeholder={t('addContract.placeholderContractName')}
             placeholderTextColor={theme.textTertiary}
           />
         </View>
 
-        <Text style={styles.label}>Fournisseur</Text>
+        <Text style={styles.label}>{t('addContract.labelProvider')}</Text>
         <View style={styles.inputWrap}>
           <Ionicons name="business-outline" size={20} color={theme.textTertiary} />
           <TextInput
             style={styles.input}
             value={issuer}
             onChangeText={setIssuer}
-            placeholder="Sunrise, Swisscom, AXA..."
+            placeholder={t('addContract.placeholderProvider')}
             placeholderTextColor={theme.textTertiary}
           />
         </View>
 
-        <Text style={styles.label}>Montant mensuel (CHF) *</Text>
+        <Text style={styles.label}>{t('addContract.labelAmount', { currency: 'CHF' })}</Text>
         <View style={styles.inputWrap}>
           <Text style={styles.currencyTag}>CHF</Text>
           <TextInput
             style={[styles.input, { fontSize: FontSizes.xl, fontWeight: FontWeights.bold }]}
             value={amount}
-            onChangeText={(t) => setAmount(t.replace(/[^0-9.,]/g, ''))}
-            placeholder="49.90"
+            onChangeText={(txt) => setAmount(txt.replace(/[^0-9.,]/g, ''))}
+            placeholder={t('addContract.placeholderAmount')}
             placeholderTextColor={theme.textTertiary}
             keyboardType="decimal-pad"
           />
         </View>
 
-        <Text style={styles.label}>Type / Catégorie</Text>
+        <Text style={styles.label}>{t('addContract.labelType')}</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View style={styles.chipRow}>
-            {CONTRACT_TYPES.map((t) => {
-              const selected = category === t.id;
-              const cat = EXPENSE_CATEGORIES.find(c => c.id === t.id);
+            {CONTRACT_TYPES.map((typ) => {
+              const selected = category === typ.id;
+              const cat = EXPENSE_CATEGORIES.find(c => c.id === typ.id);
               const c = cat?.color || theme.primary;
               return (
                 <TouchableOpacity
-                  key={t.id}
+                  key={typ.id}
                   style={[styles.chip, selected && { backgroundColor: `${c}25`, borderColor: c }]}
-                  onPress={() => setCategory(t.id)}
+                  onPress={() => setCategory(typ.id)}
                 >
-                  <Text style={{ fontSize: 14 }}>{t.emoji}</Text>
-                  <Text style={[styles.chipText, selected && { color: c }]}>{t.label}</Text>
+                  <Text style={{ fontSize: 14 }}>{typ.emoji}</Text>
+                  <Text style={[styles.chipText, selected && { color: c }]}>{typ.label}</Text>
                 </TouchableOpacity>
               );
             })}
           </View>
         </ScrollView>
 
-        <Text style={styles.label}>Date de début</Text>
+        <Text style={styles.label}>{t('addContract.labelStartDate')}</Text>
         <View style={styles.inputWrap}>
           <Ionicons name="calendar-outline" size={20} color={theme.textTertiary} />
           <TextInput
             style={styles.input}
             value={startDate}
             onChangeText={setStartDate}
-            placeholder="JJ.MM.AAAA"
+            placeholder={t('addContract.placeholderDate')}
             placeholderTextColor={theme.textTertiary}
           />
         </View>
 
-        <Text style={styles.label}>Date d'échéance (recommandé)</Text>
+        <Text style={styles.label}>{t('addContract.labelDueDate')}</Text>
         <View style={styles.inputWrap}>
           <Ionicons name="alarm-outline" size={20} color={theme.warning} />
           <TextInput
             style={styles.input}
             value={dueDate}
             onChangeText={setDueDate}
-            placeholder="JJ.MM.AAAA"
+            placeholder={t('addContract.placeholderDate')}
             placeholderTextColor={theme.textTertiary}
           />
         </View>
         <Text style={styles.hint}>
-          Si renseignée → rappels automatiques J-90 / J-30 / J-7 / J-1
+          {t('addContract.hintDueDate')}
         </Text>
 
         <View style={styles.switchCard}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.switchLabel}>Renouvellement automatique</Text>
-            <Text style={styles.switchHint}>Le contrat se prolonge tacitement</Text>
+            <Text style={styles.switchLabel}>{t('addContract.labelAutoRenew')}</Text>
+            <Text style={styles.switchHint}>{t('addContract.hintAutoRenew')}</Text>
           </View>
           <Switch
             value={autoRenew}
@@ -376,25 +378,25 @@ export default function AddContractScreen() {
           />
         </View>
 
-        <Text style={styles.label}>Délai de résiliation (mois)</Text>
+        <Text style={styles.label}>{t('addContract.labelNoticePeriod')}</Text>
         <View style={styles.inputWrap}>
           <Ionicons name="time-outline" size={20} color={theme.textTertiary} />
           <TextInput
             style={styles.input}
             value={noticePeriod}
-            onChangeText={(t) => setNoticePeriod(t.replace(/[^0-9]/g, ''))}
+            onChangeText={(txt) => setNoticePeriod(txt.replace(/[^0-9]/g, ''))}
             placeholder="3"
             placeholderTextColor={theme.textTertiary}
             keyboardType="number-pad"
           />
         </View>
 
-        <Text style={styles.label}>Notes (optionnel)</Text>
+        <Text style={styles.label}>{t('addContract.labelNotes')}</Text>
         <TextInput
           style={[styles.input, styles.multiline]}
           value={notes}
           onChangeText={setNotes}
-          placeholder="Numéro de client, détails de résiliation..."
+          placeholder={t('addContract.placeholderNotes')}
           placeholderTextColor={theme.textTertiary}
           multiline
           textAlignVertical="top"
@@ -404,7 +406,7 @@ export default function AddContractScreen() {
       {/* Sticky CTA */}
       <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
         <Button
-          title={saving ? 'Ajout en cours...' : 'Ajouter le contrat'}
+          title={saving ? t('addContract.ctaAdding') : t('addContract.ctaAddContract')}
           onPress={handleAdd}
           loading={saving}
           fullWidth

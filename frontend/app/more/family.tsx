@@ -9,7 +9,7 @@
  *   - Code d'invitation visuel à 8 caractères (local, partage natif)
  *   - Activité récente
  *
- * Aucun appel backend — fonctionne hors-ligne, App Store-safe.
+ * i18n complet (fr/en/de/it) — v3.9.0 build 73.
  */
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -31,12 +31,13 @@ import { Card, Button } from '../../src/components/ui';
 import type { ExpenseGroup, GroupMember, GroupExpense } from '../../src/types';
 import { publishInviteCode, joinByCode, makeSelfMember, leaveGroupCloud } from '../../src/services/familyCloud';
 import { isSupabaseConfigured } from '../../src/lib/supabase';
+import { useTranslation } from '../../src/hooks/useTranslation';
+import { DATE_LOCALES } from '../../src/i18n/translations';
 
 // ─────────────────── Helpers ───────────────────
 const MEMBER_COLORS = ['#34D399', '#60A5FA', '#A78BFA', '#FBBF24', '#F87171', '#F472B6', '#22D3EE', '#FB923C'];
 const GROUP_EMOJIS = ['👨‍👩‍👧‍👦', '👫', '🏠', '🍕', '✈️', '🎉', '💼', '🐾'];
 
-const fmt = (n: number) => `CHF ${Math.round(Math.abs(n)).toLocaleString('fr-CH').replace(/,/g, "'")}`;
 const initial = (s: string) => (s || '?').trim().charAt(0).toUpperCase();
 const genCode = () => {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -60,7 +61,6 @@ function computeSettlements(group: ExpenseGroup, expenses: GroupExpense[]) {
     for (const mid of memberIds) balances[mid] = (balances[mid] || 0) - share;
     balances[e.paidBy] = (balances[e.paidBy] || 0) + e.amount;
   }
-  // Round to 2 decimals
   for (const k of Object.keys(balances)) balances[k] = Math.round(balances[k] * 100) / 100;
 
   const debtors = Object.entries(balances).filter(([, v]) => v < -0.01)
@@ -89,6 +89,11 @@ export default function FamilyScreen() {
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { t, lang } = useTranslation();
+
+  const locale = DATE_LOCALES[lang];
+  const fmt = (n: number, currency = 'CHF') =>
+    `${currency} ${Math.round(Math.abs(n)).toLocaleString(locale).replace(/,/g, "'")}`;
 
   const {
     groups, groupExpenses, user,
@@ -101,8 +106,6 @@ export default function FamilyScreen() {
   const [joinCodeInput, setJoinCodeInput] = useState('');
   const [showJoinModal, setShowJoinModal] = useState(false);
 
-  // v3.8.0 — Support deep link /join/[code] : ouvre automatiquement le modal
-  // Rejoindre avec le code pré-rempli.
   const routeParams = useLocalSearchParams<{ joinCode?: string }>();
   useEffect(() => {
     const codeFromLink = (routeParams?.joinCode || '').toString().trim().toUpperCase();
@@ -112,14 +115,10 @@ export default function FamilyScreen() {
     }
   }, [routeParams?.joinCode]);
 
-  // Create-group form
   const [newName, setNewName] = useState('');
   const [newEmoji, setNewEmoji] = useState('👨‍👩‍👧‍👦');
-
-  // Add-member form
   const [newMemberName, setNewMemberName] = useState('');
 
-  // Add-expense form
   const [expTitle, setExpTitle] = useState('');
   const [expAmount, setExpAmount] = useState('');
   const [expPaidBy, setExpPaidBy] = useState<string>('');
@@ -143,7 +142,7 @@ export default function FamilyScreen() {
   const handleCreateGroup = () => {
     const name = newName.trim();
     if (!name) {
-      Alert.alert('Nom manquant', 'Entrez un nom pour ce groupe.');
+      Alert.alert(t('family.missingNameTitle'), t('family.missingNameBody'));
       return;
     }
     const meId = `m_${Date.now()}`;
@@ -154,7 +153,7 @@ export default function FamilyScreen() {
       color: MEMBER_COLORS[0],
       members: [{
         id: meId,
-        name: user?.name || 'Moi',
+        name: user?.name || t('family.meLabel'),
         color: MEMBER_COLORS[0],
         isMe: true,
       }],
@@ -173,11 +172,11 @@ export default function FamilyScreen() {
     if (!selectedGroup) return;
     const name = newMemberName.trim();
     if (!name) {
-      Alert.alert('Nom manquant', 'Entrez le prénom du membre.');
+      Alert.alert(t('family.missingNameTitle'), t('family.missingMemberBody'));
       return;
     }
     if (selectedGroup.members.length >= 8) {
-      Alert.alert('Maximum atteint', '8 membres maximum par groupe.');
+      Alert.alert(t('family.maxMembersTitle'), t('family.maxMembersBody'));
       return;
     }
     const usedColors = selectedGroup.members.map((m) => m.color);
@@ -195,11 +194,11 @@ export default function FamilyScreen() {
 
   const handleAddExpense = () => {
     if (!selectedGroup) return;
-    const t = expTitle.trim();
+    const tt = expTitle.trim();
     const amt = parseFloat(expAmount.replace(',', '.'));
-    if (!t) { Alert.alert('Titre manquant', 'Décrivez la dépense.'); return; }
-    if (!amt || isNaN(amt) || amt <= 0) { Alert.alert('Montant invalide', 'Entrez un montant valide.'); return; }
-    if (!expPaidBy) { Alert.alert('Payeur', 'Choisissez qui a payé.'); return; }
+    if (!tt) { Alert.alert(t('family.missingTitleTitle'), t('family.missingTitleBody')); return; }
+    if (!amt || isNaN(amt) || amt <= 0) { Alert.alert(t('family.invalidAmountTitle'), t('family.invalidAmountBody')); return; }
+    if (!expPaidBy) { Alert.alert(t('family.payerTitle'), t('family.payerBody')); return; }
 
     const memberIds = selectedGroup.members.map((m) => m.id);
     const shares: Record<string, number> = {};
@@ -208,7 +207,7 @@ export default function FamilyScreen() {
     const expense: GroupExpense = {
       id: `ge_${Date.now()}`,
       groupId: selectedGroup.id,
-      title: t,
+      title: tt,
       amount: amt,
       currency: selectedGroup.currency || 'CHF',
       paidBy: expPaidBy,
@@ -227,12 +226,12 @@ export default function FamilyScreen() {
 
   const handleDeleteGroup = (id: string) => {
     Alert.alert(
-      'Supprimer ce groupe ?',
-      'Toutes les dépenses partagées seront aussi supprimées.',
+      t('family.deleteConfirmTitle'),
+      t('family.deleteConfirmBody'),
       [
-        { text: 'Annuler', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Supprimer', style: 'destructive', onPress: () => {
+          text: t('common.delete'), style: 'destructive', onPress: () => {
             deleteGroup(id);
             if (selectedGroupId === id) { setSelectedGroupId(null); setMode('list'); }
           },
@@ -243,32 +242,28 @@ export default function FamilyScreen() {
 
   const handleLeaveGroup = (group: ExpenseGroup) => {
     Alert.alert(
-      'Quitter ce groupe ?',
-      "Vous n'apparaîtrez plus dans ce groupe partagé. Vous pourrez le rejoindre à nouveau avec un nouveau code d'invitation.",
+      t('family.leaveConfirmTitle'),
+      t('family.leaveConfirmBody'),
       [
-        { text: 'Annuler', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Quitter',
+          text: t('family.leaveCta'),
           style: 'destructive',
           onPress: async () => {
             const res = await leaveGroupCloud(group.id);
             if (!res.ok && res.error === 'owner_cannot_leave') {
-              Alert.alert(
-                'Impossible de quitter',
-                "Vous êtes le propriétaire de ce groupe. Utilisez « Supprimer » depuis l'en-tête pour le fermer définitivement pour tous les membres.",
-              );
+              Alert.alert(t('family.ownerCannotLeaveTitle'), t('family.ownerCannotLeaveBody'));
               return;
             }
             if (!res.ok) {
-              Alert.alert('Erreur', `Impossible de quitter : ${res.error || 'erreur inconnue'}`);
+              Alert.alert(t('family.errorTitle'), t('family.leaveError', { error: res.error || t('family.unknownError') }));
               return;
             }
-            // Success — clean up locally
             deleteGroup(group.id);
             try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
             setSelectedGroupId(null);
             setMode('list');
-            Alert.alert('Groupe quitté', `Vous ne faites plus partie de « ${group.name} ».`);
+            Alert.alert(t('family.leaveSuccessTitle'), t('family.leaveSuccessBody', { name: group.name }));
           },
         },
       ]
@@ -281,29 +276,19 @@ export default function FamilyScreen() {
       code = genCode();
       updateGroup(group.id, { inviteCode: code });
     }
-    // v3.8.0 — publish the code to Supabase so other devices can join.
-    // Fails silently if offline: the code is still shareable, will be
-    // re-published on the next foreground sync.
     const pub = await publishInviteCode(group, code);
-    const shareBase = `Rejoignez "${group.name}" sur Budgy 🎉\n\nCode d'invitation : ${code}\nLien : budgy://join/${code}\n\n(Ouvrir Budgy → Plus → Famille & Groupes → Rejoindre)`;
-    const suffix = pub.ok
-      ? ''
-      : "\n\nℹ️ Vous êtes hors ligne : le code sera activé automatiquement à votre prochaine connexion.";
+    const shareBase = t('family.shareMessage', { name: group.name, code });
+    const suffix = pub.ok ? '' : t('family.shareOfflineSuffix');
     const finalMsg = shareBase + suffix;
 
-    // Try native Share first. On Expo Web (or unsupported envs) fall back to
-    // clipboard so the code is still transmissible without crashing.
     try {
       await Share.share({ message: finalMsg });
     } catch {
       try {
         await Clipboard.setStringAsync(finalMsg);
-        Alert.alert(
-          'Message copié',
-          "Le code et le lien d'invitation ont été copiés dans le presse-papiers. Vous pouvez maintenant les coller dans WhatsApp, Messages ou un e-mail.",
-        );
+        Alert.alert(t('family.clipboardFallbackTitle'), t('family.clipboardFallbackBody'));
       } catch {
-        Alert.alert('Code d\'invitation', `Code : ${code}\n\nLien : budgy://join/${code}`);
+        Alert.alert(t('family.inviteCodeFallbackTitle'), `${t('family.codeLabel', { code })}\n\nbudgy://join/${code}`);
       }
     }
   };
@@ -311,14 +296,11 @@ export default function FamilyScreen() {
   const handleJoinByCode = async () => {
     const code = joinCodeInput.trim().toUpperCase();
     if (code.length !== 8) {
-      Alert.alert('Code invalide', 'Le code doit faire 8 caractères.');
+      Alert.alert(t('family.invalidCodeTitle'), t('family.invalidCodeBody'));
       return;
     }
     if (!isSupabaseConfigured()) {
-      Alert.alert(
-        'Connexion requise',
-        "Pour rejoindre un groupe partagé, connectez-vous à votre compte Budgy dans les réglages.",
-      );
+      Alert.alert(t('family.authRequiredTitle'), t('family.authRequired'));
       return;
     }
 
@@ -329,17 +311,16 @@ export default function FamilyScreen() {
     if (!res.ok || !res.data) {
       const msg =
         res.error === 'invite_not_found' || res.error === 'not_found'
-          ? "Code introuvable ou expiré. Demandez au propriétaire de partager un nouveau code."
+          ? t('family.codeNotFound')
           : res.error === 'not_authenticated'
-          ? "Vous devez être connecté pour rejoindre un groupe."
-          : `Impossible de rejoindre : ${res.error || 'erreur inconnue'}`;
-      Alert.alert('Rejoindre le groupe', msg);
+          ? t('family.notAuthenticated')
+          : t('family.joinError', { error: res.error || t('family.unknownError') });
+      Alert.alert(t('family.joinTitleModal'), msg);
       return;
     }
 
     const { group: cloudGroup, expenses: cloudExpenses, alreadyMember } = res.data;
 
-    // Add self as GroupMember if we're not already listed
     const self = await makeSelfMember(MEMBER_COLORS[cloudGroup.members.length % MEMBER_COLORS.length]);
     const meAlreadyInMembers =
       self && cloudGroup.members.some((m) => m.id === self.id || m.email === self.email);
@@ -351,7 +332,6 @@ export default function FamilyScreen() {
         : cloudGroup.members,
     };
 
-    // Merge into local store (updateGroup upserts by id in Zustand)
     const existing = groups.find((g) => g.id === finalGroup.id);
     if (existing) {
       updateGroup(finalGroup.id, {
@@ -365,7 +345,6 @@ export default function FamilyScreen() {
     } else {
       addGroup(finalGroup);
     }
-    // Bring shared expenses locally (dedupe by id)
     for (const e of cloudExpenses) {
       const alreadyLocal = groupExpenses.some((x) => x.id === e.id);
       if (!alreadyLocal) addGroupExpense(e);
@@ -375,10 +354,14 @@ export default function FamilyScreen() {
     setSelectedGroupId(finalGroup.id);
     setMode('detail');
     Alert.alert(
-      alreadyMember ? 'Groupe déjà rejoint' : 'Groupe rejoint 🎉',
+      alreadyMember ? t('family.alreadyMemberTitle') : t('family.invitedTitle'),
       alreadyMember
-        ? `Vous êtes déjà membre de « ${finalGroup.name} ». Ses ${cloudExpenses.length} dépenses partagées sont maintenant synchronisées sur cet appareil.`
-        : `Bienvenue dans « ${finalGroup.name} » ! ${cloudExpenses.length} dépense${cloudExpenses.length > 1 ? 's' : ''} partagée${cloudExpenses.length > 1 ? 's' : ''} synchronisée${cloudExpenses.length > 1 ? 's' : ''}.`,
+        ? t('family.alreadyMemberBody', { name: finalGroup.name, n: cloudExpenses.length })
+        : t('family.invitedBody', {
+            name: finalGroup.name,
+            n: cloudExpenses.length,
+            s: cloudExpenses.length > 1 ? 's' : '',
+          }),
     );
   };
 
@@ -397,17 +380,21 @@ export default function FamilyScreen() {
     </View>
   );
 
+  const memberUnit = (n: number) => (n > 1 ? t('family.membersMany') : t('family.member'));
+  const expenseUnit = (n: number) =>
+    n > 1 ? t('family.expensesMany') : t('family.expenseOne');
+
   // ───── LIST MODE ─────
   if (mode === 'list') {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]} testID="family-screen">
-        {renderHeader('Famille & Groupes')}
+        {renderHeader(t('family.title'))}
         <ScrollView contentContainerStyle={{ padding: Spacing.lg, paddingBottom: 120 }}>
           {groups.length === 0 ? (
             <View style={styles.heroSection}>
               <Text style={{ fontSize: 64 }}>👨‍👩‍👧‍👦</Text>
-              <Text style={styles.heroTitle}>Partagez vos dépenses, simplement</Text>
-              <Text style={styles.heroSub}>Créez un groupe pour suivre qui doit combien à qui. Fonctionne 100% hors-ligne.</Text>
+              <Text style={styles.heroTitle}>{t('family.heroTitle')}</Text>
+              <Text style={styles.heroSub}>{t('family.heroSub')}</Text>
             </View>
           ) : (
             groups.map((g) => {
@@ -429,13 +416,15 @@ export default function FamilyScreen() {
                   <View style={{ flex: 1 }}>
                     <Text style={styles.groupCardTitle}>{g.name}</Text>
                     <Text style={styles.groupCardSub}>
-                      {g.members.length} membre{g.members.length > 1 ? 's' : ''} · {exp.length} dépense{exp.length > 1 ? 's' : ''} · {fmt(total)}
+                      {g.members.length} {memberUnit(g.members.length)} · {exp.length} {expenseUnit(exp.length)} · {fmt(total, g.currency || 'CHF')}
                     </Text>
                     {myMember && Math.abs(myBalance) > 0.01 && (
                       <View style={[styles.balanceBadge, { backgroundColor: myBalance > 0 ? `${theme.success}20` : `${theme.error}20` }]}>
                         <Ionicons name={myBalance > 0 ? 'arrow-down' : 'arrow-up'} size={12} color={myBalance > 0 ? theme.success : theme.error} />
                         <Text style={[styles.balanceBadgeTxt, { color: myBalance > 0 ? theme.success : theme.error }]}>
-                          {myBalance > 0 ? `On vous doit ${fmt(myBalance)}` : `Vous devez ${fmt(myBalance)}`}
+                          {myBalance > 0
+                            ? t('family.onOwesYou', { amount: fmt(myBalance, g.currency || 'CHF') })
+                            : t('family.youOwe', { amount: fmt(myBalance, g.currency || 'CHF') })}
                         </Text>
                       </View>
                     )}
@@ -449,20 +438,18 @@ export default function FamilyScreen() {
           <TouchableOpacity style={styles.primaryCta} onPress={() => setMode('create')} activeOpacity={0.85}>
             <LinearGradient colors={[theme.primary, theme.primaryDark || theme.primary]} style={styles.primaryCtaGrad}>
               <Ionicons name="add-circle" size={22} color="#FFF" />
-              <Text style={styles.primaryCtaTxt}>Créer un groupe</Text>
+              <Text style={styles.primaryCtaTxt}>{t('family.createGroup')}</Text>
             </LinearGradient>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.secondaryCta} onPress={() => setShowJoinModal(true)} activeOpacity={0.85}>
             <Ionicons name="enter-outline" size={22} color={theme.text} />
-            <Text style={styles.secondaryCtaTxt}>Rejoindre avec un code</Text>
+            <Text style={styles.secondaryCtaTxt}>{t('family.joinGroup')}</Text>
           </TouchableOpacity>
 
           <Card style={styles.tipCard}>
             <Ionicons name="cloud-done" size={18} color={theme.success} />
-            <Text style={styles.tipTxt}>
-              Le partage de groupes entre appareils est activé : générez un code depuis un groupe et invitez vos proches à le saisir sur leur propre compte Budgy.
-            </Text>
+            <Text style={styles.tipTxt}>{t('family.cloudReadyTip')}</Text>
           </Card>
         </ScrollView>
 
@@ -470,20 +457,20 @@ export default function FamilyScreen() {
         <Modal visible={showJoinModal} transparent animationType="fade" onRequestClose={() => setShowJoinModal(false)}>
           <View style={styles.modalBackdrop}>
             <View style={styles.modalCard}>
-              <Text style={styles.modalTitle}>Rejoindre un groupe</Text>
-              <Text style={styles.modalSub}>Entrez le code d'invitation à 8 caractères.</Text>
+              <Text style={styles.modalTitle}>{t('family.joinTitleModal')}</Text>
+              <Text style={styles.modalSub}>{t('family.joinSubModal')}</Text>
               <TextInput
                 style={styles.codeInput}
                 value={joinCodeInput}
-                onChangeText={(t) => setJoinCodeInput(t.toUpperCase().slice(0, 8))}
-                placeholder="XXXXXXXX"
+                onChangeText={(txt) => setJoinCodeInput(txt.toUpperCase().slice(0, 8))}
+                placeholder={t('family.codeInputPh')}
                 placeholderTextColor={theme.textTertiary}
                 autoCapitalize="characters"
                 maxLength={8}
               />
               <View style={{ flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.lg }}>
-                <Button title="Annuler" variant="secondary" onPress={() => setShowJoinModal(false)} style={{ flex: 1 }} />
-                <Button title="Rejoindre" onPress={handleJoinByCode} style={{ flex: 1 }} disabled={joinCodeInput.length !== 8} />
+                <Button title={t('common.cancel')} variant="secondary" onPress={() => setShowJoinModal(false)} style={{ flex: 1 }} />
+                <Button title={t('family.joinCta')} onPress={handleJoinByCode} style={{ flex: 1 }} disabled={joinCodeInput.length !== 8} />
               </View>
             </View>
           </View>
@@ -499,9 +486,9 @@ export default function FamilyScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={[styles.container, { paddingTop: insets.top }]}
       >
-        {renderHeader('Nouveau groupe', () => setMode('list'))}
+        {renderHeader(t('family.newGroup'), () => setMode('list'))}
         <ScrollView contentContainerStyle={{ padding: Spacing.lg }} keyboardShouldPersistTaps="handled">
-          <Text style={styles.label}>Choisissez un emoji</Text>
+          <Text style={styles.label}>{t('family.chooseEmoji')}</Text>
           <View style={styles.emojiRow}>
             {GROUP_EMOJIS.map((e) => (
               <TouchableOpacity
@@ -514,18 +501,18 @@ export default function FamilyScreen() {
             ))}
           </View>
 
-          <Text style={styles.label}>Nom du groupe</Text>
+          <Text style={styles.label}>{t('family.groupName')}</Text>
           <TextInput
             style={styles.input}
             value={newName}
             onChangeText={setNewName}
-            placeholder="Famille Dupont, Coloc, Voyage Italie..."
+            placeholder={t('family.groupNamePh')}
             placeholderTextColor={theme.textTertiary}
             autoFocus
             maxLength={40}
           />
 
-          <Button title="Créer le groupe" onPress={handleCreateGroup} fullWidth size="lg" icon="checkmark-circle" style={{ marginTop: Spacing.xl }} />
+          <Button title={t('family.createGroupCta')} onPress={handleCreateGroup} fullWidth size="lg" icon="checkmark-circle" style={{ marginTop: Spacing.xl }} />
         </ScrollView>
       </KeyboardAvoidingView>
     );
@@ -538,19 +525,19 @@ export default function FamilyScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={[styles.container, { paddingTop: insets.top }]}
       >
-        {renderHeader('Ajouter un membre', () => setMode('detail'))}
+        {renderHeader(t('family.addMemberScreenTitle'), () => setMode('detail'))}
         <ScrollView contentContainerStyle={{ padding: Spacing.lg }} keyboardShouldPersistTaps="handled">
-          <Text style={styles.label}>Prénom</Text>
+          <Text style={styles.label}>{t('family.firstName')}</Text>
           <TextInput
             style={styles.input}
             value={newMemberName}
             onChangeText={setNewMemberName}
-            placeholder="ex: Sarah"
+            placeholder={t('family.firstNamePh')}
             placeholderTextColor={theme.textTertiary}
             autoFocus
             maxLength={30}
           />
-          <Button title="Ajouter au groupe" onPress={handleAddMember} fullWidth size="lg" icon="person-add" style={{ marginTop: Spacing.xl }} />
+          <Button title={t('family.addToGroup')} onPress={handleAddMember} fullWidth size="lg" icon="person-add" style={{ marginTop: Spacing.xl }} />
         </ScrollView>
       </KeyboardAvoidingView>
     );
@@ -558,35 +545,40 @@ export default function FamilyScreen() {
 
   // ───── ADD EXPENSE ─────
   if (mode === 'addExpense' && selectedGroup) {
+    const currency = selectedGroup.currency || 'CHF';
+    const parsedAmt = parseFloat((expAmount || '').replace(',', '.'));
+    const shareText = expAmount && !isNaN(parsedAmt)
+      ? fmt(parsedAmt / selectedGroup.members.length, currency)
+      : t('family.splitDashAmount', { currency });
     return (
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={[styles.container, { paddingTop: insets.top }]}
       >
-        {renderHeader('Nouvelle dépense', () => setMode('detail'))}
+        {renderHeader(t('family.newExpenseTitle'), () => setMode('detail'))}
         <ScrollView contentContainerStyle={{ padding: Spacing.lg }} keyboardShouldPersistTaps="handled">
-          <Text style={styles.label}>Description</Text>
+          <Text style={styles.label}>{t('family.descriptionLabel')}</Text>
           <TextInput
             style={styles.input}
             value={expTitle}
             onChangeText={setExpTitle}
-            placeholder="Courses Migros, Restau, AirBnB..."
+            placeholder={t('family.descriptionPh')}
             placeholderTextColor={theme.textTertiary}
             autoFocus
             maxLength={60}
           />
 
-          <Text style={styles.label}>Montant (CHF)</Text>
+          <Text style={styles.label}>{t('family.amountLabel', { currency })}</Text>
           <TextInput
             style={[styles.input, { fontSize: FontSizes.xl, fontWeight: '800' }]}
             value={expAmount}
-            onChangeText={(t) => setExpAmount(t.replace(/[^0-9.,]/g, ''))}
-            placeholder="0.00"
+            onChangeText={(txt) => setExpAmount(txt.replace(/[^0-9.,]/g, ''))}
+            placeholder={t('family.amountPh')}
             placeholderTextColor={theme.textTertiary}
             keyboardType="decimal-pad"
           />
 
-          <Text style={styles.label}>Payé par</Text>
+          <Text style={styles.label}>{t('family.paidByLabel')}</Text>
           <View style={styles.memberChipRow}>
             {selectedGroup.members.map((m) => (
               <TouchableOpacity
@@ -597,7 +589,7 @@ export default function FamilyScreen() {
                 <View style={[styles.memberAvatarSm, { backgroundColor: m.color }]}>
                   <Text style={styles.memberAvatarTxt}>{initial(m.name)}</Text>
                 </View>
-                <Text style={[styles.memberChipTxt, expPaidBy === m.id && { color: m.color, fontWeight: '700' }]}>{m.name}</Text>
+                <Text style={[styles.memberChipTxt, expPaidBy === m.id && { color: m.color, fontWeight: '700' }]}>{m.isMe ? t('family.meLabel') : m.name}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -605,11 +597,15 @@ export default function FamilyScreen() {
           <View style={styles.splitInfo}>
             <Ionicons name="information-circle" size={16} color={theme.info} />
             <Text style={styles.splitInfoTxt}>
-              Réparti équitablement entre les {selectedGroup.members.length} membre{selectedGroup.members.length > 1 ? 's' : ''} ({expAmount ? fmt(parseFloat(expAmount.replace(',', '.')) / selectedGroup.members.length) : 'CHF —'} chacun).
+              {t('family.splitEqualHint', {
+                n: selectedGroup.members.length,
+                unit: memberUnit(selectedGroup.members.length),
+                share: shareText,
+              })}
             </Text>
           </View>
 
-          <Button title="Ajouter la dépense" onPress={handleAddExpense} fullWidth size="lg" icon="checkmark-circle" style={{ marginTop: Spacing.xl }} />
+          <Button title={t('family.addExpenseCta')} onPress={handleAddExpense} fullWidth size="lg" icon="checkmark-circle" style={{ marginTop: Spacing.xl }} />
         </ScrollView>
       </KeyboardAvoidingView>
     );
@@ -618,6 +614,7 @@ export default function FamilyScreen() {
   // ───── DETAIL MODE ─────
   if (mode === 'detail' && selectedGroup && computed) {
     const inviteCode = selectedGroup.inviteCode || '';
+    const currency = selectedGroup.currency || 'CHF';
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
         {renderHeader(
@@ -633,16 +630,16 @@ export default function FamilyScreen() {
             <TouchableOpacity onPress={() => handleShareCode(selectedGroup)} style={styles.inviteBtn} activeOpacity={0.85}>
               <Ionicons name="share-outline" size={18} color={theme.primary} />
               <Text style={styles.inviteBtnTxt}>
-                {inviteCode ? `Code: ${inviteCode}` : 'Générer un code d\'invitation'}
+                {inviteCode ? t('family.codeLabel', { code: inviteCode }) : t('family.generateInviteCode')}
               </Text>
             </TouchableOpacity>
           </LinearGradient>
 
           {/* Members */}
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Membres ({selectedGroup.members.length})</Text>
+            <Text style={styles.sectionTitle}>{t('family.membersHeader', { n: selectedGroup.members.length })}</Text>
             <TouchableOpacity onPress={() => setMode('addMember')}>
-              <Text style={styles.linkAdd}>+ Ajouter</Text>
+              <Text style={styles.linkAdd}>{t('family.linkAdd')}</Text>
             </TouchableOpacity>
           </View>
           <View style={styles.membersGrid}>
@@ -653,11 +650,11 @@ export default function FamilyScreen() {
                   <View style={[styles.memberAvatar, { backgroundColor: m.color }]}>
                     <Text style={styles.memberAvatarTxt}>{initial(m.name)}</Text>
                   </View>
-                  <Text style={styles.memberName} numberOfLines={1}>{m.isMe ? 'Moi' : m.name}</Text>
+                  <Text style={styles.memberName} numberOfLines={1}>{m.isMe ? t('family.meLabel') : m.name}</Text>
                   <Text style={[styles.memberBalance, {
                     color: Math.abs(bal) < 0.01 ? theme.textTertiary : bal > 0 ? theme.success : theme.error,
                   }]}>
-                    {Math.abs(bal) < 0.01 ? 'À jour' : bal > 0 ? `+${fmt(bal)}` : `-${fmt(bal)}`}
+                    {Math.abs(bal) < 0.01 ? t('family.upToDate') : bal > 0 ? `+${fmt(bal, currency)}` : `-${fmt(bal, currency)}`}
                   </Text>
                 </View>
               );
@@ -668,7 +665,7 @@ export default function FamilyScreen() {
           {computed.settlements.length > 0 && (
             <>
               <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Qui doit combien</Text>
+                <Text style={styles.sectionTitle}>{t('family.whoOwesTitle')}</Text>
               </View>
               <View style={styles.settlementsCard}>
                 {computed.settlements.map((s, i) => {
@@ -680,9 +677,9 @@ export default function FamilyScreen() {
                       <View style={[styles.dotAvatar, { backgroundColor: from.color }]}>
                         <Text style={styles.memberAvatarTxt}>{initial(from.name)}</Text>
                       </View>
-                      <Text style={styles.settlementTxt}>{from.isMe ? 'Vous devez' : `${from.name} doit`}</Text>
-                      <Text style={styles.settlementAmount}>{fmt(s.amount)}</Text>
-                      <Text style={styles.settlementTxt}>{to.isMe ? 'à vous' : `à ${to.name}`}</Text>
+                      <Text style={styles.settlementTxt}>{from.isMe ? t('family.youOweShort') : t('family.personOwes', { name: from.name })}</Text>
+                      <Text style={styles.settlementAmount}>{fmt(s.amount, currency)}</Text>
+                      <Text style={styles.settlementTxt}>{to.isMe ? t('family.toYou') : t('family.toName', { name: to.name })}</Text>
                       <View style={[styles.dotAvatar, { backgroundColor: to.color }]}>
                         <Text style={styles.memberAvatarTxt}>{initial(to.name)}</Text>
                       </View>
@@ -695,29 +692,30 @@ export default function FamilyScreen() {
 
           {/* Activity */}
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Activité récente ({selectedExpenses.length})</Text>
+            <Text style={styles.sectionTitle}>{t('family.activityHeader', { n: selectedExpenses.length })}</Text>
             <TouchableOpacity onPress={() => { setExpPaidBy(selectedGroup.members.find(m => m.isMe)?.id || ''); setMode('addExpense'); }}>
-              <Text style={styles.linkAdd}>+ Dépense</Text>
+              <Text style={styles.linkAdd}>{t('family.linkAddExpense')}</Text>
             </TouchableOpacity>
           </View>
           {selectedExpenses.length === 0 ? (
             <View style={styles.emptyExp}>
               <Ionicons name="receipt-outline" size={36} color={theme.textTertiary} />
-              <Text style={styles.emptyExpTxt}>Aucune dépense partagée pour l'instant.</Text>
-              <Text style={styles.emptyExpSub}>Ajoutez votre première dépense pour démarrer le calcul.</Text>
+              <Text style={styles.emptyExpTxt}>{t('family.noSharedExpenses')}</Text>
+              <Text style={styles.emptyExpSub}>{t('family.noSharedExpensesSub')}</Text>
             </View>
           ) : (
             <View style={styles.activityList}>
               {selectedExpenses.slice(0, 20).map((e) => {
                 const payer = selectedGroup.members.find((m) => m.id === e.paidBy);
+                const payerName = payer?.isMe ? t('family.paidByYou') : (payer?.name || '—');
                 return (
                   <TouchableOpacity
                     key={e.id}
                     style={styles.activityRow}
                     onLongPress={() => {
-                      Alert.alert('Supprimer cette dépense ?', e.title, [
-                        { text: 'Annuler', style: 'cancel' },
-                        { text: 'Supprimer', style: 'destructive', onPress: () => deleteGroupExpense(e.id) },
+                      Alert.alert(t('family.deleteExpenseTitle'), e.title, [
+                        { text: t('common.cancel'), style: 'cancel' },
+                        { text: t('common.delete'), style: 'destructive', onPress: () => deleteGroupExpense(e.id) },
                       ]);
                     }}
                     activeOpacity={0.7}
@@ -728,17 +726,16 @@ export default function FamilyScreen() {
                     <View style={{ flex: 1 }}>
                       <Text style={styles.activityTitle} numberOfLines={1}>{e.title}</Text>
                       <Text style={styles.activitySub}>
-                        Payé par {payer?.isMe ? 'vous' : payer?.name || '—'} · {new Date(e.createdAt).toLocaleDateString('fr-CH', { day: '2-digit', month: 'short' })}
+                        {t('family.paidByName', { name: payerName })} · {new Date(e.createdAt).toLocaleDateString(locale, { day: '2-digit', month: 'short' })}
                       </Text>
                     </View>
-                    <Text style={styles.activityAmount}>{fmt(e.amount)}</Text>
+                    <Text style={styles.activityAmount}>{fmt(e.amount, e.currency || currency)}</Text>
                   </TouchableOpacity>
                 );
               })}
             </View>
           )}
 
-          {/* Leave group (for joined members). Owner sees an inline hint. */}
           <TouchableOpacity
             style={styles.leaveBtn}
             onPress={() => handleLeaveGroup(selectedGroup)}
@@ -746,7 +743,7 @@ export default function FamilyScreen() {
             testID="family-leave-group"
           >
             <Ionicons name="exit-outline" size={18} color={theme.error} />
-            <Text style={styles.leaveBtnTxt}>Quitter le groupe</Text>
+            <Text style={styles.leaveBtnTxt}>{t('family.leaveGroup')}</Text>
           </TouchableOpacity>
         </ScrollView>
 
@@ -854,7 +851,6 @@ const makeStyles = (Colors: ThemePalette) => StyleSheet.create({
     backgroundColor: Colors.card,
   },
 
-  // detail
   heroBlock: {
     alignItems: 'center', padding: Spacing.xl, borderRadius: BorderRadius.xl,
     borderWidth: 1, borderColor: `${Colors.primary}30`, marginBottom: Spacing.lg,

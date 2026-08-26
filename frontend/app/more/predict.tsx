@@ -31,6 +31,7 @@ import { useStore } from '../../src/stores/useStore';
 import { apiFetchJson } from '../../src/lib/network';
 import { CategoryIcon, getCategoryName } from '../../src/components/CategoryIcon';
 import { formatNumber, pct, predictMonthlyExpenses } from '../../src/utils/calculations';
+import { useTranslation } from '../../src/hooks/useTranslation';
 
 type Tab = 'predictions' | 'alerts' | 'cashflow' | 'insights' | 'coach';
 
@@ -42,6 +43,7 @@ export default function PredictScreen() {
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { t } = useTranslation();
   const { preferences, transactions, incomes, budgets, chatHistory, addChatMessage, user } = useStore();
   const scrollRef = useRef<ScrollView>(null);
 
@@ -90,7 +92,7 @@ export default function PredictScreen() {
   // Trend health (-100 to 100)
   const trendScore = Math.max(-100, Math.min(100, savingsRate));
   const trendColor = trendScore > 25 ? '#10B981' : trendScore > 10 ? '#F59E0B' : trendScore > 0 ? '#FB923C' : '#EF4444';
-  const trendLabel = trendScore > 25 ? 'Excellent' : trendScore > 10 ? 'Bien' : trendScore > 0 ? 'À surveiller' : 'Risque';
+  const trendLabel = trendScore > 25 ? t('predict.trendExcellent') : trendScore > 10 ? t('predict.trendGood') : trendScore > 0 ? t('predict.trendWatch') : t('predict.trendRisk');
 
   // Alerts
   const alerts = useMemo(() => {
@@ -98,21 +100,21 @@ export default function PredictScreen() {
     categoryPredictions.forEach(p => {
       if (p.budget > 0 && p.predicted > p.budget) {
         result.push({
-          id: `a_${p.category}`, title: `Budget ${getCategoryName(p.category)} dépassé`,
-          message: `Prévu: ${formatNumber(p.predicted)} / Budget: ${formatNumber(p.budget)}`,
+          id: `a_${p.category}`, title: t('predict.budgetExceeded', { category: getCategoryName(p.category) }),
+          message: t('predict.predictedVsBudget', { predicted: formatNumber(p.predicted), budget: formatNumber(p.budget) }),
           severity: p.predicted > p.budget * 1.3 ? 'high' : 'medium', icon: 'warning',
         });
       }
     });
     if (totalPredicted > monthlyIncome * 0.8 && monthlyIncome > 0) {
       result.push({
-        id: 'a_income', title: 'Dépenses élevées',
-        message: `${pct(totalPredicted, monthlyIncome)}% de vos revenus ce mois`,
+        id: 'a_income', title: t('predict.highSpending'),
+        message: t('predict.incomePctRatio', { n: pct(totalPredicted, monthlyIncome) }),
         severity: totalPredicted > monthlyIncome ? 'high' : 'medium', icon: 'trending-up',
       });
     }
     return result;
-  }, [categoryPredictions, totalPredicted, monthlyIncome]);
+  }, [categoryPredictions, totalPredicted, monthlyIncome, t]);
 
   // Build financial context for AI
   const financialContext = useMemo(() => {
@@ -153,9 +155,9 @@ Alertes actives: ${alerts.length}`;
       });
     } catch {
       const fallbacks = [
-        `Basé sur vos données, votre taux d'épargne est de ${savingsRate.toFixed(0)}%. ${savingsRate > 20 ? 'Excellent!' : 'Visez 20-30% pour l\'indépendance financière.'}`,
-        `Vous avez ${alerts.length} alertes budget. Revoyez vos dépenses ${categoryPredictions[0]?.category || 'courses'} en priorité.`,
-        `Conseil: Cotisez CHF 7'258 au 3ème pilier pour économiser jusqu'à 30% d'impôts dans le canton ${preferences.canton}.`,
+        t('predict.fallback1', { n: savingsRate.toFixed(0), tip: savingsRate > 20 ? t('predict.fallbackGood') : t('predict.fallbackAim') }),
+        t('predict.fallback2', { n: alerts.length, cat: categoryPredictions[0]?.category || 'courses' }),
+        t('predict.fallback3', { canton: preferences.canton }),
       ];
       addChatMessage({
         id: `msg_${Date.now()}_ai`,
@@ -170,18 +172,18 @@ Alertes actives: ${alerts.length}`;
   };
 
   const quickQuestions = [
-    { text: 'Comment réduire mes impôts ?', icon: '📑' },
-    { text: 'Quelle franchise LAMal ?', icon: '🏥' },
-    { text: 'Comment épargner plus ?', icon: '💰' },
-    { text: 'Analyse mes dépenses', icon: '📊' },
+    { text: t('predict.quickReduceTax'), icon: '📑' },
+    { text: t('predict.quickLamal'), icon: '🏥' },
+    { text: t('predict.quickSaveMore'), icon: '💰' },
+    { text: t('predict.quickAnalyze'), icon: '📊' },
   ];
 
   const tabs: { key: Tab; label: string; icon: string; gradient: [string, string] }[] = [
-    { key: 'predictions', label: 'Prédire', icon: 'analytics', gradient: ['#22D3EE', '#0891B2'] },
-    { key: 'alerts',      label: `Alertes${alerts.length ? ` ${alerts.length}` : ''}`, icon: 'warning', gradient: ['#F59E0B', '#EA580C'] },
-    { key: 'cashflow',    label: 'Cash Flow', icon: 'swap-vertical', gradient: ['#A78BFA', '#7C3AED'] },
-    { key: 'insights',    label: 'Conseils', icon: 'bulb', gradient: ['#FBBF24', '#F59E0B'] },
-    { key: 'coach',       label: 'Coach IA', icon: 'sparkles', gradient: ['#34D399', '#22D3EE'] },
+    { key: 'predictions', label: t('predict.tabPredictions'), icon: 'analytics', gradient: ['#22D3EE', '#0891B2'] },
+    { key: 'alerts',      label: `${t('predict.tabAlerts')}${alerts.length ? ` ${alerts.length}` : ''}`, icon: 'warning', gradient: ['#F59E0B', '#EA580C'] },
+    { key: 'cashflow',    label: t('predict.tabCashflow'), icon: 'swap-vertical', gradient: ['#A78BFA', '#7C3AED'] },
+    { key: 'insights',    label: t('predict.tabInsights'), icon: 'bulb', gradient: ['#FBBF24', '#F59E0B'] },
+    { key: 'coach',       label: t('predict.tabCoach'), icon: 'sparkles', gradient: ['#34D399', '#22D3EE'] },
   ];
 
   // ------ RENDER ------
@@ -209,9 +211,9 @@ Alertes actives: ${alerts.length}`;
             <Animated.View style={pulseStyle}>
               <Ionicons name="sparkles" size={18} color="#FBBF24" />
             </Animated.View>
-            <Text style={styles.title}>Coach Predict</Text>
+            <Text style={styles.title}>{t('predict.title')}</Text>
           </View>
-          <Text style={styles.subtitle}>Votre assistant financier IA</Text>
+          <Text style={styles.subtitle}>{t('predict.subtitle')}</Text>
         </View>
         <View style={{ width: 40 }} />
       </View>
@@ -257,9 +259,9 @@ Alertes actives: ${alerts.length}`;
                     <Ionicons name="sparkles" size={42} color="#FBBF24" />
                   </Animated.View>
                 </LinearGradient>
-                <Text style={styles.aiTitle}>Coach IA Budgy</Text>
+                <Text style={styles.aiTitle}>{t('predict.aiIntroTitle')}</Text>
                 <Text style={styles.aiSub}>
-                  Posez vos questions sur vos finances suisses.{'\n'}Je connais vos données et le système 🇨🇭
+                  {t('predict.aiIntroSub')}
                 </Text>
                 <View style={styles.quickGrid}>
                   {quickQuestions.map((q, i) => (
@@ -283,7 +285,7 @@ Alertes actives: ${alerts.length}`;
                 {msg.role === 'assistant' && (
                   <View style={styles.aiBadgeMini}>
                     <Ionicons name="sparkles" size={11} color="#FBBF24" />
-                    <Text style={styles.aiBadgeMiniTxt}>Budgy IA</Text>
+                    <Text style={styles.aiBadgeMiniTxt}>{t('predict.aiBadge')}</Text>
                   </View>
                 )}
                 <Text style={[styles.bubbleTxt, msg.role === 'user' && { color: '#0E1530' }]}>
@@ -295,7 +297,7 @@ Alertes actives: ${alerts.length}`;
             {isLoading && (
               <View style={[styles.bubble, styles.aiBubble, styles.typingBubble]}>
                 <ActivityIndicator size="small" color="#FBBF24" />
-                <Text style={styles.typingTxt}>Analyse en cours...</Text>
+                <Text style={styles.typingTxt}>{t('predict.analyzing')}</Text>
               </View>
             )}
           </ScrollView>
@@ -305,7 +307,7 @@ Alertes actives: ${alerts.length}`;
               style={styles.chatInput}
               value={message}
               onChangeText={setMessage}
-              placeholder="Posez votre question..."
+              placeholder={t('predict.inputPlaceholder')}
               placeholderTextColor={theme.textTertiary}
               multiline
               onSubmitEditing={handleSendMessage}
@@ -337,7 +339,7 @@ Alertes actives: ${alerts.length}`;
             >
               <View style={styles.heroTop}>
                 <View>
-                  <Text style={styles.heroLabel}>Prévision fin de mois</Text>
+                  <Text style={styles.heroLabel}>{t('predict.heroLabel')}</Text>
                   <Text style={styles.heroAmount}>{CUR} {formatNumber(totalPredicted)}</Text>
                 </View>
                 <View style={[styles.healthBadge, { backgroundColor: `${trendColor}25`, borderColor: trendColor }]}>
@@ -348,7 +350,7 @@ Alertes actives: ${alerts.length}`;
 
               {/* Health bar (savings rate) */}
               <View style={styles.gaugeRow}>
-                <Text style={styles.gaugeLabel}>Taux d'épargne</Text>
+                <Text style={styles.gaugeLabel}>{t('predict.savingsRate')}</Text>
                 <Text style={[styles.gaugeValue, { color: trendColor }]}>{savingsRate.toFixed(0)}%</Text>
               </View>
               <View style={styles.gaugeBar}>
@@ -359,24 +361,24 @@ Alertes actives: ${alerts.length}`;
                   style={[styles.gaugeFill, { width: `${Math.max(0, Math.min(100, savingsRate))}%` }]}
                 />
               </View>
-              <Text style={styles.gaugeHint}>Cible recommandée: 20-30%</Text>
+              <Text style={styles.gaugeHint}>{t('predict.savingsTarget')}</Text>
 
               <View style={styles.heroFooter}>
                 <View style={styles.heroStat}>
                   <Ionicons name="arrow-up" size={14} color="#10B981" />
-                  <Text style={styles.heroStatLabel}>Revenus</Text>
+                  <Text style={styles.heroStatLabel}>{t('predict.incomes')}</Text>
                   <Text style={styles.heroStatValue}>{CUR} {formatNumber(monthlyIncome)}</Text>
                 </View>
                 <View style={styles.heroSep} />
                 <View style={styles.heroStat}>
                   <Ionicons name="arrow-down" size={14} color="#EF4444" />
-                  <Text style={styles.heroStatLabel}>Dépenses</Text>
+                  <Text style={styles.heroStatLabel}>{t('predict.expenses')}</Text>
                   <Text style={styles.heroStatValue}>{CUR} {formatNumber(totalPredicted)}</Text>
                 </View>
                 <View style={styles.heroSep} />
                 <View style={styles.heroStat}>
                   <Ionicons name="wallet" size={14} color={trendColor} />
-                  <Text style={styles.heroStatLabel}>Net</Text>
+                  <Text style={styles.heroStatLabel}>{t('predict.net')}</Text>
                   <Text style={[styles.heroStatValue, { color: netSavings >= 0 ? '#10B981' : '#EF4444' }]}>
                     {netSavings >= 0 ? '+' : ''}{CUR} {formatNumber(Math.abs(netSavings))}
                   </Text>
@@ -398,8 +400,8 @@ Alertes actives: ${alerts.length}`;
                   <Ionicons name="sparkles" size={22} color="#FBBF24" />
                 </Animated.View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.askAiTitle}>Demandez à l'IA</Text>
-                  <Text style={styles.askAiSub}>"Comment optimiser mon budget ce mois ?"</Text>
+                  <Text style={styles.askAiTitle}>{t('predict.askAiTitle')}</Text>
+                  <Text style={styles.askAiSub}>{t('predict.askAiSub')}</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} />
               </LinearGradient>
@@ -409,8 +411,8 @@ Alertes actives: ${alerts.length}`;
           {/* PREDICTIONS Tab */}
           {activeTab === 'predictions' && (
             <>
-              <Text style={styles.sectionTitle}>📊 Catégories</Text>
-              <Text style={styles.sectionSub}>Prévision fin de mois par catégorie · Jour {dayOfMonth}/30</Text>
+              <Text style={styles.sectionTitle}>{t('predict.sectionCategoriesTitle')}</Text>
+              <Text style={styles.sectionSub}>{t('predict.sectionCategoriesSub', { day: dayOfMonth })}</Text>
               {categoryPredictions.map((p, idx) => {
                 const overBudget = p.budget > 0 && p.predicted > p.budget;
                 const progress = p.budget > 0 ? Math.min(100, (p.predicted / p.budget) * 100) : 0;
@@ -421,11 +423,11 @@ Alertes actives: ${alerts.length}`;
                         <CategoryIcon category={p.category} size="sm" />
                         <View style={{ flex: 1 }}>
                           <Text style={styles.predName}>{getCategoryName(p.category)}</Text>
-                          <Text style={styles.predConfidence}>Confiance {Math.round((p.confidence || 0.5) * 100)}%</Text>
+                          <Text style={styles.predConfidence}>{t('predict.confidence', { n: Math.round((p.confidence || 0.5) * 100) })}</Text>
                         </View>
                         <View style={{ alignItems: 'flex-end' }}>
                           <Text style={styles.predAmount}>{CUR} {formatNumber(p.predicted)}</Text>
-                          <Text style={styles.predCurrent}>maintenant: {formatNumber(p.currentSpent)}</Text>
+                          <Text style={styles.predCurrent}>{t('predict.currentNow', { amount: formatNumber(p.currentSpent) })}</Text>
                         </View>
                       </View>
                       {p.budget > 0 && (
@@ -439,7 +441,7 @@ Alertes actives: ${alerts.length}`;
                             />
                           </View>
                           <Text style={[styles.predBudget, overBudget && { color: '#EF4444' }]}>
-                            {overBudget ? '⚠️ ' : ''}Budget {CUR} {formatNumber(p.budget)} · {Math.round(progress)}%
+                            {t('predict.budgetLine', { prefix: overBudget ? t('predict.overBudget') : '', currency: CUR, amount: formatNumber(p.budget), n: Math.round(progress) })}
                           </Text>
                         </>
                       )}
@@ -453,8 +455,8 @@ Alertes actives: ${alerts.length}`;
           {/* ALERTS Tab */}
           {activeTab === 'alerts' && (
             <>
-              <Text style={styles.sectionTitle}>⚠️ Alertes</Text>
-              <Text style={styles.sectionSub}>Anomalies détectées dans vos finances</Text>
+              <Text style={styles.sectionTitle}>{t('predict.sectionAlertsTitle')}</Text>
+              <Text style={styles.sectionSub}>{t('predict.sectionAlertsSub')}</Text>
               {alerts.length === 0 ? (
                 <View style={styles.emptyOk}>
                   <LinearGradient
@@ -463,8 +465,8 @@ Alertes actives: ${alerts.length}`;
                   >
                     <Ionicons name="checkmark-circle" size={56} color="#10B981" />
                   </LinearGradient>
-                  <Text style={styles.emptyOkTitle}>Tout va bien ! 🎉</Text>
-                  <Text style={styles.emptyOkSub}>Aucune alerte budget pour le moment</Text>
+                  <Text style={styles.emptyOkTitle}>{t('predict.emptyOkTitle')}</Text>
+                  <Text style={styles.emptyOkSub}>{t('predict.emptyOkSub')}</Text>
                 </View>
               ) : (
                 alerts.map((a, idx) => {
@@ -494,8 +496,8 @@ Alertes actives: ${alerts.length}`;
           {/* CASHFLOW Tab */}
           {activeTab === 'cashflow' && (
             <>
-              <Text style={styles.sectionTitle}>💰 Cash Flow Mensuel</Text>
-              <Text style={styles.sectionSub}>Flux entrants vs sortants</Text>
+              <Text style={styles.sectionTitle}>{t('predict.cashflowTitle')}</Text>
+              <Text style={styles.sectionSub}>{t('predict.cashflowSub')}</Text>
               <View style={styles.cfMain}>
                 <Animated.View entering={FadeInDown.delay(60)}>
                   <LinearGradient
@@ -503,7 +505,7 @@ Alertes actives: ${alerts.length}`;
                     style={styles.cfBig}
                   >
                     <View style={styles.cfBigIcon}><Ionicons name="arrow-up" size={20} color="#10B981" /></View>
-                    <Text style={styles.cfBigLabel}>Entrées</Text>
+                    <Text style={styles.cfBigLabel}>{t('predict.cfInflows')}</Text>
                     <Text style={[styles.cfBigAmount, { color: '#10B981' }]}>+{CUR} {formatNumber(monthlyIncome)}</Text>
                   </LinearGradient>
                 </Animated.View>
@@ -513,7 +515,7 @@ Alertes actives: ${alerts.length}`;
                     style={styles.cfBig}
                   >
                     <View style={styles.cfBigIcon}><Ionicons name="arrow-down" size={20} color="#EF4444" /></View>
-                    <Text style={styles.cfBigLabel}>Sorties prévues</Text>
+                    <Text style={styles.cfBigLabel}>{t('predict.cfOutflows')}</Text>
                     <Text style={[styles.cfBigAmount, { color: '#EF4444' }]}>-{CUR} {formatNumber(totalPredicted)}</Text>
                   </LinearGradient>
                 </Animated.View>
@@ -525,14 +527,14 @@ Alertes actives: ${alerts.length}`;
                   style={styles.cfNet}
                 >
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.cfNetLabel}>Solde net du mois</Text>
+                    <Text style={styles.cfNetLabel}>{t('predict.cfNetLabel')}</Text>
                     <Text style={[styles.cfNetAmount, { color: netSavings >= 0 ? '#10B981' : '#EF4444' }]}>
                       {netSavings >= 0 ? '+' : ''}{CUR} {formatNumber(Math.abs(netSavings))}
                     </Text>
                     <Text style={styles.cfNetSub}>
                       {netSavings >= 0
-                        ? `→ Économies projetées · épargne ${savingsRate.toFixed(0)}%`
-                        : `⚠️ Découvert prévu · ajustez vos dépenses`}
+                        ? t('predict.cfNetPositive', { n: savingsRate.toFixed(0) })
+                        : t('predict.cfNetNegative')}
                     </Text>
                   </View>
                   <Ionicons
@@ -548,37 +550,37 @@ Alertes actives: ${alerts.length}`;
           {/* INSIGHTS Tab */}
           {activeTab === 'insights' && (
             <>
-              <Text style={styles.sectionTitle}>💡 Conseils personnalisés</Text>
-              <Text style={styles.sectionSub}>Recommandations sur mesure pour vos finances</Text>
+              <Text style={styles.sectionTitle}>{t('predict.insightsTitle')}</Text>
+              <Text style={styles.sectionSub}>{t('predict.insightsSub')}</Text>
               {[
                 {
                   icon: '📊',
-                  title: `Taux d'épargne: ${savingsRate.toFixed(0)}%`,
-                  desc: savingsRate > 20 ? 'Excellent ! Vous êtes sur la bonne voie pour atteindre vos objectifs.' : 'Visez 20-30% pour bâtir votre indépendance financière.',
+                  title: t('predict.savingsRateShort', { n: savingsRate.toFixed(0) }),
+                  desc: savingsRate > 20 ? t('predict.savingsGood') : t('predict.savingsAim'),
                   color: savingsRate > 20 ? '#10B981' : '#F59E0B',
                   gradient: savingsRate > 20 ? ['rgba(16,185,129,0.18)', 'rgba(16,185,129,0.05)'] : ['rgba(245,158,11,0.18)', 'rgba(245,158,11,0.05)'],
                 },
                 {
                   icon: '🎯',
-                  title: alerts.length === 0 ? 'Budgets sous contrôle' : `${alerts.length} alerte${alerts.length > 1 ? 's' : ''} budget`,
-                  desc: alerts.length === 0 ? 'Vos enveloppes sont respectées, continuez !' : `Attention à vos dépenses ${alerts[0]?.title?.split(' ').pop() || ''}`,
+                  title: alerts.length === 0 ? t('predict.budgetsOk') : t('predict.budgetsAlerts', { n: alerts.length, s: alerts.length > 1 ? 's' : '' }),
+                  desc: alerts.length === 0 ? t('predict.budgetsOkSub') : t('predict.budgetsAlertsSub', { cat: alerts[0]?.title?.split(' ').pop() || '' }),
                   color: alerts.length === 0 ? '#10B981' : '#EF4444',
                   gradient: alerts.length === 0 ? ['rgba(16,185,129,0.15)', 'rgba(16,185,129,0.05)'] : ['rgba(239,68,68,0.15)', 'rgba(239,68,68,0.05)'],
                 },
                 {
                   icon: '💎',
-                  title: '3ème pilier',
-                  desc: 'Cotisez CHF 7\'258 max au pilier 3a pour économiser jusqu\'à 30% d\'impôts.',
+                  title: t('predict.pillar3Title'),
+                  desc: t('predict.pillar3Desc'),
                   color: '#A78BFA',
                   gradient: ['rgba(167,139,250,0.18)', 'rgba(167,139,250,0.05)'],
                 },
                 {
                   icon: '🏥',
-                  title: 'LAMal · 30 novembre',
-                  desc: 'Date limite de résiliation. Comparez les primes avec notre comparateur intégré.',
+                  title: t('predict.lamalTitle'),
+                  desc: t('predict.lamalDesc'),
                   color: '#22D3EE',
                   gradient: ['rgba(34,211,238,0.18)', 'rgba(34,211,238,0.05)'],
-                  cta: { label: 'Comparer', route: '/more/lamal-comparator' },
+                  cta: { label: t('predict.lamalCta'), route: '/more/lamal-comparator' },
                 },
               ].map((insight, idx) => (
                 <Animated.View key={idx} entering={FadeInDown.delay(idx * 80)}>

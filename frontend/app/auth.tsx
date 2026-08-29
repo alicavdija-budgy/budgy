@@ -162,7 +162,8 @@ export default function AuthScreen() {
           mode === 'register'
         );
       } else {
-        throw new Error('Supabase not configured');
+        // Machine-only code. humanizeAuthError maps it to translated UX.
+        throw new Error('supabase_config_missing');
       }
     } catch (error: any) {
       const h = humanizeAuthError(error, mode === 'register' ? 'signUp' : 'signIn');

@@ -74,7 +74,8 @@ scenario('2. No secret key names anywhere in app/ src/', () => {
 });
 
 scenario('3. auth.tsx: production error → throw, not silent local login', () => {
-  const src = stripComments(read('app/auth.tsx'));
+  const raw = read('app/auth.tsx');
+  const src = stripComments(raw);
   assert(
     'no `confirmation email` → loginAsLocalUser bypass',
     !/confirmation email[\s\S]{0,300}loginAsLocalUser/i.test(src),
@@ -83,10 +84,14 @@ scenario('3. auth.tsx: production error → throw, not silent local login', () =
     'unconditional local fallback removed',
     !/\}\s*else\s*\{\s*await new Promise[\s\S]{0,300}loginAsLocalUser/.test(src),
   );
-  assert('__DEV__ branch exists', /__DEV__/.test(src));
+  assert('__DEV__ branch exists', raw.includes('else if (__DEV__)'));
+
+  const devIndex = raw.indexOf('else if (__DEV__)');
+  const throwIndex = raw.indexOf("throw new Error('Supabase not configured')", devIndex);
+  const catchIndex = raw.indexOf('} catch (error', devIndex);
   assert(
     'production else-branch throws configuration failure',
-    /else\s*\{[\s\S]{0,160}throw new Error\(['"]Supabase not configured['"]\)/.test(src),
+    devIndex >= 0 && throwIndex > devIndex && catchIndex > throwIndex,
   );
 });
 

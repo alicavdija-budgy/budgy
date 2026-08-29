@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * BUDGY v3.9.0 Build 74 — Cloud / Auth production hardening test.
+ * BUDGY v3.9.0 Build 80 — Cloud / Auth production hardening test.
  *
  * Validates:
  *   1) Supabase env vars are wired via EXPO_PUBLIC_* keys (never secret keys)
  *   2) No service_role / private key referenced in client bundle
  *   3) auth.tsx: production DOES NOT silently create a local account
  *      when Supabase is unconfigured — only __DEV__ does
- *   4) eas.json production environment declares SUPABASE URL + ANON KEY
+ *   4) eas.json production environment declares the production Supabase URL
  */
 
 import fs from 'node:fs';
@@ -29,7 +29,6 @@ const root = path.join(__dirname, '..');
 const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
 const stripComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
 
-// ── 1. Client uses only PUBLIC env keys ─────────────────────────────────
 scenario('1. Supabase client uses only PUBLIC env keys', () => {
   const supaFile = 'src/lib/supabase.ts';
   if (!fs.existsSync(path.join(root, supaFile))) {
@@ -42,13 +41,11 @@ scenario('1. Supabase client uses only PUBLIC env keys', () => {
   assert(`${supaFile}: does NOT reference SERVICE_ROLE`, !/SERVICE_ROLE/i.test(src));
   assert(`${supaFile}: does NOT reference SUPABASE_SECRET`, !/SUPABASE_SECRET/i.test(src));
 
-  // auth.tsx must not reference secret keys either (but importing supabase via `../src/lib/supabase` is fine)
   const authSrc = read('app/auth.tsx');
   assert('app/auth.tsx: does NOT reference SERVICE_ROLE', !/SERVICE_ROLE/i.test(authSrc));
   assert('app/auth.tsx: does NOT reference SUPABASE_SECRET', !/SUPABASE_SECRET/i.test(authSrc));
 });
 
-// ── 2. Client bundle has no secret key names ────────────────────────────
 scenario('2. No secret key names anywhere in app/ src/', () => {
   const walk = (dir) => {
     const out = [];
@@ -76,37 +73,27 @@ scenario('2. No secret key names anywhere in app/ src/', () => {
   assert('no banned secret-key names in client bundle', hits === 0);
 });
 
-// ── 3. auth.tsx: production DOES NOT silently fall back to local ────────
 scenario('3. auth.tsx: production error → throw, not silent local login', () => {
   const src = stripComments(read('app/auth.tsx'));
-  // The removed BAD pattern: on signUp error containing "confirmation email"
-  // → loginAsLocalUser (silent bypass)
   assert(
     'no `confirmation email` → loginAsLocalUser bypass',
     !/confirmation email[\s\S]{0,300}loginAsLocalUser/i.test(src),
   );
-  // Local fallback must be under __DEV__ only
   assert(
     'unconditional local fallback removed',
     !/\}\s*else\s*\{\s*await new Promise[\s\S]{0,300}loginAsLocalUser/.test(src),
   );
+  assert('__DEV__ branch exists', /__DEV__/.test(src));
   assert(
-    '__DEV__ branch exists',
-    /__DEV__/.test(src),
-  );
-  assert(
-    'production else-branch throws with translated message',
-    /else\s*\{[\s\S]{0,120}throw new Error\(t\(/.test(src),
+    'production else-branch throws configuration failure',
+    /else\s*\{[\s\S]{0,160}throw new Error\(['"]Supabase not configured['"]\)/.test(src),
   );
 });
 
-// ── 4. eas.json declares production env vars ────────────────────────────
 scenario('4. eas.json production env declares Supabase keys', () => {
   const src = read('eas.json');
   const production = src.match(/"production"\s*:\s*\{[\s\S]*?\}\s*\}?/);
   assert('eas.json has production build profile', !!production);
-  // We only check the FILE declares these keys via env — the actual values
-  // live in EAS Environment, invisible to this sandbox.
   const supabaseUrlDeclared =
     /EXPO_PUBLIC_SUPABASE_URL/.test(src) ||
     /environment[^}]*production/.test(src);
@@ -116,10 +103,8 @@ scenario('4. eas.json production env declares Supabase keys', () => {
   );
 });
 
-// ── 5. Cloud sync does NOT hydrate isPro from cloud prefs ──────────────
 scenario('5. cloudSync.ts does not hydrate isPro (backend IAP is truth)', () => {
   const src = read('src/services/cloudSync.ts');
-  // pullAllFromCloud must NOT set isPro from prefs row
   const pull = src.match(/pullAllFromCloud[\s\S]*?(?=\n(?:export|async function|function))/);
   if (pull) {
     assert(
@@ -131,7 +116,6 @@ scenario('5. cloudSync.ts does not hydrate isPro (backend IAP is truth)', () => 
   }
 });
 
-// ── Report ─────────────────────────────────────────────────────────────
 console.log('\n' + '─'.repeat(60));
 console.log(`Cloud-auth tests : ${PASS} passed, ${FAIL} failed`);
 if (FAIL > 0) {

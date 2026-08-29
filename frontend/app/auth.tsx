@@ -10,7 +10,6 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../src/constants/theme';
 import { useStore } from '../src/stores/useStore';
@@ -27,7 +26,7 @@ export default function AuthScreen() {
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const router = useRouter();
-  const { setUser, setPro, loadSeedData, setPreferences } = useStore();
+  const { setUser, setPro, setPreferences } = useStore();
 
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [name, setName] = useState('');
@@ -55,7 +54,6 @@ export default function AuthScreen() {
       try {
         router.replace(path as any);
       } catch (e) {
-        // Fallback only for web platform
         if (Platform.OS === 'web' && typeof window !== 'undefined') {
           try { window.location.assign(path); } catch {}
         }
@@ -63,13 +61,13 @@ export default function AuthScreen() {
     }, 200);
   };
 
-  // Auth is handled exclusively by Supabase below — no client-side bypass.
-
-  const loginAsLocalUser = (userId: string, emailAddr: string, userName: string, isPro: boolean, isNewAccount: boolean) => {
-    // v3.9.0 Build 74 — CRITICAL: reset any stale Premium entitlement from a
-    // previous account/demo BEFORE anchoring the new user. `isPro` passed in
-    // is intentionally ignored for Premium — the backend IAP sync is the
-    // ONLY source of truth. A new account MUST start FREE.
+  const loginAsLocalUser = (
+    userId: string,
+    emailAddr: string,
+    userName: string,
+    _isPro: boolean,
+    isNewAccount: boolean
+  ) => {
     const premium = usePremiumStore.getState();
     premium.resetForUserChange();
     premium.attachToUser(userId);
@@ -79,28 +77,23 @@ export default function AuthScreen() {
       email: emailAddr,
       name: userName,
       createdAt: Date.now(),
-      isPro: false, // never seed Pro from client — backend IAP sync decides
+      isPro: false,
     });
 
     if (isNewAccount) {
-      // New account: go through onboarding, NO seed data
       setPreferences({ onboarded: false });
       navigateTo('/onboarding');
     } else {
-      // Existing/returning user: skip onboarding
       setPreferences({ onboarded: true });
       navigateTo('/(tabs)');
     }
   };
 
-  // Cloud sync after successful Supabase login (non-blocking)
   const triggerCloudSync = async (isNewAccount: boolean) => {
     try {
       if (isNewAccount) {
-        // For new accounts, push the initial state (user_preferences row)
         await pushAllToCloud();
       } else {
-        // For returning users, pull cloud data to hydrate local store
         await pullAllFromCloud();
       }
     } catch (e) {
@@ -120,64 +113,76 @@ export default function AuthScreen() {
           const { data, error } = await supabase.auth.signUp({
             email: emailClean,
             password,
-            options: { data: { name: name.trim() } },
+            options: {
+              data: { name: name.trim() },
+              emailRedirectTo: 'budgy://auth',
+            },
           });
 
-          if (error) {
-            // v3.9.0 Build 74 — NO silent local fallback in production.
-            // A confirmation-email failure MUST surface a real error.
-            // Otherwise the user thinks he has a cloud account when he doesn't
-            // — meaning no receipt validation, no cross-device restore, no IAP.
-            throw error;
-          }
+          if (error) throw error;
+          if (!data.user) throw new Error('signup_missing_user');
 
-          if (data.user && !data.session) {
-            loginAsLocalUser(data.user.id, emailClean, name.trim(), false, true);
-            // Trigger cloud sync in background (non-blocking)
-            triggerCloudSync(true);
+          // Build 80: never create a local "authenticated" user when GoTrue
+          // requires email confirmation. A real Supabase session is mandatory
+          // for cloud sync and StoreKit receipt ownership.
+          if (!data.session) {
+            setMode('login');
+            setPassword('');
+            setConfirmPassword('');
+            Alert.alert(
+              t('authErrors.emailNotConfirmedTitle'),
+              `${t('authErrors.emailNotConfirmedMessage')}\n\n${t('authErrors.checkSpam')}`,
+              [{ text: 'OK' }]
+            );
             return;
           }
 
-          loginAsLocalUser(data.user?.id || `user_${Date.now()}`, emailClean, name.trim(), false, true);
+          loginAsLocalUser(data.user.id, emailClean, name.trim(), false, true);
           triggerCloudSync(true);
         } else {
-          // Login
           const { data, error } = await supabase.auth.signInWithPassword({
             email: emailClean,
             password,
           });
 
-          if (error) {
-            // Surface the real error to the user — no client-side bypass
-            throw error;
-          }
+          if (error) throw error;
+          if (!data.user || !data.session) throw new Error('signin_missing_session');
 
-          const userId = data.user?.id || `user_${Date.now()}`;
-          const userName = data.user?.user_metadata?.name || emailClean.split('@')[0];
-          loginAsLocalUser(userId, emailClean, userName, false, false);
-          // Pull cloud data in background to hydrate local store
+          const userName = data.user.user_metadata?.name || emailClean.split('@')[0];
+          loginAsLocalUser(data.user.id, emailClean, userName, false, false);
           triggerCloudSync(false);
         }
       } else if (__DEV__) {
-        // v3.9.0 Build 74 — DEV-ONLY offline fallback. Never runs in production
-        // TestFlight/App Store builds. Ensures cloud misconfiguration surfaces
-        // instead of silently creating a fake local account.
         await new Promise(r => setTimeout(r, 400));
-        loginAsLocalUser(`local_${Date.now()}`, emailClean, mode === 'register' ? name.trim() : emailClean.split('@')[0], false, mode === 'register');
+        loginAsLocalUser(
+          `local_${Date.now()}`,
+          emailClean,
+          mode === 'register' ? name.trim() : emailClean.split('@')[0],
+          false,
+          mode === 'register'
+        );
       } else {
-        // Production: cloud unavailable → surface the real error, stay logged out.
-        throw new Error(t('auth.cloudUnavailable'));
+        throw new Error('Supabase not configured');
       }
     } catch (error: any) {
       const h = humanizeAuthError(error, mode === 'register' ? 'signUp' : 'signIn');
       const buttons: any[] = [{ text: 'OK', style: 'default' }];
-      if (mode === 'login' && (h._code === 'AUTH_SIGNIN_UNAUTHORIZED' || h._code === 'AUTH_INVALID_CREDENTIALS' || h._code === 'AUTH_SIGNIN_GENERIC')) {
+      if (
+        mode === 'login' &&
+        (h._code === 'AUTH_SIGNIN_UNAUTHORIZED' ||
+          h._code === 'AUTH_INVALID_CREDENTIALS' ||
+          h._code === 'AUTH_SIGNIN_GENERIC')
+      ) {
         buttons.unshift({
           text: t('auth.forgotPwdShort'),
           onPress: () => router.push('/forgot-password' as any),
         });
       }
-      Alert.alert(t(h.titleKey), h.hintKey ? `${t(h.messageKey)}\n\n${t(h.hintKey)}` : t(h.messageKey), buttons);
+      Alert.alert(
+        t(h.titleKey),
+        h.hintKey ? `${t(h.messageKey)}\n\n${t(h.hintKey)}` : t(h.messageKey),
+        buttons
+      );
     } finally {
       setLoading(false);
     }
@@ -186,13 +191,6 @@ export default function AuthScreen() {
   const handleDemoMode = async () => {
     setLoading(true);
     try {
-      // v3.9.0 Build 74 — APPLE GUIDELINE 2.1(b) COMPLIANCE.
-      // Demo mode MUST start strictly FREE. The ONLY paths to Pro are:
-      //   1) StoreKit purchase → validateOnBackend → confirmPro()
-      //   2) StoreKit restore  → restoreOnBackend  → confirmPro()
-      //   3) Provisional grant AFTER a real Apple receipt (transient)
-      // No local grant of any kind — the paywall route is identical to any
-      // Free user, so App Review sees the real StoreKit flow.
       const premium = usePremiumStore.getState();
       premium.resetForUserChange();
       premium.attachToUser('demo_user');
@@ -206,18 +204,18 @@ export default function AuthScreen() {
         isDemo: true,
       });
       setPro(false);
-      // Phase 1: no seed data — demo mode also starts empty
       setPreferences({ onboarded: true });
       await new Promise(r => setTimeout(r, 300));
       navigateTo('/(tabs)');
-    } catch { setLoading(false); }
+    } catch {
+      setLoading(false);
+    }
   };
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + 20 }]} testID="auth-screen">
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardView}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-          {/* Logo */}
           <View style={styles.logoContainer}>
             <Image
               source={require('../assets/images/icon.png')}
@@ -228,10 +226,14 @@ export default function AuthScreen() {
             <Text style={styles.tagline}>{t('auth.tagline')}</Text>
           </View>
 
-          {/* Mode Toggle */}
           <View style={styles.modeToggle}>
             {(['login', 'register'] as const).map((m) => (
-              <TouchableOpacity key={m} testID={`auth-mode-${m}`} style={[styles.modeButton, mode === m && styles.modeButtonActive]} onPress={() => { setMode(m); setErrors({}); }}>
+              <TouchableOpacity
+                key={m}
+                testID={`auth-mode-${m}`}
+                style={[styles.modeButton, mode === m && styles.modeButtonActive]}
+                onPress={() => { setMode(m); setErrors({}); }}
+              >
                 <Text style={[styles.modeButtonText, mode === m && styles.modeButtonTextActive]}>
                   {m === 'login' ? t('auth.login') : t('auth.signup')}
                 </Text>
@@ -239,14 +241,21 @@ export default function AuthScreen() {
             ))}
           </View>
 
-          {/* Form */}
           <View style={styles.form}>
             {mode === 'register' && (
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>{t('auth.fullName')}</Text>
                 <View style={[styles.inputContainer, errors.name && styles.inputError]}>
                   <Ionicons name="person-outline" size={20} color={Colors.textTertiary} />
-                  <TextInput testID="auth-name-input" style={styles.input} value={name} onChangeText={setName} placeholder={t('auth.fullNamePlaceholder')} placeholderTextColor={Colors.textTertiary} autoCapitalize="words" />
+                  <TextInput
+                    testID="auth-name-input"
+                    style={styles.input}
+                    value={name}
+                    onChangeText={setName}
+                    placeholder={t('auth.fullNamePlaceholder')}
+                    placeholderTextColor={Colors.textTertiary}
+                    autoCapitalize="words"
+                  />
                 </View>
                 {errors.name && <Text style={styles.errorText}>{errors.name}</Text>}
               </View>
@@ -256,7 +265,17 @@ export default function AuthScreen() {
               <Text style={styles.label}>{t('auth.email')}</Text>
               <View style={[styles.inputContainer, errors.email && styles.inputError]}>
                 <Ionicons name="mail-outline" size={20} color={Colors.textTertiary} />
-                <TextInput testID="auth-email-input" style={styles.input} value={email} onChangeText={setEmail} placeholder={t("auth.emailPlaceholder")} placeholderTextColor={Colors.textTertiary} keyboardType="email-address" autoCapitalize="none" autoCorrect={false} />
+                <TextInput
+                  testID="auth-email-input"
+                  style={styles.input}
+                  value={email}
+                  onChangeText={setEmail}
+                  placeholder={t('auth.emailPlaceholder')}
+                  placeholderTextColor={Colors.textTertiary}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
               </View>
               {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
             </View>
@@ -265,7 +284,15 @@ export default function AuthScreen() {
               <Text style={styles.label}>{t('auth.password')}</Text>
               <View style={[styles.inputContainer, errors.password && styles.inputError]}>
                 <Ionicons name="lock-closed-outline" size={20} color={Colors.textTertiary} />
-                <TextInput testID="auth-password-input" style={styles.input} value={password} onChangeText={setPassword} placeholder="••••••••" placeholderTextColor={Colors.textTertiary} secureTextEntry={!showPassword} />
+                <TextInput
+                  testID="auth-password-input"
+                  style={styles.input}
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder="••••••••"
+                  placeholderTextColor={Colors.textTertiary}
+                  secureTextEntry={!showPassword}
+                />
                 <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
                   <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color={Colors.textTertiary} />
                 </TouchableOpacity>
@@ -288,16 +315,30 @@ export default function AuthScreen() {
                 <Text style={styles.label}>{t('authExtra.confirmPasswordLabel')}</Text>
                 <View style={[styles.inputContainer, errors.confirmPassword && styles.inputError]}>
                   <Ionicons name="lock-closed-outline" size={20} color={Colors.textTertiary} />
-                  <TextInput testID="auth-confirm-password" style={styles.input} value={confirmPassword} onChangeText={setConfirmPassword} placeholder="••••••••" placeholderTextColor={Colors.textTertiary} secureTextEntry={!showPassword} />
+                  <TextInput
+                    testID="auth-confirm-password"
+                    style={styles.input}
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    placeholder="••••••••"
+                    placeholderTextColor={Colors.textTertiary}
+                    secureTextEntry={!showPassword}
+                  />
                 </View>
                 {errors.confirmPassword && <Text style={styles.errorText}>{errors.confirmPassword}</Text>}
               </View>
             )}
 
-            <Button title={mode === 'login' ? t('auth.loginCta') : t('auth.signupCta')} onPress={handleSubmit} loading={loading} fullWidth size="lg" style={{ marginTop: Spacing.lg }} />
+            <Button
+              title={mode === 'login' ? t('auth.loginCta') : t('auth.signupCta')}
+              onPress={handleSubmit}
+              loading={loading}
+              fullWidth
+              size="lg"
+              style={{ marginTop: Spacing.lg }}
+            />
           </View>
 
-          {/* Cloud indicator */}
           {isSupabaseConfigured() && (
             <View style={styles.cloudBadge}>
               <Ionicons name="cloud-done" size={14} color={Colors.success} />
@@ -305,8 +346,12 @@ export default function AuthScreen() {
             </View>
           )}
 
-          {/* Demo Mode */}
-          <TouchableOpacity testID="demo-mode-button" style={styles.demoButton} onPress={handleDemoMode} disabled={loading}>
+          <TouchableOpacity
+            testID="demo-mode-button"
+            style={styles.demoButton}
+            onPress={handleDemoMode}
+            disabled={loading}
+          >
             <Ionicons name="flash" size={16} color={Colors.primary} />
             <Text style={styles.demoButtonText}>{t('auth.demoMode')}</Text>
           </TouchableOpacity>

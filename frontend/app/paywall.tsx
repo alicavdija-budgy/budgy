@@ -136,6 +136,23 @@ export default function PaywallScreen() {
   }, [glow]);
   const glowStyle = useAnimatedStyle(() => ({ opacity: glow.value }));
 
+  // v3.9.0 Build 76 — Auto-retry once if StoreKit returns 0 products on
+  // first attempt (Apple review can hit us before StoreKit finishes
+  // propagating products). We wait 2s, then request `reload()` a single
+  // time. NEVER activates Pro locally — this is just a re-fetch.
+  const [autoRetried, setAutoRetried] = useState(false);
+  useEffect(() => {
+    if (autoRetried) return;
+    if (!iap.available) return;
+    if (!iap.ready) return; // still loading first attempt
+    if (iap.annual || iap.monthly) return; // we have products
+    const timer = setTimeout(() => {
+      try { iap.reload(); } catch {}
+      setAutoRetried(true);
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [autoRetried, iap.available, iap.ready, iap.annual, iap.monthly, iap]);
+
   // StoreKit-backed product state
   const productsLoading = iap.phase === 'loading' || (!iap.ready && iap.available);
   const productsAvailable = iap.available && (!!iap.annual || !!iap.monthly);
@@ -357,36 +374,50 @@ export default function PaywallScreen() {
             <Text style={styles.socialText}>{t('paywallTriggers.socialProof')}</Text>
           </View>
 
-          {/* ── Loading state ─────────────────────────────────────────── */}
-          {productsLoading && (
-            <View style={styles.stateBox}>
-              <ActivityIndicator color="#34D399" />
-              <Text style={styles.stateText}>{t('paywallTriggers.loadingProducts')}</Text>
+          {/* ── Products loading OR pending (informational, NOT an error) ── */}
+          {(productsLoading ||
+            (productsError && iap.diagnosticCode === 'PRODUCTS_NOT_FOUND')) && (
+            <View style={styles.pendingBox}>
+              <ActivityIndicator color="#22D3EE" />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.pendingTitle}>
+                  {productsLoading
+                    ? t('paywallTriggers.loadingProducts')
+                    : t('paywallTriggers.productsNotFoundTitle')}
+                </Text>
+                <Text style={styles.pendingBody}>
+                  {productsLoading
+                    ? t('paywallTriggers.loadingProductsSub')
+                    : t('paywallTriggers.productsNotFoundBody')}
+                </Text>
+              </View>
+              {!productsLoading && (
+                <TouchableOpacity onPress={handleRetryLoad} style={styles.retryBtnSoft}>
+                  <Ionicons name="refresh" size={14} color="#0E1530" />
+                  <Text style={styles.retryTxt}>{t('paywallTriggers.retry')}</Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
 
-          {/* ── Error state (fine-grained per StoreKit diagnostic) ────── */}
-          {productsError && (
+          {/* ── True error state (network / StoreKit unavailable) ────── */}
+          {productsError && iap.diagnosticCode !== 'PRODUCTS_NOT_FOUND' && (
             <View style={styles.errorBox}>
               <Ionicons name="alert-circle" size={20} color="#F87171" />
               <View style={{ flex: 1 }}>
                 <Text style={styles.errorTitle}>
-                  {iap.diagnosticCode === 'PRODUCTS_NOT_FOUND'
-                    ? t('paywallTriggers.productsNotFoundTitle')
-                    : iap.diagnosticCode === 'STOREKIT_UNAVAILABLE'
-                      ? t('paywallTriggers.storekitUnavailableTitle')
-                      : iap.diagnosticCode === 'NETWORK_ERROR'
-                        ? t('paywallTriggers.networkErrorTitle')
-                        : t('paywallTriggers.productsErrorTitle')}
+                  {iap.diagnosticCode === 'STOREKIT_UNAVAILABLE'
+                    ? t('paywallTriggers.storekitUnavailableTitle')
+                    : iap.diagnosticCode === 'NETWORK_ERROR'
+                      ? t('paywallTriggers.networkErrorTitle')
+                      : t('paywallTriggers.productsErrorTitle')}
                 </Text>
                 <Text style={styles.errorBody}>
-                  {iap.diagnosticCode === 'PRODUCTS_NOT_FOUND'
-                    ? t('paywallTriggers.productsNotFoundBody')
-                    : iap.diagnosticCode === 'STOREKIT_UNAVAILABLE'
-                      ? t('paywallTriggers.storekitUnavailableBody')
-                      : iap.diagnosticCode === 'NETWORK_ERROR'
-                        ? t('paywallTriggers.networkErrorBody')
-                        : t('paywallTriggers.productsErrorBody')}
+                  {iap.diagnosticCode === 'STOREKIT_UNAVAILABLE'
+                    ? t('paywallTriggers.storekitUnavailableBody')
+                    : iap.diagnosticCode === 'NETWORK_ERROR'
+                      ? t('paywallTriggers.networkErrorBody')
+                      : t('paywallTriggers.productsErrorBody')}
                 </Text>
               </View>
               <TouchableOpacity onPress={handleRetryLoad} style={styles.retryBtn}>
@@ -710,6 +741,31 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+  },
+  // v3.9.0 Build 76 — informational (blue) state for the very expected
+  // case where StoreKit needs a beat to return products (fresh reviewer
+  // account on iPad, first paywall open, etc.). NOT red, NOT alarming.
+  pendingBox: {
+    marginVertical: 16,
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: 'rgba(34,211,238,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(34,211,238,0.25)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  pendingTitle: { color: '#67E8F9', fontSize: 13, fontWeight: '700' },
+  pendingBody: { color: 'rgba(191,219,254,0.9)', fontSize: 12, marginTop: 2, lineHeight: 16 },
+  retryBtnSoft: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: '#67E8F9',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   errorTitle: { color: '#FCA5A5', fontSize: 13, fontWeight: '700' },
   errorBody: { color: 'rgba(252,165,165,0.85)', fontSize: 12, marginTop: 2 },

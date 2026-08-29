@@ -37,9 +37,9 @@ export function humanizeAuthError(
   }
 
   // Build 80: configuration/API-key failures must NEVER be presented as a
-  // wrong password. This was misleading on Build 79 when the EAS anon key was
-  // absent. Treat these as service/configuration errors for every auth flow.
+  // wrong password. Machine-only codes are mapped to translated service UX.
   if (
+    lower.includes('supabase_config_missing') ||
     lower.includes('supabase not configured') ||
     lower.includes('invalid api key') ||
     lower.includes('no api key') ||
@@ -67,7 +67,6 @@ export function humanizeAuthError(
     };
   }
 
-  // Unauthorized / JWT / session errors.
   if (
     lower.includes('unauthorized') ||
     lower === 'invalid' ||

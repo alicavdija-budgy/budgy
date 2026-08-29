@@ -1,16 +1,15 @@
 /**
  * BUDGY - Premium / Subscription State
- * Tracks trial, subscription, usage triggers and PER-FEATURE quotas for paywall.
+ * Tracks subscription state, usage triggers and PER-FEATURE quotas for paywall.
+ *
+ * IMPORTANT — production entitlement model:
+ *   - StoreKit starts purchases.
+ *   - Budgy backend validates Apple transactions.
+ *   - `confirmPro()` is the only action that may set `isPro: true`.
+ *   - Legacy local trial/purchase helpers are retained as fail-safe NO-OPs.
  *
  * All literal strings in this store are either console-only diagnostics
  * (dev-mode) or stable ProFeature identifiers — never rendered as UI copy.
- *
- * Free Preview Mode:
- *   Chaque feature Pro a un quota gratuit d'essai (ex: 1 facture, 2 charges récurrentes,
- *   1 simulation fiscale, 1 analyse IA...). Une fois dépassé, le paywall s'active.
- *
- * MOCKED mode: works locally until RevenueCat keys are wired.
- * When RevenueCat is integrated, replace `startTrial` / `purchase` with real calls.
  */
 
 import { create } from 'zustand';
@@ -31,17 +30,10 @@ export type ProFeature =
   | 'investments';
 
 // Quotas gratuits par feature (0 = bloqué immédiatement, 999999 = illimité free)
-// MAJ Budget v3.7.25 — Plan officiel TestFlight :
-//   PRO : ai (Économiseur + Radar), predict (Coach + Prévisions),
-//         tax (Optimisation fiscale avancée), export (PDF Premium / Excel).
-//   FREE : invoices, recurring, analytics, investments (qu'on libère
-//          intégralement), cloud (reste Pro / activé via session Supabase).
-// v3.9.0 Build 74 — APPLE 2.1(b) STRICT.
+// v3.9.0 Build 78 — APPLE 2.1(b) STRICT.
 // NO Pro route may be unlocked via a "free preview" counter. A Pro feature
-// is Pro. Period. This map now ONLY reflects the *tier* boundary: 0 for Pro,
-// unlimited for genuinely-free features. The `canUseFeature()` selector
-// keeps behaving the same — it just never returns true for Pro features
-// unless the user has a real subscription confirmed by the backend.
+// is Pro. Period. This map only reflects the tier boundary: 0 for Pro,
+// unlimited for genuinely-free features.
 export const FREE_QUOTAS: Record<ProFeature, number> = {
   ai: 0,               // PRO — no free preview
   tax: 0,              // PRO — no free preview
@@ -62,21 +54,13 @@ export interface PremiumState {
   trialEndsAt: number | null;
   subscriptionStartedAt: number | null;
 
-  // v3.9.0 Build 74 — USER-SCOPED entitlement guard.
-  // The Supabase userId that OWNS the current Premium entitlement. When we
-  // switch users (login/register/logout), if the incoming userId !== ownerUserId
-  // we MUST reset the entitlement — Premium can never leak across accounts.
-  // Null means "no entitlement is claimed by any user" (safe default).
+  // USER-SCOPED entitlement guard.
   ownerUserId: string | null;
 
-  // PROVISIONAL Pro grant — used when Apple StoreKit returns a valid receipt
-  // but the backend cannot validate immediately (e.g. transaction_not_found
-  // because Apple Sandbox/TestFlight takes a few minutes to propagate the
-  // transaction to the App Store Server API). We grant 48h of provisional
-  // access so the user gets the value he paid for instantly; a background
-  // job re-validates on next foreground / app launch and upgrades to real Pro.
+  // A provisional entitlement is permitted only after StoreKit has delivered
+  // a real transaction and backend validation is temporarily unavailable.
+  // It is NEVER created by startTrial()/purchase() or a feature counter.
   provisionalProUntil: number | null;
-  /** Receipt details we need to re-validate later. */
   pendingValidation: {
     transactionId: string;
     productId: string;
@@ -92,55 +76,42 @@ export interface PremiumState {
   paywallSeenCount: number;
   dismissedCount: number;
 
-  // Per-feature usage (free preview counters)
+  // Per-feature usage (free-tier counters only)
   featureUsage: Record<ProFeature, number>;
 
   // Actions
   startTrial: () => void;
+  /** Legacy compatibility helper. MUST NEVER grant Pro locally. */
   purchase: (plan: Plan) => void;
-  /** Grant temporary Pro after a valid Apple receipt while waiting for
-   *  backend confirmation. Pass the receipt info so we can retry later. */
+  /** Grant short provisional access only after a real StoreKit transaction
+   *  while backend verification is temporarily pending. */
   grantProvisionalPro: (
     plan: Plan,
     hours: number,
     receipt?: { transactionId: string; productId: string; receiptData?: string }
   ) => void;
-  /** Clear provisional state once backend has confirmed real Pro. */
+  /** The only local action allowed to set isPro=true. Call only after server truth. */
   confirmPro: (plan: Plan) => void;
-  /** Remove provisional access (called after explicit refund/expiry). */
   clearProvisional: () => void;
   restore: () => void;
   cancel: () => void;
-  /**
-   * v3.9.0 Build 74 — Full entitlement wipe used on account switch
-   * (logout / login / register / leaving demo). Removes any local Pro,
-   * provisional access, trial, plan, pending validation AND the ownerUserId
-   * anchor. Feature usage counters are also reset so a new account starts
-   * clean. Never grants Pro — safe to call at any time.
-   */
   resetForUserChange: () => void;
-  /**
-   * v3.9.0 Build 74 — Anchor the current entitlement to a Supabase userId.
-   * Called right after login / demo start. If the incoming userId does not
-   * match the current ownerUserId (and ownerUserId is set), we reset first —
-   * this prevents "user A → logout → user B" from inheriting Pro.
-   */
   attachToUser: (userId: string | null) => void;
   incrementTx: () => void;
   incrementBudget: () => void;
   markPaywallShown: () => void;
   markPaywallDismissed: () => void;
   shouldShowPaywall: (trigger: PaywallTrigger) => boolean;
+  /** Legacy local trial metadata must never become an entitlement. */
   isTrialActive: () => boolean;
   hasPremiumAccess: () => boolean;
-  /** True when access is granted only via provisional / pending state. */
   isProvisional: () => boolean;
 
-  // Feature gating with free preview
-  canUseFeature: (f: ProFeature) => boolean;       // true si Pro OU quota dispo
-  remainingQuota: (f: ProFeature) => number;       // quota restant
-  consumeFeature: (f: ProFeature) => void;         // à appeler quand user utilise
-  resetFeatureUsage: () => void;                   // reset quotas (tests / pro)
+  // Feature gating
+  canUseFeature: (f: ProFeature) => boolean;
+  remainingQuota: (f: ProFeature) => number;
+  consumeFeature: (f: ProFeature) => void;
+  resetFeatureUsage: () => void;
 }
 
 export type PaywallTrigger =
@@ -158,7 +129,6 @@ export type PaywallTrigger =
   | 'manual';
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
-const TRIAL_DAYS = 7;
 const MIN_BETWEEN_ORGANIC_PAYWALL = 2 * MS_PER_DAY;
 
 const DEFAULT_USAGE: Record<ProFeature, number> = {
@@ -189,40 +159,33 @@ export const usePremiumStore = create<PremiumState>()(
       featureUsage: { ...DEFAULT_USAGE },
 
       /**
-       * ⚠️ Apple App Review 2.1(b) — v3.9.0 / Build 73
-       *
-       * The Apple free trial MUST come from the Introductory Offer configured
-       * in App Store Connect and be granted ONLY through a real StoreKit
-       * transaction (`iap.purchase()` → App Store Server API → backend
-       * verification). No path in production may activate Pro locally without
-       * a validated Apple receipt.
-       *
-       * This method is kept as a NO-OP (with a dev-only warn) so that any
-       * legacy call site fails safely — the caller will simply not unlock Pro,
-       * forcing the paywall CTA to route through StoreKit.
+       * Apple free trials are StoreKit introductory offers. There is no local
+       * Budgy trial entitlement. This remains a NO-OP so legacy call sites fail
+       * safely instead of unlocking Pro.
        */
       startTrial: () => {
         if (__DEV__) {
           // eslint-disable-next-line no-console
-          console.warn( // i18n-technical (dev diagnostic only)
-            '[Premium] startTrial() is intentionally a no-op since v3.9.0. ' + // i18n-technical
-              'Free trials must come from the Apple Introductory Offer via ' + // i18n-technical
-              'iap.purchase(). No local Pro activation is allowed.' // i18n-technical
+          console.warn(
+            '[Premium] startTrial() is disabled. Apple introductory offers ' +
+              'must flow through StoreKit + backend validation.'
           );
         }
       },
 
-      purchase: (plan: Plan) => {
-        const now = Date.now();
-        set({
-          isPro: true,
-          plan,
-          subscriptionStartedAt: now,
-          trialEndsAt: null,
-          // Clear any provisional state once a real Pro purchase is confirmed
-          provisionalProUntil: null,
-          pendingValidation: null,
-        });
+      /**
+       * Legacy compatibility only. Before Build 78 this helper could set
+       * isPro=true locally. It is now intentionally a NO-OP. Confirmed
+       * entitlements must use confirmPro() after backend validation.
+       */
+      purchase: (_plan: Plan) => {
+        if (__DEV__) {
+          // eslint-disable-next-line no-console
+          console.warn(
+            '[Premium] purchase() cannot grant Pro locally. Use the StoreKit ' +
+              'flow and confirmPro() only after backend validation.'
+          );
+        }
       },
 
       grantProvisionalPro: (plan, hours, receipt) => {
@@ -247,6 +210,9 @@ export const usePremiumStore = create<PremiumState>()(
           isPro: true,
           plan,
           subscriptionStartedAt: now,
+          // Apple trial eligibility/status is already reflected by server truth;
+          // never maintain an independent local trial entitlement.
+          trialStartedAt: null,
           trialEndsAt: null,
           provisionalProUntil: null,
           pendingValidation: null,
@@ -258,7 +224,7 @@ export const usePremiumStore = create<PremiumState>()(
       },
 
       restore: () => {
-        // Real flow: fetch RevenueCat entitlements
+        // Legacy no-op. Real restore is implemented by useIAP.restore().
       },
 
       cancel: () => {
@@ -273,12 +239,6 @@ export const usePremiumStore = create<PremiumState>()(
         });
       },
 
-      /**
-       * v3.9.0 Build 74 — Full reset on account switch.
-       * Wipes every entitlement bit so a new account starts strictly FREE,
-       * plus resets feature-usage counters (each account gets its own free
-       * preview quotas). Never grants Pro.
-       */
       resetForUserChange: () => {
         set({
           isPro: false,
@@ -293,13 +253,6 @@ export const usePremiumStore = create<PremiumState>()(
         });
       },
 
-      /**
-       * v3.9.0 Build 74 — Anchor entitlement to a specific user.
-       * If ownerUserId is already set and different from userId, we assume
-       * this is a NEW account and reset entitlements first — Pro cannot leak
-       * across accounts. Then we tag the (possibly empty) entitlement with
-       * the new owner id so future account switches can detect drift.
-       */
       attachToUser: (userId: string | null) => {
         const s = get();
         if (s.ownerUserId && userId && s.ownerUserId !== userId) {
@@ -330,10 +283,8 @@ export const usePremiumStore = create<PremiumState>()(
 
       markPaywallDismissed: () => set((s) => ({ dismissedCount: s.dismissedCount + 1 })),
 
-      isTrialActive: () => {
-        const { trialEndsAt } = get();
-        return !!trialEndsAt && trialEndsAt > Date.now();
-      },
+      // Local trial timestamps are legacy metadata only. They never unlock Pro.
+      isTrialActive: () => false,
 
       isProvisional: () => {
         const s = get();
@@ -344,7 +295,8 @@ export const usePremiumStore = create<PremiumState>()(
       hasPremiumAccess: () => {
         const s = get();
         if (s.isPro) return true;
-        if (s.trialEndsAt && s.trialEndsAt > Date.now()) return true;
+        // Provisional access is only produced after StoreKit delivered a real
+        // transaction and is bounded while backend verification catches up.
         if (s.provisionalProUntil && s.provisionalProUntil > Date.now()) return true;
         return false;
       },
@@ -365,7 +317,7 @@ export const usePremiumStore = create<PremiumState>()(
 
       consumeFeature: (f: ProFeature) => {
         const s = get();
-        if (s.hasPremiumAccess()) return; // unlimited
+        if (s.hasPremiumAccess()) return;
         set({
           featureUsage: {
             ...s.featureUsage,
@@ -405,6 +357,23 @@ export const usePremiumStore = create<PremiumState>()(
     {
       name: 'budgy-premium-v2',
       storage: createJSONStorage(() => AsyncStorage),
+      // Build 78 security migration: never trust entitlement bits persisted by
+      // older builds where local purchase/trial helpers could grant access.
+      // Paid users are re-confirmed immediately from backend truth at boot.
+      version: 3,
+      migrate: (persistedState: unknown) => {
+        const persisted = (persistedState ?? {}) as Record<string, unknown>;
+        return {
+          ...persisted,
+          isPro: false,
+          plan: null,
+          trialStartedAt: null,
+          trialEndsAt: null,
+          subscriptionStartedAt: null,
+          provisionalProUntil: null,
+          pendingValidation: null,
+        };
+      },
       partialize: (s) => ({
         isPro: s.isPro,
         plan: s.plan,

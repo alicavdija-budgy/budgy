@@ -1,14 +1,13 @@
 #!/usr/bin/env node
 /**
- * BUDGY v3.9.0 Build 74 — Premium entitlement contract test.
+ * BUDGY v3.9.0 Build 78 — Premium entitlement contract test.
  *
- * This is a standalone Node test that validates the BEHAVIOURAL contract of
- * `src/stores/usePremiumStore.ts` for the account-switch scenarios reported
- * in Build 73 QA (new account inherits Pro from a previous session).
- *
- * We re-implement the store's reducers here as PURE functions and run the
- * critical scenarios. Any drift between this contract and the real store
- * must be considered a P0 regression.
+ * Validates the security contract of `src/stores/usePremiumStore.ts`:
+ * - legacy purchase/startTrial helpers never grant Pro;
+ * - only backend-confirmed state can set isPro=true;
+ * - local trial timestamps never unlock Pro;
+ * - account switching never leaks entitlements;
+ * - provisional access remains bounded to a StoreKit-pending transaction.
  *
  * Run: `node scripts/test-premium.mjs`
  */
@@ -20,7 +19,6 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// ── Pure reducers (must mirror usePremiumStore.ts) ─────────────────────
 const DEFAULT_USAGE = {
   ai: 0, tax: 0, export: 0, cloud: 0,
   invoices: 0, recurring: 0, analytics: 0,
@@ -47,18 +45,10 @@ function initialState() {
   };
 }
 
-// Contract of the store actions
 const actions = {
-  purchase(s, plan) {
-    return {
-      ...s,
-      isPro: true,
-      plan,
-      subscriptionStartedAt: Date.now(),
-      trialEndsAt: null,
-      provisionalProUntil: null,
-      pendingValidation: null,
-    };
+  // Build 78: legacy helper is intentionally a NO-OP.
+  purchase(s, _plan) {
+    return { ...s };
   },
   confirmPro(s, plan) {
     return {
@@ -66,6 +56,7 @@ const actions = {
       isPro: true,
       plan,
       subscriptionStartedAt: Date.now(),
+      trialStartedAt: null,
       trialEndsAt: null,
       provisionalProUntil: null,
       pendingValidation: null,
@@ -116,13 +107,11 @@ const actions = {
   },
   hasPremiumAccess(s) {
     if (s.isPro) return true;
-    if (s.trialEndsAt && s.trialEndsAt > Date.now()) return true;
     if (s.provisionalProUntil && s.provisionalProUntil > Date.now()) return true;
     return false;
   },
 };
 
-// ── Assertion helpers ───────────────────────────────────────────────────
 let PASS = 0;
 let FAIL = 0;
 const FAILURES = [];
@@ -143,16 +132,12 @@ function scenario(title, fn) {
   fn();
 }
 
-// ── Scenarios ───────────────────────────────────────────────────────────
-
-// A — Old store Pro → new account must be FREE
-scenario('A. Ancien store Pro → nouveau compte FREE', () => {
+scenario('A. Backend-confirmed Pro → nouveau compte FREE', () => {
   let s = initialState();
-  s = actions.purchase(s, 'annual');
+  s = actions.confirmPro(s, 'annual');
   s = actions.attachToUser(s, 'user_A');
-  assert('user_A is Pro after purchase', s.isPro && s.ownerUserId === 'user_A');
+  assert('user_A is Pro after backend confirmation', s.isPro && s.ownerUserId === 'user_A');
 
-  // Simulate account switch to a NEW account
   s = actions.attachToUser(s, 'user_B');
   assert('user_B does NOT inherit Pro', !s.isPro);
   assert('user_B does NOT have plan', s.plan === null);
@@ -161,80 +146,52 @@ scenario('A. Ancien store Pro → nouveau compte FREE', () => {
   assert('hasPremiumAccess() = false on user_B', !actions.hasPremiumAccess(s));
 });
 
-// B — Demo Pro → logout → real login = FREE
-scenario('B. Demo PRO → logout → real account FREE', () => {
+scenario('B. Legacy purchase() cannot unlock demo or production', () => {
   let s = initialState();
   s = actions.attachToUser(s, 'demo_user');
-  s = actions.purchase(s, 'annual'); // demo Pro
-  assert('demo_user is Pro', s.isPro && s.ownerUserId === 'demo_user');
-
-  // logout (settings.tsx: resetForUserChange)
-  s = actions.resetForUserChange(s);
-  assert('resetForUserChange clears isPro', !s.isPro);
-  assert('resetForUserChange clears ownerUserId', s.ownerUserId === null);
-  assert('resetForUserChange clears plan', s.plan === null);
-  assert('resetForUserChange resets quotas', s.featureUsage.ai === 0);
-
-  // real login
-  s = actions.attachToUser(s, 'user_real');
-  assert('real login = FREE', !s.isPro && actions.hasPremiumAccess(s) === false);
-  assert('ownerUserId = user_real', s.ownerUserId === 'user_real');
+  s = actions.purchase(s, 'annual');
+  assert('purchase() leaves isPro=false', !s.isPro);
+  assert('purchase() leaves plan unchanged', s.plan === null);
+  assert('purchase() does not create access', !actions.hasPremiumAccess(s));
 });
 
-// C — Backend returns FREE → local Pro downgraded
 scenario('C. Backend FREE → local Pro removed', () => {
   let s = initialState();
   s = actions.confirmPro(s, 'monthly');
   s = actions.attachToUser(s, 'user_C');
   assert('user_C is Pro', s.isPro);
-
-  // Backend sync: is_pro=false, subscription_state='FREE'
-  // useIAP.syncFromBackend must call cancel() (no pending provisional)
-  const local = { ...s, pendingValidation: null, provisionalProUntil: null };
-  const stillPendingValid =
-    !!local.pendingValidation &&
-    !!local.provisionalProUntil &&
-    local.provisionalProUntil > Date.now();
-  const shouldCancel = !stillPendingValid;
-  assert('sync FREE triggers cancel()', shouldCancel);
-  if (shouldCancel) s = actions.cancel(s);
-  assert('local no longer Pro', !s.isPro);
+  s = actions.cancel(s);
+  assert('backend FREE clears local Pro', !s.isPro);
 });
 
-// D — Backend EXPIRED → FREE
-scenario('D. Backend EXPIRED → local Pro removed', () => {
+scenario('D. Backend EXPIRED → FREE', () => {
   let s = initialState();
   s = actions.confirmPro(s, 'annual');
   s = actions.attachToUser(s, 'user_D');
-  s = actions.cancel(s); // EXPIRED path already existed
+  s = actions.cancel(s);
   assert('EXPIRED clears Pro', !s.isPro);
+  assert('EXPIRED clears plan', s.plan === null);
 });
 
-// E — Backend returns PRO valid → local becomes Pro
-scenario('E. Backend PRO valid → local PRO', () => {
+scenario('E. Backend PRO valid → local becomes Pro', () => {
   let s = initialState();
   s = actions.attachToUser(s, 'user_E');
   assert('user_E is FREE initially', !s.isPro);
-
-  // Backend: is_pro=true, subscription_state='PRO'
   s = actions.confirmPro(s, 'annual');
   assert('user_E is now PRO', s.isPro);
   assert('user_E plan is annual', s.plan === 'annual');
 });
 
-// F — user A PRO → logout → user B never inherits
 scenario('F. Compte A PRO → logout → compte B jamais Pro', () => {
   let s = initialState();
   s = actions.attachToUser(s, 'user_A');
-  s = actions.purchase(s, 'annual');
+  s = actions.confirmPro(s, 'annual');
   assert('user_A is PRO', s.isPro);
 
-  // Logout (settings.tsx handleLogout)
   s = actions.resetForUserChange(s);
   assert('after logout: no owner', s.ownerUserId === null);
   assert('after logout: not Pro', !s.isPro);
 
-  // user_B signs in
   s = actions.attachToUser(s, 'user_B');
   assert('user_B is FREE', !s.isPro);
   assert('user_B has no plan', s.plan === null);
@@ -242,25 +199,22 @@ scenario('F. Compte A PRO → logout → compte B jamais Pro', () => {
   assert('user_B hasPremiumAccess=false', !actions.hasPremiumAccess(s));
 });
 
-// G — Provisional purchase must persist across attach with SAME user
-scenario('G. Provisional Pro survit à un attach du MÊME user', () => {
+scenario('G. StoreKit provisional entitlement stays scoped to SAME user', () => {
   let s = initialState();
   s = actions.attachToUser(s, 'user_G');
-  // grantProvisionalPro
   s = {
     ...s,
     plan: 'monthly',
     provisionalProUntil: Date.now() + 48 * 3600 * 1000,
     pendingValidation: { transactionId: 'tx1', productId: 'monthly', queuedAt: Date.now() },
   };
-  s = actions.attachToUser(s, 'user_G'); // same user re-attach (e.g. resume)
+  s = actions.attachToUser(s, 'user_G');
   assert('provisional survives same-user attach', s.provisionalProUntil !== null);
   assert('pendingValidation preserved', s.pendingValidation !== null);
-  assert('hasPremiumAccess = true (provisional)', actions.hasPremiumAccess(s));
+  assert('hasPremiumAccess = true while StoreKit validation is pending', actions.hasPremiumAccess(s));
 });
 
-// H — Provisional Pro is WIPED on user switch
-scenario('H. Provisional Pro wiped on user switch', () => {
+scenario('H. Provisional entitlement is WIPED on user switch', () => {
   let s = initialState();
   s = actions.attachToUser(s, 'user_H1');
   s = {
@@ -277,43 +231,30 @@ scenario('H. Provisional Pro wiped on user switch', () => {
   assert('user_H2 pendingValidation cleared', s.pendingValidation === null);
 });
 
-// I — v3.9.0 Build 74 — Demo mode = STRICTLY FREE (Apple 2.1(b) compliance)
-scenario('I. Demo mode starts FREE (no local Pro grant)', () => {
+scenario('I. Local trial timestamps NEVER grant Premium', () => {
   let s = initialState();
-  // Mirror auth.tsx.handleDemoMode
-  s = actions.resetForUserChange(s);
-  s = actions.attachToUser(s, 'demo_user');
-  // NO premium.purchase(), NO setPro(true) — this is the whole point
-
-  assert('demo_user is NOT Pro', !s.isPro);
-  assert('demo_user has no plan', s.plan === null);
-  assert('demo_user hasPremiumAccess = false', !actions.hasPremiumAccess(s));
-  assert('demo_user has no provisional', s.provisionalProUntil === null);
-  assert('demo_user has no pending validation', s.pendingValidation === null);
-  assert('demo_user ownerUserId = demo_user', s.ownerUserId === 'demo_user');
+  s = {
+    ...s,
+    trialStartedAt: Date.now() - 1000,
+    trialEndsAt: Date.now() + 7 * 24 * 3600 * 1000,
+  };
+  assert('legacy local trial does not set isPro', !s.isPro);
+  assert('legacy local trial does not grant access', !actions.hasPremiumAccess(s));
 });
 
-// J — Demo → real account transition (must remain FREE)
 scenario('J. Demo FREE → logout → real user stays FREE', () => {
   let s = initialState();
   s = actions.attachToUser(s, 'demo_user');
   assert('demo_user is FREE', !s.isPro);
-
-  // logout
   s = actions.resetForUserChange(s);
-
-  // real login
   s = actions.attachToUser(s, 'user_real');
   assert('real user is FREE', !s.isPro);
   assert('real user has no plan', s.plan === null);
 });
 
-// K — Static contract: no premium grant path in auth.tsx (source scan)
 scenario('K. auth.tsx contains no premium grant path', () => {
   const authFile = path.join(__dirname, '..', 'app', 'auth.tsx');
   const src = fs.readFileSync(authFile, 'utf8');
-
-  // Strip comments (block + line) to only inspect executable code
   const stripped = src
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/\/\/.*$/gm, '');
@@ -332,7 +273,25 @@ scenario('K. auth.tsx contains no premium grant path', () => {
   }
 });
 
-// ── Report ─────────────────────────────────────────────────────────────
+scenario('L. Store source enforces backend-first local helpers', () => {
+  const storeFile = path.join(__dirname, '..', 'src', 'stores', 'usePremiumStore.ts');
+  const src = fs.readFileSync(storeFile, 'utf8');
+
+  const purchaseStart = src.indexOf('purchase: (_plan: Plan) =>');
+  const provisionalStart = src.indexOf('grantProvisionalPro:', purchaseStart);
+  const purchaseBlock = src.slice(purchaseStart, provisionalStart);
+  assert('legacy purchase() exists as compatibility NO-OP', purchaseStart >= 0);
+  assert('legacy purchase() block cannot set isPro=true', !/isPro\s*:\s*true/.test(purchaseBlock));
+
+  const accessStart = src.indexOf('hasPremiumAccess: () =>');
+  const accessEnd = src.indexOf('canUseFeature:', accessStart);
+  const accessBlock = src.slice(accessStart, accessEnd);
+  assert('hasPremiumAccess ignores local trialEndsAt', !/trialEndsAt/.test(accessBlock));
+
+  assert('persist security migration is version 3', /version:\s*3/.test(src));
+  assert('migration resets persisted isPro', /migrate:[\s\S]*isPro:\s*false/.test(src));
+});
+
 console.log('\n' + '─'.repeat(60));
 console.log(`Premium contract tests : ${PASS} passed, ${FAIL} failed`);
 if (FAIL > 0) {

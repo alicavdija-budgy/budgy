@@ -21,7 +21,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.budgy.ch.budgy",
-      "buildNumber": "77",
+      "buildNumber": "78",
       "associatedDomains": [
         "applinks:budgy.ch",
         "applinks:www.budgy.ch"
@@ -55,7 +55,7 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.budgy.ch.budgy",
-      "versionCode": 77,
+      "versionCode": 78,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_MEDIA_IMAGES",
@@ -168,6 +168,7 @@
         }
       ],
       "expo-web-browser",
+      "react-native-iap",
       "./plugins/withForcedInfoPlist",
       "expo-font"
     ],

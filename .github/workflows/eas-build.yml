@@ -1,12 +1,8 @@
 name: EAS Build (iOS & Android)
 
-# Build natif iOS / Android directement depuis GitHub — aucun Mac requis.
-# Le repo est un MONOREPO : le projet Expo vit dans ./frontend
-# (PAS de package.json à la racine).
-#
-# Déclenchements:
-#   1. workflow_dispatch  → bouton "Run workflow" dans l'onglet Actions
-#   2. push sur main qui modifie frontend/app.json (bump version → re-build)
+# Native production build for Budgy.
+# IMPORTANT: manual launch only. A push/bump must NEVER create an EAS build.
+# Use Actions → EAS Build (iOS & Android) → Run workflow.
 
 on:
   workflow_dispatch:
@@ -29,12 +25,7 @@ on:
         default: 'false'
         type: choice
         options: ['true', 'false']
-  push:
-    branches: [main]
-    paths:
-      - 'frontend/app.json'   # rebuild auto sur bump version/buildNumber
 
-# Si on relance manuellement, on annule l'ancien run pour ne pas empiler.
 concurrency:
   group: eas-build-${{ github.ref }}-${{ github.event.inputs.platform || 'ios' }}-${{ github.event.inputs.profile || 'production' }}
   cancel-in-progress: false
@@ -44,8 +35,6 @@ jobs:
     name: "EAS Build (${{ github.event.inputs.platform || 'ios' }} / ${{ github.event.inputs.profile || 'production' }})"
     runs-on: ubuntu-latest
 
-    # 🔑 Toutes les commandes s'exécutent dans ./frontend (le sous-dossier Expo).
-    # C'est la pièce maîtresse qui règle le bug "Cannot find package.json at root".
     defaults:
       run:
         working-directory: ./frontend
@@ -53,48 +42,31 @@ jobs:
 
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-      # Désactive les prompts interactifs côté CLI
       CI: 'true'
       EAS_NO_VCS: '1'
 
     steps:
-      # ────────────────────────────────────────────────────────
-      # 1. Checkout
-      # ────────────────────────────────────────────────────────
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
-      # ────────────────────────────────────────────────────────
-      # 2. Sanity check repo structure (fail-fast si monorepo cassé)
-      # ────────────────────────────────────────────────────────
       - name: Verify monorepo structure
         working-directory: ${{ github.workspace }}
         run: |
-          echo "── Repo root content ──"
-          ls -la
-          echo ""
-
           if [ -f "./package.json" ]; then
-            echo "❌ Un package.json existe à la RACINE du repo."
-            echo "   Budgy est un monorepo, le seul package.json valide est frontend/package.json."
-            echo "   Supprime celui de la racine et relance le build."
+            echo "❌ Root package.json detected. Budgy Expo project must remain in frontend/."
             exit 1
           fi
 
           for f in frontend/package.json frontend/package-lock.json frontend/app.json frontend/eas.json; do
             if [ ! -f "./$f" ]; then
-              echo "❌ Fichier requis manquant : $f"
+              echo "❌ Required file missing: $f"
               exit 1
             fi
           done
+          echo "✅ Monorepo structure OK"
 
-          echo "✅ Structure monorepo OK (frontend/ contient app.json, eas.json, package.json, package-lock.json)"
-
-      # ────────────────────────────────────────────────────────
-      # 3. Node 20 + cache npm (lockfile dans frontend/)
-      # ────────────────────────────────────────────────────────
       - name: Setup Node 20
         uses: actions/setup-node@v4
         with:
@@ -102,9 +74,6 @@ jobs:
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
-      # ────────────────────────────────────────────────────────
-      # 4. Installation EAS CLI + Expo CLI (via action officielle)
-      # ────────────────────────────────────────────────────────
       - name: Setup Expo & EAS CLI
         uses: expo/expo-github-action@v8
         with:
@@ -113,46 +82,43 @@ jobs:
           token: ${{ secrets.EXPO_TOKEN }}
           packager: npm
 
-      # ────────────────────────────────────────────────────────
-      # 5. Installation deps du sous-dossier frontend
-      # ────────────────────────────────────────────────────────
-      - name: Install dependencies (frontend/)
+      - name: Install dependencies
         run: npm ci --legacy-peer-deps --no-audit --no-fund
 
-      # ────────────────────────────────────────────────────────
-      # 6. Affiche les versions présentes (PUR Node, aucun npx).
-      #    Ce step est volontairement minimal pour ne JAMAIS faire échouer
-      #    le workflow avant le build : il ne fait que lire frontend/app.json.
-      # ────────────────────────────────────────────────────────
-      - name: Print app version info from frontend/app.json
+      - name: Pre-build quality gate
         run: |
-          node -e "const a = require('./app.json').expo; console.log('Name             :', a.name); console.log('Slug             :', a.slug); console.log('Owner            :', a.owner); console.log('Version          :', a.version); console.log('iOS buildNumber  :', a.ios && a.ios.buildNumber); console.log('Android verCode  :', a.android && a.android.versionCode); console.log('iOS bundleId     :', a.ios && a.ios.bundleIdentifier); console.log('Android package  :', a.android && a.android.package); console.log('EAS projectId    :', a.extra && a.extra.eas && a.extra.eas.projectId);"
+          echo "── TypeScript ──"
+          npx tsc --noEmit
+          echo "── i18n ──"
+          npm run check:i18n
+          npm run audit:i18n
+          echo "── Premium / IAP / feature contracts ──"
+          npm run test:premium
+          npm run test:pro-gating
+          npm run test:savings-tier
+          npm run test:cloud-auth
+          npm run test:ai-optimizer
+          npm run test:iap-v15
+          echo "── Expo config resolution ──"
+          npx expo config --type public >/tmp/budgy-expo-config.json
+          echo "✅ Pre-build quality gate PASS"
 
-      # ────────────────────────────────────────────────────────
-      # 6b. Diagnostic EAS (non bloquant — continue-on-error si pb)
-      # ────────────────────────────────────────────────────────
-      - name: EAS CLI sanity (whoami)
-        continue-on-error: true
+      - name: Print app version info
         run: |
-          echo "── EAS / Expo CLI versions ──"
-          eas --version || true
-          expo --version || true
-          echo ""
-          echo "── Compte EAS connecté ──"
-          eas whoami || true
+          node -e "const a=require('./app.json').expo; console.log('Name:',a.name); console.log('Version:',a.version); console.log('iOS buildNumber:',a.ios?.buildNumber); console.log('Android versionCode:',a.android?.versionCode); console.log('Bundle ID:',a.ios?.bundleIdentifier); console.log('EAS projectId:',a.extra?.eas?.projectId);"
 
-      # ────────────────────────────────────────────────────────
-      # 7. Lancement du build EAS
-      #    - submit=true  → on attend la fin pour pouvoir submit
-      #    - submit=false → --no-wait pour rendre la main vite à GitHub
-      # ────────────────────────────────────────────────────────
-      - name: EAS build (wait mode = ${{ github.event.inputs.submit || 'false' }})
+      - name: EAS CLI sanity
+        run: |
+          eas --version
+          eas whoami
+
+      - name: EAS build
         run: |
           PLATFORM="${{ github.event.inputs.platform || 'ios' }}"
           PROFILE="${{ github.event.inputs.profile || 'production' }}"
           SUBMIT="${{ github.event.inputs.submit || 'false' }}"
 
-          echo "Lancement EAS build  platform=$PLATFORM  profile=$PROFILE  submit=$SUBMIT"
+          echo "Launching EAS build platform=$PLATFORM profile=$PROFILE submit=$SUBMIT"
           if [ "$SUBMIT" = "true" ]; then
             eas build \
               --platform "$PLATFORM" \
@@ -166,14 +132,10 @@ jobs:
               --no-wait
           fi
 
-      # ────────────────────────────────────────────────────────
-      # 8. Submit optionnel (TestFlight / Play Internal)
-      # ────────────────────────────────────────────────────────
-      - name: EAS submit (TestFlight / Play Store)
+      - name: EAS submit (optional)
         if: ${{ github.event.inputs.submit == 'true' }}
         run: |
           PLATFORM="${{ github.event.inputs.platform || 'ios' }}"
-          echo "Submitting latest $PLATFORM build to store …"
           eas submit \
             --platform "$PLATFORM" \
             --latest \

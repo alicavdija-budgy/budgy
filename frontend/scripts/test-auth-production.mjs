@@ -62,7 +62,7 @@ ok('reset-password supports PKCE recovery and password update', () => {
 
 ok('auth has no production local fallback', () => {
   assert.match(authSrc, /else if \(__DEV__\)/);
-  assert.match(authSrc, /throw new Error\('Supabase not configured'\)/);
+  assert.match(authSrc, /throw new Error\('supabase_config_missing'\)/);
 });
 
 ok('signup without a Supabase session does not create a local authenticated user', () => {
@@ -79,7 +79,7 @@ ok('successful sign-in requires both user and session', () => {
 });
 
 ok('configuration failure is not presented as bad credentials', () => {
-  const configIndex = authErrorsSrc.indexOf("lower.includes('supabase not configured')");
+  const configIndex = authErrorsSrc.indexOf("lower.includes('supabase_config_missing')");
   const credentialsIndex = authErrorsSrc.indexOf("lower.includes('invalid login')");
   assert.ok(configIndex >= 0 && credentialsIndex > configIndex);
   assert.match(authErrorsSrc, /AUTH_SERVICE_UNAVAILABLE/);

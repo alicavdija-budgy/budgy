@@ -1,9 +1,7 @@
 #!/usr/bin/env node
 /**
- * BUDGY v3.9.0 Build 78 — react-native-iap v15 pre-build contract.
- *
- * Static/pure tests only: no native StoreKit is available in Node. Real
- * purchase/restore validation must still be done on TestFlight after build.
+ * BUDGY v3.9.0 Build 79 — react-native-iap v15 pre-build contract.
+ * Static/pure tests only: native StoreKit is validated on TestFlight.
  */
 
 import assert from 'node:assert/strict';
@@ -36,16 +34,12 @@ const premiumSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'stores', '
 const paywallSrc = fs.readFileSync(path.join(__dirname, '..', 'app', 'paywall.tsx'), 'utf8');
 const appJson = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'app.json'), 'utf8'));
 
-// Security source assertions must evaluate executable code, not explanatory
-// comments. Otherwise a comment such as "must never set isPro: true" becomes
-// a false positive even though the implementation is safe.
 const premiumExecutable = premiumSrc
   .replace(/\/\*[\s\S]*?\*\//g, '')
   .replace(/\/\/.*$/gm, '');
 
-console.log('\n[test-iap-v15] Build 78 contract suite\n');
+console.log('\n[test-iap-v15] Build 79 contract suite\n');
 
-// ── Native v15 API contract ─────────────────────────────────────────────
 ok('uses v15 fetchProducts()', () => {
   assert.match(iapSrc, /RNIap\.fetchProducts\s*\(/);
   assert.match(iapSrc, /type:\s*['"]subs['"]/);
@@ -82,10 +76,42 @@ ok('diagnostics cover missing products and fetch failures', () => {
   }
 });
 
-// ── Product / backend contract ──────────────────────────────────────────
 ok('product IDs are canonical and unchanged', () => {
   assert.ok(iapSrc.includes(`monthly: '${MONTHLY_ID}'`));
   assert.ok(iapSrc.includes(`annual: '${ANNUAL_ID}'`));
+});
+
+// Build 79 regression guards for the exact TestFlight `missing_token` bug.
+ok('StoreKit purchase is auth-preflighted before requestPurchase()', () => {
+  const authIndex = iapSrc.indexOf('await getIapAuthenticatedUserId()');
+  const purchaseIndex = iapSrc.indexOf('await RNIap.requestPurchase(request)');
+  assert.ok(authIndex >= 0, 'IAP auth preflight missing');
+  assert.ok(purchaseIndex > authIndex, 'StoreKit must start only after auth preflight');
+});
+
+ok('IAP auth refreshes missing or near-expiry sessions', () => {
+  assert.match(iapSrc, /supabase\.auth\.refreshSession\(\)/);
+  assert.match(iapSrc, /nearExpiry/);
+});
+
+ok('backend IAP call retries once after 401/403 auth failure', () => {
+  assert.match(iapSrc, /isAuthFailure\(r\.status, r\.data\)/);
+  assert.match(iapSrc, /perform\(true\)/);
+});
+
+ok('missing/invalid backend token normalizes to auth_required', () => {
+  assert.ok(iapSrc.includes("detail === 'missing_token'"));
+  assert.ok(iapSrc.includes("error: 'auth_required'"));
+});
+
+ok('auth_required is never provisional-eligible', () => {
+  const verdictBlock = hookSrc.slice(
+    hookSrc.indexOf("if (verdict.error === 'auth_required')"),
+    hookSrc.indexOf('if (verdict.not_configured)')
+  );
+  assert.ok(verdictBlock.length > 0, 'explicit auth rejection block missing');
+  assert.doesNotMatch(verdictBlock, /grantProvisional/);
+  assert.match(verdictBlock, /state:\s*'FREE'/);
 });
 
 ok('purchase flow validates on backend before confirmPro()', () => {
@@ -99,6 +125,13 @@ ok('restore flow is backend validated', () => {
   assert.match(hookSrc, /restoreOnBackend\s*\(/);
 });
 
+ok('restore also requires authenticated IAP user', () => {
+  const restoreIndex = hookSrc.indexOf('const restore = useCallback');
+  const authIndex = hookSrc.indexOf('getIapAuthenticatedUserId()', restoreIndex);
+  const receiptsIndex = hookSrc.indexOf('getAvailableReceipts()', restoreIndex);
+  assert.ok(authIndex > restoreIndex && receiptsIndex > authIndex);
+});
+
 ok('boot sync uses backend subscription truth', () => {
   assert.match(hookSrc, /fetchSubscriptionFromBackend\s*\(/);
   assert.match(hookSrc, /remote\.is_pro/);
@@ -108,7 +141,6 @@ ok('no direct setPro(true) bypass exists in IAP hook', () => {
   assert.doesNotMatch(hookSrc, /setPro\s*\(\s*true\s*\)/);
 });
 
-// ── Premium store hardening ─────────────────────────────────────────────
 ok('legacy purchase() is a NO-OP and cannot set isPro=true', () => {
   const start = premiumExecutable.indexOf('purchase: (_plan: Plan) =>');
   const end = premiumExecutable.indexOf('grantProvisionalPro:', start);
@@ -140,7 +172,6 @@ ok('persist migration clears legacy entitlement bits', () => {
   assert.match(premiumExecutable, /migrate:[\s\S]*pendingValidation:\s*null/);
 });
 
-// ── Paywall contract ────────────────────────────────────────────────────
 ok('paywall purchase CTA routes through iap.purchase()', () => {
   assert.match(paywallSrc, /await\s+iap\.purchase\(selected\)/);
 });
@@ -150,8 +181,8 @@ ok('paywall restore routes through iap.restore()', () => {
 });
 
 ok('paywall has legal links', () => {
-  assert.ok(paywallSrc.includes("https://budgy.ch/terms"));
-  assert.ok(paywallSrc.includes("https://budgy.ch/privacy"));
+  assert.ok(paywallSrc.includes('https://budgy.ch/terms'));
+  assert.ok(paywallSrc.includes('https://budgy.ch/privacy'));
 });
 
 ok('paywall has no hardcoded subscription CHF prices', () => {
@@ -159,17 +190,16 @@ ok('paywall has no hardcoded subscription CHF prices', () => {
   assert.doesNotMatch(paywallSrc, /CHF\s*39\.90/);
 });
 
-// ── Expo native config / build identity ─────────────────────────────────
 ok('app version is 3.9.0', () => {
   assert.equal(appJson.expo.version, '3.9.0');
 });
 
-ok('iOS buildNumber is 78', () => {
-  assert.equal(appJson.expo.ios.buildNumber, '78');
+ok('iOS buildNumber is 79', () => {
+  assert.equal(appJson.expo.ios.buildNumber, '79');
 });
 
-ok('Android versionCode is 78', () => {
-  assert.equal(appJson.expo.android.versionCode, 78);
+ok('Android versionCode is 79', () => {
+  assert.equal(appJson.expo.android.versionCode, 79);
 });
 
 ok('bundle/package IDs match Budgy production app', () => {

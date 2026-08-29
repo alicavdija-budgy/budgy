@@ -1,22 +1,17 @@
 /**
  * BUDGY — useIAP hook (backend-first)
  *
- * User-visible error messages are localised through useTranslation() and
- * exposed via `IapResult.error`. Stable machine-readable codes (product_not_found,
- * transaction_not_found…) are preserved for logic branching.
+ * Build 79 hardening:
+ *   - requires a valid Supabase session BEFORE opening StoreKit;
+ *   - never charges a local/demo-only user that the backend cannot identify;
+ *   - maps auth failures to a localized message instead of exposing
+ *     `missing_token` / backend implementation details;
+ *   - restore and pending-validation paths use the same auth preflight.
  *
- * Production-ready flow:
- *   purchase()  → StoreKit → /api/iap/validate (App Store Server API)
- *                 → upserts state in Supabase + unlocks Pro locally.
- *   restore()   → StoreKit getAvailablePurchases → /api/iap/restore
- *                 → re-derives state from Apple, unlocks if active.
- *   sync()      → /api/iap/me?user_id=...  (called at app boot / login)
- *                 → silently downgrades to Free if subscription expired.
- *
- * Graceful when backend not configured:
- *   - returns { success:false, notConfigured:true } — UI shows toast.
- *   - DOES NOT silently unlock Pro on production builds.
- *   - On Web/Expo Go (no native StoreKit): preview unlock is allowed.
+ * Production flow:
+ *   purchase() → auth preflight → StoreKit → backend validation → Pro
+ *   restore()  → auth preflight → StoreKit receipts → backend restore → Pro
+ *   sync()     → authenticated /api/iap/me → authoritative subscription state
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Platform } from 'react-native';
@@ -30,6 +25,7 @@ import {
   validateOnBackend,
   restoreOnBackend,
   fetchSubscriptionFromBackend,
+  getIapAuthenticatedUserId,
   isIapAvailable,
   getIapUnavailableReason,
   getIapDiagnostics,
@@ -39,7 +35,6 @@ import {
   IapDiagnosticCode,
 } from '../services/iap';
 import { usePremiumStore } from '../stores/usePremiumStore';
-import { getSupabase } from '../lib/supabase';
 import { useTranslation } from './useTranslation';
 
 export type IapPhase = 'idle' | 'loading' | 'purchasing' | 'validating' | 'restoring' | 'syncing';
@@ -53,9 +48,8 @@ export interface UseIapState {
   monthly: IapProduct | null;
   annual: IapProduct | null;
   error: string | null;
-  notConfigured: boolean;       // server returned 503
-  missingEnv: string[];          // which env vars are missing on server
-  // v3.9.0 Build 74 — fine-grained diagnostic (never PII) for TestFlight.
+  notConfigured: boolean;
+  missingEnv: string[];
   diagnosticCode: IapDiagnosticCode;
 }
 
@@ -65,29 +59,13 @@ export interface IapResult {
   notConfigured?: boolean;
   cancelled?: boolean;
   restored?: number;
-  /** When backend missing but native receipt obtained — UI can choose to
-   *  show a "preview unlock" message. Pro is NOT activated in this case. */
   pendingValidation?: boolean;
-  /** Provisional Pro granted locally (Apple receipt OK but backend not yet
-   *  confirmed). Will be re-validated automatically. */
   provisional?: boolean;
   state?: 'PRO' | 'EXPIRED' | 'GRACE_PERIOD' | 'REFUNDED' | 'FREE';
 }
 
-async function getCurrentUserId(): Promise<string | undefined> {
-  try {
-    const supa = getSupabase();
-    if (!supa) return undefined;
-    const { data } = await supa.auth.getUser();
-    return data?.user?.id;
-  } catch {
-    return undefined;
-  }
-}
-
 export function useIAP() {
   const { t } = useTranslation();
-  const setPro = usePremiumStore((s) => s.purchase);
   const confirmPro = usePremiumStore((s) => s.confirmPro);
   const grantProvisional = usePremiumStore((s) => s.grantProvisionalPro);
   const cancelPro = usePremiumStore((s) => s.cancel);
@@ -111,6 +89,8 @@ export function useIAP() {
       setState((s) => ({ ...s, phase, ...patch })),
     []
   );
+
+  const authError = useCallback(() => t('errors.unauthorized'), [t]);
 
   // ── Lifecycle ───────────────────────────────────────────────────────────
   const reload = useCallback(async () => {
@@ -164,19 +144,24 @@ export function useIAP() {
 
       setPhase('purchasing', { error: null, notConfigured: false });
       try {
+        // Build 79: account preflight MUST happen before Apple's purchase sheet.
+        // This prevents a successful charge followed by backend `missing_token`.
+        const userId = await getIapAuthenticatedUserId();
+        if (!userId) {
+          const message = authError();
+          setPhase('idle', { error: message });
+          return { success: false, error: message };
+        }
+
         const sku =
           plan === 'monthly' ? IAP_PRODUCT_IDS.monthly : IAP_PRODUCT_IDS.annual;
 
-        // CRITICAL: ensure the product is loaded from App Store Connect BEFORE
-        // attempting to purchase. Calling requestSubscription on a product that
-        // wasn't returned by getSubscriptions causes the iOS error
-        // "Missing purchase request configuration".
         const localProduct = (state.products || []).find((p) => p.productId === sku);
+        let productForSku = localProduct || null;
         if (!localProduct) {
-          // Try one reload in case products weren't loaded yet
           const freshProducts = await fetchSubscriptions();
-          const freshHas = freshProducts.some((p) => p.productId === sku);
-          if (!freshHas) {
+          const freshProduct = freshProducts.find((p) => p.productId === sku) || null;
+          if (!freshProduct) {
             setState((s) => ({
               ...s,
               phase: 'idle',
@@ -190,13 +175,10 @@ export function useIAP() {
               error: `${t('iapErrors.notReadyToSubmit')} ${t('iapErrors.debugTip')}`,
             };
           }
-          // Update state with the freshly-loaded products
+          productForSku = freshProduct;
           setState((s) => ({ ...s, products: freshProducts }));
         }
 
-        // Look up the offer token (Android only — iOS ignores it).
-        const productForSku =
-          (state.products || []).find((p) => p.productId === sku) || null;
         const receipt = await requestSubscription(sku, {
           androidOfferToken: productForSku?.androidOfferToken ?? null,
         });
@@ -205,9 +187,7 @@ export function useIAP() {
           return { success: false, cancelled: true };
         }
 
-        // Send to backend for validation + Supabase sync
         setPhase('validating');
-        const userId = await getCurrentUserId();
         const verdict = await validateOnBackend({
           transaction_id: receipt.transactionId,
           product_id: receipt.productId,
@@ -215,9 +195,19 @@ export function useIAP() {
           receipt_data: receipt.transactionReceipt,
         });
 
+        // Auth failures are explicit, non-transient and NEVER eligible for
+        // provisional Pro. The user can sign in and use Restore Purchases.
+        if (verdict.error === 'auth_required') {
+          const message = authError();
+          setPhase('idle', { error: message });
+          await finishTransaction(receipt);
+          return { success: false, error: message, state: 'FREE' };
+        }
+
         if (verdict.not_configured) {
-          // Backend missing keys, but Apple receipt is valid — user PAID.
-          // Grant 48h of provisional Pro and queue for later re-validation.
+          // A real StoreKit transaction exists, but our Apple validation service
+          // is temporarily unavailable. Keep the bounded, account-scoped 48h
+          // provisional path so a paid user is not locked out.
           grantProvisional(plan, 48, {
             transactionId: receipt.transactionId,
             productId: receipt.productId,
@@ -246,8 +236,6 @@ export function useIAP() {
             verdict.error === 'network_error' ||
             verdict.error?.includes('timeout');
           if (isTransient) {
-            // Apple Sandbox/TestFlight propagation lag — receipt is real,
-            // give the user provisional access immediately while we re-try.
             grantProvisional(plan, 48, {
               transactionId: receipt.transactionId,
               productId: receipt.productId,
@@ -265,8 +253,6 @@ export function useIAP() {
           setPhase('idle', {
             error: verdict.error || t('iapErrors.invalidReceipt'),
           });
-          // Still finish the txn — backend has the data; user should not be
-          // re-prompted on next launch.
           await finishTransaction(receipt);
           return {
             success: false,
@@ -275,7 +261,6 @@ export function useIAP() {
           };
         }
 
-        // Server confirmed Pro → unlock locally and finish native txn.
         confirmPro(plan);
         await finishTransaction(receipt);
         setPhase('idle');
@@ -284,11 +269,15 @@ export function useIAP() {
           state: (verdict.subscription_state as any) || 'PRO',
         };
       } catch (e: any) {
-        setPhase('idle', { error: e?.message || t('iapErrors.purchaseFailed') });
-        return { success: false, error: e?.message || t('iapErrors.purchaseFailed') };
+        const isAuth = e?.code === 'auth_required' || e?.message === 'auth_required';
+        const message = isAuth
+          ? authError()
+          : e?.message || t('iapErrors.purchaseFailed');
+        setPhase('idle', { error: message });
+        return { success: false, error: message };
       }
     },
-    [setPhase, confirmPro, grantProvisional, t]
+    [setPhase, state.products, confirmPro, grantProvisional, authError, t]
   );
 
   // ── Restore ─────────────────────────────────────────────────────────────
@@ -302,13 +291,21 @@ export function useIAP() {
     setPhase('restoring', { error: null, notConfigured: false });
 
     try {
+      // Restore is account-bound too. Fail before touching backend if this is
+      // a demo/local-only session; no raw `missing_token` should reach the UI.
+      const userId = await getIapAuthenticatedUserId();
+      if (!userId) {
+        const message = authError();
+        setPhase('idle', { error: message });
+        return { success: false, restored: 0, error: message };
+      }
+
       const receipts = await getAvailableReceipts();
       if (receipts.length === 0) {
         setPhase('idle');
         return { success: false, restored: 0 };
       }
 
-      const userId = await getCurrentUserId();
       let restored = 0;
       let lastState: IapResult['state'] = 'FREE';
       let lastError: string | null = null;
@@ -321,6 +318,10 @@ export function useIAP() {
           original_transaction_id: orig,
           user_id: userId,
         });
+        if (verdict.error === 'auth_required') {
+          lastError = authError();
+          break;
+        }
         if (verdict.not_configured) {
           serverNotConfigured = true;
           missingEnv = verdict.missing || [];
@@ -332,8 +333,10 @@ export function useIAP() {
           confirmPro(plan);
           restored += 1;
           lastState = 'PRO';
-        } else if (verdict.subscription_state === 'EXPIRED' || verdict.subscription_state === 'REFUNDED') {
-          // Silent downgrade so app reflects reality.
+        } else if (
+          verdict.subscription_state === 'EXPIRED' ||
+          verdict.subscription_state === 'REFUNDED'
+        ) {
           cancelPro();
           lastState = verdict.subscription_state;
           lastError = verdict.error || verdict.subscription_state;
@@ -360,15 +363,19 @@ export function useIAP() {
         error: restored === 0 ? lastError || undefined : undefined,
       };
     } catch (e: any) {
-      setPhase('idle', { error: e?.message || t('iapErrors.purchaseFailed') });
-      return { success: false, error: e?.message || t('iapErrors.purchaseFailed') };
+      const isAuth = e?.code === 'auth_required' || e?.message === 'auth_required';
+      const message = isAuth
+        ? authError()
+        : e?.message || t('iapErrors.purchaseFailed');
+      setPhase('idle', { error: message });
+      return { success: false, error: message };
     }
-  }, [setPhase, confirmPro, cancelPro]);
+  }, [setPhase, confirmPro, cancelPro, authError, t]);
 
-  // ── Silent sync (called at app boot / on auth change) ───────────────────
+  // ── Silent sync ─────────────────────────────────────────────────────────
   const syncFromBackend = useCallback(async (): Promise<void> => {
     try {
-      const userId = await getCurrentUserId();
+      const userId = await getIapAuthenticatedUserId();
       if (!userId) return;
       setPhase('syncing');
       const remote = await fetchSubscriptionFromBackend(userId);
@@ -376,11 +383,6 @@ export function useIAP() {
         setPhase('idle');
         return;
       }
-      // v3.9.0 Build 74 — Backend truth is authoritative.
-      //   remote PRO + is_pro=true  → confirm Pro
-      //   remote anything else     → revoke local Pro (FREE/EXPIRED/REFUNDED)
-      // Exception: keep a valid provisional grant if the SAME transaction is
-      // still pending validation (Apple Sandbox propagation lag).
       if (remote.is_pro && remote.subscription_state === 'PRO') {
         const plan: IapPlan =
           remote.apple_product_id === IAP_PRODUCT_IDS.annual ? 'annual' : 'monthly';
@@ -404,7 +406,6 @@ export function useIAP() {
   return useMemo(
     () => ({
       ...state,
-      // legacy aliases
       loading: state.phase !== 'idle',
       reload,
       purchase,
@@ -418,12 +419,11 @@ export function useIAP() {
 // Standalone helper for one-shot sync (e.g. inside _layout.tsx without React tree)
 export async function syncSubscriptionFromBackendOnce(): Promise<void> {
   try {
-    const userId = await getCurrentUserId();
+    const userId = await getIapAuthenticatedUserId();
     if (!userId) return;
     const remote = await fetchSubscriptionFromBackend(userId);
     if (!remote) return;
     const store = usePremiumStore.getState();
-    // v3.9.0 Build 74 — Backend truth is authoritative (see syncFromBackend).
     if (remote.is_pro && remote.subscription_state === 'PRO') {
       const plan: IapPlan =
         remote.apple_product_id === IAP_PRODUCT_IDS.annual ? 'annual' : 'monthly';
@@ -441,23 +441,21 @@ export async function syncSubscriptionFromBackendOnce(): Promise<void> {
 }
 
 /**
- * Re-validate any pending receipt against the backend. Called on app
- * foreground / launch to upgrade a provisional Pro to a confirmed Pro once
- * Apple's App Store Server API has propagated the transaction.
- *
- * Never throws. No-op if there's no pending validation.
+ * Re-validate a pending receipt after a genuine transient Apple/backend delay.
+ * Auth failures are not provisional-eligible and are never silently retried as
+ * if they were network propagation errors.
  */
 export async function retryPendingValidationOnce(): Promise<void> {
   try {
     const store = usePremiumStore.getState();
     const pending = store.pendingValidation;
     if (!pending) return;
-    // Skip if provisional expired (Apple sandbox usually propagates in <5min)
     if (store.provisionalProUntil && store.provisionalProUntil < Date.now()) {
       store.clearProvisional();
       return;
     }
-    const userId = await getCurrentUserId();
+    const userId = await getIapAuthenticatedUserId();
+    if (!userId) return;
     const verdict = await validateOnBackend({
       transaction_id: pending.transactionId,
       product_id: pending.productId,
@@ -472,12 +470,9 @@ export async function retryPendingValidationOnce(): Promise<void> {
       verdict.subscription_state === 'EXPIRED' ||
       verdict.subscription_state === 'REFUNDED'
     ) {
-      // Real refusal — revoke provisional access (e.g. refund).
       store.cancel();
     }
-    // Otherwise leave provisional in place; we'll try again next foreground.
   } catch {}
 }
 
-// Re-export Platform if needed elsewhere
 export { Platform };

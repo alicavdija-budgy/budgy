@@ -36,6 +36,13 @@ const premiumSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'stores', '
 const paywallSrc = fs.readFileSync(path.join(__dirname, '..', 'app', 'paywall.tsx'), 'utf8');
 const appJson = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'app.json'), 'utf8'));
 
+// Security source assertions must evaluate executable code, not explanatory
+// comments. Otherwise a comment such as "must never set isPro: true" becomes
+// a false positive even though the implementation is safe.
+const premiumExecutable = premiumSrc
+  .replace(/\/\*[\s\S]*?\*\//g, '')
+  .replace(/\/\/.*$/gm, '');
+
 console.log('\n[test-iap-v15] Build 78 contract suite\n');
 
 // ── Native v15 API contract ─────────────────────────────────────────────
@@ -103,34 +110,34 @@ ok('no direct setPro(true) bypass exists in IAP hook', () => {
 
 // ── Premium store hardening ─────────────────────────────────────────────
 ok('legacy purchase() is a NO-OP and cannot set isPro=true', () => {
-  const start = premiumSrc.indexOf('purchase: (_plan: Plan) =>');
-  const end = premiumSrc.indexOf('grantProvisionalPro:', start);
+  const start = premiumExecutable.indexOf('purchase: (_plan: Plan) =>');
+  const end = premiumExecutable.indexOf('grantProvisionalPro:', start);
   assert.ok(start >= 0, 'hardened purchase helper missing');
-  const block = premiumSrc.slice(start, end);
+  const block = premiumExecutable.slice(start, end);
   assert.doesNotMatch(block, /isPro\s*:\s*true/);
 });
 
 ok('local trial timestamps cannot grant Premium access', () => {
-  const start = premiumSrc.indexOf('hasPremiumAccess: () =>');
-  const end = premiumSrc.indexOf('canUseFeature:', start);
-  const block = premiumSrc.slice(start, end);
+  const start = premiumExecutable.indexOf('hasPremiumAccess: () =>');
+  const end = premiumExecutable.indexOf('canUseFeature:', start);
+  const block = premiumExecutable.slice(start, end);
   assert.ok(start >= 0);
   assert.doesNotMatch(block, /trialEndsAt/);
 });
 
-ok('only confirmPro block sets isPro=true', () => {
-  const matches = [...premiumSrc.matchAll(/isPro:\s*true/g)];
-  assert.equal(matches.length, 1, `expected exactly one isPro:true, got ${matches.length}`);
-  const confirmStart = premiumSrc.indexOf('confirmPro: (plan) =>');
-  const confirmEnd = premiumSrc.indexOf('clearProvisional:', confirmStart);
+ok('only confirmPro executable block sets isPro=true', () => {
+  const matches = [...premiumExecutable.matchAll(/isPro:\s*true/g)];
+  assert.equal(matches.length, 1, `expected exactly one executable isPro:true, got ${matches.length}`);
+  const confirmStart = premiumExecutable.indexOf('confirmPro: (plan) =>');
+  const confirmEnd = premiumExecutable.indexOf('clearProvisional:', confirmStart);
   assert.ok(matches[0].index > confirmStart && matches[0].index < confirmEnd);
 });
 
 ok('persist migration clears legacy entitlement bits', () => {
-  assert.match(premiumSrc, /version:\s*3/);
-  assert.match(premiumSrc, /migrate:[\s\S]*isPro:\s*false/);
-  assert.match(premiumSrc, /migrate:[\s\S]*trialEndsAt:\s*null/);
-  assert.match(premiumSrc, /migrate:[\s\S]*pendingValidation:\s*null/);
+  assert.match(premiumExecutable, /version:\s*3/);
+  assert.match(premiumExecutable, /migrate:[\s\S]*isPro:\s*false/);
+  assert.match(premiumExecutable, /migrate:[\s\S]*trialEndsAt:\s*null/);
+  assert.match(premiumExecutable, /migrate:[\s\S]*pendingValidation:\s*null/);
 });
 
 // ── Paywall contract ────────────────────────────────────────────────────

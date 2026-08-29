@@ -62,7 +62,20 @@ ok('reset-password supports PKCE recovery and password update', () => {
 
 ok('auth has no production local fallback', () => {
   assert.match(authSrc, /else if \(__DEV__\)/);
-  assert.match(authSrc, /cloud unavailable|cloudUnavailable/i);
+  assert.match(authSrc, /throw new Error\('Supabase not configured'\)/);
+});
+
+ok('signup without a Supabase session does not create a local authenticated user', () => {
+  const start = authSrc.indexOf('if (!data.session)');
+  const end = authSrc.indexOf('loginAsLocalUser(data.user.id', start);
+  assert.ok(start >= 0 && end > start, 'email-confirmation/session guard missing');
+  const block = authSrc.slice(start, end);
+  assert.doesNotMatch(block, /loginAsLocalUser\s*\(/);
+  assert.match(block, /setMode\('login'\)/);
+});
+
+ok('successful sign-in requires both user and session', () => {
+  assert.match(authSrc, /if \(!data\.user \|\| !data\.session\) throw new Error\('signin_missing_session'\)/);
 });
 
 ok('configuration failure is not presented as bad credentials', () => {

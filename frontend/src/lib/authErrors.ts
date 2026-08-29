@@ -1,38 +1,22 @@
 /**
- * BUDGY — Humanisation des erreurs Supabase Auth (v3.9.0 build 73)
+ * BUDGY — Humanisation des erreurs Supabase Auth (v3.9.0 build 80)
  *
- * @i18n-technical-file — All literal strings in this file are English
- *   lowercase pattern matchers used against raw Supabase error messages
- *   (`.includes()`). They are NEVER shown to the user; only the returned
- *   i18n `titleKey` / `messageKey` / `hintKey` reach the UI.
- *
- * Retourne des CLÉS i18n (pas de texte). L'UI appelle t(h.titleKey) pour
- * afficher le message dans la langue de l'utilisateur (fr/en/de/it).
- *
- * Règle : l'utilisateur NE DOIT JAMAIS voir "Unauthorized", "AuthApiError",
- * "401" ou tout code technique. Le mapping technique Supabase reste unique;
- * seuls les textes passent par i18n.
- *
- * Logs développeur uniquement via console.warn (jamais Alert).
+ * @i18n-technical-file — literal strings in this file are technical pattern
+ * matchers only. Raw Supabase/API errors are never rendered to users.
  */
 
 import { Platform } from 'react-native';
 
 export interface HumanAuthError {
-  /** i18n key for the title (e.g. `authErrors.signInUnauthorizedTitle`) */
   titleKey: string;
-  /** i18n key for the body message */
   messageKey: string;
-  /** Optional i18n key for a hint / suggestion */
   hintKey?: string;
-  /** Technical code for logging — NEVER shown to the user */
+  /** Technical code for logging/branching — NEVER shown to the user. */
   _code: string;
 }
 
 const TAG = '[auth]';
 
-/** Convenience helper for callers who receive an HumanAuthError.
- *  Usage: `Alert.alert(...toAlert(h, t))`  */
 export function toAlert(
   h: HumanAuthError,
   t: (k: string, p?: any) => string,
@@ -52,7 +36,38 @@ export function humanizeAuthError(
     console.warn(`${TAG} ${context} raw error:`, raw, 'status:', status);
   }
 
-  // ── Unauthorized / 401 / token / session ─────────────────────────────
+  // Build 80: configuration/API-key failures must NEVER be presented as a
+  // wrong password. This was misleading on Build 79 when the EAS anon key was
+  // absent. Treat these as service/configuration errors for every auth flow.
+  if (
+    lower.includes('supabase not configured') ||
+    lower.includes('invalid api key') ||
+    lower.includes('no api key') ||
+    lower.includes('apikey') ||
+    lower.includes('api key') ||
+    lower.includes('service unavailable') ||
+    status === 502 ||
+    status === 503 ||
+    status === 504
+  ) {
+    return {
+      titleKey: 'authErrors.networkTitle',
+      messageKey: 'authErrors.networkMessage',
+      _code: 'AUTH_SERVICE_UNAVAILABLE',
+    };
+  }
+
+  // Explicit invalid credentials MUST be checked before the broad 401 block.
+  if (lower.includes('invalid login') || lower.includes('invalid credentials')) {
+    return {
+      titleKey: 'authErrors.signInImpossibleTitle',
+      messageKey: 'authErrors.invalidCredentialsMessage',
+      hintKey: 'authErrors.forgotPasswordHint',
+      _code: 'AUTH_INVALID_CREDENTIALS',
+    };
+  }
+
+  // Unauthorized / JWT / session errors.
   if (
     lower.includes('unauthorized') ||
     lower === 'invalid' ||
@@ -85,17 +100,6 @@ export function humanizeAuthError(
     };
   }
 
-  // ── Invalid credentials (explicit) ───────────────────────────────────
-  if (lower.includes('invalid login') || lower.includes('invalid credentials')) {
-    return {
-      titleKey: 'authErrors.signInImpossibleTitle',
-      messageKey: 'authErrors.invalidCredentialsMessage',
-      hintKey: 'authErrors.forgotPasswordHint',
-      _code: 'AUTH_INVALID_CREDENTIALS',
-    };
-  }
-
-  // ── User already exists ──────────────────────────────────────────────
   if (
     lower.includes('user already registered') ||
     lower.includes('already exists') ||
@@ -108,7 +112,6 @@ export function humanizeAuthError(
     };
   }
 
-  // ── Email not confirmed ──────────────────────────────────────────────
   if (lower.includes('email not confirmed') || lower.includes('confirm your email')) {
     return {
       titleKey: 'authErrors.emailNotConfirmedTitle',
@@ -118,7 +121,6 @@ export function humanizeAuthError(
     };
   }
 
-  // ── Weak password ────────────────────────────────────────────────────
   if (lower.includes('password should be') || lower.includes('weak password')) {
     return {
       titleKey: 'authErrors.weakPasswordTitle',
@@ -127,7 +129,6 @@ export function humanizeAuthError(
     };
   }
 
-  // ── Invalid email ────────────────────────────────────────────────────
   if (lower.includes('invalid email') || lower.includes('email address')) {
     return {
       titleKey: 'authErrors.invalidEmailTitle',
@@ -136,7 +137,6 @@ export function humanizeAuthError(
     };
   }
 
-  // ── Rate limit ───────────────────────────────────────────────────────
   if (lower.includes('rate limit') || lower.includes('too many requests') || status === 429) {
     return {
       titleKey: 'authErrors.rateLimitTitle',
@@ -145,12 +145,13 @@ export function humanizeAuthError(
     };
   }
 
-  // ── SMTP / Email sending down ────────────────────────────────────────
   if (
     lower.includes('confirmation email') ||
     lower.includes('sending') ||
     lower.includes('smtp') ||
-    lower.includes('email rate limit')
+    lower.includes('email rate limit') ||
+    lower.includes('error sending recovery email') ||
+    lower.includes('email address not authorized')
   ) {
     if (context === 'resetPassword') {
       return {
@@ -167,14 +168,14 @@ export function humanizeAuthError(
     };
   }
 
-  // ── Network / offline ────────────────────────────────────────────────
   if (
     lower.includes('network') ||
     lower.includes('fetch failed') ||
     lower.includes('offline') ||
     lower.includes('timeout') ||
     lower.includes('econnrefused') ||
-    (Platform.OS === 'web' && lower.includes('failed to fetch'))
+    lower.includes('failed to fetch') ||
+    (Platform.OS === 'web' && lower.includes('load failed'))
   ) {
     return {
       titleKey: 'authErrors.networkTitle',
@@ -183,7 +184,6 @@ export function humanizeAuthError(
     };
   }
 
-  // ── Catch-all — never surface raw Supabase strings ───────────────────
   if (context === 'signUp') {
     return {
       titleKey: 'authErrors.signUpGenericTitle',

@@ -1,29 +1,32 @@
 import React, { useEffect } from 'react';
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { Stack, usePathname, useRouter } from 'expo-router';
 import { Colors } from '../../src/constants/theme';
 import { usePremiumStore } from '../../src/stores/usePremiumStore';
 import { FEATURE_BY_ROUTE, isProRoute } from '../../src/config/features';
 
 /**
- * BUDGY v3.9.0 Build 74 — Pro Route Guard (double defence).
+ * BUDGY v3.9.0 Build 78 — Pro Route Guard (double defence).
  *
  * Every navigation into a /more/* screen is checked against the central
  * FEATURES catalog. If the destination is `tier: 'pro'` and the user is
  * FREE, we redirect to the paywall BEFORE the screen renders — this
  * ensures deep-links, router.push, share intents, etc. all hit the wall.
  *
- * The paywall trigger is derived from the feature id so the copy matches.
+ * `usePathname()` is intentionally used instead of indexing the typed
+ * `useSegments()` tuple. Expo Router can infer a one-element tuple for this
+ * nested layout, making `segments[1]` both type-unsafe and unnecessary.
  */
 export default function MoreLayout() {
   const router = useRouter();
-  const segments = useSegments();
+  const pathname = usePathname();
   const hasAccess = usePremiumStore((s) => s.hasPremiumAccess);
 
   useEffect(() => {
-    // segments looks like ['more', 'ai-optimizer'] for /more/ai-optimizer
-    if (!segments || segments.length < 2) return;
-    if (segments[0] !== 'more') return;
-    const route = `/more/${segments[1]}`;
+    if (!pathname || !pathname.startsWith('/more/')) return;
+
+    // usePathname() excludes the query string. Remove a trailing slash so
+    // routes always match the canonical keys in FEATURE_BY_ROUTE.
+    const route = pathname.length > 1 ? pathname.replace(/\/$/, '') : pathname;
     if (!isProRoute(route)) return;
     if (hasAccess()) return;
 
@@ -52,7 +55,7 @@ export default function MoreLayout() {
       }
     }, 0);
     return () => clearTimeout(timer);
-  }, [segments, hasAccess, router]);
+  }, [pathname, hasAccess, router]);
 
   return (
     <Stack

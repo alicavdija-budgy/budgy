@@ -1,40 +1,61 @@
-# Budgy v3.9.0 build 73 — Locale-aware backend + release checklist
+# Budgy v3.9.0 build 77 — react-native-iap v15 migration
 
 ## Contexte
-- Passe finale i18n: backend `/api/coach/chat`, `/api/email/parse`, `/api/scanner/ocr` deviennent locale-aware.
-- Aucun build iOS/Android généré; aucune publication.
+- Cause réelle du rejet Apple 2.1(b) identifiée : `src/services/iap.ts` appelait `RNIap.getSubscriptions(...)`, une API disparue dans `react-native-iap` 15.x → retournait toujours `[]` → paywall sans produits.
+- Le Build 76 (retry doux sur `PRODUCTS_NOT_FOUND`) ne suffit pas : il fallait migrer vers l'API v15 pour que StoreKit renvoie vraiment les abonnements.
+- Le Build 76 reste en place non soumis. Le prochain build est **3.9.0 (77)**.
+- AUCUN `eas build` / `eas submit` lancé par l'agent — action manuelle utilisateur.
 
-## Frontend (inchangé, validé baseline)
-- USER_VISIBLE = 0, REVIEW_MANUALLY = 0, IGNORED_DIRECTIVES = 0
-- 85 namespaces × 1962 clés × 4 langues, parity PASS
-- Nouveau helper: `src/utils/apiLocale.ts` → `getApiLocale(lang)` (fr/en/de/it, fallback fr)
-- Callsites migrés: `predict.tsx` (coach), `email-import.tsx`, `scanner-modal.tsx` (envoient body.locale + Accept-Language)
+## Migration StoreKit v15
+- `react-native-iap` installé : **15.6.2** (Nitro / OpenIAP).
+- Ancienne API supprimée : `getSubscriptions({ skus })`, `requestSubscription({ sku, andDangerouslyFinishTransactionAutomaticallyIOS })`.
+- Nouvelle API v15 utilisée : 
+  - `initConnection()` / `endConnection()`
+  - `fetchProducts({ skus, type: 'subs' })` → `ProductSubscription[]`
+  - `requestPurchase({ request: { apple: { sku, ... } }, type: 'subs' })` — événementiel
+  - `purchaseUpdatedListener` + `purchaseErrorListener` (pont Promise interne dans `iap.ts`)
+  - `finishTransaction({ purchase, isConsumable: false })` avec le `Purchase` brut natif
+  - `getAvailablePurchases()`
+- Mapping v15 → `IapProduct` interne : `id → productId`, `displayPrice → localizedPrice`, `price:number → price:string`, intro-offer normalisé via `subscriptionOffers[type='introductory', paymentMode='free-trial']` avec fallback legacy iOS (`introductoryPricePaymentModeIOS = 'free-trial'`).
+- Nouveau diagnostic : `OK`, `STOREKIT_UNAVAILABLE`, `INIT_FAILED`, `FETCH_PRODUCTS_FAILED`, `NETWORK_ERROR`, `PRODUCTS_NOT_FOUND`, `MONTHLY_MISSING`, `ANNUAL_MISSING`.
 
-## Backend v3.9.0 (locale-aware)
-- `SYSTEM_PROMPT` refactoré en `SYSTEM_PROMPT_BASE + build_system_prompt(locale)` + `LANGUAGE_DIRECTIVES` par langue (FR/EN/DE/IT)
-- Modèles Pydantic: `ChatRequest`, `EmailParseRequest`, `OCRRequest` → nouveau champ `locale: Optional[str] = "fr"`
-- Chat sessions namespacées par `(user_id, locale, session_id)` — pas de fuite cross-locale
-- Prompts OCR + Email: nouvelle clause "DATA INTEGRITY — NEVER TRANSLATE" (merchant, IBAN, references, amounts, currency, raw_text = verbatim)
-- Codes d'erreur stables UPPER_SNAKE_CASE: `LLM_NOT_CONFIGURED`, `IMAGE_TOO_SMALL`, `INVALID_BASE64`, `INVALID_JSON`, `OCR_FAILED`, `EMAIL_PARSE_FAILED`
+## Règles StoreKit strictes (contrat inchangé)
+- Product IDs figés : `com.budgy.ch.budgy.monthly`, `com.budgy.ch.budgy.annual`.
+- ZÉRO prix hardcodé (aucun `4.90` / `39.90` dans le code — StoreKit seule source).
+- ZÉRO durée d'essai hardcodée (aucun `7 jours` / `1 semaine` — trial détecté uniquement si StoreKit renvoie `paymentMode: free-trial`).
+- ZÉRO bypass Premium local (`startTrial` reste no-op, aucun `setPro(true)`).
+- Pro activé UNIQUEMENT après validation backend (`/api/iap/validate`, `/api/iap/me`).
+
+## Fichiers modifiés
+- `frontend/src/services/iap.ts` (réécriture complète, migration v15)
+- `frontend/src/hooks/useIAP.ts` (transmission `androidOfferToken` à `requestSubscription`)
+- `frontend/app/paywall.tsx` (helpers intro-offer → nouveau champ `introOffer`)
+- `frontend/app.json` (buildNumber 77, versionCode 77, version 3.9.0)
+- `frontend/package.json` (script `test:iap-v15`)
+- `frontend/scripts/test-iap-v15.mjs` (34 assertions — contrat migration v15)
 
 ## Tests
-- **Frontend**: TypeScript PASS, audit:i18n PASS, check:i18n PASS, audit self-test 4/4 PASS
-- **Backend**: 144 passed / 1 skipped / 0 failed (via `testing_agent`)
-- **Nouveau**: `test_v390_locale_endpoints.py` — 18 tests couvrant les 4 locales × 3 endpoints + data-integrity + error codes stables
+- TypeScript strict : **PASS** (0 erreur)
+- i18n check : **2028 clés × 4 langues** PASS
+- i18n audit : **0 USER_VISIBLE** hardcoded
+- `test:premium` : **48/48**
+- `test:pro-gating` : **49/49**
+- `test:savings-tier` : **22/22**
+- `test:cloud-auth` : **14/14**
+- `test:ai-optimizer` : **62/62**
+- `test:iap-v15` : **34/34** (fetchProducts, mapProduct, intro-offer, cancel/error, restore, listener bridge, ZÉRO bypass, ZÉRO hardcode)
+- Backend pytest : **144 passed / 1 skipped**
 
-## Apple / StoreKit
-- iap.purchase, iap.restore, startTrial no-op intacts
-- Product IDs, version 3.9.0, build 73, iPad maxWidth 560 inchangés
+## App Store Connect (config utilisateur, hors code)
+- Monthly `com.budgy.ch.budgy.monthly` — CHF 4.90, 1 mois, pas d'offre intro
+- Annual `com.budgy.ch.budgy.annual` — CHF 39.90, 1 an, offre intro Free Trial 1 semaine (illimitée, 175 régions)
+- Les prix et durées de trial doivent rester configurés côté ASC — le code lit tout via StoreKit.
 
-## Supabase / EAS
-- eas.json: development / preview / production restaurés avec `environment` explicite
-- URLs: https://api.budgy.ch + https://supabase.budgy.ch
-- Aucune clé exposée dans le repo
-
-## LAMal
-- Aucune donnée modifiée (primes, franchises, calculs, codes cantonaux)
-- `getCantonName(code, lang)` inchangé
-- INSURERS.desc / strengths: non affichés — pas migrés (comme convenu)
+## GitHub
+- Commit local : `af326a8a48f97a638149dd169fc21360945f4f71`
+- Message : `fix: migrate StoreKit integration for build 77`
+- ⚠ Aucun remote configuré dans ce workspace. Push vers `alicavdija-budgy/budgy@main` à faire par l'utilisateur via le bouton "Push to GitHub" d'Emergent.
 
 ## Ne PAS générer de build
-Attendre validation utilisateur du rapport avant publication.
+- Le Build 77 doit être lancé manuellement par l'utilisateur (portail Emergent Publish → EAS iOS production).
+- **AUTO-SUBMIT = NO**. Aucune soumission App Review avant test TestFlight.

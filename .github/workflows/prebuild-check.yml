@@ -47,6 +47,9 @@ jobs:
           npm run check:i18n
           npm run audit:i18n
 
+      - name: Auth production contract
+        run: node scripts/test-auth-production.mjs
+
       - name: Premium and IAP contracts
         run: |
           npm run test:premium

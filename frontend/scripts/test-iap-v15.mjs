@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * BUDGY v3.9.0 Build 79 — react-native-iap v15 pre-build contract.
+ * BUDGY v3.9.0 Build 80 — react-native-iap v15 pre-build contract.
  * Static/pure tests only: native StoreKit is validated on TestFlight.
  */
 
@@ -38,7 +38,7 @@ const premiumExecutable = premiumSrc
   .replace(/\/\*[\s\S]*?\*\//g, '')
   .replace(/\/\/.*$/gm, '');
 
-console.log('\n[test-iap-v15] Build 79 contract suite\n');
+console.log('\n[test-iap-v15] Build 80 contract suite\n');
 
 ok('uses v15 fetchProducts()', () => {
   assert.match(iapSrc, /RNIap\.fetchProducts\s*\(/);
@@ -81,7 +81,6 @@ ok('product IDs are canonical and unchanged', () => {
   assert.ok(iapSrc.includes(`annual: '${ANNUAL_ID}'`));
 });
 
-// Build 79 regression guards for the exact TestFlight `missing_token` bug.
 ok('StoreKit purchase is auth-preflighted before requestPurchase()', () => {
   const authIndex = iapSrc.indexOf('await getIapAuthenticatedUserId()');
   const purchaseIndex = iapSrc.indexOf('await RNIap.requestPurchase(request)');
@@ -194,12 +193,12 @@ ok('app version is 3.9.0', () => {
   assert.equal(appJson.expo.version, '3.9.0');
 });
 
-ok('iOS buildNumber is 79', () => {
-  assert.equal(appJson.expo.ios.buildNumber, '79');
+ok('iOS buildNumber is 80', () => {
+  assert.equal(appJson.expo.ios.buildNumber, '80');
 });
 
-ok('Android versionCode is 79', () => {
-  assert.equal(appJson.expo.android.versionCode, 79);
+ok('Android versionCode is 80', () => {
+  assert.equal(appJson.expo.android.versionCode, 80);
 });
 
 ok('bundle/package IDs match Budgy production app', () => {

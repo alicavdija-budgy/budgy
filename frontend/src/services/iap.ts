@@ -3,42 +3,71 @@
  *
  * @i18n-technical-file
  *
- * v3.9.0 Build 77 — Full migration to the react-native-iap 15.x (OpenIAP / Nitro)
- * API surface. The previous implementation relied on the deprecated
- * `getSubscriptions()` + `requestSubscription({ sku })` helpers which no longer
- * exist in v15 and returned an empty product list at runtime — the direct
- * cause of the Apple 2.1(b) rejection on Build 75. The Sandbox reviewers saw
- * "0 products" because our code was calling a non-existent function.
+ * v3.9.0 Build 79 — hardened authentication around StoreKit purchases.
+ * A native purchase is never started unless a valid Supabase session exists,
+ * and backend IAP calls retry once after refreshing an expired session.
  *
- * v15 API used here (all documented in
- * node_modules/react-native-iap/lib/typescript/src/index.d.ts):
+ * v15 API used here:
  *   - initConnection() / endConnection()
- *   - fetchProducts({ skus, type: 'subs' })      → ProductSubscription[]
+ *   - fetchProducts({ skus, type: 'subs' })
  *   - requestPurchase({ request: { apple: { sku } }, type: 'subs' })
  *   - purchaseUpdatedListener / purchaseErrorListener
  *   - finishTransaction({ purchase, isConsumable: false })
  *   - getAvailablePurchases()
  *
  * Product IDs MUST match App Store Connect → Monetization → Subscriptions.
- * All prices, currencies, titles and trial periods come from StoreKit —
- * nothing hardcoded. Pro is NEVER granted client-side; the backend
- * (/api/iap/validate, /api/iap/restore) talks to Apple's App Store Server API
- * and is the sole source of truth.
+ * All prices, currencies, titles and trial periods come from StoreKit.
+ * Premium is granted only after a real StoreKit transaction and backend
+ * validation (or the bounded provisional path for genuine transient failures).
  */
 
 import { Platform } from 'react-native';
 
-// v3.9.0 SECURITY: attach Supabase JWT to all backend calls.
-async function getAuthHeaders(): Promise<Record<string, string>> {
+// ── IAP authentication ───────────────────────────────────────────────────────
+// The IAP backend is account-bound and fail-closed. A local/demo-only Zustand
+// user is NOT sufficient: the backend requires a real Supabase Bearer token.
+// We resolve the session at request time and refresh it when missing/near expiry
+// so stale persisted sessions cannot produce `missing_token` after Apple charges.
+async function resolveAuthSession(forceRefresh = false): Promise<any | null> {
   try {
     const { supabase, isSupabaseConfigured } = await import('../lib/supabase');
-    if (!isSupabaseConfigured()) return {};
-    const { data } = await supabase.auth.getSession();
-    const token = data?.session?.access_token;
-    return token ? { Authorization: `Bearer ${token}` } : {};
+    if (!isSupabaseConfigured()) return null;
+
+    const { data, error } = await supabase.auth.getSession();
+    if (error) return null;
+    let session = data?.session ?? null;
+
+    const expiresAtMs = session?.expires_at ? Number(session.expires_at) * 1000 : null;
+    const nearExpiry = !!expiresAtMs && expiresAtMs <= Date.now() + 60_000;
+
+    if (forceRefresh || !session?.access_token || nearExpiry) {
+      const refreshed = await supabase.auth.refreshSession();
+      if (!refreshed.error && refreshed.data?.session) {
+        session = refreshed.data.session;
+      }
+    }
+
+    return session?.access_token ? session : null;
   } catch {
-    return {};
+    return null;
   }
+}
+
+async function getAuthHeaders(forceRefresh = false): Promise<Record<string, string>> {
+  const session = await resolveAuthSession(forceRefresh);
+  return session?.access_token
+    ? { Authorization: `Bearer ${session.access_token}` }
+    : {};
+}
+
+/**
+ * Returns the authenticated Supabase user id if IAP can safely bind a purchase.
+ * Used as a preflight BEFORE StoreKit is opened, preventing a user from being
+ * charged when the backend would necessarily answer `missing_token`.
+ */
+export async function getIapAuthenticatedUserId(): Promise<string | undefined> {
+  const session = await resolveAuthSession(false);
+  return session?.user?.id || undefined;
 }
 
 export const IAP_PRODUCT_IDS = {
@@ -52,40 +81,28 @@ export const IAP_SKUS: string[] = [IAP_PRODUCT_IDS.monthly, IAP_PRODUCT_IDS.annu
 
 /** Normalised free-trial descriptor extracted from StoreKit. */
 export interface IapIntroOffer {
-  /** True when the offer is a free trial (period at price=0). */
   isFreeTrial: boolean;
-  /** Number of days the free trial lasts. Null if unavailable. */
   periodDays: number | null;
-  /** Raw payment mode (free-trial, pay-as-you-go, pay-up-front). */
   paymentMode: 'free-trial' | 'pay-as-you-go' | 'pay-up-front' | 'unknown' | null;
 }
 
 export interface IapProduct {
   productId: string;
-  /** Numeric price as a string. Localised price is `localizedPrice`. */
   price: string;
-  /** StoreKit-provided localised display price, e.g. "$X.XX / CHF X.XX". */
   localizedPrice: string;
   currency: string;
   title: string;
   description: string;
-  /** Normalised introductory offer if the product exposes one. */
   introOffer: IapIntroOffer | null;
-  /**
-   * Android-only: offer token needed for `requestPurchase` on Play Billing.
-   * On iOS this is always null.
-   */
   androidOfferToken: string | null;
 }
 
 export interface IapPurchaseReceipt {
   productId: string;
   transactionId: string;
-  /** iOS: StoreKit 2 JWS. Android: Play purchaseToken. Used by backend for validation. */
   transactionReceipt: string;
   originalTransactionId?: string;
   purchaseTime: number;
-  /** Raw purchase object from the native module (needed by finishTransaction). */
   raw: any;
 }
 
@@ -108,21 +125,6 @@ function loadIap() {
 }
 
 // ── Diagnostics ──────────────────────────────────────────────────────────────
-/**
- * v3.9.0 Build 77 — StoreKit diagnostics for TestFlight.
- *
- * Machine-readable snapshot of the last IAP init/fetch cycle. Never contains
- * PII — only stable machine codes and product IDs. Read from getIapDiagnostics().
- *
- *   OK                    → connection + at least one product returned
- *   STOREKIT_UNAVAILABLE  → native module not linked (Expo Go / web)
- *   INIT_FAILED           → initConnection threw / returned falsy
- *   FETCH_PRODUCTS_FAILED → fetchProducts threw synchronously
- *   NETWORK_ERROR         → transient store/network failure
- *   PRODUCTS_NOT_FOUND    → connection OK, StoreKit returned 0 SKUs
- *   MONTHLY_MISSING       → connection OK, only annual returned
- *   ANNUAL_MISSING        → connection OK, only monthly returned
- */
 export type IapDiagnosticCode =
   | 'OK'
   | 'STOREKIT_UNAVAILABLE'
@@ -168,7 +170,6 @@ function setDiagnostics(patch: Partial<IapDiagnostics>) {
     at: Date.now(),
   };
   if (__DEV__ || process.env.EXPO_PUBLIC_IAP_DIAGNOSTICS === '1') {
-    // TestFlight diagnostic logs — machine-readable, no PII.
     // eslint-disable-next-line no-console
     console.log('[IAP-DIAG]', JSON.stringify(LAST_DIAGNOSTICS));
   }
@@ -196,7 +197,6 @@ let listenerSubs: Array<{ remove: () => void }> = [];
 
 function normalisePurchase(p: any): IapPurchaseReceipt | null {
   if (!p) return null;
-  // v15 unified fields: id, productId, purchaseToken (JWS on iOS), transactionDate
   const productId: string = p.productId || p.id || (Array.isArray(p.ids) && p.ids[0]) || '';
   if (!productId) return null;
   const transactionId: string = p.transactionId || p.id || '';
@@ -223,15 +223,13 @@ function onPurchaseUpdated(rawPurchase: any) {
     if (resolver.timeout) clearTimeout(resolver.timeout);
     resolver.resolve(receipt);
   }
-  // If no resolver matches (e.g. a re-delivered transaction on relaunch),
-  // we drop the event silently — the caller is expected to call
-  // getAvailablePurchases() explicitly on foreground.
 }
 
 function onPurchaseError(err: any) {
   const code = String(err?.code || '').toLowerCase();
   const isCancel = code === 'user-cancelled' || code === 'e_user_cancelled';
-  const failingSku: string | undefined = err?.productId || (Array.isArray(err?.productIds) && err.productIds[0]);
+  const failingSku: string | undefined =
+    err?.productId || (Array.isArray(err?.productIds) && err.productIds[0]);
   const settleWith = (resolver: PurchaseResolver) => {
     if (resolver.timeout) clearTimeout(resolver.timeout);
     if (isCancel) resolver.resolve(null);
@@ -245,7 +243,6 @@ function onPurchaseError(err: any) {
       return;
     }
   }
-  // No SKU identified — settle the oldest pending resolver.
   const resolver = pendingResolvers.shift();
   if (resolver) settleWith(resolver);
 }
@@ -269,7 +266,6 @@ function removeListeners() {
     try { s.remove(); } catch {}
   }
   listenerSubs = [];
-  // Any pending resolvers must be cleared — connection is gone.
   for (const r of pendingResolvers) {
     if (r.timeout) clearTimeout(r.timeout);
     r.resolve(null);
@@ -305,9 +301,6 @@ export async function initIap(): Promise<boolean> {
       return false;
     }
     const connected = await RNIap.initConnection();
-    // initConnection may return void OR true depending on the platform; we
-    // don't consider `false` fatal here (some Android paths return true only
-    // after products are queried). But `void` is treated as success.
     if (connected === false) {
       setDiagnostics({
         code: 'INIT_FAILED',
@@ -353,18 +346,14 @@ export async function endIap(): Promise<void> {
 }
 
 // ── Products ─────────────────────────────────────────────────────────────────
-
-/** Pull an intro offer out of a v15 ProductSubscription. */
 function extractIntroOffer(raw: any): IapIntroOffer | null {
   if (!raw) return null;
-  // Preferred (v15): subscriptionOffers[] with type === 'introductory'.
   const offers: any[] = Array.isArray(raw.subscriptionOffers) ? raw.subscriptionOffers : [];
   const intro = offers.find((o) => String(o?.type).toLowerCase() === 'introductory');
   if (intro) {
     const paymentMode = String(intro.paymentMode || '').toLowerCase();
     const isFreeTrial =
       paymentMode === 'free-trial' ||
-      // Some SDKs also emit price 0 without paymentMode when the offer IS a trial.
       (Number(intro.price ?? -1) === 0 && paymentMode !== 'pay-as-you-go');
     let periodDays: number | null = null;
     if (intro.period && typeof intro.period.value === 'number') {
@@ -390,10 +379,7 @@ function extractIntroOffer(raw: any): IapIntroOffer | null {
             : 'unknown',
     };
   }
-  // Legacy fallback (v15 still populates these on iOS for parity).
-  //   introductoryPricePaymentModeIOS: 'empty' | 'free-trial' | 'pay-as-you-go' | 'pay-up-front'
-  //   introductoryPriceNumberOfPeriodsIOS: string
-  //   introductoryPriceSubscriptionPeriodIOS: 'day' | 'week' | 'month' | 'year' | 'empty'
+
   const legacyMode = String(raw.introductoryPricePaymentModeIOS || '').toLowerCase();
   if (!legacyMode || legacyMode === 'empty') return null;
   const legacyUnit = String(raw.introductoryPriceSubscriptionPeriodIOS || '').toLowerCase();
@@ -417,19 +403,16 @@ function extractIntroOffer(raw: any): IapIntroOffer | null {
   };
 }
 
-/** v15 mapping: ProductSubscription → IapProduct. Exported for tests. */
 export function mapProduct(raw: any): IapProduct {
   const productId: string = raw?.id || raw?.productId || '';
   const displayPrice: string = raw?.displayPrice || '';
   const numericPrice: number | null = typeof raw?.price === 'number' ? raw.price : null;
   const currency: string = raw?.currency || '';
-  // Android: pick the first subscription offer token if present (needed for purchase).
   let androidOfferToken: string | null = null;
   if (raw?.platform === 'android') {
     const offers = Array.isArray(raw.subscriptionOffers) ? raw.subscriptionOffers : [];
     const firstToken = offers.find((o: any) => o?.offerTokenAndroid)?.offerTokenAndroid;
     androidOfferToken = firstToken || null;
-    // Legacy fallback.
     if (!androidOfferToken && Array.isArray(raw.subscriptionOfferDetailsAndroid)) {
       const legacy = raw.subscriptionOfferDetailsAndroid.find((o: any) => o?.offerToken);
       androidOfferToken = legacy?.offerToken || null;
@@ -438,7 +421,8 @@ export function mapProduct(raw: any): IapProduct {
   return {
     productId,
     price: numericPrice != null ? String(numericPrice) : '',
-    localizedPrice: displayPrice || (currency && numericPrice != null ? `${currency} ${numericPrice}` : ''),
+    localizedPrice:
+      displayPrice || (currency && numericPrice != null ? `${currency} ${numericPrice}` : ''),
     currency: currency || 'CHF',
     title: raw?.title || raw?.displayName || raw?.displayNameIOS || '',
     description: raw?.description || '',
@@ -458,7 +442,6 @@ export async function fetchSubscriptions(): Promise<IapProduct[]> {
     });
     return [];
   }
-  // v15 exposes fetchProducts. `getSubscriptions` no longer exists.
   if (typeof RNIap?.fetchProducts !== 'function') {
     console.warn('[IAP] fetchProducts is not a function on this build');
     setDiagnostics({
@@ -507,20 +490,25 @@ export async function fetchSubscriptions(): Promise<IapProduct[]> {
 }
 
 // ── Purchase ─────────────────────────────────────────────────────────────────
-
-/**
- * v15 requestPurchase dispatch. Real result is delivered via
- * `purchaseUpdatedListener` — we bridge it back to a Promise here.
- */
 export async function requestSubscription(
   productId: string,
   opts: { androidOfferToken?: string | null } = {}
 ): Promise<IapPurchaseReceipt | null> {
-  if (!isIapAvailable()) throw new Error(getIapUnavailableReason() || 'IAP indisponible');
+  if (!isIapAvailable()) throw new Error(getIapUnavailableReason() || 'IAP unavailable');
   if (typeof RNIap?.requestPurchase !== 'function') {
     throw new Error('IAP module is missing requestPurchase on this build');
   }
-  // Make sure listeners are registered (they should be, from initIap).
+
+  // SECURITY / UX: never show Apple's payment sheet if we cannot bind the
+  // resulting transaction to an authenticated account. This is the direct
+  // guard against the Build 78 `missing_token` failure observed after payment.
+  const userId = await getIapAuthenticatedUserId();
+  if (!userId) {
+    const authError: any = new Error('auth_required');
+    authError.code = 'auth_required';
+    throw authError;
+  }
+
   registerListeners();
 
   const promise = new Promise<IapPurchaseReceipt | null>((resolve, reject) => {
@@ -530,7 +518,7 @@ export async function requestSubscription(
         pendingResolvers.splice(idx, 1);
         reject(new Error('purchase_timeout'));
       }
-    }, 90_000); // 90s upper bound (Apple auth sheets can take a while).
+    }, 90_000);
     pendingResolvers.push({ sku: productId, resolve, reject, timeout });
   });
 
@@ -541,7 +529,6 @@ export async function requestSubscription(
       andDangerouslyFinishTransactionAutomatically: false,
     };
   } else {
-    // Android needs the offer token; fall back to empty if unknown so we still get an error.
     request.request.google = {
       skus: [productId],
       subscriptionOffers: opts.androidOfferToken
@@ -551,18 +538,15 @@ export async function requestSubscription(
   }
 
   try {
-    // v15 documents that the return value should NOT be relied upon — the
-    // listener is authoritative. We still `await` to catch synchronous
-    // rejections (e.g. E_NOT_PREPARED).
     await RNIap.requestPurchase(request);
   } catch (e: any) {
-    // Drop the resolver we just pushed and re-throw so useIAP can react.
     const idx = pendingResolvers.findIndex((r) => r.sku === productId);
     if (idx >= 0) {
       const [r] = pendingResolvers.splice(idx, 1);
       if (r.timeout) clearTimeout(r.timeout);
     }
-    if (String(e?.code || '').toLowerCase() === 'user-cancelled') return null;
+    const code = String(e?.code || '').toLowerCase();
+    if (code === 'user-cancelled' || code === 'e_user_cancelled') return null;
     throw e;
   }
 
@@ -573,8 +557,6 @@ export async function finishTransaction(purchase: IapPurchaseReceipt): Promise<v
   if (!isIapAvailable()) return;
   try {
     if (typeof RNIap?.finishTransaction !== 'function') return;
-    // v15 signature: { purchase, isConsumable }. The Purchase argument must be
-    // the raw native object (with id/purchaseToken); we kept it in `raw`.
     await RNIap.finishTransaction({
       purchase: (purchase.raw as any) || (purchase as any),
       isConsumable: false,
@@ -605,8 +587,7 @@ export async function getAvailableReceipts(): Promise<IapPurchaseReceipt[]> {
 // ── Backend (FastAPI) ────────────────────────────────────────────────────────
 import { safeFetch } from '../lib/network';
 
-const BACKEND_URL =
-  process.env.EXPO_PUBLIC_BACKEND_URL || 'https://api.budgy.ch';
+const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://api.budgy.ch';
 
 export type SubscriptionState =
   | 'FREE'
@@ -616,8 +597,8 @@ export type SubscriptionState =
   | 'REFUNDED';
 
 export interface BackendValidation {
-  ok: boolean;                 // true if Apple call succeeded
-  valid: boolean;              // true if subscription is currently Pro
+  ok: boolean;
+  valid: boolean;
   subscription_state?: SubscriptionState;
   product_id?: string | null;
   expires_at?: number | null;
@@ -626,27 +607,63 @@ export interface BackendValidation {
   environment?: 'Sandbox' | 'Production' | null;
   auto_renew?: boolean | null;
   error?: string | null;
-  // 503 helpers
   not_configured?: boolean;
   missing?: string[];
 }
 
-async function postJson(path: string, body: any): Promise<BackendValidation> {
-  // v3.9.0 SECURITY: attach Supabase JWT
-  const authHeaders = await getAuthHeaders();
-  const r = await safeFetch(`${BACKEND_URL}${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeaders },
-    body: JSON.stringify(body),
-  }, { timeoutMs: 8000, retries: 1, silent: true });
+function isAuthFailure(status: number, data: any): boolean {
+  const detail = String(data?.detail || data?.error || '').toLowerCase();
+  return (
+    status === 401 ||
+    status === 403 ||
+    detail === 'missing_token' ||
+    detail === 'token_expired' ||
+    detail === 'invalid_token' ||
+    detail === 'malformed_token' ||
+    detail === 'unknown_kid' ||
+    detail === 'invalid_signature' ||
+    detail === 'invalid_audience' ||
+    detail === 'invalid_issuer'
+  );
+}
 
-  // Network failure → graceful offline result, never throw
+async function postJson(path: string, body: any): Promise<BackendValidation> {
+  const perform = async (forceRefresh: boolean) => {
+    const authHeaders = await getAuthHeaders(forceRefresh);
+    if (!authHeaders.Authorization) return null;
+    return safeFetch(
+      `${BACKEND_URL}${path}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
+        body: JSON.stringify(body),
+      },
+      { timeoutMs: 8000, retries: 1, silent: true }
+    );
+  };
+
+  // No token means this request can never succeed. Fail before making a
+  // pointless backend call and, crucially, never classify it as transient.
+  let r = await perform(false);
+  if (!r) {
+    return { ok: false, valid: false, error: 'auth_required' };
+  }
+
+  // Session may expire between StoreKit and backend validation. Refresh once
+  // and replay the exact request; never retry an auth failure indefinitely.
+  if (isAuthFailure(r.status, r.data)) {
+    const retried = await perform(true);
+    if (!retried) {
+      return { ok: false, valid: false, error: 'auth_required' };
+    }
+    r = retried;
+    if (isAuthFailure(r.status, r.data)) {
+      return { ok: false, valid: false, error: 'auth_required' };
+    }
+  }
+
   if (r.offline || (!r.ok && r.status === 0)) {
-    return {
-      ok: false,
-      valid: false,
-      error: 'network_error',
-    };
+    return { ok: false, valid: false, error: 'network_error' };
   }
 
   const data: any = r.data || {};
@@ -669,7 +686,7 @@ async function postJson(path: string, body: any): Promise<BackendValidation> {
     original_transaction_id: data.original_transaction_id ?? null,
     environment: data.environment ?? null,
     auto_renew: data.auto_renew ?? null,
-    error: data.error ?? null,
+    error: data.error ?? data.detail ?? null,
   };
 }
 
@@ -709,14 +726,22 @@ export interface RemoteSubscription {
 export async function fetchSubscriptionFromBackend(
   user_id: string
 ): Promise<RemoteSubscription | null> {
-  // v3.9.0 SECURITY: user_id is now derived from JWT server-side — the query
-  // param is kept for backwards compat but ignored by the backend.
-  const authHeaders = await getAuthHeaders();
-  const r = await safeFetch(
-    `${BACKEND_URL}/api/iap/me`,
-    { headers: authHeaders },
-    { timeoutMs: 6000, retries: 1, silent: true }
-  );
+  const perform = async (forceRefresh: boolean) => {
+    const authHeaders = await getAuthHeaders(forceRefresh);
+    if (!authHeaders.Authorization) return null;
+    return safeFetch(
+      `${BACKEND_URL}/api/iap/me`,
+      { headers: authHeaders },
+      { timeoutMs: 6000, retries: 1, silent: true }
+    );
+  };
+
+  let r = await perform(false);
+  if (!r) return null;
+  if (isAuthFailure(r.status, r.data)) {
+    r = await perform(true);
+    if (!r || isAuthFailure(r.status, r.data)) return null;
+  }
   if (!r.ok || !r.data) return null;
   const data: any = r.data;
   return {

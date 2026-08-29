@@ -76,6 +76,8 @@ scenario('2. No secret key names anywhere in app/ src/', () => {
 scenario('3. auth.tsx: production error → throw, not silent local login', () => {
   const raw = read('app/auth.tsx');
   const src = stripComments(raw);
+  const authErrors = read('src/lib/authErrors.ts');
+
   assert(
     'no `confirmation email` → loginAsLocalUser bypass',
     !/confirmation email[\s\S]{0,300}loginAsLocalUser/i.test(src),
@@ -87,11 +89,16 @@ scenario('3. auth.tsx: production error → throw, not silent local login', () =
   assert('__DEV__ branch exists', raw.includes('else if (__DEV__)'));
 
   const devIndex = raw.indexOf('else if (__DEV__)');
-  const throwIndex = raw.indexOf("throw new Error('Supabase not configured')", devIndex);
+  const throwIndex = raw.indexOf("throw new Error('supabase_config_missing')", devIndex);
   const catchIndex = raw.indexOf('} catch (error', devIndex);
   assert(
-    'production else-branch throws configuration failure',
+    'production else-branch throws machine-only configuration failure',
     devIndex >= 0 && throwIndex > devIndex && catchIndex > throwIndex,
+  );
+  assert(
+    'machine configuration code maps to service-unavailable UX',
+    authErrors.includes("lower.includes('supabase_config_missing')") &&
+      authErrors.includes("_code: 'AUTH_SERVICE_UNAVAILABLE'"),
   );
 });
 

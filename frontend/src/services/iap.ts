@@ -1,22 +1,29 @@
 /**
- * BUDGY — Apple StoreKit / In-App Purchase Service (react-native-iap)
+ * BUDGY — Apple StoreKit / In-App Purchase Service (react-native-iap 15.x / Nitro)
  *
  * @i18n-technical-file
  *
- * ⚠ Contains only stable internal error codes returned in {ok:false,
- * error:'iap_not_configured'|'network_error'|'transaction_not_found'|...}.
- * Any UI-visible message is translated by the caller (see useIAP.ts / paywall).
+ * v3.9.0 Build 77 — Full migration to the react-native-iap 15.x (OpenIAP / Nitro)
+ * API surface. The previous implementation relied on the deprecated
+ * `getSubscriptions()` + `requestSubscription({ sku })` helpers which no longer
+ * exist in v15 and returned an empty product list at runtime — the direct
+ * cause of the Apple 2.1(b) rejection on Build 75. The Sandbox reviewers saw
+ * "0 products" because our code was calling a non-existent function.
  *
- * Wraps the native IAP layer with:
- *   - Web / Expo Go safe fallback (no-op — keeps bundler happy)
- *   - Product fetching for the Budgy Pro subscription group
- *   - Backend-first validation/restore via FastAPI (/api/iap/*) which talks
- *     to Apple's App Store Server API (StoreKit 2 / production-ready).
- *   - Graceful behavior when the server isn't configured yet (returns
- *     `{ ok:false, missing:[...] }` so the UI can show a clear message
- *     instead of crashing or silently unlocking).
+ * v15 API used here (all documented in
+ * node_modules/react-native-iap/lib/typescript/src/index.d.ts):
+ *   - initConnection() / endConnection()
+ *   - fetchProducts({ skus, type: 'subs' })      → ProductSubscription[]
+ *   - requestPurchase({ request: { apple: { sku } }, type: 'subs' })
+ *   - purchaseUpdatedListener / purchaseErrorListener
+ *   - finishTransaction({ purchase, isConsumable: false })
+ *   - getAvailablePurchases()
  *
  * Product IDs MUST match App Store Connect → Monetization → Subscriptions.
+ * All prices, currencies, titles and trial periods come from StoreKit —
+ * nothing hardcoded. Pro is NEVER granted client-side; the backend
+ * (/api/iap/validate, /api/iap/restore) talks to Apple's App Store Server API
+ * and is the sole source of truth.
  */
 
 import { Platform } from 'react-native';
@@ -43,23 +50,43 @@ export type IapPlan = 'monthly' | 'annual';
 
 export const IAP_SKUS: string[] = [IAP_PRODUCT_IDS.monthly, IAP_PRODUCT_IDS.annual];
 
+/** Normalised free-trial descriptor extracted from StoreKit. */
+export interface IapIntroOffer {
+  /** True when the offer is a free trial (period at price=0). */
+  isFreeTrial: boolean;
+  /** Number of days the free trial lasts. Null if unavailable. */
+  periodDays: number | null;
+  /** Raw payment mode (free-trial, pay-as-you-go, pay-up-front). */
+  paymentMode: 'free-trial' | 'pay-as-you-go' | 'pay-up-front' | 'unknown' | null;
+}
+
 export interface IapProduct {
   productId: string;
+  /** Numeric price as a string. Localised price is `localizedPrice`. */
   price: string;
+  /** StoreKit-provided localised display price, e.g. "$X.XX / CHF X.XX". */
   localizedPrice: string;
   currency: string;
   title: string;
   description: string;
-  subscriptionPeriodUnitIOS?: 'DAY' | 'WEEK' | 'MONTH' | 'YEAR';
-  subscriptionPeriodNumberIOS?: string;
+  /** Normalised introductory offer if the product exposes one. */
+  introOffer: IapIntroOffer | null;
+  /**
+   * Android-only: offer token needed for `requestPurchase` on Play Billing.
+   * On iOS this is always null.
+   */
+  androidOfferToken: string | null;
 }
 
 export interface IapPurchaseReceipt {
   productId: string;
   transactionId: string;
+  /** iOS: StoreKit 2 JWS. Android: Play purchaseToken. Used by backend for validation. */
   transactionReceipt: string;
   originalTransactionId?: string;
   purchaseTime: number;
+  /** Raw purchase object from the native module (needed by finishTransaction). */
+  raw: any;
 }
 
 // ── Native lazy-load (Expo Go / Web safe) ────────────────────────────────────
@@ -82,24 +109,29 @@ function loadIap() {
 
 // ── Diagnostics ──────────────────────────────────────────────────────────────
 /**
- * v3.9.0 Build 74 — StoreKit diagnostics.
+ * v3.9.0 Build 77 — StoreKit diagnostics for TestFlight.
  *
- * Machine-readable snapshot of the last IAP init/fetch cycle. Used by
- * TestFlight builds to distinguish between:
- *   - STOREKIT_UNAVAILABLE   → native module not linked (Expo Go / web)
- *   - INIT_FAILED            → initConnection threw / returned false
- *   - PRODUCTS_NOT_FOUND     → connection OK, StoreKit returned 0 SKUs
- *                              (App Store Connect not yet configured or
- *                               "Cleared for Sale" is OFF)
- *   - NETWORK_ERROR          → getSubscriptions threw (transient)
- * NEVER contains PII. Product IDs, platform, error code/message only.
+ * Machine-readable snapshot of the last IAP init/fetch cycle. Never contains
+ * PII — only stable machine codes and product IDs. Read from getIapDiagnostics().
+ *
+ *   OK                    → connection + at least one product returned
+ *   STOREKIT_UNAVAILABLE  → native module not linked (Expo Go / web)
+ *   INIT_FAILED           → initConnection threw / returned falsy
+ *   FETCH_PRODUCTS_FAILED → fetchProducts threw synchronously
+ *   NETWORK_ERROR         → transient store/network failure
+ *   PRODUCTS_NOT_FOUND    → connection OK, StoreKit returned 0 SKUs
+ *   MONTHLY_MISSING       → connection OK, only annual returned
+ *   ANNUAL_MISSING        → connection OK, only monthly returned
  */
 export type IapDiagnosticCode =
   | 'OK'
   | 'STOREKIT_UNAVAILABLE'
   | 'INIT_FAILED'
+  | 'FETCH_PRODUCTS_FAILED'
+  | 'NETWORK_ERROR'
   | 'PRODUCTS_NOT_FOUND'
-  | 'NETWORK_ERROR';
+  | 'MONTHLY_MISSING'
+  | 'ANNUAL_MISSING';
 
 export interface IapDiagnostics {
   code: IapDiagnosticCode;
@@ -152,6 +184,99 @@ export function getIapUnavailableReason(): string | null {
   return RNIapError;
 }
 
+// ── Purchase event pump (v15 is listener-based) ──────────────────────────────
+type PurchaseResolver = {
+  sku: string;
+  resolve: (r: IapPurchaseReceipt | null) => void;
+  reject: (e: any) => void;
+  timeout?: any;
+};
+let pendingResolvers: PurchaseResolver[] = [];
+let listenerSubs: Array<{ remove: () => void }> = [];
+
+function normalisePurchase(p: any): IapPurchaseReceipt | null {
+  if (!p) return null;
+  // v15 unified fields: id, productId, purchaseToken (JWS on iOS), transactionDate
+  const productId: string = p.productId || p.id || (Array.isArray(p.ids) && p.ids[0]) || '';
+  if (!productId) return null;
+  const transactionId: string = p.transactionId || p.id || '';
+  const receipt: string =
+    p.purchaseToken || p.transactionReceipt || p.jwsRepresentationIOS || '';
+  return {
+    productId,
+    transactionId,
+    transactionReceipt: receipt,
+    originalTransactionId:
+      p.originalTransactionIdentifierIOS || p.originalTransactionId || undefined,
+    purchaseTime:
+      typeof p.transactionDate === 'number' ? p.transactionDate : Date.now(),
+    raw: p,
+  };
+}
+
+function onPurchaseUpdated(rawPurchase: any) {
+  const receipt = normalisePurchase(rawPurchase);
+  if (!receipt) return;
+  const idx = pendingResolvers.findIndex((r) => r.sku === receipt.productId);
+  if (idx >= 0) {
+    const [resolver] = pendingResolvers.splice(idx, 1);
+    if (resolver.timeout) clearTimeout(resolver.timeout);
+    resolver.resolve(receipt);
+  }
+  // If no resolver matches (e.g. a re-delivered transaction on relaunch),
+  // we drop the event silently — the caller is expected to call
+  // getAvailablePurchases() explicitly on foreground.
+}
+
+function onPurchaseError(err: any) {
+  const code = String(err?.code || '').toLowerCase();
+  const isCancel = code === 'user-cancelled' || code === 'e_user_cancelled';
+  const failingSku: string | undefined = err?.productId || (Array.isArray(err?.productIds) && err.productIds[0]);
+  const settleWith = (resolver: PurchaseResolver) => {
+    if (resolver.timeout) clearTimeout(resolver.timeout);
+    if (isCancel) resolver.resolve(null);
+    else resolver.reject(err);
+  };
+  if (failingSku) {
+    const idx = pendingResolvers.findIndex((r) => r.sku === failingSku);
+    if (idx >= 0) {
+      const [resolver] = pendingResolvers.splice(idx, 1);
+      settleWith(resolver);
+      return;
+    }
+  }
+  // No SKU identified — settle the oldest pending resolver.
+  const resolver = pendingResolvers.shift();
+  if (resolver) settleWith(resolver);
+}
+
+function registerListeners() {
+  if (!RNIap || listenerSubs.length > 0) return;
+  try {
+    if (typeof RNIap.purchaseUpdatedListener === 'function') {
+      listenerSubs.push(RNIap.purchaseUpdatedListener(onPurchaseUpdated));
+    }
+    if (typeof RNIap.purchaseErrorListener === 'function') {
+      listenerSubs.push(RNIap.purchaseErrorListener(onPurchaseError));
+    }
+  } catch (e) {
+    console.warn('[IAP] failed to register listeners', e);
+  }
+}
+
+function removeListeners() {
+  for (const s of listenerSubs) {
+    try { s.remove(); } catch {}
+  }
+  listenerSubs = [];
+  // Any pending resolvers must be cleared — connection is gone.
+  for (const r of pendingResolvers) {
+    if (r.timeout) clearTimeout(r.timeout);
+    r.resolve(null);
+  }
+  pendingResolvers = [];
+}
+
 // ── Lifecycle ────────────────────────────────────────────────────────────────
 export async function initIap(): Promise<boolean> {
   loadIap();
@@ -179,10 +304,22 @@ export async function initIap(): Promise<boolean> {
       });
       return false;
     }
-    await RNIap.initConnection();
-    if (Platform.OS === 'android' && typeof RNIap?.flushFailedPurchasesCachedAsPendingAndroid === 'function') {
-      await RNIap.flushFailedPurchasesCachedAsPendingAndroid();
+    const connected = await RNIap.initConnection();
+    // initConnection may return void OR true depending on the platform; we
+    // don't consider `false` fatal here (some Android paths return true only
+    // after products are queried). But `void` is treated as success.
+    if (connected === false) {
+      setDiagnostics({
+        code: 'INIT_FAILED',
+        isIapAvailable: true,
+        initConnected: false,
+        returnedProductIds: [],
+        errorCode: 'init_returned_false',
+        errorMessage: 'initConnection resolved with false',
+      });
+      return false;
     }
+    registerListeners();
     setDiagnostics({
       code: 'OK',
       isIapAvailable: true,
@@ -207,6 +344,7 @@ export async function initIap(): Promise<boolean> {
 
 export async function endIap(): Promise<void> {
   if (!isIapAvailable()) return;
+  removeListeners();
   try {
     if (typeof RNIap?.endConnection === 'function') {
       await RNIap.endConnection();
@@ -215,6 +353,100 @@ export async function endIap(): Promise<void> {
 }
 
 // ── Products ─────────────────────────────────────────────────────────────────
+
+/** Pull an intro offer out of a v15 ProductSubscription. */
+function extractIntroOffer(raw: any): IapIntroOffer | null {
+  if (!raw) return null;
+  // Preferred (v15): subscriptionOffers[] with type === 'introductory'.
+  const offers: any[] = Array.isArray(raw.subscriptionOffers) ? raw.subscriptionOffers : [];
+  const intro = offers.find((o) => String(o?.type).toLowerCase() === 'introductory');
+  if (intro) {
+    const paymentMode = String(intro.paymentMode || '').toLowerCase();
+    const isFreeTrial =
+      paymentMode === 'free-trial' ||
+      // Some SDKs also emit price 0 without paymentMode when the offer IS a trial.
+      (Number(intro.price ?? -1) === 0 && paymentMode !== 'pay-as-you-go');
+    let periodDays: number | null = null;
+    if (intro.period && typeof intro.period.value === 'number') {
+      const unit = String(intro.period.unit).toLowerCase();
+      const value = Number(intro.period.value);
+      const count = Number(intro.periodCount ?? 1) || 1;
+      const totalUnits = value * count;
+      if (unit === 'day') periodDays = totalUnits;
+      else if (unit === 'week') periodDays = totalUnits * 7;
+      else if (unit === 'month') periodDays = totalUnits * 30;
+      else if (unit === 'year') periodDays = totalUnits * 365;
+    }
+    return {
+      isFreeTrial,
+      periodDays,
+      paymentMode:
+        paymentMode === 'free-trial' ||
+        paymentMode === 'pay-as-you-go' ||
+        paymentMode === 'pay-up-front'
+          ? paymentMode
+          : isFreeTrial
+            ? 'free-trial'
+            : 'unknown',
+    };
+  }
+  // Legacy fallback (v15 still populates these on iOS for parity).
+  //   introductoryPricePaymentModeIOS: 'empty' | 'free-trial' | 'pay-as-you-go' | 'pay-up-front'
+  //   introductoryPriceNumberOfPeriodsIOS: string
+  //   introductoryPriceSubscriptionPeriodIOS: 'day' | 'week' | 'month' | 'year' | 'empty'
+  const legacyMode = String(raw.introductoryPricePaymentModeIOS || '').toLowerCase();
+  if (!legacyMode || legacyMode === 'empty') return null;
+  const legacyUnit = String(raw.introductoryPriceSubscriptionPeriodIOS || '').toLowerCase();
+  const legacyCount = Number(raw.introductoryPriceNumberOfPeriodsIOS || 0);
+  let periodDays: number | null = null;
+  if (legacyCount > 0 && legacyUnit) {
+    if (legacyUnit === 'day') periodDays = legacyCount;
+    else if (legacyUnit === 'week') periodDays = legacyCount * 7;
+    else if (legacyUnit === 'month') periodDays = legacyCount * 30;
+    else if (legacyUnit === 'year') periodDays = legacyCount * 365;
+  }
+  return {
+    isFreeTrial: legacyMode === 'free-trial',
+    periodDays,
+    paymentMode:
+      legacyMode === 'free-trial' ||
+      legacyMode === 'pay-as-you-go' ||
+      legacyMode === 'pay-up-front'
+        ? (legacyMode as any)
+        : 'unknown',
+  };
+}
+
+/** v15 mapping: ProductSubscription → IapProduct. Exported for tests. */
+export function mapProduct(raw: any): IapProduct {
+  const productId: string = raw?.id || raw?.productId || '';
+  const displayPrice: string = raw?.displayPrice || '';
+  const numericPrice: number | null = typeof raw?.price === 'number' ? raw.price : null;
+  const currency: string = raw?.currency || '';
+  // Android: pick the first subscription offer token if present (needed for purchase).
+  let androidOfferToken: string | null = null;
+  if (raw?.platform === 'android') {
+    const offers = Array.isArray(raw.subscriptionOffers) ? raw.subscriptionOffers : [];
+    const firstToken = offers.find((o: any) => o?.offerTokenAndroid)?.offerTokenAndroid;
+    androidOfferToken = firstToken || null;
+    // Legacy fallback.
+    if (!androidOfferToken && Array.isArray(raw.subscriptionOfferDetailsAndroid)) {
+      const legacy = raw.subscriptionOfferDetailsAndroid.find((o: any) => o?.offerToken);
+      androidOfferToken = legacy?.offerToken || null;
+    }
+  }
+  return {
+    productId,
+    price: numericPrice != null ? String(numericPrice) : '',
+    localizedPrice: displayPrice || (currency && numericPrice != null ? `${currency} ${numericPrice}` : ''),
+    currency: currency || 'CHF',
+    title: raw?.title || raw?.displayName || raw?.displayNameIOS || '',
+    description: raw?.description || '',
+    introOffer: extractIntroOffer(raw),
+    androidOfferToken,
+  };
+}
+
 export async function fetchSubscriptions(): Promise<IapProduct[]> {
   if (!isIapAvailable()) {
     setDiagnostics({
@@ -226,46 +458,48 @@ export async function fetchSubscriptions(): Promise<IapProduct[]> {
     });
     return [];
   }
-  try {
-    // react-native-iap v12+ uses `getSubscriptions({ skus })`. Older versions
-    // used `getSubscriptions({ skus })` too — but some forks may have removed it.
-    if (typeof RNIap?.getSubscriptions !== 'function') {
-      console.warn('[IAP] getSubscriptions is not a function on this build');
-      setDiagnostics({
-        code: 'INIT_FAILED',
-        returnedProductIds: [],
-        errorCode: 'get_subscriptions_missing',
-        errorMessage: 'getSubscriptions is not a function on this build',
-      });
-      return [];
-    }
-    const raw = await RNIap.getSubscriptions({ skus: IAP_SKUS });
-    const products: IapProduct[] = (raw || []).map((p: any) => ({
-      productId: p.productId,
-      price: p.price,
-      localizedPrice: p.localizedPrice || `${p.currency ?? ''} ${p.price}`.trim(),
-      currency: p.currency ?? 'CHF',
-      title: p.title ?? '',
-      description: p.description ?? '',
-      subscriptionPeriodUnitIOS: p.subscriptionPeriodUnitIOS,
-      subscriptionPeriodNumberIOS: p.subscriptionPeriodNumberIOS,
-    }));
+  // v15 exposes fetchProducts. `getSubscriptions` no longer exists.
+  if (typeof RNIap?.fetchProducts !== 'function') {
+    console.warn('[IAP] fetchProducts is not a function on this build');
     setDiagnostics({
-      code: products.length > 0 ? 'OK' : 'PRODUCTS_NOT_FOUND',
-      returnedProductIds: products.map((p) => p.productId),
-      errorCode: products.length > 0 ? null : 'no_products',
+      code: 'FETCH_PRODUCTS_FAILED',
+      returnedProductIds: [],
+      errorCode: 'fetch_products_missing',
+      errorMessage: 'fetchProducts is not a function on this build',
+    });
+    return [];
+  }
+  try {
+    const raw = await RNIap.fetchProducts({ skus: IAP_SKUS, type: 'subs' });
+    const list: any[] = Array.isArray(raw) ? raw : [];
+    const products: IapProduct[] = list
+      .filter((p) => p && (p.type === 'subs' || p.type == null))
+      .map(mapProduct)
+      .filter((p) => !!p.productId);
+    const returnedIds = products.map((p) => p.productId);
+    const hasMonthly = returnedIds.includes(IAP_PRODUCT_IDS.monthly);
+    const hasAnnual = returnedIds.includes(IAP_PRODUCT_IDS.annual);
+    let code: IapDiagnosticCode = 'OK';
+    if (!hasMonthly && !hasAnnual) code = 'PRODUCTS_NOT_FOUND';
+    else if (!hasMonthly) code = 'MONTHLY_MISSING';
+    else if (!hasAnnual) code = 'ANNUAL_MISSING';
+    setDiagnostics({
+      code,
+      returnedProductIds: returnedIds,
+      errorCode: code === 'OK' ? null : 'partial_or_empty_products',
       errorMessage:
-        products.length > 0
+        code === 'OK'
           ? null
-          : 'StoreKit returned 0 products for the requested SKUs',
+          : `StoreKit returned ${products.length}/${IAP_SKUS.length} expected subscriptions`,
     });
     return products;
   } catch (e: any) {
-    console.warn('[IAP] getSubscriptions failed', e);
+    console.warn('[IAP] fetchProducts failed', e);
+    const isNetwork = String(e?.code || '').toLowerCase().includes('network');
     setDiagnostics({
-      code: 'NETWORK_ERROR',
+      code: isNetwork ? 'NETWORK_ERROR' : 'FETCH_PRODUCTS_FAILED',
       returnedProductIds: [],
-      errorCode: e?.code || 'network_error',
+      errorCode: e?.code || (isNetwork ? 'network_error' : 'fetch_products_failed'),
       errorMessage: e?.message || String(e),
     });
     return [];
@@ -273,49 +507,78 @@ export async function fetchSubscriptions(): Promise<IapProduct[]> {
 }
 
 // ── Purchase ─────────────────────────────────────────────────────────────────
+
+/**
+ * v15 requestPurchase dispatch. Real result is delivered via
+ * `purchaseUpdatedListener` — we bridge it back to a Promise here.
+ */
 export async function requestSubscription(
-  productId: string
+  productId: string,
+  opts: { androidOfferToken?: string | null } = {}
 ): Promise<IapPurchaseReceipt | null> {
   if (!isIapAvailable()) throw new Error(getIapUnavailableReason() || 'IAP indisponible');
+  if (typeof RNIap?.requestPurchase !== 'function') {
+    throw new Error('IAP module is missing requestPurchase on this build');
+  }
+  // Make sure listeners are registered (they should be, from initIap).
+  registerListeners();
+
+  const promise = new Promise<IapPurchaseReceipt | null>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      const idx = pendingResolvers.findIndex((r) => r.sku === productId);
+      if (idx >= 0) {
+        pendingResolvers.splice(idx, 1);
+        reject(new Error('purchase_timeout'));
+      }
+    }, 90_000); // 90s upper bound (Apple auth sheets can take a while).
+    pendingResolvers.push({ sku: productId, resolve, reject, timeout });
+  });
+
+  const request: any = { type: 'subs' as const, request: {} };
+  if (Platform.OS === 'ios') {
+    request.request.apple = {
+      sku: productId,
+      andDangerouslyFinishTransactionAutomatically: false,
+    };
+  } else {
+    // Android needs the offer token; fall back to empty if unknown so we still get an error.
+    request.request.google = {
+      skus: [productId],
+      subscriptionOffers: opts.androidOfferToken
+        ? [{ sku: productId, offerToken: opts.androidOfferToken }]
+        : [],
+    };
+  }
 
   try {
-    // Defensive: react-native-iap v12+ uses `requestSubscription`; some forks
-    // renamed it to `requestPurchase`. Pick whichever is callable.
-    const fn =
-      typeof RNIap?.requestSubscription === 'function'
-        ? RNIap.requestSubscription
-        : typeof RNIap?.requestPurchase === 'function'
-          ? RNIap.requestPurchase
-          : null;
-    if (!fn) {
-      throw new Error('IAP module is missing a purchase function on this build');
-    }
-    const purchase = await fn({
-      sku: productId,
-      andDangerouslyFinishTransactionAutomaticallyIOS: false,
-    });
-
-    const p = Array.isArray(purchase) ? purchase[0] : purchase;
-    if (!p || !p.transactionReceipt) return null;
-
-    return {
-      productId: p.productId,
-      transactionId: p.transactionId,
-      transactionReceipt: p.transactionReceipt,
-      originalTransactionId: p.originalTransactionIdentifierIOS,
-      purchaseTime: p.transactionDate || Date.now(),
-    };
+    // v15 documents that the return value should NOT be relied upon — the
+    // listener is authoritative. We still `await` to catch synchronous
+    // rejections (e.g. E_NOT_PREPARED).
+    await RNIap.requestPurchase(request);
   } catch (e: any) {
-    if (e?.code === 'E_USER_CANCELLED') return null;
+    // Drop the resolver we just pushed and re-throw so useIAP can react.
+    const idx = pendingResolvers.findIndex((r) => r.sku === productId);
+    if (idx >= 0) {
+      const [r] = pendingResolvers.splice(idx, 1);
+      if (r.timeout) clearTimeout(r.timeout);
+    }
+    if (String(e?.code || '').toLowerCase() === 'user-cancelled') return null;
     throw e;
   }
+
+  return promise;
 }
 
 export async function finishTransaction(purchase: IapPurchaseReceipt): Promise<void> {
   if (!isIapAvailable()) return;
   try {
     if (typeof RNIap?.finishTransaction !== 'function') return;
-    await RNIap.finishTransaction({ purchase: purchase as any, isConsumable: false });
+    // v15 signature: { purchase, isConsumable }. The Purchase argument must be
+    // the raw native object (with id/purchaseToken); we kept it in `raw`.
+    await RNIap.finishTransaction({
+      purchase: (purchase.raw as any) || (purchase as any),
+      isConsumable: false,
+    });
   } catch (e) {
     console.warn('[IAP] finishTransaction failed', e);
   }
@@ -326,14 +589,13 @@ export async function getAvailableReceipts(): Promise<IapPurchaseReceipt[]> {
   if (!isIapAvailable()) return [];
   try {
     if (typeof RNIap?.getAvailablePurchases !== 'function') return [];
-    const purchases = await RNIap.getAvailablePurchases();
-    return (purchases || []).map((p: any) => ({
-      productId: p.productId,
-      transactionId: p.transactionId,
-      transactionReceipt: p.transactionReceipt,
-      originalTransactionId: p.originalTransactionIdentifierIOS,
-      purchaseTime: p.transactionDate || Date.now(),
-    }));
+    const purchases: any[] = await RNIap.getAvailablePurchases();
+    const receipts: IapPurchaseReceipt[] = [];
+    for (const p of purchases || []) {
+      const n = normalisePurchase(p);
+      if (n) receipts.push(n);
+    }
+    return receipts;
   } catch (e) {
     console.warn('[IAP] getAvailablePurchases failed', e);
     return [];

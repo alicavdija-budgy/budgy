@@ -18,7 +18,8 @@
     "test:ai-optimizer": "node scripts/test-ai-optimizer.mjs",
     "test:pro-gating": "node scripts/test-pro-gating.mjs",
     "test:savings-tier": "node scripts/test-savings-tier.mjs",
-    "test:cloud-auth": "node scripts/test-cloud-auth.mjs"
+    "test:cloud-auth": "node scripts/test-cloud-auth.mjs",
+    "test:iap-v15": "node scripts/test-iap-v15.mjs"
   },
   "dependencies": {
     "@babel/runtime": "^7.20.6",

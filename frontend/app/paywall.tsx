@@ -7,7 +7,8 @@
  * (`iap.purchase()`), never through a local "startTrial" bypass.
  * The free trial, if any, comes from the Introductory Offer configured
  * on the subscription product in App Store Connect and is presented
- * only when Apple StoreKit reports it in `introductoryPricePaymentModeIOS`.
+ * only when Apple StoreKit reports it in `introOffer.isFreeTrial`
+ * (v15 normalised field — see src/services/iap.ts `extractIntroOffer`).
  *
  * Pricing, currency and trial period ALL come from StoreKit — no
  * fallback hardcoded numbers. When StoreKit fails, the CTA is disabled
@@ -84,30 +85,18 @@ function getTriggerCopy(trigger: string | undefined, t: (k: string, p?: any) => 
 }
 
 /** Does this StoreKit product ship with an Introductory Offer that is a
- * free trial? We inspect the introductory payment mode when available. */
+ * free trial? v15 exposes a normalised `introOffer` field on IapProduct. */
 function hasIntroductoryFreeTrial(product: IapProduct | null): boolean {
   if (!product) return false;
-  const p: any = product;
-  // react-native-iap exposes introductory info on iOS via these fields:
-  //   introductoryPricePaymentModeIOS: 'FREETRIAL' | 'PAYASYOUGO' | 'PAYUPFRONT'
-  //   introductoryPriceNumberOfPeriodsIOS: '7'
-  //   introductoryPriceSubscriptionPeriodIOS: 'DAY' | 'WEEK' | 'MONTH' | 'YEAR'
-  const mode = String(p.introductoryPricePaymentModeIOS || p.introductoryPricePaymentMode || '').toUpperCase();
-  return mode === 'FREETRIAL' || mode === 'FREE_TRIAL';
+  return !!product.introOffer?.isFreeTrial;
 }
 
-/** Format the trial as "7 days" / "1 week" using StoreKit period info. */
+/** Format the trial in days using the normalised StoreKit period info. */
 function formatIntroductoryPeriodDays(product: IapProduct | null): number | null {
   if (!product) return null;
-  const p: any = product;
-  const num = Number(p.introductoryPriceNumberOfPeriodsIOS || p.introductoryPriceNumberOfPeriods || 0);
-  const unit = String(p.introductoryPriceSubscriptionPeriodIOS || p.introductoryPriceSubscriptionPeriod || '').toUpperCase();
-  if (!num || !unit) return null;
-  if (unit === 'DAY') return num;
-  if (unit === 'WEEK') return num * 7;
-  if (unit === 'MONTH') return num * 30;
-  if (unit === 'YEAR') return num * 365;
-  return null;
+  const offer = product.introOffer;
+  if (!offer || !offer.isFreeTrial) return null;
+  return offer.periodDays;
 }
 
 // ── Screen ───────────────────────────────────────────────────────────────

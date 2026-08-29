@@ -194,7 +194,12 @@ export function useIAP() {
           setState((s) => ({ ...s, products: freshProducts }));
         }
 
-        const receipt = await requestSubscription(sku);
+        // Look up the offer token (Android only — iOS ignores it).
+        const productForSku =
+          (state.products || []).find((p) => p.productId === sku) || null;
+        const receipt = await requestSubscription(sku, {
+          androidOfferToken: productForSku?.androidOfferToken ?? null,
+        });
         if (!receipt) {
           setPhase('idle');
           return { success: false, cancelled: true };

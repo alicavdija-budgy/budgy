@@ -85,9 +85,9 @@ ok('configuration failure is not presented as bad credentials', () => {
   assert.match(authErrorsSrc, /AUTH_SERVICE_UNAVAILABLE/);
 });
 
-ok('Build 81 identity is active', () => {
-  assert.equal(app.expo.ios.buildNumber, '81');
-  assert.equal(app.expo.android.versionCode, 81);
+ok('Build 82 identity is active', () => {
+  assert.equal(app.expo.ios.buildNumber, '82');
+  assert.equal(app.expo.android.versionCode, 82);
 });
 
 console.log(`\n[test-auth-production] ${passed} passed, ${failed} failed\n`);

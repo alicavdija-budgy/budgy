@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * BUDGY v3.9.0 Build 81 — Restore / already-owned / password-recovery
+ * BUDGY v3.9.0 Build 82 — Restore / already-owned / password-recovery
  * regression contract.
  *
  * Covers the two TestFlight bugs:
@@ -55,7 +55,7 @@ const premiumExecutable = premiumSrc
 const MONTHLY_ID = 'com.budgy.ch.budgy.monthly';
 const ANNUAL_ID = 'com.budgy.ch.budgy.annual';
 
-console.log('\n[test-iap-restore] Build 81 restore & recovery contract\n');
+console.log('\n[test-iap-restore] Build 82 restore & recovery contract\n');
 
 // ── 1. Restore performs a REAL Apple sync before concluding ──────────────
 ok('restore syncs StoreKit (AppStore.sync) before reading purchases', () => {
@@ -64,8 +64,16 @@ ok('restore syncs StoreKit (AppStore.sync) before reading purchases', () => {
   assert.ok(fnStart >= 0, 'syncNativeTransactions missing');
   const receiptsFn = iapSrc.indexOf('export async function getAvailableReceipts');
   const syncCall = iapSrc.indexOf('await syncNativeTransactions()', receiptsFn);
-  const getCall = iapSrc.indexOf('RNIap.getAvailablePurchases()', receiptsFn);
+  const getCall = iapSrc.indexOf('RNIap.getAvailablePurchases(', receiptsFn);
   assert.ok(syncCall > receiptsFn && getCall > syncCall, 'sync must run before getAvailablePurchases');
+});
+
+ok('restore has active + historical StoreKit fallback', () => {
+  const receiptsFn = iapSrc.indexOf('export async function getAvailableReceipts');
+  const activeIdx = iapSrc.indexOf('onlyIncludeActiveItemsIOS: true', receiptsFn);
+  const historicalIdx = iapSrc.indexOf('onlyIncludeActiveItemsIOS: false', receiptsFn);
+  assert.ok(activeIdx > receiptsFn, 'active entitlement query missing');
+  assert.ok(historicalIdx > activeIdx, 'historical fallback must follow active query');
 });
 
 ok('sync failure is non-fatal (cached entitlements still read)', () => {
@@ -252,7 +260,6 @@ ok('raw internal errors never reach purchase/restore alerts', () => {
     assert.doesNotMatch(uiSrc, /transaction_not_found/);
     assert.doesNotMatch(uiSrc, /supabase_config_missing/);
   }
-  // hook returns localized copy, not e?.message, on purchase failure
   assert.doesNotMatch(hookSrc, /:\s*e\?\.message \|\| t\('iapErrors\.purchaseFailed'\)/);
 });
 
@@ -263,22 +270,10 @@ ok('pro screen uses existing iap.* translation keys (no dead paywall.* keys)', (
 
 ok('localized restore copy matches the approved FR wording', () => {
   assert.ok(translationsSrc.includes("restoreDoneTitle: 'Abonnement restauré'"));
-  assert.ok(
-    translationsSrc.includes(
-      "restoreDoneBody: 'Votre abonnement Budgy Pro a été restauré avec succès.'"
-    )
-  );
-  assert.ok(
-    translationsSrc.includes(
-      "restoreNoneBody: 'Aucun abonnement Budgy actif n\\'a été trouvé sur ce compte Apple.'"
-    )
-  );
+  assert.ok(translationsSrc.includes("restoreDoneBody: 'Votre abonnement Budgy Pro a été restauré avec succès.'"));
+  assert.ok(translationsSrc.includes("restoreNoneBody: 'Aucun abonnement Budgy actif n\\'a été trouvé sur ce compte Apple.'"));
   assert.ok(translationsSrc.includes("buyFailedTitle: 'Achat impossible'"));
-  assert.ok(
-    translationsSrc.includes(
-      "buyFailedBody: 'Une erreur est survenue avec l\\'App Store. Veuillez réessayer.'"
-    )
-  );
+  assert.ok(translationsSrc.includes("buyFailedBody: 'Une erreur est survenue avec l\\'App Store. Veuillez réessayer.'"));
 });
 
 ok('paywall shows the restore confirmation when purchase recovers ownership', () => {

@@ -164,19 +164,19 @@ export default function ProScreen() {
     setRestoring(true);
     try {
       const r = await iap.restore();
-      if (r.success && (r.state === 'PRO' || r.state === 'GRACE_PERIOD')) {
-        Alert.alert(t('paywall.restoreDoneTitle'), t('paywall.restoreDoneBody', { n: r.restored ?? 1 }));
-      } else if (r.success && (r.restored ?? 0) === 0) {
-        Alert.alert(t('paywall.restoreNoneTitle'), t('paywall.restoreNoneBody'));
+      if (r.success && (r.restored ?? 0) > 0) {
+        Alert.alert(t('iap.restoreDoneTitle'), t('iap.restoreDoneBody', { n: r.restored ?? 1 }));
       } else if (r.state === 'EXPIRED' || r.state === 'REFUNDED') {
-        Alert.alert(t('paywall.restoreExpiredTitle'), t('paywall.restoreExpiredBody'));
+        Alert.alert(t('iap.restoreExpiredTitle'), t('iap.restoreExpiredBody'));
       } else if (r.cancelled) {
         // silent — user cancelled Apple sheet
+      } else if (r.error || r.notConfigured) {
+        Alert.alert(t('iap.restoreFailedTitle'), r.error || t('iap.restoreFailedBody'));
       } else {
-        Alert.alert(t('paywall.restoreFailedTitle'), t('paywall.restoreFailedBody'));
+        Alert.alert(t('iap.restoreNoneTitle'), t('iap.restoreNoneBody'));
       }
     } catch {
-      Alert.alert(t('paywall.restoreFailedTitle'), t('paywall.restoreFailedBody'));
+      Alert.alert(t('iap.restoreFailedTitle'), t('iap.restoreFailedBody'));
     } finally {
       setRestoring(false);
     }

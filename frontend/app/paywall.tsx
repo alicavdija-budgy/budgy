@@ -195,6 +195,18 @@ export default function PaywallScreen() {
           await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
       } catch {}
+      // Already-owned recovery: the purchase attempt was reconciled into a
+      // restore of the existing subscription — show the restore confirmation.
+      if ((res.restored ?? 0) > 0) {
+        Alert.alert(
+          t('iap.restoreDoneTitle'),
+          t((res.restored ?? 1) > 1 ? 'iap.restoreDoneBodyPlural' : 'iap.restoreDoneBody', {
+            n: res.restored,
+          }),
+          [{ text: t('iap.ctaStart'), onPress: () => router.back() }]
+        );
+        return;
+      }
       Alert.alert(
         t('iap.welcomeTitle'),
         selected === 'annual' ? t('iap.welcomeYearly') : t('iap.welcomeMonthly'),
@@ -239,6 +251,9 @@ export default function PaywallScreen() {
       Alert.alert(t('iap.restoreExpiredTitle'), t('iap.restoreExpiredBody'), [
         { text: t('iap.ctaOK') },
       ]);
+    } else if (res.error) {
+      // Technical/auth failure — already localized, never "no subscription".
+      Alert.alert(t('iap.restoreFailedTitle'), res.error, [{ text: t('iap.ctaOK') }]);
     } else {
       Alert.alert(t('iap.restoreNoneTitle'), t('iap.restoreNoneBody'), [{ text: t('iap.ctaOK') }]);
     }

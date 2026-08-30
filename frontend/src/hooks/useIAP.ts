@@ -10,8 +10,14 @@
  *
  * Production flow:
  *   purchase() → auth preflight → StoreKit → backend validation → Pro
- *   restore()  → auth preflight → StoreKit receipts → backend restore → Pro
+ *   restore()  → auth preflight → StoreKit sync + receipts → backend restore → Pro
  *   sync()     → authenticated /api/iap/me → authoritative subscription state
+ *
+ * Already-owned recovery (Build 81):
+ *   When StoreKit answers "already owned" on purchase, the SAME reconciliation
+ *   used by restore() runs once (never re-entering purchase(), so no loop) and
+ *   recovers the entitlement through backend validation instead of surfacing
+ *   the raw error to the user.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Platform } from 'react-native';
@@ -29,7 +35,9 @@ import {
   isIapAvailable,
   getIapUnavailableReason,
   getIapDiagnostics,
+  isAlreadyOwnedError,
   IAP_PRODUCT_IDS,
+  IAP_SKUS,
   IapProduct,
   IapPlan,
   IapDiagnosticCode,
@@ -62,6 +70,107 @@ export interface IapResult {
   pendingValidation?: boolean;
   provisional?: boolean;
   state?: 'PRO' | 'EXPIRED' | 'GRACE_PERIOD' | 'REFUNDED' | 'FREE';
+}
+
+// ── Shared Apple → backend reconciliation ─────────────────────────────────
+/**
+ * Single restore implementation used by BOTH the user-facing "Restore
+ * Purchases" action and the already-owned purchase recovery path.
+ *
+ * Flow: StoreKit sync (AppStore.sync on iOS) → getAvailablePurchases →
+ * filter Budgy subscription SKUs → backend /api/iap/restore per original
+ * transaction → apply the authoritative backend verdict.
+ *
+ * It never calls purchase()/requestSubscription, so a purchase→restore loop
+ * is structurally impossible. Premium is only confirmed after the backend
+ * validated the Apple subscription (verdict.valid).
+ */
+interface ReconcileOutcome {
+  restored: number;
+  lastState: NonNullable<IapResult['state']>;
+  lastError: string | null;
+  authFailed: boolean;
+  notConfigured: boolean;
+  missingEnv: string[];
+}
+
+async function reconcileEntitlements(
+  userId: string,
+  confirmProAction: (plan: IapPlan) => void,
+  cancelProAction: () => void
+): Promise<ReconcileOutcome> {
+  const outcome: ReconcileOutcome = {
+    restored: 0,
+    lastState: 'FREE',
+    lastError: null,
+    authFailed: false,
+    notConfigured: false,
+    missingEnv: [],
+  };
+
+  // syncFirst performs a real Apple restore so entitlements are visible even
+  // after reinstall / device change / an unfinished historical transaction.
+  const receipts = (await getAvailableReceipts({ syncFirst: true })).filter(
+    (r) => IAP_SKUS.includes(r.productId)
+  );
+  if (receipts.length === 0) return outcome;
+
+  let sawInactive: 'EXPIRED' | 'REFUNDED' | null = null;
+
+  for (const receipt of receipts) {
+    const orig = receipt.originalTransactionId || receipt.transactionId;
+    const verdict = await restoreOnBackend({
+      original_transaction_id: orig,
+      user_id: userId,
+    });
+    if (verdict.error === 'auth_required') {
+      outcome.authFailed = true;
+      break;
+    }
+    if (verdict.not_configured) {
+      outcome.notConfigured = true;
+      outcome.missingEnv = verdict.missing || [];
+      break;
+    }
+    if (verdict.valid) {
+      const plan: IapPlan =
+        receipt.productId === IAP_PRODUCT_IDS.annual ? 'annual' : 'monthly';
+      confirmProAction(plan);
+      outcome.restored += 1;
+      outcome.lastState = 'PRO';
+      // Backend confirmed the entitlement: acknowledge the StoreKit
+      // transaction so it does not linger unfinished and keep re-triggering
+      // "Item already owned" on the next purchase attempt.
+      await finishTransaction(receipt);
+    } else if (
+      verdict.subscription_state === 'EXPIRED' ||
+      verdict.subscription_state === 'REFUNDED'
+    ) {
+      sawInactive = verdict.subscription_state;
+      outcome.lastError = verdict.error || verdict.subscription_state;
+    } else {
+      outcome.lastError = verdict.error || null;
+    }
+  }
+
+  // Downgrade only when NO receipt produced a valid entitlement — an old
+  // expired monthly must never cancel a freshly restored active annual.
+  if (outcome.restored === 0 && sawInactive) {
+    cancelProAction();
+    outcome.lastState = sawInactive;
+  }
+
+  if (__DEV__) {
+    // Diagnostics only — never receipt/JWS contents or tokens.
+    console.log('[IAP] reconcile', {
+      receiptProductIds: receipts.map((r) => r.productId),
+      restored: outcome.restored,
+      state: outcome.lastState,
+      authFailed: outcome.authFailed,
+      notConfigured: outcome.notConfigured,
+    });
+  }
+  return outcome;
 }
 
 export function useIAP() {
@@ -250,13 +359,13 @@ export function useIAP() {
               state: 'PRO',
             };
           }
-          setPhase('idle', {
-            error: verdict.error || t('iapErrors.invalidReceipt'),
-          });
+          if (__DEV__) console.warn('[IAP] backend rejected purchase:', verdict.error);
+          const rejectMessage = t('iapErrors.invalidReceipt');
+          setPhase('idle', { error: rejectMessage });
           await finishTransaction(receipt);
           return {
             success: false,
-            error: verdict.error || t('iapErrors.invalidReceipt'),
+            error: rejectMessage,
             state: (verdict.subscription_state as any) || 'FREE',
           };
         }
@@ -270,14 +379,60 @@ export function useIAP() {
         };
       } catch (e: any) {
         const isAuth = e?.code === 'auth_required' || e?.message === 'auth_required';
-        const message = isAuth
-          ? authError()
-          : e?.message || t('iapErrors.purchaseFailed');
+
+        // "Item already owned": this Apple ID already holds the subscription
+        // (typically an unfinished/unsynced historical transaction) while the
+        // Budgy account state does not reflect it yet. Never surface the raw
+        // StoreKit error — run the SAME safe restore/reconciliation used by
+        // the Restore button, exactly once (purchase() is never re-entered,
+        // so no purchase/restore loop is possible).
+        if (!isAuth && isAlreadyOwnedError(e)) {
+          try {
+            const ownerId = await getIapAuthenticatedUserId();
+            if (ownerId) {
+              setPhase('validating');
+              const outcome = await reconcileEntitlements(ownerId, confirmPro, cancelPro);
+              if (outcome.restored > 0) {
+                setPhase('idle', { error: null });
+                return { success: true, restored: outcome.restored, state: 'PRO' };
+              }
+              if (outcome.notConfigured) {
+                setState((s) => ({
+                  ...s,
+                  phase: 'idle',
+                  notConfigured: true,
+                  missingEnv: outcome.missingEnv,
+                }));
+                return { success: false, notConfigured: true, error: 'iap_not_configured' };
+              }
+              if (outcome.lastState === 'EXPIRED' || outcome.lastState === 'REFUNDED') {
+                const message = t('iap.restoreExpiredBody');
+                setPhase('idle', { error: message });
+                return { success: false, error: message, state: outcome.lastState };
+              }
+            }
+          } catch (reconcileError: any) {
+            if (__DEV__) {
+              console.warn(
+                '[IAP] already-owned reconciliation failed',
+                reconcileError?.code,
+                reconcileError?.message
+              );
+            }
+          }
+          const fallback = t('iap.buyFailedBody');
+          setPhase('idle', { error: fallback });
+          return { success: false, error: fallback };
+        }
+
+        if (__DEV__ && !isAuth) console.warn('[IAP] purchase failed', e?.code, e?.message);
+        // Localized message only — internal codes/raw store errors stay in logs.
+        const message = isAuth ? authError() : t('iap.buyFailedBody');
         setPhase('idle', { error: message });
         return { success: false, error: message };
       }
     },
-    [setPhase, state.products, confirmPro, grantProvisional, authError, t]
+    [setPhase, state.products, confirmPro, cancelPro, grantProvisional, authError, t]
   );
 
   // ── Restore ─────────────────────────────────────────────────────────────
@@ -300,73 +455,48 @@ export function useIAP() {
         return { success: false, restored: 0, error: message };
       }
 
-      const receipts = await getAvailableReceipts();
-      if (receipts.length === 0) {
-        setPhase('idle');
-        return { success: false, restored: 0 };
+      // Shared reconciliation: real Apple restore/sync → Budgy SKUs → backend
+      // validation. Never concludes "no subscription" before StoreKit has been
+      // properly synchronized (AppStore.sync on iOS).
+      const outcome = await reconcileEntitlements(userId, confirmPro, cancelPro);
+
+      if (outcome.authFailed) {
+        const message = authError();
+        setPhase('idle', { error: message });
+        return { success: false, restored: 0, error: message };
       }
-
-      let restored = 0;
-      let lastState: IapResult['state'] = 'FREE';
-      let lastError: string | null = null;
-      let serverNotConfigured = false;
-      let missingEnv: string[] = [];
-
-      for (const r of receipts) {
-        const orig = r.originalTransactionId || r.transactionId;
-        const verdict = await restoreOnBackend({
-          original_transaction_id: orig,
-          user_id: userId,
-        });
-        if (verdict.error === 'auth_required') {
-          lastError = authError();
-          break;
-        }
-        if (verdict.not_configured) {
-          serverNotConfigured = true;
-          missingEnv = verdict.missing || [];
-          break;
-        }
-        if (verdict.valid) {
-          const plan: IapPlan =
-            r.productId === IAP_PRODUCT_IDS.annual ? 'annual' : 'monthly';
-          confirmPro(plan);
-          restored += 1;
-          lastState = 'PRO';
-        } else if (
-          verdict.subscription_state === 'EXPIRED' ||
-          verdict.subscription_state === 'REFUNDED'
-        ) {
-          cancelPro();
-          lastState = verdict.subscription_state;
-          lastError = verdict.error || verdict.subscription_state;
-        } else {
-          lastError = verdict.error || null;
-        }
-      }
-
-      if (serverNotConfigured) {
+      if (outcome.notConfigured) {
         setState((s) => ({
           ...s,
           phase: 'idle',
           notConfigured: true,
-          missingEnv,
+          missingEnv: outcome.missingEnv,
         }));
         return { success: false, notConfigured: true, error: 'iap_not_configured' };
       }
-
-      setPhase('idle', { error: restored === 0 ? lastError : null });
-      return {
-        success: restored > 0,
-        restored,
-        state: lastState,
-        error: restored === 0 ? lastError || undefined : undefined,
-      };
+      if (outcome.restored > 0) {
+        setPhase('idle', { error: null });
+        return { success: true, restored: outcome.restored, state: outcome.lastState };
+      }
+      if (outcome.lastState === 'EXPIRED' || outcome.lastState === 'REFUNDED') {
+        setPhase('idle');
+        return { success: false, restored: 0, state: outcome.lastState };
+      }
+      if (outcome.lastError) {
+        // Backend/technical failure (network, ownership check…) — this is NOT
+        // the same as "no subscription found". Localized retry message only,
+        // never the raw internal error code.
+        const message = t('iap.restoreFailedBody');
+        setPhase('idle', { error: message });
+        return { success: false, restored: 0, error: message };
+      }
+      // Genuinely no valid Budgy entitlement on this Apple account.
+      setPhase('idle');
+      return { success: false, restored: 0, state: 'FREE' };
     } catch (e: any) {
       const isAuth = e?.code === 'auth_required' || e?.message === 'auth_required';
-      const message = isAuth
-        ? authError()
-        : e?.message || t('iapErrors.purchaseFailed');
+      if (__DEV__ && !isAuth) console.warn('[IAP] restore failed', e?.code, e?.message);
+      const message = isAuth ? authError() : t('iap.restoreFailedBody');
       setPhase('idle', { error: message });
       return { success: false, error: message };
     }

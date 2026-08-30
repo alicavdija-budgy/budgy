@@ -21,7 +21,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import * as Linking from 'expo-linking';
+import { getPasswordResetRedirectUrl } from '../src/lib/authRedirects';
 import {
   Colors,
   BorderRadius,
@@ -55,8 +55,9 @@ export default function ForgotPasswordScreen() {
         setError(t('forgot.errNoSupabase'));
         return;
       }
-      // Use the Expo deep link as redirect target.
-      const redirectTo = Linking.createURL('reset-password');
+      // Centralized redirect — always a public app deep link, never an
+      // internal Supabase/Docker hostname (see src/lib/authRedirects.ts).
+      const redirectTo = getPasswordResetRedirectUrl();
       const { error: e } = await supabase.auth.resetPasswordForEmail(clean, {
         redirectTo,
       });

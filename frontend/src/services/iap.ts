@@ -567,10 +567,60 @@ export async function finishTransaction(purchase: IapPurchaseReceipt): Promise<v
 }
 
 // ── Restore (native) ─────────────────────────────────────────────────────────
-export async function getAvailableReceipts(): Promise<IapPurchaseReceipt[]> {
+
+/**
+ * True when StoreKit / react-native-iap reports that this Apple ID already
+ * owns the subscription being purchased. v15 code: ErrorCode.AlreadyOwned
+ * ("already-owned"); legacy builds surfaced E_ALREADY_OWNED / raw messages.
+ * A user cancellation is NEVER classified as already-owned.
+ */
+export function isAlreadyOwnedError(e: any): boolean {
+  if (!e) return false;
+  const code = String(e.code || '').toLowerCase();
+  if (code === 'user-cancelled' || code === 'e_user_cancelled') return false;
+  if (
+    code === 'already-owned' ||
+    code === 'e_already_owned' ||
+    code === 'already_owned'
+  ) {
+    return true;
+  }
+  const msg = String(e.message || '').toLowerCase();
+  return msg.includes('already owned') || msg.includes('already purchased');
+}
+
+/**
+ * iOS: force a real StoreKit restore (AppStore.sync) so transactions made on
+ * this Apple ID — on another device, before a reinstall, or left unfinished by
+ * an older build — become visible to getAvailablePurchases(). Without this,
+ * TestFlight/sandbox frequently returns [] while StoreKit still answers
+ * "Item already owned" on a new purchase attempt.
+ *
+ * Failures (e.g. the user dismisses Apple's sign-in prompt) are non-fatal:
+ * getAvailablePurchases() may still return cached entitlements.
+ */
+async function syncNativeTransactions(): Promise<void> {
+  if (!isIapAvailable() || Platform.OS !== 'ios') return;
+  try {
+    if (typeof RNIap?.syncIOS === 'function') {
+      await RNIap.syncIOS();
+    } else if (typeof RNIap?.restorePurchases === 'function') {
+      await RNIap.restorePurchases();
+    }
+  } catch (e: any) {
+    console.warn('[IAP] StoreKit sync failed', e?.code || e?.message || e);
+  }
+}
+
+export async function getAvailableReceipts(
+  opts: { syncFirst?: boolean } = {}
+): Promise<IapPurchaseReceipt[]> {
   if (!isIapAvailable()) return [];
   try {
     if (typeof RNIap?.getAvailablePurchases !== 'function') return [];
+    if (opts.syncFirst) {
+      await syncNativeTransactions();
+    }
     const purchases: any[] = await RNIap.getAvailablePurchases();
     const receipts: IapPurchaseReceipt[] = [];
     for (const p of purchases || []) {

@@ -104,9 +104,10 @@ ok('missing/invalid backend token normalizes to auth_required', () => {
 });
 
 ok('auth_required is never provisional-eligible', () => {
+  const purchaseIdx = hookSrc.indexOf('const purchase = useCallback');
   const verdictBlock = hookSrc.slice(
-    hookSrc.indexOf("if (verdict.error === 'auth_required')"),
-    hookSrc.indexOf('if (verdict.not_configured)')
+    hookSrc.indexOf("if (verdict.error === 'auth_required')", purchaseIdx),
+    hookSrc.indexOf('if (verdict.not_configured)', purchaseIdx)
   );
   assert.ok(verdictBlock.length > 0, 'explicit auth rejection block missing');
   assert.doesNotMatch(verdictBlock, /grantProvisional/);
@@ -127,8 +128,8 @@ ok('restore flow is backend validated', () => {
 ok('restore also requires authenticated IAP user', () => {
   const restoreIndex = hookSrc.indexOf('const restore = useCallback');
   const authIndex = hookSrc.indexOf('getIapAuthenticatedUserId()', restoreIndex);
-  const receiptsIndex = hookSrc.indexOf('getAvailableReceipts()', restoreIndex);
-  assert.ok(authIndex > restoreIndex && receiptsIndex > authIndex);
+  const reconcileIndex = hookSrc.indexOf('reconcileEntitlements(userId', restoreIndex);
+  assert.ok(authIndex > restoreIndex && reconcileIndex > authIndex);
 });
 
 ok('boot sync uses backend subscription truth', () => {
@@ -193,12 +194,12 @@ ok('app version is 3.9.0', () => {
   assert.equal(appJson.expo.version, '3.9.0');
 });
 
-ok('iOS buildNumber is 80', () => {
-  assert.equal(appJson.expo.ios.buildNumber, '80');
+ok('iOS buildNumber is 81', () => {
+  assert.equal(appJson.expo.ios.buildNumber, '81');
 });
 
-ok('Android versionCode is 80', () => {
-  assert.equal(appJson.expo.android.versionCode, 80);
+ok('Android versionCode is 81', () => {
+  assert.equal(appJson.expo.android.versionCode, 81);
 });
 
 ok('bundle/package IDs match Budgy production app', () => {

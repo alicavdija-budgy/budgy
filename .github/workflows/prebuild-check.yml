@@ -58,6 +58,7 @@ jobs:
           npm run test:cloud-auth
           npm run test:ai-optimizer
           npm run test:iap-v15
+          npm run test:iap-restore
 
       - name: Build identity guard
         run: |
@@ -65,8 +66,8 @@ jobs:
           const a = require('./app.json').expo;
           const plugins = (a.plugins || []).map((p) => Array.isArray(p) ? p[0] : p);
           if (a.version !== '3.9.0') throw new Error(`Unexpected version ${a.version}`);
-          if (a.ios?.buildNumber !== '80') throw new Error(`Unexpected iOS build ${a.ios?.buildNumber}`);
-          if (a.android?.versionCode !== 80) throw new Error(`Unexpected Android code ${a.android?.versionCode}`);
+          if (a.ios?.buildNumber !== '81') throw new Error(`Unexpected iOS build ${a.ios?.buildNumber}`);
+          if (a.android?.versionCode !== 81) throw new Error(`Unexpected Android code ${a.android?.versionCode}`);
           if (a.ios?.bundleIdentifier !== 'com.budgy.ch.budgy') throw new Error('Wrong iOS bundle ID');
           if (!plugins.includes('react-native-iap')) throw new Error('react-native-iap Expo plugin missing');
           console.log('✅ Build identity + react-native-iap plugin verified');

@@ -59,3 +59,49 @@
 ## Ne PAS générer de build
 - Le Build 77 doit être lancé manuellement par l'utilisateur (portail Emergent Publish → EAS iOS production).
 - **AUTO-SUBMIT = NO**. Aucune soumission App Review avant test TestFlight.
+
+---
+
+# Session Build 81 (juin 2026) — Restore StoreKit + already-owned + reset password
+
+## Baseline
+- Workspace resynchronisé sur GitHub `origin/main` @ `1406cee41fa96f9f502842d2b82302386701c4e2` (Build 80, protections auth intactes).
+- Commit local créé : `2af3aaf0` — "fix: real StoreKit restore, already-owned recovery and public reset redirect (build 81)". **PUSH EN ATTENTE** (pas de credentials GitHub dans ce fork — utiliser "Save to GitHub").
+
+## Bugs TestFlight corrigés (Build 80 → 81)
+1. **Restore = "Aucun abonnement actif"** : `getAvailablePurchases()` était appelé SANS synchronisation StoreKit préalable. Fix : `syncNativeTransactions()` (RNIap.syncIOS / AppStore.sync, fallback restorePurchases) avant lecture, via `getAvailableReceipts({ syncFirst: true })`.
+2. **"Achat échoué – Item already owned"** : le code brut StoreKit remontait à l'UI. Fix : `isAlreadyOwnedError()` (exclut user-cancelled) + réconciliation partagée `reconcileEntitlements()` dans useIAP — même logique que le bouton Restore (sync Apple → filtre SKUs Budgy → /api/iap/restore → confirmPro si valide → finishTransaction). Jamais de ré-entrée dans purchase() (pas de boucle).
+3. **Transactions bloquées** : les reçus restaurés validés par le backend sont maintenant `finishTransaction()`és → plus de re-déclenchement already-owned.
+4. **Edge case** : un reçu EXPIRED ne peut plus annuler un abonnement actif restauré dans la même passe (cancel seulement si restored === 0).
+5. **pro.tsx** utilisait des clés i18n mortes `paywall.restore*` → corrigé vers `iap.restore*`.
+6. **Reset password** : redirect centralisé dans `src/lib/authRedirects.ts` — production = `budgy://reset-password`, jamais supabase-kong/localhost. `forgot-password.tsx` utilise le helper.
+7. **UX (FR/EN/DE/IT)** : "Abonnement restauré" / "Votre abonnement Budgy Pro a été restauré avec succès." / "Aucun abonnement Budgy actif n'a été trouvé sur ce compte Apple." / "Achat impossible" + "Une erreur est survenue avec l'App Store. Veuillez réessayer.". Aucun code technique (missing_token, Item already owned…) n'atteint l'UI.
+
+## Sécurité préservée (vérifiée par tests)
+- Preflight Supabase avant StoreKit (purchase + restore) : intact.
+- Validation backend obligatoire avant confirmPro : intacte.
+- startTrial()/purchase() locaux : toujours NO-OP. 1 seul `isPro: true` (confirmPro).
+- Chemin provisionnel borné : NON élargi (2 chemins, transient uniquement, jamais auth).
+- Guard auth Build 80 (supabase_config_missing → service unavailable) : intact.
+- Aucun token/reçu/JWS loggé.
+
+## Environnement local (fork) — IMPORTANT
+- `package-lock.json` (committé) épingle `react-native-iap@15.2.0` (qui contient `app.plugin.js`). Le node_modules local avait 15.6.2 (sans plugin) → `expo start` crashait. Fix local : node_modules/react-native-iap remplacé par 15.2.0 exact (aucun changement de package.json/lockfile). Les API utilisées (syncIOS, restorePurchases, getAvailablePurchases, fetchProducts, ErrorCode "already-owned") existent en 15.2.0 (typecheck OK).
+- `npm ci` échoue sur ce lockfile (entrées binaires optionnelles manquantes) — ne pas s'en servir ici.
+
+## Tests Build 81
+- `test:iap-restore` (NOUVEAU) : **34/34**
+- `test:iap-v15` : **31/31** (assertions build 81)
+- `test:auth-production` : **11/11** — `test:cloud-auth` : **15/15**
+- `test:premium` 45/45, `test:pro-gating` 49/49, `test:savings-tier` 22/22, ai-optimizer PASS
+- TypeScript strict PASS, ESLint PASS, i18n parity PASS
+- Backend pytest : **144 passed / 1 skipped**
+
+## Build
+- iOS buildNumber 80 → **81**, Android versionCode 80 → **81** (version marketing 3.9.0 inchangée).
+
+## À faire (utilisateur)
+1. Pousser le commit `2af3aaf0` sur GitHub main (Save to GitHub).
+2. Lancer le Build 81 EAS manuellement (jamais par l'agent).
+3. TestFlight : reset password, achat mensuel/annuel, restore, compte already-owned, logout/login + restore, réinstallation + restore.
+4. Côté Supabase self-hosted : vérifier que `budgy://reset-password` est dans la liste des Redirect URLs autorisées.

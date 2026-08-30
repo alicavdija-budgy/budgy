@@ -114,3 +114,8 @@
 3. Test on actual device after fixes
 4. Re-run full test suite
 5. Verify all 7 scenarios pass before submitting to TestFlight
+
+## Build 81 (juin 2026) — Restore/already-owned/reset-password
+- Commit local `2af3aaf0` sur main (base 1406cee, GitHub main). PUSH EN ATTENTE: pas de credentials GitHub dans ce fork → utiliser le bouton "Save to GitHub".
+- Tests: test:iap-restore 34/34, test:iap-v15 31/31, cloud-auth 15/15, auth-production 11/11, premium 45/45, pro-gating 49/49, savings-tier 22/22, tsc/lint/i18n PASS, backend pytest 144 passed.
+- Env local: node_modules/react-native-iap réaligné sur 15.2.0 (version du package-lock.json committé) — sinon expo start crashe (15.6.2 n'a pas app.plugin.js). Ne pas relancer yarn install dans frontend sans re-vérifier cette version.

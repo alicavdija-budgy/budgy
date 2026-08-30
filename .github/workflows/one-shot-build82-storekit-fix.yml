@@ -1,0 +1,159 @@
+name: One-shot Build 82 StoreKit Fix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/one-shot-build82-storekit-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Apply Build 82 restore hardening
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+
+          iap = Path('frontend/src/services/iap.ts')
+          src = iap.read_text()
+          old = """    const purchases: any[] = await RNIap.getAvailablePurchases();
+    const receipts: IapPurchaseReceipt[] = [];
+    for (const p of purchases || []) {
+      const n = normalisePurchase(p);
+      if (n) receipts.push(n);
+    }
+    return receipts;
+"""
+          new = """    // First ask StoreKit for current entitlements. This is the normal fast path.
+    // react-native-iap defaults `onlyIncludeActiveItemsIOS` to true on iOS.
+    let purchases: any[] = await RNIap.getAvailablePurchases({
+      onlyIncludeActiveItemsIOS: true,
+      alsoPublishToEventListenerIOS: false,
+    });
+
+    let receipts: IapPurchaseReceipt[] = [];
+    for (const p of purchases || []) {
+      const n = normalisePurchase(p);
+      if (n) receipts.push(n);
+    }
+
+    // Build 82 — StoreKit 2 recovery fallback.
+    // TestFlight can report `already owned` while the active-entitlement query
+    // returns an empty array (notably for unfinished/legacy subscription state).
+    // In that case, query the broader StoreKit transaction set and let the
+    // Budgy backend decide whether each Budgy subscription is still valid.
+    // This remains fail-closed: historical receipts NEVER grant Pro locally.
+    const hasBudgyReceipt = receipts.some((r) => IAP_SKUS.includes(r.productId));
+    if (Platform.OS === 'ios' && !hasBudgyReceipt) {
+      try {
+        const historical: any[] = await RNIap.getAvailablePurchases({
+          onlyIncludeActiveItemsIOS: false,
+          alsoPublishToEventListenerIOS: false,
+        });
+        const byKey = new Map<string, IapPurchaseReceipt>();
+        for (const r of receipts) {
+          byKey.set(`${r.productId}:${r.transactionId}`, r);
+        }
+        for (const p of historical || []) {
+          const n = normalisePurchase(p);
+          if (n) byKey.set(`${n.productId}:${n.transactionId}`, n);
+        }
+        receipts = [...byKey.values()];
+        if (__DEV__) {
+          console.log('[IAP] restore fallback', {
+            activeCount: purchases?.length || 0,
+            historicalCount: historical?.length || 0,
+            budgyCount: receipts.filter((r) => IAP_SKUS.includes(r.productId)).length,
+          });
+        }
+      } catch (fallbackError: any) {
+        if (__DEV__) {
+          console.warn(
+            '[IAP] historical restore fallback failed',
+            fallbackError?.code || fallbackError?.message || fallbackError
+          );
+        }
+      }
+    }
+    return receipts;
+"""
+          if old not in src:
+            raise SystemExit('Expected getAvailableReceipts block not found; refusing unsafe patch')
+          iap.write_text(src.replace(old, new, 1))
+
+          # Build identity 81 -> 82.
+          app_path = Path('frontend/app.json')
+          app = json.loads(app_path.read_text())
+          app['expo']['ios']['buildNumber'] = '82'
+          app['expo']['android']['versionCode'] = 82
+          app_path.write_text(json.dumps(app, ensure_ascii=False, indent=2) + '\n')
+
+          # Keep static contracts / quality gate aligned with the native build.
+          replacements = {
+            'frontend/scripts/test-iap-v15.mjs': [("Build 81", "Build 82"), ("buildNumber === '81'", "buildNumber === '82'"), ("versionCode === 81", "versionCode === 82")],
+            'frontend/scripts/test-auth-production.mjs': [("Build 81", "Build 82"), ("buildNumber === '81'", "buildNumber === '82'"), ("versionCode === 81", "versionCode === 82")],
+            'frontend/scripts/test-iap-restore.mjs': [("Build 81", "Build 82")],
+            '.github/workflows/prebuild-check.yml': [("buildNumber !== '81'", "buildNumber !== '82'"), ("versionCode !== 81", "versionCode !== 82")],
+          }
+          for name, pairs in replacements.items():
+            p = Path(name)
+            if not p.exists():
+              continue
+            text = p.read_text()
+            for a, b in pairs:
+              text = text.replace(a, b)
+            p.write_text(text)
+
+          # Strengthen the regression test for the precise TestFlight failure.
+          t = Path('frontend/scripts/test-iap-restore.mjs')
+          text = t.read_text()
+          marker = "ok('reconciliation requests syncFirst: true', () => {\n"
+          insert = """ok('restore falls back to historical StoreKit transactions when active entitlements are empty', () => {
+  assert.match(iapSrc, /onlyIncludeActiveItemsIOS:\s*true/);
+  assert.match(iapSrc, /onlyIncludeActiveItemsIOS:\s*false/);
+  const activeIdx = iapSrc.indexOf('onlyIncludeActiveItemsIOS: true');
+  const historicalIdx = iapSrc.indexOf('onlyIncludeActiveItemsIOS: false');
+  assert.ok(activeIdx >= 0 && historicalIdx > activeIdx, 'historical fallback must follow active query');
+  assert.match(iapSrc, /IAP_SKUS\.includes\(r\.productId\)/);
+});
+
+"""
+          if insert not in text:
+            idx = text.find(marker)
+            if idx < 0:
+              raise SystemExit('Restore regression insertion point missing')
+            text = text[:idx] + insert + text[idx:]
+            t.write_text(text)
+
+          # Remove this one-shot workflow in the resulting commit.
+          Path('.github/workflows/one-shot-build82-storekit-fix.yml').unlink()
+          PY
+      - name: Install and validate
+        working-directory: frontend
+        run: |
+          npm ci --legacy-peer-deps --no-audit --no-fund
+          npx tsc --noEmit
+          npm run check:i18n
+          npm run test:cloud-auth
+          npm run test:premium
+          npm run test:iap-v15
+          npm run test:iap-restore
+          node scripts/test-auth-production.mjs
+      - name: Commit Build 82
+        run: |
+          git config user.name 'budgy-ci'
+          git config user.email 'actions@users.noreply.github.com'
+          git add -A
+          git commit -m 'fix: harden StoreKit restore fallback for Build 82'
+          git push origin HEAD:main

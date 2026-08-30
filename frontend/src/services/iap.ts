@@ -23,11 +23,6 @@
 
 import { Platform } from 'react-native';
 
-// ── IAP authentication ───────────────────────────────────────────────────────
-// The IAP backend is account-bound and fail-closed. A local/demo-only Zustand
-// user is NOT sufficient: the backend requires a real Supabase Bearer token.
-// We resolve the session at request time and refresh it when missing/near expiry
-// so stale persisted sessions cannot produce `missing_token` after Apple charges.
 async function resolveAuthSession(forceRefresh = false): Promise<any | null> {
   try {
     const { supabase, isSupabaseConfigured } = await import('../lib/supabase');
@@ -42,9 +37,7 @@ async function resolveAuthSession(forceRefresh = false): Promise<any | null> {
 
     if (forceRefresh || !session?.access_token || nearExpiry) {
       const refreshed = await supabase.auth.refreshSession();
-      if (!refreshed.error && refreshed.data?.session) {
-        session = refreshed.data.session;
-      }
+      if (!refreshed.error && refreshed.data?.session) session = refreshed.data.session;
     }
 
     return session?.access_token ? session : null;
@@ -55,16 +48,9 @@ async function resolveAuthSession(forceRefresh = false): Promise<any | null> {
 
 async function getAuthHeaders(forceRefresh = false): Promise<Record<string, string>> {
   const session = await resolveAuthSession(forceRefresh);
-  return session?.access_token
-    ? { Authorization: `Bearer ${session.access_token}` }
-    : {};
+  return session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
 }
 
-/**
- * Returns the authenticated Supabase user id if IAP can safely bind a purchase.
- * Used as a preflight BEFORE StoreKit is opened, preventing a user from being
- * charged when the backend would necessarily answer `missing_token`.
- */
 export async function getIapAuthenticatedUserId(): Promise<string | undefined> {
   const session = await resolveAuthSession(false);
   return session?.user?.id || undefined;
@@ -76,10 +62,8 @@ export const IAP_PRODUCT_IDS = {
 } as const;
 
 export type IapPlan = 'monthly' | 'annual';
-
 export const IAP_SKUS: string[] = [IAP_PRODUCT_IDS.monthly, IAP_PRODUCT_IDS.annual];
 
-/** Normalised free-trial descriptor extracted from StoreKit. */
 export interface IapIntroOffer {
   isFreeTrial: boolean;
   periodDays: number | null;
@@ -106,7 +90,6 @@ export interface IapPurchaseReceipt {
   raw: any;
 }
 
-// ── Native lazy-load (Expo Go / Web safe) ────────────────────────────────────
 let RNIap: any = null;
 let RNIapError: string | null = null;
 
@@ -124,7 +107,6 @@ function loadIap() {
   }
 }
 
-// ── Diagnostics ──────────────────────────────────────────────────────────────
 export type IapDiagnosticCode =
   | 'OK'
   | 'STOREKIT_UNAVAILABLE'
@@ -164,13 +146,8 @@ export function getIapDiagnostics(): IapDiagnostics {
 }
 
 function setDiagnostics(patch: Partial<IapDiagnostics>) {
-  LAST_DIAGNOSTICS = {
-    ...LAST_DIAGNOSTICS,
-    ...patch,
-    at: Date.now(),
-  };
+  LAST_DIAGNOSTICS = { ...LAST_DIAGNOSTICS, ...patch, at: Date.now() };
   if (__DEV__ || process.env.EXPO_PUBLIC_IAP_DIAGNOSTICS === '1') {
-    // eslint-disable-next-line no-console
     console.log('[IAP-DIAG]', JSON.stringify(LAST_DIAGNOSTICS));
   }
 }
@@ -185,7 +162,6 @@ export function getIapUnavailableReason(): string | null {
   return RNIapError;
 }
 
-// ── Purchase event pump (v15 is listener-based) ──────────────────────────────
 type PurchaseResolver = {
   sku: string;
   resolve: (r: IapPurchaseReceipt | null) => void;
@@ -200,16 +176,13 @@ function normalisePurchase(p: any): IapPurchaseReceipt | null {
   const productId: string = p.productId || p.id || (Array.isArray(p.ids) && p.ids[0]) || '';
   if (!productId) return null;
   const transactionId: string = p.transactionId || p.id || '';
-  const receipt: string =
-    p.purchaseToken || p.transactionReceipt || p.jwsRepresentationIOS || '';
+  const receipt: string = p.purchaseToken || p.transactionReceipt || p.jwsRepresentationIOS || '';
   return {
     productId,
     transactionId,
     transactionReceipt: receipt,
-    originalTransactionId:
-      p.originalTransactionIdentifierIOS || p.originalTransactionId || undefined,
-    purchaseTime:
-      typeof p.transactionDate === 'number' ? p.transactionDate : Date.now(),
+    originalTransactionId: p.originalTransactionIdentifierIOS || p.originalTransactionId || undefined,
+    purchaseTime: typeof p.transactionDate === 'number' ? p.transactionDate : Date.now(),
     raw: p,
   };
 }
@@ -228,8 +201,7 @@ function onPurchaseUpdated(rawPurchase: any) {
 function onPurchaseError(err: any) {
   const code = String(err?.code || '').toLowerCase();
   const isCancel = code === 'user-cancelled' || code === 'e_user_cancelled';
-  const failingSku: string | undefined =
-    err?.productId || (Array.isArray(err?.productIds) && err.productIds[0]);
+  const failingSku: string | undefined = err?.productId || (Array.isArray(err?.productIds) && err.productIds[0]);
   const settleWith = (resolver: PurchaseResolver) => {
     if (resolver.timeout) clearTimeout(resolver.timeout);
     if (isCancel) resolver.resolve(null);
@@ -250,12 +222,8 @@ function onPurchaseError(err: any) {
 function registerListeners() {
   if (!RNIap || listenerSubs.length > 0) return;
   try {
-    if (typeof RNIap.purchaseUpdatedListener === 'function') {
-      listenerSubs.push(RNIap.purchaseUpdatedListener(onPurchaseUpdated));
-    }
-    if (typeof RNIap.purchaseErrorListener === 'function') {
-      listenerSubs.push(RNIap.purchaseErrorListener(onPurchaseError));
-    }
+    if (typeof RNIap.purchaseUpdatedListener === 'function') listenerSubs.push(RNIap.purchaseUpdatedListener(onPurchaseUpdated));
+    if (typeof RNIap.purchaseErrorListener === 'function') listenerSubs.push(RNIap.purchaseErrorListener(onPurchaseError));
   } catch (e) {
     console.warn('[IAP] failed to register listeners', e);
   }
@@ -273,64 +241,27 @@ function removeListeners() {
   pendingResolvers = [];
 }
 
-// ── Lifecycle ────────────────────────────────────────────────────────────────
 export async function initIap(): Promise<boolean> {
   loadIap();
   if (!isIapAvailable()) {
-    setDiagnostics({
-      code: 'STOREKIT_UNAVAILABLE',
-      isIapAvailable: false,
-      initConnected: false,
-      returnedProductIds: [],
-      errorCode: 'not_available',
-      errorMessage: RNIapError || 'IAP native module not available',
-    });
+    setDiagnostics({ code: 'STOREKIT_UNAVAILABLE', isIapAvailable: false, initConnected: false, returnedProductIds: [], errorCode: 'not_available', errorMessage: RNIapError || 'IAP native module not available' });
     return false;
   }
   try {
     if (typeof RNIap?.initConnection !== 'function') {
-      console.warn('[IAP] initConnection unavailable on this build');
-      setDiagnostics({
-        code: 'INIT_FAILED',
-        isIapAvailable: true,
-        initConnected: false,
-        returnedProductIds: [],
-        errorCode: 'init_missing',
-        errorMessage: 'initConnection is not a function on this build',
-      });
+      setDiagnostics({ code: 'INIT_FAILED', isIapAvailable: true, initConnected: false, returnedProductIds: [], errorCode: 'init_missing', errorMessage: 'initConnection is not a function on this build' });
       return false;
     }
     const connected = await RNIap.initConnection();
     if (connected === false) {
-      setDiagnostics({
-        code: 'INIT_FAILED',
-        isIapAvailable: true,
-        initConnected: false,
-        returnedProductIds: [],
-        errorCode: 'init_returned_false',
-        errorMessage: 'initConnection resolved with false',
-      });
+      setDiagnostics({ code: 'INIT_FAILED', isIapAvailable: true, initConnected: false, returnedProductIds: [], errorCode: 'init_returned_false', errorMessage: 'initConnection resolved with false' });
       return false;
     }
     registerListeners();
-    setDiagnostics({
-      code: 'OK',
-      isIapAvailable: true,
-      initConnected: true,
-      errorCode: null,
-      errorMessage: null,
-    });
+    setDiagnostics({ code: 'OK', isIapAvailable: true, initConnected: true, errorCode: null, errorMessage: null });
     return true;
   } catch (e: any) {
-    console.warn('[IAP] initConnection failed', e);
-    setDiagnostics({
-      code: 'INIT_FAILED',
-      isIapAvailable: true,
-      initConnected: false,
-      returnedProductIds: [],
-      errorCode: e?.code || 'init_failed',
-      errorMessage: e?.message || String(e),
-    });
+    setDiagnostics({ code: 'INIT_FAILED', isIapAvailable: true, initConnected: false, returnedProductIds: [], errorCode: e?.code || 'init_failed', errorMessage: e?.message || String(e) });
     return false;
   }
 }
@@ -338,23 +269,16 @@ export async function initIap(): Promise<boolean> {
 export async function endIap(): Promise<void> {
   if (!isIapAvailable()) return;
   removeListeners();
-  try {
-    if (typeof RNIap?.endConnection === 'function') {
-      await RNIap.endConnection();
-    }
-  } catch {}
+  try { if (typeof RNIap?.endConnection === 'function') await RNIap.endConnection(); } catch {}
 }
 
-// ── Products ─────────────────────────────────────────────────────────────────
 function extractIntroOffer(raw: any): IapIntroOffer | null {
   if (!raw) return null;
   const offers: any[] = Array.isArray(raw.subscriptionOffers) ? raw.subscriptionOffers : [];
   const intro = offers.find((o) => String(o?.type).toLowerCase() === 'introductory');
   if (intro) {
     const paymentMode = String(intro.paymentMode || '').toLowerCase();
-    const isFreeTrial =
-      paymentMode === 'free-trial' ||
-      (Number(intro.price ?? -1) === 0 && paymentMode !== 'pay-as-you-go');
+    const isFreeTrial = paymentMode === 'free-trial' || (Number(intro.price ?? -1) === 0 && paymentMode !== 'pay-as-you-go');
     let periodDays: number | null = null;
     if (intro.period && typeof intro.period.value === 'number') {
       const unit = String(intro.period.unit).toLowerCase();
@@ -366,20 +290,8 @@ function extractIntroOffer(raw: any): IapIntroOffer | null {
       else if (unit === 'month') periodDays = totalUnits * 30;
       else if (unit === 'year') periodDays = totalUnits * 365;
     }
-    return {
-      isFreeTrial,
-      periodDays,
-      paymentMode:
-        paymentMode === 'free-trial' ||
-        paymentMode === 'pay-as-you-go' ||
-        paymentMode === 'pay-up-front'
-          ? paymentMode
-          : isFreeTrial
-            ? 'free-trial'
-            : 'unknown',
-    };
+    return { isFreeTrial, periodDays, paymentMode: paymentMode === 'free-trial' || paymentMode === 'pay-as-you-go' || paymentMode === 'pay-up-front' ? paymentMode : isFreeTrial ? 'free-trial' : 'unknown' };
   }
-
   const legacyMode = String(raw.introductoryPricePaymentModeIOS || '').toLowerCase();
   if (!legacyMode || legacyMode === 'empty') return null;
   const legacyUnit = String(raw.introductoryPriceSubscriptionPeriodIOS || '').toLowerCase();
@@ -391,16 +303,7 @@ function extractIntroOffer(raw: any): IapIntroOffer | null {
     else if (legacyUnit === 'month') periodDays = legacyCount * 30;
     else if (legacyUnit === 'year') periodDays = legacyCount * 365;
   }
-  return {
-    isFreeTrial: legacyMode === 'free-trial',
-    periodDays,
-    paymentMode:
-      legacyMode === 'free-trial' ||
-      legacyMode === 'pay-as-you-go' ||
-      legacyMode === 'pay-up-front'
-        ? (legacyMode as any)
-        : 'unknown',
-  };
+  return { isFreeTrial: legacyMode === 'free-trial', periodDays, paymentMode: legacyMode === 'free-trial' || legacyMode === 'pay-as-you-go' || legacyMode === 'pay-up-front' ? legacyMode as any : 'unknown' };
 }
 
 export function mapProduct(raw: any): IapProduct {
@@ -418,47 +321,16 @@ export function mapProduct(raw: any): IapProduct {
       androidOfferToken = legacy?.offerToken || null;
     }
   }
-  return {
-    productId,
-    price: numericPrice != null ? String(numericPrice) : '',
-    localizedPrice:
-      displayPrice || (currency && numericPrice != null ? `${currency} ${numericPrice}` : ''),
-    currency: currency || 'CHF',
-    title: raw?.title || raw?.displayName || raw?.displayNameIOS || '',
-    description: raw?.description || '',
-    introOffer: extractIntroOffer(raw),
-    androidOfferToken,
-  };
+  return { productId, price: numericPrice != null ? String(numericPrice) : '', localizedPrice: displayPrice || (currency && numericPrice != null ? `${currency} ${numericPrice}` : ''), currency: currency || 'CHF', title: raw?.title || raw?.displayName || raw?.displayNameIOS || '', description: raw?.description || '', introOffer: extractIntroOffer(raw), androidOfferToken };
 }
 
 export async function fetchSubscriptions(): Promise<IapProduct[]> {
-  if (!isIapAvailable()) {
-    setDiagnostics({
-      code: 'STOREKIT_UNAVAILABLE',
-      isIapAvailable: false,
-      returnedProductIds: [],
-      errorCode: 'not_available',
-      errorMessage: RNIapError || 'IAP native module not available',
-    });
-    return [];
-  }
-  if (typeof RNIap?.fetchProducts !== 'function') {
-    console.warn('[IAP] fetchProducts is not a function on this build');
-    setDiagnostics({
-      code: 'FETCH_PRODUCTS_FAILED',
-      returnedProductIds: [],
-      errorCode: 'fetch_products_missing',
-      errorMessage: 'fetchProducts is not a function on this build',
-    });
-    return [];
-  }
+  if (!isIapAvailable()) return [];
+  if (typeof RNIap?.fetchProducts !== 'function') return [];
   try {
     const raw = await RNIap.fetchProducts({ skus: IAP_SKUS, type: 'subs' });
     const list: any[] = Array.isArray(raw) ? raw : [];
-    const products: IapProduct[] = list
-      .filter((p) => p && (p.type === 'subs' || p.type == null))
-      .map(mapProduct)
-      .filter((p) => !!p.productId);
+    const products = list.filter((p) => p && (p.type === 'subs' || p.type == null)).map(mapProduct).filter((p) => !!p.productId);
     const returnedIds = products.map((p) => p.productId);
     const hasMonthly = returnedIds.includes(IAP_PRODUCT_IDS.monthly);
     const hasAnnual = returnedIds.includes(IAP_PRODUCT_IDS.annual);
@@ -466,77 +338,38 @@ export async function fetchSubscriptions(): Promise<IapProduct[]> {
     if (!hasMonthly && !hasAnnual) code = 'PRODUCTS_NOT_FOUND';
     else if (!hasMonthly) code = 'MONTHLY_MISSING';
     else if (!hasAnnual) code = 'ANNUAL_MISSING';
-    setDiagnostics({
-      code,
-      returnedProductIds: returnedIds,
-      errorCode: code === 'OK' ? null : 'partial_or_empty_products',
-      errorMessage:
-        code === 'OK'
-          ? null
-          : `StoreKit returned ${products.length}/${IAP_SKUS.length} expected subscriptions`,
-    });
+    setDiagnostics({ code, returnedProductIds: returnedIds, errorCode: code === 'OK' ? null : 'partial_or_empty_products', errorMessage: code === 'OK' ? null : `StoreKit returned ${products.length}/${IAP_SKUS.length} expected subscriptions` });
     return products;
   } catch (e: any) {
-    console.warn('[IAP] fetchProducts failed', e);
     const isNetwork = String(e?.code || '').toLowerCase().includes('network');
-    setDiagnostics({
-      code: isNetwork ? 'NETWORK_ERROR' : 'FETCH_PRODUCTS_FAILED',
-      returnedProductIds: [],
-      errorCode: e?.code || (isNetwork ? 'network_error' : 'fetch_products_failed'),
-      errorMessage: e?.message || String(e),
-    });
+    setDiagnostics({ code: isNetwork ? 'NETWORK_ERROR' : 'FETCH_PRODUCTS_FAILED', returnedProductIds: [], errorCode: e?.code || (isNetwork ? 'network_error' : 'fetch_products_failed'), errorMessage: e?.message || String(e) });
     return [];
   }
 }
 
-// ── Purchase ─────────────────────────────────────────────────────────────────
-export async function requestSubscription(
-  productId: string,
-  opts: { androidOfferToken?: string | null } = {}
-): Promise<IapPurchaseReceipt | null> {
+export async function requestSubscription(productId: string, opts: { androidOfferToken?: string | null } = {}): Promise<IapPurchaseReceipt | null> {
   if (!isIapAvailable()) throw new Error(getIapUnavailableReason() || 'IAP unavailable');
-  if (typeof RNIap?.requestPurchase !== 'function') {
-    throw new Error('IAP module is missing requestPurchase on this build');
-  }
-
-  // SECURITY / UX: never show Apple's payment sheet if we cannot bind the
-  // resulting transaction to an authenticated account. This is the direct
-  // guard against the Build 78 `missing_token` failure observed after payment.
+  if (typeof RNIap?.requestPurchase !== 'function') throw new Error('IAP module is missing requestPurchase on this build');
   const userId = await getIapAuthenticatedUserId();
   if (!userId) {
     const authError: any = new Error('auth_required');
     authError.code = 'auth_required';
     throw authError;
   }
-
   registerListeners();
-
   const promise = new Promise<IapPurchaseReceipt | null>((resolve, reject) => {
     const timeout = setTimeout(() => {
       const idx = pendingResolvers.findIndex((r) => r.sku === productId);
-      if (idx >= 0) {
-        pendingResolvers.splice(idx, 1);
-        reject(new Error('purchase_timeout'));
-      }
+      if (idx >= 0) { pendingResolvers.splice(idx, 1); reject(new Error('purchase_timeout')); }
     }, 90_000);
     pendingResolvers.push({ sku: productId, resolve, reject, timeout });
   });
-
   const request: any = { type: 'subs' as const, request: {} };
   if (Platform.OS === 'ios') {
-    request.request.apple = {
-      sku: productId,
-      andDangerouslyFinishTransactionAutomatically: false,
-    };
+    request.request.apple = { sku: productId, andDangerouslyFinishTransactionAutomatically: false };
   } else {
-    request.request.google = {
-      skus: [productId],
-      subscriptionOffers: opts.androidOfferToken
-        ? [{ sku: productId, offerToken: opts.androidOfferToken }]
-        : [],
-    };
+    request.request.google = { skus: [productId], subscriptionOffers: opts.androidOfferToken ? [{ sku: productId, offerToken: opts.androidOfferToken }] : [] };
   }
-
   try {
     await RNIap.requestPurchase(request);
   } catch (e: any) {
@@ -549,7 +382,6 @@ export async function requestSubscription(
     if (code === 'user-cancelled' || code === 'e_user_cancelled') return null;
     throw e;
   }
-
   return promise;
 }
 
@@ -557,75 +389,75 @@ export async function finishTransaction(purchase: IapPurchaseReceipt): Promise<v
   if (!isIapAvailable()) return;
   try {
     if (typeof RNIap?.finishTransaction !== 'function') return;
-    await RNIap.finishTransaction({
-      purchase: (purchase.raw as any) || (purchase as any),
-      isConsumable: false,
-    });
+    await RNIap.finishTransaction({ purchase: (purchase.raw as any) || (purchase as any), isConsumable: false });
   } catch (e) {
     console.warn('[IAP] finishTransaction failed', e);
   }
 }
 
-// ── Restore (native) ─────────────────────────────────────────────────────────
-
-/**
- * True when StoreKit / react-native-iap reports that this Apple ID already
- * owns the subscription being purchased. v15 code: ErrorCode.AlreadyOwned
- * ("already-owned"); legacy builds surfaced E_ALREADY_OWNED / raw messages.
- * A user cancellation is NEVER classified as already-owned.
- */
 export function isAlreadyOwnedError(e: any): boolean {
   if (!e) return false;
   const code = String(e.code || '').toLowerCase();
   if (code === 'user-cancelled' || code === 'e_user_cancelled') return false;
-  if (
-    code === 'already-owned' ||
-    code === 'e_already_owned' ||
-    code === 'already_owned'
-  ) {
-    return true;
-  }
+  if (code === 'already-owned' || code === 'e_already_owned' || code === 'already_owned') return true;
   const msg = String(e.message || '').toLowerCase();
   return msg.includes('already owned') || msg.includes('already purchased');
 }
 
-/**
- * iOS: force a real StoreKit restore (AppStore.sync) so transactions made on
- * this Apple ID — on another device, before a reinstall, or left unfinished by
- * an older build — become visible to getAvailablePurchases(). Without this,
- * TestFlight/sandbox frequently returns [] while StoreKit still answers
- * "Item already owned" on a new purchase attempt.
- *
- * Failures (e.g. the user dismisses Apple's sign-in prompt) are non-fatal:
- * getAvailablePurchases() may still return cached entitlements.
- */
 async function syncNativeTransactions(): Promise<void> {
   if (!isIapAvailable() || Platform.OS !== 'ios') return;
   try {
-    if (typeof RNIap?.syncIOS === 'function') {
-      await RNIap.syncIOS();
-    } else if (typeof RNIap?.restorePurchases === 'function') {
-      await RNIap.restorePurchases();
-    }
+    if (typeof RNIap?.syncIOS === 'function') await RNIap.syncIOS();
+    else if (typeof RNIap?.restorePurchases === 'function') await RNIap.restorePurchases();
   } catch (e: any) {
     console.warn('[IAP] StoreKit sync failed', e?.code || e?.message || e);
   }
 }
 
-export async function getAvailableReceipts(
-  opts: { syncFirst?: boolean } = {}
-): Promise<IapPurchaseReceipt[]> {
+export async function getAvailableReceipts(opts: { syncFirst?: boolean } = {}): Promise<IapPurchaseReceipt[]> {
   if (!isIapAvailable()) return [];
   try {
     if (typeof RNIap?.getAvailablePurchases !== 'function') return [];
-    if (opts.syncFirst) {
-      await syncNativeTransactions();
-    }
-    const purchases: any[] = await RNIap.getAvailablePurchases();
-    const receipts: IapPurchaseReceipt[] = [];
+    if (opts.syncFirst) await syncNativeTransactions();
+
+    let purchases: any[] = await RNIap.getAvailablePurchases({
+      onlyIncludeActiveItemsIOS: true,
+      alsoPublishToEventListenerIOS: false,
+    });
+    let receipts: IapPurchaseReceipt[] = [];
     for (const p of purchases || []) {
       const n = normalisePurchase(p);
       if (n) receipts.push(n);
+    }
+
+    // Build 82: if StoreKit says “already owned” but its active entitlement
+    // query is empty, broaden the query to historical/unfinished transactions.
+    // These records are NEVER trusted locally; useIAP sends only Budgy SKUs to
+    // the backend, and Pro is granted only after the backend validates Apple.
+    const hasBudgyReceipt = receipts.some((r) => IAP_SKUS.includes(r.productId));
+    if (Platform.OS === 'ios' && !hasBudgyReceipt) {
+      try {
+        const historical: any[] = await RNIap.getAvailablePurchases({
+          onlyIncludeActiveItemsIOS: false,
+          alsoPublishToEventListenerIOS: false,
+        });
+        const byKey = new Map<string, IapPurchaseReceipt>();
+        for (const r of receipts) byKey.set(`${r.productId}:${r.transactionId}`, r);
+        for (const p of historical || []) {
+          const n = normalisePurchase(p);
+          if (n) byKey.set(`${n.productId}:${n.transactionId}`, n);
+        }
+        receipts = [...byKey.values()];
+        if (__DEV__) {
+          console.log('[IAP] restore fallback', {
+            activeCount: purchases?.length || 0,
+            historicalCount: historical?.length || 0,
+            budgyCount: receipts.filter((r) => IAP_SKUS.includes(r.productId)).length,
+          });
+        }
+      } catch (e: any) {
+        if (__DEV__) console.warn('[IAP] historical restore fallback failed', e?.code || e?.message || e);
+      }
     }
     return receipts;
   } catch (e) {
@@ -634,17 +466,10 @@ export async function getAvailableReceipts(
   }
 }
 
-// ── Backend (FastAPI) ────────────────────────────────────────────────────────
 import { safeFetch } from '../lib/network';
-
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://api.budgy.ch';
 
-export type SubscriptionState =
-  | 'FREE'
-  | 'PRO'
-  | 'EXPIRED'
-  | 'GRACE_PERIOD'
-  | 'REFUNDED';
+export type SubscriptionState = 'FREE' | 'PRO' | 'EXPIRED' | 'GRACE_PERIOD' | 'REFUNDED';
 
 export interface BackendValidation {
   ok: boolean;
@@ -663,106 +488,35 @@ export interface BackendValidation {
 
 function isAuthFailure(status: number, data: any): boolean {
   const detail = String(data?.detail || data?.error || '').toLowerCase();
-  return (
-    status === 401 ||
-    status === 403 ||
-    detail === 'missing_token' ||
-    detail === 'token_expired' ||
-    detail === 'invalid_token' ||
-    detail === 'malformed_token' ||
-    detail === 'unknown_kid' ||
-    detail === 'invalid_signature' ||
-    detail === 'invalid_audience' ||
-    detail === 'invalid_issuer'
-  );
+  return status === 401 || status === 403 || detail === 'missing_token' || detail === 'token_expired' || detail === 'invalid_token' || detail === 'malformed_token' || detail === 'unknown_kid' || detail === 'invalid_signature' || detail === 'invalid_audience' || detail === 'invalid_issuer';
 }
 
 async function postJson(path: string, body: any): Promise<BackendValidation> {
   const perform = async (forceRefresh: boolean) => {
     const authHeaders = await getAuthHeaders(forceRefresh);
     if (!authHeaders.Authorization) return null;
-    return safeFetch(
-      `${BACKEND_URL}${path}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders },
-        body: JSON.stringify(body),
-      },
-      { timeoutMs: 8000, retries: 1, silent: true }
-    );
+    return safeFetch(`${BACKEND_URL}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders }, body: JSON.stringify(body) }, { timeoutMs: 8000, retries: 1, silent: true });
   };
-
-  // No token means this request can never succeed. Fail before making a
-  // pointless backend call and, crucially, never classify it as transient.
   let r = await perform(false);
-  if (!r) {
-    return { ok: false, valid: false, error: 'auth_required' };
-  }
-
-  // Session may expire between StoreKit and backend validation. Refresh once
-  // and replay the exact request; never retry an auth failure indefinitely.
+  if (!r) return { ok: false, valid: false, error: 'auth_required' };
   if (isAuthFailure(r.status, r.data)) {
     const retried = await perform(true);
-    if (!retried) {
-      return { ok: false, valid: false, error: 'auth_required' };
-    }
+    if (!retried) return { ok: false, valid: false, error: 'auth_required' };
     r = retried;
-    if (isAuthFailure(r.status, r.data)) {
-      return { ok: false, valid: false, error: 'auth_required' };
-    }
+    if (isAuthFailure(r.status, r.data)) return { ok: false, valid: false, error: 'auth_required' };
   }
-
-  if (r.offline || (!r.ok && r.status === 0)) {
-    return { ok: false, valid: false, error: 'network_error' };
-  }
-
+  if (r.offline || (!r.ok && r.status === 0)) return { ok: false, valid: false, error: 'network_error' };
   const data: any = r.data || {};
-  if (r.status === 503 || data?.error === 'iap_not_configured') {
-    return {
-      ok: false,
-      valid: false,
-      not_configured: true,
-      missing: data?.missing || [],
-      error: 'iap_not_configured',
-    };
-  }
-  return {
-    ok: !!data.ok,
-    valid: !!data.valid,
-    subscription_state: data.subscription_state,
-    product_id: data.product_id ?? null,
-    expires_at: data.expires_at ?? null,
-    pro_until: data.pro_until ?? null,
-    original_transaction_id: data.original_transaction_id ?? null,
-    environment: data.environment ?? null,
-    auto_renew: data.auto_renew ?? null,
-    error: data.error ?? data.detail ?? null,
-  };
+  if (r.status === 503 || data?.error === 'iap_not_configured') return { ok: false, valid: false, not_configured: true, missing: data?.missing || [], error: 'iap_not_configured' };
+  return { ok: !!data.ok, valid: !!data.valid, subscription_state: data.subscription_state, product_id: data.product_id ?? null, expires_at: data.expires_at ?? null, pro_until: data.pro_until ?? null, original_transaction_id: data.original_transaction_id ?? null, environment: data.environment ?? null, auto_renew: data.auto_renew ?? null, error: data.error ?? data.detail ?? null };
 }
 
-export async function validateOnBackend(input: {
-  transaction_id: string;
-  product_id?: string;
-  user_id?: string;
-  receipt_data?: string;
-}): Promise<BackendValidation> {
-  return postJson('/api/iap/validate', {
-    platform: 'ios',
-    transaction_id: input.transaction_id,
-    product_id: input.product_id,
-    user_id: input.user_id,
-    receipt_data: input.receipt_data,
-  });
+export async function validateOnBackend(input: { transaction_id: string; product_id?: string; user_id?: string; receipt_data?: string }): Promise<BackendValidation> {
+  return postJson('/api/iap/validate', { platform: 'ios', transaction_id: input.transaction_id, product_id: input.product_id, user_id: input.user_id, receipt_data: input.receipt_data });
 }
 
-export async function restoreOnBackend(input: {
-  original_transaction_id: string;
-  user_id?: string;
-}): Promise<BackendValidation> {
-  return postJson('/api/iap/restore', {
-    original_transaction_id: input.original_transaction_id,
-    user_id: input.user_id,
-  });
+export async function restoreOnBackend(input: { original_transaction_id: string; user_id?: string }): Promise<BackendValidation> {
+  return postJson('/api/iap/restore', { original_transaction_id: input.original_transaction_id, user_id: input.user_id });
 }
 
 export interface RemoteSubscription {
@@ -773,19 +527,12 @@ export interface RemoteSubscription {
   apple_original_transaction_id?: string | null;
 }
 
-export async function fetchSubscriptionFromBackend(
-  user_id: string
-): Promise<RemoteSubscription | null> {
+export async function fetchSubscriptionFromBackend(user_id: string): Promise<RemoteSubscription | null> {
   const perform = async (forceRefresh: boolean) => {
     const authHeaders = await getAuthHeaders(forceRefresh);
     if (!authHeaders.Authorization) return null;
-    return safeFetch(
-      `${BACKEND_URL}/api/iap/me`,
-      { headers: authHeaders },
-      { timeoutMs: 6000, retries: 1, silent: true }
-    );
+    return safeFetch(`${BACKEND_URL}/api/iap/me`, { headers: authHeaders }, { timeoutMs: 6000, retries: 1, silent: true });
   };
-
   let r = await perform(false);
   if (!r) return null;
   if (isAuthFailure(r.status, r.data)) {
@@ -794,11 +541,5 @@ export async function fetchSubscriptionFromBackend(
   }
   if (!r.ok || !r.data) return null;
   const data: any = r.data;
-  return {
-    is_pro: !!data.is_pro,
-    subscription_state: (data.subscription_state || 'FREE') as SubscriptionState,
-    pro_until: data.pro_until ?? null,
-    apple_product_id: data.apple_product_id ?? null,
-    apple_original_transaction_id: data.apple_original_transaction_id ?? null,
-  };
+  return { is_pro: !!data.is_pro, subscription_state: (data.subscription_state || 'FREE') as SubscriptionState, pro_until: data.pro_until ?? null, apple_product_id: data.apple_product_id ?? null, apple_original_transaction_id: data.apple_original_transaction_id ?? null };
 }

@@ -21,7 +21,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.budgy.ch.budgy",
-      "buildNumber": "81",
+      "buildNumber": "82",
       "associatedDomains": [
         "applinks:budgy.ch",
         "applinks:www.budgy.ch"
@@ -55,7 +55,7 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.budgy.ch.budgy",
-      "versionCode": 81,
+      "versionCode": 82,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_MEDIA_IMAGES",

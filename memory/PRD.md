@@ -105,3 +105,28 @@
 2. Lancer le Build 81 EAS manuellement (jamais par l'agent).
 3. TestFlight : reset password, achat mensuel/annuel, restore, compte already-owned, logout/login + restore, réinstallation + restore.
 4. Côté Supabase self-hosted : vérifier que `budgy://reset-password` est dans la liste des Redirect URLs autorisées.
+
+---
+
+# Session hotfix "suppressions cloud persistantes" (sept. 2026) — commit dd1732a1
+
+## Bug corrigé
+Suppression d'une dépense/facture/charge récurrente → disparaît localement mais revient au relaunch (la ligne Supabase survivait car pushAllToCloud est upsert-only et pullAllFromCloud remplace les tableaux locaux).
+
+## Correctif
+- NOUVEAU `src/services/cloudDelete.ts` : deleteFromCloud(table, id) + deleteEntityWithCloud — whitelist typée (transactions/invoices/recurring_expenses), user_id UNIQUEMENT depuis la session, DELETE .eq(id).eq(user_id).select('id'), vérification idempotente si 0 ligne, garde anti double-tap (Set + finally).
+- Ordre cloud-first pour utilisateur connecté : Zustand supprimé APRÈS confirmation cloud. Mode local (pas de session) : suppression locale directe inchangée. proExpenses inchangées (non synchronisées).
+- Écrans modifiés : (tabs)/expenses.tsx, more/invoices.tsx (rappels annulés seulement après succès), more/recurring.tsx. Actions Zustand inchangées (synchrones).
+- i18n : nouveau namespace `cloudDelete` (failedTitle/failedBody) FR/EN/DE/IT.
+- NOUVEAU test `scripts/test-cloud-delete.mjs` (18 checks, comportemental via transpilation TS + contrats statiques) — lancé via `node scripts/...` (package.json protégé, pas de nouveau script npm). Ajouté au Pre-build Quality Gate.
+- NOUVEAU workflow manuel `.github/workflows/eas-update.yml` (workflow_dispatch only, channel preview/production whitelisté, message obligatoire, gate qualité + guard identité Build 82 + expo-updates + URL EAS, seule commande de déploiement = `eas update`). NON lancé.
+
+## Protections Build 82 — INTACTES
+app.json / eas.json / package.json / package-lock.json inchangés. Version 3.9.0, build iOS 82, versionCode 82. Aucun eas build/submit/update exécuté. Aucun secret ajouté.
+
+## Validations
+tsc PASS, check:i18n + audit:i18n PASS, premium 45/45, pro-gating 49/49, savings-tier 22/22, cloud-auth 15/15, ai-optimizer 62/62, iap-v15 32/32, iap-restore 35/35, auth-production 11/11, test-cloud-delete 18/18, expo config public OK.
+`npm ci --legacy-peer-deps` : ÉCHOUE avec npm 11 local (entrées optionnelles absentes du lockfile, strictness npm 11) mais PASSE avec npm@10 (= Node 20 de la CI GitHub) → lockfile valide pour la CI, ne pas régénérer.
+
+## PUSH EN ATTENTE
+Commit local `dd1732a1` sur main (base edfd866f). Pas de credentials GitHub dans ce fork → l'utilisateur doit pousser via "Save to GitHub". Le push déclenchera le Pre-build Quality Gate (normal). Ne PAS lancer EAS Build ni EAS Update.

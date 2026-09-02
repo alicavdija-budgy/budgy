@@ -78,21 +78,33 @@ export async function deleteFromCloud(
     return { ok: false, cloudUsed: false, error: 'invalid_id' };
   }
 
-  // Local-only mode. Configuration alone is NOT a session: the decision is
-  // based on the real Supabase session below.
+  // Local-only mode applies ONLY when Supabase is genuinely not configured,
+  // or when getSession() succeeds and explicitly confirms session === null.
   if (!deps.isConfigured()) return { ok: true, cloudUsed: false };
-  const sb = deps.getClient();
-  if (!sb) return { ok: true, cloudUsed: false };
 
-  let userId: string | undefined;
+  // Configured but no client available → defensive failure: we cannot prove
+  // there is no session, so the local item must be preserved.
+  const sb = deps.getClient();
+  if (!sb) return { ok: false, cloudUsed: false, error: 'client_unavailable' };
+
+  let session: any;
   try {
     const { data } = await sb.auth.getSession();
-    // EXCLUSIVELY the session user id — never a user_id from the UI/object.
-    userId = data?.session?.user?.id;
-  } catch {
-    userId = undefined;
+    session = data?.session ?? null;
+  } catch (e: any) {
+    // A throwing getSession() is NOT the same as "no session": fail safely
+    // and keep the local item instead of risking a resurrecting cloud row.
+    devWarn('[cloud-delete] getSession failed:', e?.message || String(e));
+    return { ok: false, cloudUsed: false, error: 'session_error' };
   }
-  if (!userId) return { ok: true, cloudUsed: false };
+  if (session === null) return { ok: true, cloudUsed: false };
+
+  // EXCLUSIVELY the session user id — never a user_id from the UI/object.
+  const userId: string | undefined = session?.user?.id;
+  if (!userId) {
+    // Session object without a user id is an inconsistent auth state.
+    return { ok: false, cloudUsed: false, error: 'session_error' };
+  }
 
   const key = `${table}:${id}`;
   if (inFlight.has(key)) {

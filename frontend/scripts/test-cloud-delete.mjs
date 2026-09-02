@@ -73,7 +73,12 @@ function makeFakeCloud(opts = {}) {
   };
   const matches = (r, f) => r.id === f.id && r.user_id === f.user_id;
   const sb = {
-    auth: { getSession: async () => ({ data: { session: opts.session ?? null } }) },
+    auth: {
+      getSession: async () => {
+        if (opts.throwSession) throw new Error('auth backend unreachable');
+        return { data: { session: opts.session ?? null } };
+      },
+    },
     from(table) {
       return {
         delete() {
@@ -142,6 +147,43 @@ await ok('Supabase not configured → local-only mode', async () => {
   const res2 = await svc.deleteEntityWithCloud('invoices', 'x', () => { localDeleted = true; }, { isConfigured: () => false, getClient: () => null });
   assert.equal(res2.ok, true);
   assert.equal(localDeleted, true);
+});
+
+// ── 1bis. Defensive auth-state guards (pre-OTA hardening) ─────────────────
+await ok('configured but client unavailable → failure, local item preserved', async () => {
+  const svc = loadService({});
+  let localDeleted = false;
+  const res = await svc.deleteEntityWithCloud(
+    'transactions',
+    't1',
+    () => { localDeleted = true; },
+    { isConfigured: () => true, getClient: () => null }
+  );
+  assert.equal(res.ok, false);
+  assert.equal(res.error, 'client_unavailable');
+  assert.equal(localDeleted, false, 'local item must be kept when the client is unavailable');
+});
+
+await ok('getSession() throws → session_error, local item preserved', async () => {
+  const svc = loadService({});
+  const { sb, state } = makeFakeCloud({ throwSession: true, rows: [{ id: 't1', user_id: 'user-1' }] });
+  let localDeleted = false;
+  const res = await svc.deleteEntityWithCloud('transactions', 't1', () => { localDeleted = true; }, deps(sb));
+  assert.equal(res.ok, false);
+  assert.equal(res.error, 'session_error');
+  assert.equal(localDeleted, false, 'a throwing getSession must never be treated as "no session"');
+  assert.equal(state.deleteCalls.length, 0, 'no remote DELETE on session error');
+});
+
+await ok('getSession() succeeds with session === null → local deletion allowed', async () => {
+  const svc = loadService({});
+  const { sb, state } = makeFakeCloud({ session: null });
+  let localDeleted = false;
+  const res = await svc.deleteEntityWithCloud('transactions', 't1', () => { localDeleted = true; }, deps(sb));
+  assert.equal(res.ok, true);
+  assert.equal(res.cloudUsed, false);
+  assert.equal(localDeleted, true);
+  assert.equal(state.deleteCalls.length, 0);
 });
 
 // ── 2. Session + remote success: filters + cloud-first ordering ──────────
@@ -297,7 +339,7 @@ await ok('proExpenses deletion is untouched (not cloud-synced)', () => {
 });
 
 await ok('service never trusts a caller-provided user_id', () => {
-  assert.match(serviceSrc, /data\?\.session\?\.user\?\.id/);
+  assert.match(serviceSrc, /session\?\.user\?\.id/);
   assert.doesNotMatch(serviceSrc, /user_id\s*:\s*string/, 'no user_id parameter allowed');
 });
 

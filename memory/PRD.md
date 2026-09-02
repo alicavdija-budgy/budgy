@@ -130,3 +130,10 @@ tsc PASS, check:i18n + audit:i18n PASS, premium 45/45, pro-gating 49/49, savings
 
 ## PUSH EN ATTENTE
 Commit local `dd1732a1` sur main (base edfd866f). Pas de credentials GitHub dans ce fork → l'utilisateur doit pousser via "Save to GitHub". Le push déclenchera le Pre-build Quality Gate (normal). Ne PAS lancer EAS Build ni EAS Update.
+
+## Durcissement défensif cloudDelete (commit de73b8af)
+- Client Supabase indisponible alors que configuré → échec `client_unavailable` (pas de suppression locale).
+- getSession() qui lève → échec `session_error` (jamais assimilé à "pas de session").
+- Mode local seulement si non configuré OU getSession() confirme session === null (session sans user.id → session_error).
+- test-cloud-delete : 21/21. Toutes les autres suites re-passées vertes. Fichiers protégés intacts.
+- PUSH EN ATTENTE : commits dd1732a1 + de73b8af à pousser via "Save to GitHub".

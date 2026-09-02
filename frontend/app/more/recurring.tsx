@@ -34,6 +34,7 @@ import BrandLogo from '../../src/components/BrandLogo';
 import { formatNumber } from '../../src/utils/calculations';
 import { EXPENSE_CATEGORIES } from '../../src/data/swiss-data';
 import { EntityActionsSheet, type EntityActionsContext } from '../../src/components/EntityActionsSheet';
+import { deleteEntityWithCloud } from '../../src/services/cloudDelete';
 import { EntityEditModal, type EditField } from '../../src/components/EntityEditModal';
 
 export default function RecurringScreen() {
@@ -43,6 +44,16 @@ export default function RecurringScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { preferences, recurringExpenses, incomes, addRecurringExpense, updateRecurringExpense, toggleRecurringExpense, deleteRecurringExpense } = useStore();
+
+  // Build 82 hotfix — cloud-first deletion: the Supabase row is removed and
+  // confirmed BEFORE the local Zustand deletion, so pullAllFromCloud() can no
+  // longer resurrect a deleted recurring expense.
+  const handleCloudDeleteRec = async (id: string) => {
+    const res = await deleteEntityWithCloud('recurring_expenses', id, () => deleteRecurringExpense(id));
+    if (!res.ok && res.error !== 'delete_in_progress') {
+      Alert.alert(t('cloudDelete.failedTitle'), t('cloudDelete.failedBody'));
+    }
+  };
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [newRec, setNewRec] = useState({ title: '', amount: '', category: 'abonnements', dayOfMonth: '1' });
@@ -326,7 +337,7 @@ export default function RecurringScreen() {
         onDelete={() => {
           const id = actionsCtx?.id;
           setActionsCtx(null);
-          if (id) deleteRecurringExpense(id);
+          if (id) void handleCloudDeleteRec(id);
         }}
         deleteConfirmTitle={t("recurringUi.deleteConfirmTitle")}
       />

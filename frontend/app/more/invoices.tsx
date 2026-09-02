@@ -27,6 +27,7 @@ import {
   cancelDeadlineRemindersForEntity,
 } from '../../src/services/notifications';
 import { EntityActionsSheet, type EntityActionsContext } from '../../src/components/EntityActionsSheet';
+import { deleteEntityWithCloud } from '../../src/services/cloudDelete';
 import { EntityEditModal, type EditField } from '../../src/components/EntityEditModal';
 import { useTranslation } from '../../src/hooks/useTranslation';
 
@@ -160,10 +161,22 @@ export default function InvoicesScreen() {
     Alert.alert(t('invoices.deleteTitle'), t('invoices.deleteBody'), [
       { text: t('invoices.cancel'), style: 'cancel' },
       { text: t('invoices.delete'), style: 'destructive', onPress: () => {
-        cancelDeadlineRemindersForEntity(id).catch(() => {});
-        deleteInvoiceAction(id);
+        void performInvoiceDelete(id);
       } },
     ]);
+  };
+
+  // Build 82 hotfix — cloud-first deletion (see src/services/cloudDelete.ts).
+  // Reminders are cancelled ONLY after the deletion is fully confirmed
+  // (cloud row gone + local removal done). On failure the invoice and its
+  // reminders are both preserved.
+  const performInvoiceDelete = async (id: string) => {
+    const res = await deleteEntityWithCloud('invoices', id, () => deleteInvoiceAction(id));
+    if (res.ok) {
+      cancelDeadlineRemindersForEntity(id).catch(() => {});
+    } else if (res.error !== 'delete_in_progress') {
+      Alert.alert(t('cloudDelete.failedTitle'), t('cloudDelete.failedBody'));
+    }
   };
 
   // ── CRUD: actions sheet + edit modal ──
@@ -478,10 +491,7 @@ export default function InvoicesScreen() {
         onDelete={() => {
           const id = actionsCtx?.id;
           setActionsCtx(null);
-          if (id) {
-            cancelDeadlineRemindersForEntity(id).catch(() => {});
-            deleteInvoiceAction(id);
-          }
+          if (id) void performInvoiceDelete(id);
         }}
         deleteConfirmTitle={t('invoices.deleteConfirmTitle')}
         deleteConfirmMessage={t('invoices.deleteConfirmMsg')}

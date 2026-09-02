@@ -1,0 +1,128 @@
+name: EAS Update (OTA)
+
+# Manual OTA publisher for Budgy 3.9.0 (Build 82).
+# NEVER triggered automatically — Actions → EAS Update (OTA) → Run workflow.
+# This workflow is ONLY allowed to run `eas update`.
+# It must NEVER call `eas build` or `eas submit`.
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: 'Canal EAS Update cible'
+        required: true
+        default: 'preview'
+        type: choice
+        options: [preview, production]
+      message:
+        description: 'Message obligatoire décrivant cette OTA'
+        required: true
+        type: string
+
+concurrency:
+  group: eas-update-${{ github.ref }}-${{ github.event.inputs.channel }}
+  cancel-in-progress: false
+
+jobs:
+  update:
+    name: "EAS Update (${{ github.event.inputs.channel }})"
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ./frontend
+        shell: bash
+
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      CI: 'true'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Guard inputs (channel whitelist + required message)
+        env:
+          CHANNEL: ${{ github.event.inputs.channel }}
+          MESSAGE: ${{ github.event.inputs.message }}
+        run: |
+          if [ "$CHANNEL" != "preview" ] && [ "$CHANNEL" != "production" ]; then
+            echo "❌ Invalid channel '$CHANNEL' — only 'preview' or 'production' are allowed."
+            exit 1
+          fi
+          if [ -z "${MESSAGE// /}" ]; then
+            echo "❌ An OTA message describing the update is required."
+            exit 1
+          fi
+          echo "✅ channel=$CHANNEL"
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Setup Expo & EAS CLI
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          expo-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+          packager: npm
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps --no-audit --no-fund
+
+      - name: Pre-OTA quality gate
+        run: |
+          echo "── TypeScript ──"
+          npx tsc --noEmit
+          echo "── i18n ──"
+          npm run check:i18n
+          npm run audit:i18n
+          echo "── Contracts & regressions ──"
+          npm run test:premium
+          npm run test:pro-gating
+          npm run test:savings-tier
+          npm run test:cloud-auth
+          npm run test:ai-optimizer
+          npm run test:iap-v15
+          npm run test:iap-restore
+          node scripts/test-auth-production.mjs
+          node scripts/test-cloud-delete.mjs
+          echo "── Expo config resolution ──"
+          npx expo config --type public >/tmp/budgy-expo-config.json
+          echo "✅ Pre-OTA quality gate PASS"
+
+      - name: Build 82 identity guard
+        run: |
+          node - <<'NODE'
+          const a = require('./app.json').expo;
+          const pkg = require('./package.json');
+          if (a.version !== '3.9.0') throw new Error(`Unexpected version ${a.version}`);
+          if (a.ios?.buildNumber !== '82') throw new Error(`Unexpected iOS buildNumber ${a.ios?.buildNumber}`);
+          if (a.android?.versionCode !== 82) throw new Error(`Unexpected Android versionCode ${a.android?.versionCode}`);
+          if (a.ios?.bundleIdentifier !== 'com.budgy.ch.budgy') throw new Error('Wrong iOS bundle ID');
+          if (!pkg.dependencies || !pkg.dependencies['expo-updates']) throw new Error('expo-updates dependency missing');
+          const url = a.updates && a.updates.url;
+          if (url !== 'https://u.expo.dev/cf75668b-71ba-4bfb-9169-8ad2f572e982') {
+            throw new Error(`Wrong EAS updates URL: ${url}`);
+          }
+          console.log('✅ Build 82 identity + expo-updates + EAS URL verified');
+          NODE
+
+      - name: EAS CLI sanity
+        run: |
+          eas --version
+          eas whoami
+
+      # The ONLY deployment command allowed in this workflow.
+      - name: Publish OTA update
+        env:
+          CHANNEL: ${{ github.event.inputs.channel }}
+          MESSAGE: ${{ github.event.inputs.message }}
+        run: |
+          eas update --channel "$CHANNEL" --message "$MESSAGE" --non-interactive

@@ -60,6 +60,9 @@ jobs:
           npm run test:iap-v15
           npm run test:iap-restore
 
+      - name: Cloud deletion regression
+        run: node scripts/test-cloud-delete.mjs
+
       - name: Build identity guard
         run: |
           node - <<'NODE'

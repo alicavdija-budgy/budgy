@@ -39,6 +39,7 @@ import { EXPENSE_CATEGORIES, PAYMENT_METHODS } from '../../src/data/swiss-data';
 import { useTranslation } from '../../src/hooks/useTranslation';
 import { DATE_LOCALES } from '../../src/i18n/translations';
 import { EntityActionsSheet, type EntityActionsContext } from '../../src/components/EntityActionsSheet';
+import { deleteEntityWithCloud } from '../../src/services/cloudDelete';
 import { EntityEditModal, type EditField } from '../../src/components/EntityEditModal';
 
 type Tab = 'daily' | 'pro';
@@ -158,14 +159,26 @@ export default function ExpensesScreen() {
           style: 'destructive',
           onPress: () => {
             if (activeTab === 'pro') {
+              // proExpenses are not cloud-synced: plain local deletion.
               deleteProExpense(id);
             } else {
-              deleteTransaction(id);
+              void handleCloudDeleteTx(id);
             }
           },
         },
       ]
     );
+  };
+
+  // Build 82 hotfix — cloud-first deletion: the Supabase row is removed and
+  // confirmed BEFORE the local Zustand deletion, so pullAllFromCloud() can no
+  // longer resurrect a deleted transaction. Local-only users (no session)
+  // keep the plain local deletion.
+  const handleCloudDeleteTx = async (id: string) => {
+    const res = await deleteEntityWithCloud('transactions', id, () => deleteTransaction(id));
+    if (!res.ok && res.error !== 'delete_in_progress') {
+      Alert.alert(t('cloudDelete.failedTitle'), t('cloudDelete.failedBody'));
+    }
   };
 
   const tabs: { key: Tab; label: string; icon: string }[] = [
@@ -478,7 +491,7 @@ export default function ExpensesScreen() {
         onDelete={() => {
           const id = txActionsCtx?.id;
           setTxActionsCtx(null);
-          if (id) deleteTransaction(id);
+          if (id) void handleCloudDeleteTx(id);
         }}
         deleteConfirmTitle={t('expensesScreen.deleteConfirmTitle')}
       />

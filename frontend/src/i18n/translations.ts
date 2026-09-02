@@ -3000,6 +3000,12 @@ export const TRANSLATIONS = {
     de: { title: 'Budgy KI-Assistent' },
     it: { title: 'Assistente IA Budgy' },
   },
+  cloudDelete: {
+    fr: { failedTitle: 'Suppression impossible', failedBody: 'La suppression n\'a pas pu être synchronisée avec le cloud. Vérifiez votre connexion Internet puis réessayez.' },
+    en: { failedTitle: 'Deletion failed', failedBody: 'The deletion could not be synced with the cloud. Check your Internet connection and try again.' },
+    de: { failedTitle: 'Löschen nicht möglich', failedBody: 'Die Löschung konnte nicht mit der Cloud synchronisiert werden. Prüfen Sie Ihre Internetverbindung und versuchen Sie es erneut.' },
+    it: { failedTitle: 'Eliminazione non riuscita', failedBody: 'L\'eliminazione non è stata sincronizzata con il cloud. Controlla la connessione Internet e riprova.' },
+  },
   iapErrors: {
     fr: { unavailable: 'IAP indisponible sur cet appareil', notReadyToSubmit: 'Achat momentanément indisponible. Le produit n’est pas encore disponible dans App Store.', invalidReceipt: 'Reçu invalide', purchaseFailed: 'Achat échoué', debugTip: 'Vérifiez que les produits sont en statut "Ready to Submit" et que le contrat Paid Apps est signé.' },
     en: { unavailable: 'IAP unavailable on this device', notReadyToSubmit: 'Purchase temporarily unavailable. The product is not yet available in the App Store.', invalidReceipt: 'Invalid receipt', purchaseFailed: 'Purchase failed', debugTip: 'Check that products are in "Ready to Submit" status and the Paid Apps contract is signed.' },

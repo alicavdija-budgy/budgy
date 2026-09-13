@@ -137,3 +137,11 @@ Commit local `dd1732a1` sur main (base edfd866f). Pas de credentials GitHub dans
 - Mode local seulement si non configuré OU getSession() confirme session === null (session sans user.id → session_error).
 - test-cloud-delete : 21/21. Toutes les autres suites re-passées vertes. Fichiers protégés intacts.
 - PUSH EN ATTENTE : commits dd1732a1 + de73b8af à pousser via "Save to GitHub".
+
+## Session SEO site web budgy.ch (commit 7e807012) — SITE UNIQUEMENT
+- Refonte SEO complète de frontend/public/ (landing + 6 pages piliers FR + hub /fr/guides + 9 guides + homepages DE/EN/IT traduites + robots.txt + sitemap.xml + 404.html + CSS partagé site-v1.css + générateur scripts/gen-website.mjs).
+- Liens App Store corrigés (étaient href="#") → https://apps.apple.com/ch/app/budgy/id6767026949 partout.
+- canonical/hreflang/JSON-LD/OG sur toutes les pages ; delete-account en noindex ; redirect 301 /landing → /.
+- AUCUN fichier de l'app mobile modifié. Validé localement via npx serve (tous 200, 404 réel, 0 lien cassé, titles/desc/H1 uniques, JSON-LD valide).
+- PUSH EN ATTENTE via "Save to GitHub" (commits de la session précédente déjà poussés par l'utilisateur ; nouveau commit 7e807012 local).
+- Après déploiement : soumettre https://budgy.ch/sitemap.xml dans Google Search Console.

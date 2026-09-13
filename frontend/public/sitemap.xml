@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <url>
+    <loc>https://budgy.ch/</loc>
+    <lastmod>2026-09-13</lastmod>
+    <xhtml:link rel="alternate" hreflang="fr-CH" href="https://budgy.ch/"/>
+    <xhtml:link rel="alternate" hreflang="de-CH" href="https://budgy.ch/de"/>
+    <xhtml:link rel="alternate" hreflang="it-CH" href="https://budgy.ch/it"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://budgy.ch/en"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://budgy.ch/"/>
+  </url>
+  <url><loc>https://budgy.ch/de</loc><lastmod>2026-09-13</lastmod></url>
+  <url><loc>https://budgy.ch/en</loc><lastmod>2026-09-13</lastmod></url>
+  <url><loc>https://budgy.ch/it</loc><lastmod>2026-09-13</lastmod></url>
+  <url><loc>https://budgy.ch/fr/application-budget</loc><lastmod>2026-09-13</lastmod></url>
+  <url><loc>https://budgy.ch/fr/gestion-budget</loc><lastmod>2026-09-13</lastmod></url>
+  <url><loc>https://budgy.ch/fr/suivi-depenses</loc><lastmod>2026-09-13</lastmod></url>
+  <url><loc>https://budgy.ch/fr/budget-mensuel</loc><lastmod>2026-09-13</lastmod></url>
+  <url><loc>https://budgy.ch/fr/epargne-objectifs</loc><lastmod>2026-09-13</lastmod></url>
+  <url><loc>https://budgy.ch/fr/budget-suisse</loc><lastmod>2026-09-13</lastmod></url>
+  <url><loc>https://budgy.ch/fr/guides</loc><lastmod>2026-09-13</lastmod></url>
+  <url><loc>https://budgy.ch/fr/guides/comment-faire-un-budget-mensuel</loc><lastmod>2026-09-13</lastmod></url>
+  <url><loc>https://budgy.ch/fr/guides/comment-suivre-ses-depenses</loc><lastmod>2026-09-13</lastmod></url>
+  <url><loc>https://budgy.ch/fr/guides/organiser-son-budget-en-suisse</loc><lastmod>2026-09-13</lastmod></url>
+  <url><loc>https://budgy.ch/fr/guides/economiser-de-largent-chaque-mois</loc><lastmod>2026-09-13</lastmod></url>
+  <url><loc>https://budgy.ch/fr/guides/budget-familial</loc><lastmod>2026-09-13</lastmod></url>
+  <url><loc>https://budgy.ch/fr/guides/depenses-recurrentes</loc><lastmod>2026-09-13</lastmod></url>
+  <url><loc>https://budgy.ch/fr/guides/objectif-epargne</loc><lastmod>2026-09-13</lastmod></url>
+  <url><loc>https://budgy.ch/fr/guides/reprendre-le-controle-de-ses-finances</loc><lastmod>2026-09-13</lastmod></url>
+  <url><loc>https://budgy.ch/fr/guides/ou-part-mon-argent</loc><lastmod>2026-09-13</lastmod></url>
+  <url><loc>https://budgy.ch/privacy</loc></url>
+  <url><loc>https://budgy.ch/terms</loc></url>
+  <url><loc>https://budgy.ch/support</loc></url>
+</urlset>

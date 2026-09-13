@@ -5,6 +5,9 @@
   "rewrites": [
     { "source": "/", "destination": "/landing.html" }
   ],
+  "redirects": [
+    { "source": "/landing", "destination": "/", "type": 301 }
+  ],
   "headers": [
     {
       "source": "**/*",

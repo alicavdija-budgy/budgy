@@ -137,12 +137,21 @@ export async function sendGoalMilestone(
 }
 
 // Monthly expense reminder
+// Fixed identifiers so re-scheduling replaces ONLY these two reminders.
+export const MONTHLY_REMINDER_ID = 'budgy-monthly-reminder';
+export const LAMAL_REMINDER_ID = 'budgy-lamal-reminder';
+
 export async function scheduleMonthlyReminder() {
-  // Cancel existing reminders first
-  await Notifications.cancelAllScheduledNotificationsAsync();
+  // Cancel ONLY our own recurring reminders before rescheduling.
+  // NEVER cancel ALL scheduled notifications here: this function runs at
+  // app startup and would wipe contract deadline reminders (J-90/J-30/J-7/J-1)
+  // and bill reminders scheduled by other services.
+  await Notifications.cancelScheduledNotificationAsync(MONTHLY_REMINDER_ID).catch(() => {});
+  await Notifications.cancelScheduledNotificationAsync(LAMAL_REMINDER_ID).catch(() => {});
 
   // Schedule reminder on the 1st of each month at 9:00
   await Notifications.scheduleNotificationAsync({
+    identifier: MONTHLY_REMINDER_ID,
     content: {
       title: '📅 Nouveau mois, nouveau budget!',
       body: 'Vérifiez vos budgets et objectifs pour ce mois. Bon courage!',
@@ -159,6 +168,7 @@ export async function scheduleMonthlyReminder() {
 
   // LAMal reminder - November 15 each year
   await Notifications.scheduleNotificationAsync({
+    identifier: LAMAL_REMINDER_ID,
     content: {
       title: '🏥 Rappel LAMal - Changement d\'assurance',
       body: 'Dernier délai le 30 novembre! Comparez vos primes sur priminfo.admin.ch.',

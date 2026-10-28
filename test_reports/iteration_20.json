@@ -1,0 +1,38 @@
+{
+  "summary": "Targeted FRONTEND retest of the iteration 19 bugs on the Expo web preview (390x844, local demo mode, Français). FOUND AND FIXED BY T1 (CRITICAL REGRESSION introduced by the BUG 1 fix): in app/(tabs)/index.tsx, parseTxDate was declared as a const inside HomeScreen after the recentTx useMemo that calls it. As soon as there are 2 or more transactions, the sort comparator runs and the app crashes with 'Uncaught Error: Cannot access parseTxDate before initialization' (red screen). T1 moved parseTxDate to module scope as a function declaration, and the crash is gone. FOUND AND FIXED BY T1: on /more/twin the amount TextInput was 525px wide (flex:1 with no minWidth on web), so focusing it scrolled the overflow-hidden container 74px and clipped the whole screen on the left. Adding minWidth: 0 fixed it (input is now 283px, no shift). VERIFIED PASSING: BUG 1, after adding Migros 45.50, Accueil shows Aujourd'hui CHF 46 and Cette semaine CHF 46 (still correct after adding a second expense and after deleting one); BUG 2, expense delete on web: '…' opens the sheet, Supprimer shows window.confirm 'Supprimer cette dépense ?', accepting removes the row (CHF 57,50 to CHF 45,50, also removed from localStorage) and Accueil updates, while dismissing keeps the item; savings goal delete: the trash button shows confirm 'Supprimer / Êtes-vous sûr ?', accepting removes the goal and the empty state comes back; BUG 3, the BETA badge renders next to Budgy Twin in Intelligence & projets; BONUS, payment labels are Carte / Espèces / TWINT / Apple Pay / E-Banking / PostFinance / LSV/DD / Google Pay / Samsung Pay / Autre, with no raw keys; Twin shows 'Réserve vos versements prévus ce mois (CHF 0)' with no {n}, and the focused input has outline-style none; Dépenses total shows CHF 45,50 with 2 decimals, consistent with the day total −45,50. No page errors after the fixes.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "HomeScreen recentTx useMemo", "issue": "FIXED BY T1. Temporal dead zone crash (red screen) when there are 2 or more transactions: parseTxDate was used in useMemo at index.tsx:148 before its const declaration at line 155.", "testID": "n/a", "priority": "CRITICAL"},
+      {"component": "Twin amount input (web)", "issue": "FIXED BY T1. The input was 525px wide and focusing it scrolled the container horizontally, clipping the screen on the left. Fix: minWidth: 0 in app/more/twin.tsx styles.input.", "testID": "twin-amount-input", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Plus > Intelligence & projets", "issues": ["The BETA badge reuses styles.lockChip, which is sized for a 9px icon (more.tsx:310). The 'BETA' text overflows the chip and touches the 'Budgy Twin' title with no gap. Use a dedicated chip style (paddingHorizontal 6, marginLeft 6, auto width), like proChipDiscrete."]},
+      {"screen": "Dépenses summary", "issues": ["'1 éléments' should be singular: '1 élément'."]},
+      {"screen": "EntityActionsSheet (web)", "issues": ["After dismissing the delete confirm, the sheet stays open. Acceptable, but you could close it."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": ["/app/test_reports/iteration_20.json"],
+  "action_items": [
+    "Review the T1 fix in app/(tabs)/index.tsx: parseTxDate is now a function at module scope. Keep helpers used inside hooks out of the render body, or declare them before the hook.",
+    "Give the BETA badge in more.tsx MenuList its own chip style with an auto width and a margin from the title.",
+    "Minor: pluralise 'éléments' in the Dépenses summary."
+  ],
+  "critical_code_review_comments": [
+    "index.tsx: weekExpenses uses d >= weekAgo with weekAgo = now minus 7 days (time included), while EU dates parse to local midnight. A transaction from exactly 7 days ago is excluded. Consider setHours(0,0,0,0) on weekAgo.",
+    "index.tsx is 800+ lines; consider splitting it."
+  ],
+  "updated_files": [
+    "/app/frontend/app/(tabs)/index.tsx (parseTxDate moved to module scope, TDZ crash fix)",
+    "/app/frontend/app/more/twin.tsx (minWidth: 0 on the amount input)",
+    "/app/frontend/app/(tabs)/savings.tsx (added testID savings-delete-{id} on the goal trash button)"
+  ],
+  "success_rate": {"backend": "N/A (not requested)", "frontend": "100% after T1 fixes (2 regressions found and fixed, plus 1 minor BETA chip design issue)"},
+  "seed_data_creation": "None. Only local demo localStorage data.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Each run: Français > Continuer > 'Explorer en mode démo'. Add expense: [data-testid=add-expense-fab], placeholders 'ex: Migros' and '0.00', then 'Ajouter'. The first row's '…' button has no testID; mouse.click(348,478) at 390x844 opens the sheet. For delete on web, install a page.on('dialog') handler before clicking 'Supprimer'. Savings: 'Créer un objectif' > template > 'Créer le projet'; delete with [data-testid^=savings-delete-]. Twin: /more/twin with [data-testid=twin-amount-input].",
+  "rca_of_issue": "TDZ: a const arrow function inside the component body is not hoisted. useMemo(recentTx) runs before line 155, and sort only calls the comparator when length is 2 or more, which is why a single expense did not crash. Twin: on react-native-web, a TextInput renders an <input> with an intrinsic width (size=20 at fontSize 40). Inside a flex row, flex:1 with min-width:auto cannot shrink below that, so it overflows and the focus scrollIntoView shifts the overflow-hidden ScrollView."
+}

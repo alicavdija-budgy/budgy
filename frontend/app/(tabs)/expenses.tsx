@@ -64,6 +64,9 @@ export default function ExpensesScreen() {
 
   const [activeTab, setActiveTab] = useState<Tab>('daily');
   const [showAddModal, setShowAddModal] = useState(false);
+  // ── Navigation par période + filtre catégorie (affichage uniquement) ──
+  const [monthOffset, setMonthOffset] = useState(0);
+  const [catFilter, setCatFilter] = useState<string | null>(null);
   const { t, lang } = useTranslation();
   const locale = DATE_LOCALES[lang];
   const CUR = preferences.currency;
@@ -107,9 +110,61 @@ export default function ExpensesScreen() {
     setEditingTxId(null);
   };
 
-  const totalDaily = useMemo(() => {
-    return transactions.reduce((sum, t) => sum + t.amount, 0);
-  }, [transactions]);
+  // ── Période affichée (mois) — lecture seule, ne modifie aucune donnée ──
+  const periodDate = useMemo(() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth() + monthOffset, 1);
+  }, [monthOffset]);
+  const parseTxDate = (s: string): Date | null => {
+    if (!s) return null;
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return new Date(s);
+    const eu = s.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})/);
+    if (eu) return new Date(parseInt(eu[3]), parseInt(eu[2]) - 1, parseInt(eu[1]));
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? null : d;
+  };
+  const monthTx = useMemo(
+    () => transactions.filter((tx) => {
+      const d = parseTxDate(tx.date);
+      return d && d.getFullYear() === periodDate.getFullYear() && d.getMonth() === periodDate.getMonth();
+    }),
+    [transactions, periodDate],
+  );
+  const monthCats = useMemo(
+    () => Array.from(new Set(monthTx.map((tx) => tx.category))),
+    [monthTx],
+  );
+  const visibleTx = useMemo(() => {
+    const list = catFilter ? monthTx.filter((tx) => tx.category === catFilter) : monthTx;
+    return [...list].sort(
+      (a, b) => (parseTxDate(b.date)?.getTime() || 0) - (parseTxDate(a.date)?.getTime() || 0),
+    );
+  }, [monthTx, catFilter]);
+  // Groupes par jour — présentation type relevé bancaire
+  const dayGroups = useMemo(() => {
+    const map = new Map<string, { label: string; items: typeof visibleTx; total: number }>();
+    const todayKey = new Date().toDateString();
+    const yest = new Date();
+    yest.setDate(yest.getDate() - 1);
+    for (const tx of visibleTx) {
+      const d = parseTxDate(tx.date) || new Date(0);
+      const key = d.toDateString();
+      if (!map.has(key)) {
+        const label =
+          key === todayKey
+            ? t('expensesV2.today')
+            : key === yest.toDateString()
+              ? t('expensesV2.yesterday')
+              : d.toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' });
+        map.set(key, { label, items: [], total: 0 });
+      }
+      const g = map.get(key)!;
+      g.items.push(tx);
+      g.total += tx.amount;
+    }
+    return Array.from(map.values());
+  }, [visibleTx, t, locale]);
+  const monthTotal = useMemo(() => monthTx.reduce((s, tx) => s + tx.amount, 0), [monthTx]);
 
   const totalPro = useMemo(() => {
     return proExpenses.reduce((sum, e) => sum + e.amount, 0);
@@ -251,18 +306,73 @@ export default function ExpensesScreen() {
           </TouchableOpacity>
         )}
 
+        {/* Sélecteur de période (mois) — onglet quotidien uniquement */}
+        {activeTab === 'daily' && (
+          <View style={styles.periodRow}>
+            <TouchableOpacity
+              style={styles.periodArrow}
+              onPress={() => setMonthOffset((o) => o - 1)}
+              accessibilityLabel={t('expensesV2.prevMonth')}
+            >
+              <Ionicons name="chevron-back" size={18} color={theme.textSecondary} />
+            </TouchableOpacity>
+            <Text style={styles.periodLabel}>
+              {periodDate.toLocaleDateString(locale, { month: 'long', year: 'numeric' })}
+            </Text>
+            <TouchableOpacity
+              style={[styles.periodArrow, monthOffset >= 0 && { opacity: 0.35 }]}
+              disabled={monthOffset >= 0}
+              onPress={() => setMonthOffset((o) => Math.min(0, o + 1))}
+              accessibilityLabel={t('expensesV2.nextMonth')}
+            >
+              <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Summary */}
         <Card style={styles.summaryCard}>
           <Text style={styles.summaryLabel}>
             {activeTab === 'daily' ? t('expenses.summaryDaily') : t('expenses.summaryPro')}
           </Text>
           <Text style={styles.summaryAmount}>
-            {CUR} {formatNumber(activeTab === 'daily' ? totalDaily : totalPro)}
+            {CUR} {formatNumber(activeTab === 'daily' ? monthTotal : totalPro)}
           </Text>
           <Text style={styles.summaryCount}>
-            {activeTab === 'daily' ? transactions.length : proExpenses.length} {t('common.items')}
+            {activeTab === 'daily' ? monthTx.length : proExpenses.length} {t('common.items')}
           </Text>
         </Card>
+
+        {/* Filtres par catégorie (chips) */}
+        {activeTab === 'daily' && monthCats.length > 1 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.chipsScroll}
+            contentContainerStyle={styles.chipsRow}
+          >
+            <TouchableOpacity
+              style={[styles.chip, !catFilter && styles.chipActive]}
+              onPress={() => setCatFilter(null)}
+            >
+              <Text style={[styles.chipText, !catFilter && styles.chipTextActive]}>
+                {t('expensesV2.allCats')}
+              </Text>
+            </TouchableOpacity>
+            {monthCats.map((cat) => (
+              <TouchableOpacity
+                key={cat}
+                style={[styles.chip, catFilter === cat && styles.chipActive]}
+                onPress={() => setCatFilter((c) => (c === cat ? null : cat))}
+              >
+                <View style={[styles.chipDot, { backgroundColor: getCategoryColor(cat) }]} />
+                <Text style={[styles.chipText, catFilter === cat && styles.chipTextActive]}>
+                  {t(`categoryLabels.${cat}`) || cat}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
 
         {/* Daily Expenses */}
         {activeTab === 'daily' && (
@@ -274,8 +384,19 @@ export default function ExpensesScreen() {
                 subtitle={t('expenses.addDailySub')}
                 action={{ label: t('common.add'), onPress: () => setShowAddModal(true) }}
               />
+            ) : visibleTx.length === 0 ? (
+              <View style={styles.emptyMonth}>
+                <Ionicons name="calendar-outline" size={28} color={theme.textTertiary} />
+                <Text style={styles.emptyMonthText}>{t('expensesV2.noMonthTx')}</Text>
+              </View>
             ) : (
-              transactions.map((tx) => (
+              dayGroups.map((group) => (
+                <View key={group.label}>
+                  <View style={styles.dayHeader}>
+                    <Text style={styles.dayHeaderLabel}>{group.label}</Text>
+                    <Text style={styles.dayHeaderTotal}>−{formatNumber(group.total, 2)}</Text>
+                  </View>
+                  {group.items.map((tx) => (
                 <TouchableOpacity
                   key={tx.id}
                   activeOpacity={0.85}
@@ -319,6 +440,8 @@ export default function ExpensesScreen() {
                   </View>
                 </Card>
                 </TouchableOpacity>
+                  ))}
+                </View>
               ))
             )}
           </>
@@ -639,7 +762,69 @@ const makeStyles = (theme: any) => StyleSheet.create({
     color: theme.error,
     fontSize: FontSizes.md,
     fontWeight: FontWeights.bold,
+    fontVariant: ['tabular-nums'],
   },
+  // ── Budgy Smart 4.0 — période, filtres, groupes jour ──
+  periodRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.md,
+    paddingHorizontal: Spacing.xs,
+  },
+  periodArrow: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: theme.card,
+    borderWidth: 1, borderColor: theme.cardBorder,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  periodLabel: {
+    color: theme.text,
+    fontSize: FontSizes.md,
+    fontWeight: FontWeights.bold,
+    textTransform: 'capitalize',
+    letterSpacing: -0.2,
+  },
+  chipsScroll: { marginBottom: Spacing.md, marginHorizontal: -Spacing.lg },
+  chipsRow: { paddingHorizontal: Spacing.lg, gap: Spacing.xs, flexDirection: 'row' },
+  chip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: Spacing.md, paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: theme.card,
+    borderWidth: 1, borderColor: theme.cardBorder,
+  },
+  chipActive: { backgroundColor: theme.primary, borderColor: theme.primary },
+  chipDot: { width: 8, height: 8, borderRadius: 4 },
+  chipText: { color: theme.textSecondary, fontSize: FontSizes.xs, fontWeight: FontWeights.semibold },
+  chipTextActive: { color: '#FFF' },
+  dayHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.sm,
+    paddingHorizontal: Spacing.xs,
+  },
+  dayHeaderLabel: {
+    color: theme.textSecondary,
+    fontSize: FontSizes.xs,
+    fontWeight: FontWeights.bold,
+    textTransform: 'capitalize',
+    letterSpacing: 0.3,
+  },
+  dayHeaderTotal: {
+    color: theme.textTertiary,
+    fontSize: FontSizes.xs,
+    fontWeight: FontWeights.semibold,
+    fontVariant: ['tabular-nums'],
+  },
+  emptyMonth: {
+    alignItems: 'center',
+    paddingVertical: Spacing.xxl,
+    gap: Spacing.sm,
+  },
+  emptyMonthText: { color: theme.textTertiary, fontSize: FontSizes.sm },
   proLockedCard: {
     alignItems: 'center',
     padding: Spacing.xxl,

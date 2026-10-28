@@ -44,6 +44,7 @@ export const FEATURES: BudgyFeature[] = [
   { id: 'ai-optimizer',   route: '/more/ai-optimizer',        tier: 'pro',  titleKey: 'more.aiOptimizer',      subtitleKey: 'more.aiOptimizerSub',    icon: 'sparkles',            accent: 'pink',    group: 'tools' },
   { id: 'savings-radar',  route: '/more/savings-radar',       tier: 'pro',  titleKey: 'moreExt.savingsRadar',  subtitleKey: 'moreExt.savingsRadarSub', icon: 'radio',              accent: 'gold',    group: 'tools' },
   { id: 'budgy-score',    route: '/more/budgy-score',         tier: 'pro',  titleKey: 'moreExt.budgyScoreTitle',                                        icon: 'speedometer',         accent: 'gold',    group: 'tools' },
+  { id: 'twin',           route: '/more/twin',                tier: 'free', titleKey: 'twin.title',             subtitleKey: 'twin.sub',              icon: 'cube',                accent: 'cyan',    group: 'tools', badge: 'BETA' },
   { id: 'predict',        route: '/more/predict',             tier: 'pro',  titleKey: 'more.predict',           subtitleKey: 'more.predictSub',       icon: 'analytics',           accent: 'secondary', group: 'tools' },
   { id: 'calendar',       route: '/more/financial-calendar',  tier: 'pro',  titleKey: 'moreExt.calendarTitle',                                          icon: 'calendar',           accent: 'info',    group: 'tools' },
   { id: 'tax',            route: '/more/tax-optimizer',       tier: 'pro',  titleKey: 'more.taxOpt',            subtitleKey: 'more.taxOptSub',        icon: 'calculator',          accent: 'primary', group: 'tools' },
@@ -106,7 +107,7 @@ export interface FeatureCategory {
 export const FEATURE_CATEGORIES: FeatureCategory[] = [
   { id: 'finances', titleKey: 'moreHub.finances', subtitleKey: 'moreHub.financesSub', icon: 'wallet', featureIds: ['incomes', 'budgets', 'recurring', 'invoices', 'debts'] },
   { id: 'documents', titleKey: 'moreHub.documents', subtitleKey: 'moreHub.documentsSub', icon: 'folder-open', featureIds: ['receipts', 'documents', 'family', 'email-import'] },
-  { id: 'intelligence', titleKey: 'moreHub.intelligence', subtitleKey: 'moreHub.intelligenceSub', icon: 'sparkles', featureIds: ['budgy-score', 'ai-optimizer', 'savings-radar', 'predict', 'investments', 'calendar', 'export-pdf'] },
+  { id: 'intelligence', titleKey: 'moreHub.intelligence', subtitleKey: 'moreHub.intelligenceSub', icon: 'sparkles', featureIds: ['twin', 'budgy-score', 'ai-optimizer', 'savings-radar', 'predict', 'investments', 'calendar', 'export-pdf'] },
   { id: 'suisse', titleKey: 'moreHub.suisse', subtitleKey: 'moreHub.suisseSub', icon: 'shield-checkmark', featureIds: ['lamal', 'tax'] },
   { id: 'account', titleKey: 'moreHub.account', subtitleKey: 'moreHub.accountSub', icon: 'settings', featureIds: ['subscription', 'cloud-sync', 'security', 'notifications', 'settings', 'legal'] },
 ];

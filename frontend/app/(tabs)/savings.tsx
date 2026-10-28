@@ -21,6 +21,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
 import { useTheme } from '../../src/hooks/useTheme';
@@ -196,7 +197,7 @@ export default function SavingsScreen() {
 
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>🎯 {t('savings.title')}</Text>
+        <Text style={styles.title}>{t('savings.title')}</Text>
         <TouchableOpacity
           style={styles.addButton}
           onPress={() => {
@@ -219,28 +220,38 @@ export default function SavingsScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* Summary Card */}
-        <Card style={styles.summaryCard}>
-          <Text style={styles.summaryLabel}>{t('savings.total')}</Text>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryAmount}>{CUR} {formatNumber(totalSaved)}</Text>
-            <View style={styles.percentContainer}>
-              <Text style={styles.percentValue}>{pct(totalSaved, totalTarget)}%</Text>
+        {/* Summary Card — gradient premium (affiché quand il y a des objectifs) */}
+        {savingsGoals.length > 0 && (
+          <LinearGradient
+            colors={theme.gradientHero as [string, string, string]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.summaryCard}
+          >
+            <View style={styles.summaryTopSheen} pointerEvents="none" />
+            <Text style={styles.summaryLabel}>{t('savings.total')}</Text>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryAmount}>{CUR} {formatNumber(totalSaved)}</Text>
+              <View style={styles.percentContainer}>
+                <Text style={styles.percentValue}>{pct(totalSaved, totalTarget)}%</Text>
+              </View>
             </View>
-          </View>
-          <Text style={styles.summaryTarget}>{t('savings.target', { n: formatNumber(totalTarget) })}</Text>
-          <ProgressBar
-            value={pct(totalSaved, totalTarget)}
-            color={theme.primary}
-            height={10}
-          />
-          <View style={styles.autoSaveRow}>
-            <Ionicons name="sync" size={16} color={theme.success} />
-            <Text style={styles.autoSaveText}>
-              {t('savings.autoSave', { c: CUR, n: formatNumber(monthlyAutoSave) })}
-            </Text>
-          </View>
-        </Card>
+            <Text style={styles.summaryTarget}>{t('savings.target', { n: formatNumber(totalTarget) })}</Text>
+            <ProgressBar
+              value={pct(totalSaved, totalTarget)}
+              color="#FFFFFF"
+              height={10}
+            />
+            {monthlyAutoSave > 0 && (
+              <View style={styles.autoSaveRow}>
+                <Ionicons name="sync" size={16} color="#6EE7B7" />
+                <Text style={styles.autoSaveText}>
+                  {t('savings.autoSave', { c: CUR, n: formatNumber(monthlyAutoSave) })}
+                </Text>
+              </View>
+            )}
+          </LinearGradient>
+        )}
 
         {/* Goals List */}
         {savingsGoals.length === 0 ? (
@@ -717,36 +728,52 @@ const makeStyles = (Colors: ThemePalette) => StyleSheet.create({
   },
   summaryCard: {
     marginBottom: Spacing.lg,
+    borderRadius: BorderRadius.xxl,
+    padding: Spacing.xl,
+    overflow: 'hidden',
+  },
+  summaryTopSheen: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, height: 1,
+    backgroundColor: 'rgba(255,255,255,0.18)',
   },
   summaryLabel: {
-    color: Colors.textSecondary,
-    fontSize: FontSizes.sm,
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 11,
+    fontWeight: FontWeights.bold,
+    letterSpacing: 1.3,
+    textTransform: 'uppercase',
   },
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginTop: Spacing.sm,
   },
   summaryAmount: {
-    color: Colors.text,
+    color: '#FFF',
     fontSize: FontSizes.xxxl,
     fontWeight: FontWeights.black,
+    letterSpacing: -1,
+    fontVariant: ['tabular-nums'],
   },
   percentContainer: {
-    backgroundColor: `${Colors.primary}20`,
-    borderRadius: BorderRadius.md,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    borderRadius: 999,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
   },
   percentValue: {
-    color: Colors.primary,
+    color: '#FFF',
     fontSize: FontSizes.lg,
     fontWeight: FontWeights.bold,
+    fontVariant: ['tabular-nums'],
   },
   summaryTarget: {
-    color: Colors.textSecondary,
+    color: 'rgba(255,255,255,0.8)',
     fontSize: FontSizes.sm,
     marginBottom: Spacing.md,
+    marginTop: 2,
   },
   autoSaveRow: {
     flexDirection: 'row',
@@ -755,7 +782,7 @@ const makeStyles = (Colors: ThemePalette) => StyleSheet.create({
     marginTop: Spacing.md,
   },
   autoSaveText: {
-    color: Colors.success,
+    color: '#6EE7B7',
     fontSize: FontSizes.sm,
     fontWeight: FontWeights.semibold,
   },

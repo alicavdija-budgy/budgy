@@ -238,8 +238,11 @@ export default function AIMenuModal({ visible, onClose }: Props) {
           {/* Action cards */}
           <View style={styles.list}>
             {ACTIONS.map((item, idx) => (
+              <React.Fragment key={item.id}>
+                {idx === 3 && (
+                  <Text style={styles.secondaryLabel}>{t('aimenuV2.moreTools')}</Text>
+                )}
               <Animated.View
-                key={item.id}
                 style={{
                   opacity: anims[idx],
                   transform: [
@@ -281,6 +284,7 @@ export default function AIMenuModal({ visible, onClose }: Props) {
                   <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.35)" />
                 </Pressable>
               </Animated.View>
+              </React.Fragment>
             ))}
           </View>
 
@@ -293,7 +297,7 @@ export default function AIMenuModal({ visible, onClose }: Props) {
               },
             ]}
           >
-            Propulsé par Budgy AI · vos données restent privées
+            {t('aimenuV2.foot')}
           </Animated.Text>
         </Pressable>
       </Pressable>
@@ -439,6 +443,15 @@ const styles = StyleSheet.create({
   },
   badgeTxt: {
     color: ACCENT, fontSize: 9.5, fontWeight: '800', letterSpacing: 0.6,
+  },
+  secondaryLabel: {
+    color: 'rgba(255,255,255,0.35)',
+    fontSize: 10.5,
+    fontWeight: '800',
+    letterSpacing: 1.4,
+    marginTop: 10,
+    marginBottom: 2,
+    marginLeft: 4,
   },
   foot: {
     color: 'rgba(255,255,255,0.32)',

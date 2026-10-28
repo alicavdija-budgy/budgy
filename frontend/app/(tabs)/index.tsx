@@ -29,6 +29,7 @@ import Animated, {
   Extrapolation,
 } from 'react-native-reanimated';
 import { BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../../src/hooks/useTheme';
 import { useStore } from '../../src/stores/useStore';
 import { usePremiumStore } from '../../src/stores/usePremiumStore';
@@ -42,6 +43,7 @@ import AnimatedNumber from '../../src/components/AnimatedNumber';
 import PressScale from '../../src/components/PressScale';
 import FinancialHealthScore from '../../src/components/FinancialHealthScore';
 import AITimeline from '../../src/components/AITimeline';
+import VoiceInputModal from '../../src/components/VoiceInputModal';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -74,6 +76,25 @@ export default function HomeScreen() {
   const isPro = usePremiumStore((s) => s.hasPremiumAccess());
 
   const [refreshing, setRefreshing] = useState(false);
+  const [voiceOpen, setVoiceOpen] = useState(false);
+
+  // ── Confidentialité : masquer les montants sensibles (persisté) ──
+  const [hideAmounts, setHideAmounts] = useState(false);
+  useEffect(() => {
+    AsyncStorage.getItem('budgy.hideAmounts')
+      .then((v) => { if (v === '1') setHideAmounts(true); })
+      .catch(() => {});
+  }, []);
+  const toggleHideAmounts = useCallback(() => {
+    setHideAmounts((prev) => {
+      AsyncStorage.setItem('budgy.hideAmounts', prev ? '0' : '1').catch(() => {});
+      return !prev;
+    });
+  }, []);
+  const mask = useCallback(
+    (v: string) => (hideAmounts ? '•••••' : v),
+    [hideAmounts],
+  );
 
   useEffect(() => {
     // Phase 1: Empty state at first launch — no auto-seeding.
@@ -100,6 +121,33 @@ export default function HomeScreen() {
   const spentPct = monthlyIncome > 0
     ? Math.min(100, (totalCommitted / monthlyIncome) * 100)
     : 0;
+
+  // ── Comparaison avec le mois précédent (même moteur, date décalée) ──
+  const prevSnapshot = useMemo(() => {
+    const d = new Date();
+    return getMonthlyFinancialSnapshot({
+      incomes,
+      transactions,
+      recurringExpenses,
+      invoices,
+      now: new Date(d.getFullYear(), d.getMonth(), 0), // dernier jour du mois précédent
+    });
+  }, [incomes, transactions, recurringExpenses, invoices]);
+  const spendDeltaPct = useMemo(() => {
+    // Affiché uniquement si les deux mois ont des données réelles
+    if (
+      prevSnapshot.txCountThisMonth === 0 ||
+      snapshot.txCountThisMonth === 0 ||
+      prevSnapshot.paidExpenses <= 0
+    ) return null;
+    return Math.round(((snapshot.paidExpenses - prevSnapshot.paidExpenses) / prevSnapshot.paidExpenses) * 100);
+  }, [snapshot, prevSnapshot]);
+
+  // ── Dernières opérations (4 plus récentes) ──
+  const recentTx = useMemo(() => {
+    const ts = (s: string) => { const d = new Date(s); return isNaN(d.getTime()) ? 0 : d.getTime(); };
+    return [...transactions].sort((a, b) => ts(b.date) - ts(a.date)).slice(0, 4);
+  }, [transactions]);
 
   const now = new Date();
 
@@ -176,10 +224,10 @@ export default function HomeScreen() {
   const styles = makeStyles(C);
 
   const quickActions = [
-    { icon: 'scan' as const, label: t('home.scanReceipt'), color: C.purple, route: '/scanner-modal' },
-    { icon: 'cash' as const, label: t('home.addIncome'), color: C.success, route: '/more/incomes' },
     { icon: 'remove-circle' as const, label: t('home.addExpense'), color: C.error, route: '/(tabs)/expenses' },
-    { icon: 'sparkles' as const, label: t('home.save'), color: C.secondary, route: '/more/ai-optimizer', isNew: true },
+    { icon: 'scan' as const, label: t('home.scanReceipt'), color: C.purple, route: '/scanner-modal' },
+    { icon: 'mic' as const, label: t('homeV2.dictate'), color: C.secondary, onPress: () => setVoiceOpen(true) },
+    { icon: 'sparkles' as const, label: t('home.save'), color: C.success, route: '/more/ai-optimizer', isNew: true },
   ];
 
   return (
@@ -252,21 +300,35 @@ export default function HomeScreen() {
 
             <View style={styles.heroTop}>
               <Text style={styles.heroLabel}>{t('home.available')}</Text>
-              <View style={[styles.proPill, { backgroundColor: isPro ? 'rgba(251, 191, 36, 0.95)' : 'rgba(255,255,255,0.22)' }]}>
-                <Ionicons name="flash" size={10} color={isPro ? '#1C1917' : '#FFF'} />
-                <Text style={[styles.proPillText, { color: isPro ? '#1C1917' : '#FFF' }]}>
-                  {isPro ? t('home.proLabel') : t('home.freeLabel')}
-                </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <PressScale
+                  haptic="selection"
+                  onPress={toggleHideAmounts}
+                  accessibilityLabel={t('homeV2.hideAmounts')}
+                  style={styles.heroEye}
+                >
+                  <Ionicons name={hideAmounts ? 'eye-off' : 'eye'} size={14} color="rgba(255,255,255,0.92)" />
+                </PressScale>
+                <View style={[styles.proPill, { backgroundColor: isPro ? 'rgba(251, 191, 36, 0.95)' : 'rgba(255,255,255,0.22)' }]}>
+                  <Ionicons name="flash" size={10} color={isPro ? '#1C1917' : '#FFF'} />
+                  <Text style={[styles.proPillText, { color: isPro ? '#1C1917' : '#FFF' }]}>
+                    {isPro ? t('home.proLabel') : t('home.freeLabel')}
+                  </Text>
+                </View>
               </View>
             </View>
 
             <View style={styles.heroAmountRow}>
               <Text style={styles.heroCurrency}>{m.code}</Text>
-              <AnimatedNumber
-                value={m.convert(available)}
-                duration={1400}
-                style={styles.heroAmount}
-              />
+              {hideAmounts ? (
+                <Text style={styles.heroAmount}>••••</Text>
+              ) : (
+                <AnimatedNumber
+                  value={m.convert(available)}
+                  duration={1400}
+                  style={styles.heroAmount}
+                />
+              )}
             </View>
 
             {/* progress bar */}
@@ -282,25 +344,34 @@ export default function HomeScreen() {
                 <View style={styles.heroStatDot} />
                 <View>
                   <Text style={styles.heroStatLabel}>{t('home.incomesShort')}</Text>
-                  <Text style={styles.heroStatValue}>{m.format(monthlyIncome)}</Text>
+                  <Text style={styles.heroStatValue}>{mask(m.format(monthlyIncome))}</Text>
                 </View>
               </View>
               <View style={styles.heroStatSep} />
               <View style={styles.heroStat}>
                 <View style={[styles.heroStatDot, { backgroundColor: '#FCA5A5' }]} />
                 <View>
-                  <Text style={styles.heroStatLabel}>Engagés</Text>
-                  <Text style={styles.heroStatValue}>{m.format(totalCommitted)}</Text>
+                  <Text style={styles.heroStatLabel}>{t('homeV2.committed')}</Text>
+                  <Text style={styles.heroStatValue}>{mask(m.format(totalCommitted))}</Text>
                 </View>
               </View>
             </View>
+
+            {/* Comparaison honnête avec le mois précédent (si données réelles) */}
+            {spendDeltaPct !== null && (
+              <View style={styles.deltaRow}>
+                <Ionicons
+                  name={spendDeltaPct <= 0 ? 'trending-down' : 'trending-up'}
+                  size={12}
+                  color={spendDeltaPct <= 0 ? '#6EE7B7' : '#FCA5A5'}
+                />
+                <Text style={styles.deltaText}>
+                  {spendDeltaPct > 0 ? '+' : ''}{spendDeltaPct}% {t('homeV2.vsLastMonth')}
+                </Text>
+              </View>
+            )}
           </LinearGradient>
           </Animated.View>
-        </Animated.View>
-
-        {/* ─── FINANCIAL HEALTH SCORE (premium card, just below balance) ─── */}
-        <Animated.View entering={FadeInDown.duration(500).delay(150)}>
-          <FinancialHealthScore />
         </Animated.View>
 
         {/* ─── AI TIMELINE — proactive insights feed ─── */}
@@ -314,7 +385,7 @@ export default function HomeScreen() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.quickStatLabel}>{t('home.today')}</Text>
-              <Text style={styles.quickStatValue}>{m.format(todayExpenses)}</Text>
+              <Text style={styles.quickStatValue}>{mask(m.format(todayExpenses))}</Text>
             </View>
           </View>
           <View style={styles.quickStatCard}>
@@ -323,7 +394,7 @@ export default function HomeScreen() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.quickStatLabel}>{t('home.thisWeek')}</Text>
-              <Text style={styles.quickStatValue}>{m.format(weekExpenses)}</Text>
+              <Text style={styles.quickStatValue}>{mask(m.format(weekExpenses))}</Text>
             </View>
           </View>
         </Animated.View>
@@ -335,7 +406,7 @@ export default function HomeScreen() {
               <PressScale
                 key={a.label}
                 haptic="light"
-                onPress={() => router.push(a.route as any)}
+                onPress={() => (a.route ? router.push(a.route as any) : a.onPress?.())}
                 style={styles.actionCard}
               >
                 <View style={styles.actionCardInner}>
@@ -350,6 +421,37 @@ export default function HomeScreen() {
           </View>
         </Animated.View>
 
+        {/* ─── DERNIÈRES OPÉRATIONS (style relevé bancaire) ─── */}
+        {recentTx.length > 0 && (
+          <Animated.View entering={FadeInDown.duration(500).delay(350)}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>{t('homeV2.recentOps')}</Text>
+              <PressScale haptic="selection" onPress={() => router.push('/(tabs)/expenses' as any)}>
+                <Text style={styles.seeAll}>{t('home.viewAll')}</Text>
+              </PressScale>
+            </View>
+            <View style={styles.recentCard}>
+              {recentTx.map((tx, i) => (
+                <View
+                  key={tx.id}
+                  style={[styles.recentRow, i < recentTx.length - 1 && styles.recentRowBorder]}
+                >
+                  <CategoryIcon category={tx.category} size="sm" />
+                  <View style={{ flex: 1, marginLeft: Spacing.sm }}>
+                    <Text style={styles.recentName} numberOfLines={1}>
+                      {tx.title || getCategoryName(tx.category, t)}
+                    </Text>
+                    <Text style={styles.recentDate}>
+                      {(() => { const d = new Date(tx.date); return isNaN(d.getTime()) ? tx.date : d.toLocaleDateString(dateLocale, { day: 'numeric', month: 'short' }); })()}
+                    </Text>
+                  </View>
+                  <Text style={styles.recentAmount}>{mask(`−${m.format(tx.amount)}`)}</Text>
+                </View>
+              ))}
+            </View>
+          </Animated.View>
+        )}
+
         {/* ─── SAVINGS progress ─── */}
         {savingsGoals.length > 0 && (
           <Animated.View entering={FadeInDown.duration(500).delay(400)}>
@@ -361,13 +463,17 @@ export default function HomeScreen() {
             </View>
             <View style={styles.savingsCard}>
               <View style={styles.savingsTop}>
-                <AnimatedNumber
-                  value={m.convert(totalSaved)}
-                  prefix={`${m.code} `}
-                  duration={1200}
-                  style={styles.savingsAmount}
-                />
-                <Text style={styles.savingsTarget}>{t('home.savingsTargetLabel', { n: m.format(totalTarget) })}</Text>
+                {hideAmounts ? (
+                  <Text style={styles.savingsAmount}>{m.code} •••••</Text>
+                ) : (
+                  <AnimatedNumber
+                    value={m.convert(totalSaved)}
+                    prefix={`${m.code} `}
+                    duration={1200}
+                    style={styles.savingsAmount}
+                  />
+                )}
+                <Text style={styles.savingsTarget}>{t('home.savingsTargetLabel', { n: mask(m.format(totalTarget)) })}</Text>
               </View>
               <View style={styles.savingsProgressBg}>
                 <LinearGradient
@@ -381,6 +487,11 @@ export default function HomeScreen() {
             </View>
           </Animated.View>
         )}
+
+        {/* ─── FINANCIAL HEALTH SCORE + ANALYSES (accès en bas de page) ─── */}
+        <Animated.View entering={FadeInDown.duration(500).delay(450)} style={{ marginTop: Spacing.md }}>
+          <FinancialHealthScore />
+        </Animated.View>
 
         {/* ─── AI TEASER (hero-width banner) ─── */}
         {transactions.length >= 3 && (
@@ -437,6 +548,9 @@ export default function HomeScreen() {
           </Animated.View>
         )}
       </Animated.ScrollView>
+
+      {/* Dictée vocale directe depuis l'accueil (réutilise le moteur existant) */}
+      <VoiceInputModal visible={voiceOpen} onClose={() => setVoiceOpen(false)} />
     </View>
   );
 }
@@ -531,7 +645,38 @@ const makeStyles = (C: any) =>
     },
     heroStatSep: { width: 1, height: 32, backgroundColor: 'rgba(255,255,255,0.3)', marginHorizontal: Spacing.sm },
     heroStatLabel: { color: 'rgba(255,255,255,0.8)', fontSize: FontSizes.xs, fontWeight: FontWeights.semibold },
-    heroStatValue: { color: '#FFF', fontSize: FontSizes.md, fontWeight: FontWeights.bold, marginTop: 1 },
+    heroStatValue: { color: '#FFF', fontSize: FontSizes.md, fontWeight: FontWeights.bold, marginTop: 1, fontVariant: ['tabular-nums'] },
+
+    heroEye: {
+      width: 28, height: 28, borderRadius: 14,
+      backgroundColor: 'rgba(255,255,255,0.18)',
+      alignItems: 'center', justifyContent: 'center',
+    },
+    deltaRow: {
+      flexDirection: 'row', alignItems: 'center', gap: 5,
+      marginTop: Spacing.sm,
+    },
+    deltaText: {
+      color: 'rgba(255,255,255,0.85)', fontSize: 11.5, fontWeight: FontWeights.semibold,
+    },
+
+    // Dernières opérations (style relevé bancaire)
+    recentCard: {
+      backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder,
+      borderRadius: BorderRadius.xl, paddingHorizontal: Spacing.md,
+      marginBottom: Spacing.sm,
+    },
+    recentRow: {
+      flexDirection: 'row', alignItems: 'center',
+      paddingVertical: Spacing.md,
+    },
+    recentRowBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.cardBorder },
+    recentName: { color: C.text, fontSize: FontSizes.sm, fontWeight: FontWeights.semibold },
+    recentDate: { color: C.textTertiary, fontSize: 11, marginTop: 1, textTransform: 'capitalize' },
+    recentAmount: {
+      color: C.text, fontSize: FontSizes.sm, fontWeight: FontWeights.bold,
+      fontVariant: ['tabular-nums'], marginLeft: Spacing.sm,
+    },
 
     // Quick stats
     quickStats: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.lg },

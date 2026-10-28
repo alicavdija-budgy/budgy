@@ -52,6 +52,17 @@ const fmt = (n: number) => {
   return s.replace(/\B(?=(\d{3})+(?!\d))/g, "'");
 };
 
+// Parse robuste des dates de transactions (format locale "28.10.2026" ou ISO).
+// Niveau module : évite l'erreur TDZ quand utilisé dans useMemo avant sa déclaration.
+function parseTxDate(s: string): Date | null {
+  if (!s) return null;
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return new Date(s);
+  const eu = s.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})/);
+  if (eu) return new Date(parseInt(eu[3]), parseInt(eu[2]) - 1, parseInt(eu[1]));
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -145,22 +156,25 @@ export default function HomeScreen() {
 
   // ── Dernières opérations (4 plus récentes) ──
   const recentTx = useMemo(() => {
-    const ts = (s: string) => { const d = new Date(s); return isNaN(d.getTime()) ? 0 : d.getTime(); };
+    const ts = (s: string) => parseTxDate(s)?.getTime() || 0;
     return [...transactions].sort((a, b) => ts(b.date) - ts(a.date)).slice(0, 4);
   }, [transactions]);
 
   const now = new Date();
 
-  // Today / week
+  // Today / week — parse robuste (parseTxDate défini au niveau module)
   const todayStr = new Date().toDateString();
   const todayExpenses = transactions
-    .filter((t) => new Date(t.date).toDateString() === todayStr)
+    .filter((t) => parseTxDate(t.date)?.toDateString() === todayStr)
     .reduce((s, t) => s + t.amount, 0);
 
   const weekAgo = new Date();
   weekAgo.setDate(weekAgo.getDate() - 7);
   const weekExpenses = transactions
-    .filter((t) => new Date(t.date) >= weekAgo)
+    .filter((t) => {
+      const d = parseTxDate(t.date);
+      return d && d >= weekAgo;
+    })
     .reduce((s, t) => s + t.amount, 0);
 
   const unreadNotifs = notifications.filter((n) => !n.read).length;
@@ -304,7 +318,8 @@ export default function HomeScreen() {
                 <PressScale
                   haptic="selection"
                   onPress={toggleHideAmounts}
-                  accessibilityLabel={t('homeV2.hideAmounts')}
+                  accessibilityLabel={hideAmounts ? t('homeV2.showAmounts') : t('homeV2.hideAmounts')}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   style={styles.heroEye}
                 >
                   <Ionicons name={hideAmounts ? 'eye-off' : 'eye'} size={14} color="rgba(255,255,255,0.92)" />
@@ -442,7 +457,7 @@ export default function HomeScreen() {
                       {tx.title || getCategoryName(tx.category, t)}
                     </Text>
                     <Text style={styles.recentDate}>
-                      {(() => { const d = new Date(tx.date); return isNaN(d.getTime()) ? tx.date : d.toLocaleDateString(dateLocale, { day: 'numeric', month: 'short' }); })()}
+                      {(() => { const d = parseTxDate(tx.date); return d ? d.toLocaleDateString(dateLocale, { day: 'numeric', month: 'short' }) : tx.date; })()}
                     </Text>
                   </View>
                   <Text style={styles.recentAmount}>{mask(`−${m.format(tx.amount)}`)}</Text>
@@ -648,7 +663,7 @@ const makeStyles = (C: any) =>
     heroStatValue: { color: '#FFF', fontSize: FontSizes.md, fontWeight: FontWeights.bold, marginTop: 1, fontVariant: ['tabular-nums'] },
 
     heroEye: {
-      width: 28, height: 28, borderRadius: 14,
+      width: 32, height: 32, borderRadius: 16,
       backgroundColor: 'rgba(255,255,255,0.18)',
       alignItems: 'center', justifyContent: 'center',
     },

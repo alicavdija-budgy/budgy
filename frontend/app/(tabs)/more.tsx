@@ -306,6 +306,17 @@ export function MenuList({
                       <Ionicons name="lock-closed" size={9} color={C.textTertiary} />
                     </View>
                   )}
+                  {!locked && f.badge && (
+                    <View style={{
+                      backgroundColor: `${C.secondary}22`,
+                      borderRadius: 5,
+                      paddingHorizontal: 5,
+                      paddingVertical: 2,
+                      marginLeft: 2,
+                    }}>
+                      <Text style={{ color: C.secondary, fontSize: 8.5, fontWeight: '800', letterSpacing: 0.5 }}>{f.badge}</Text>
+                    </View>
+                  )}
                   {!locked && f.tier === 'pro' && (
                     <View style={styles.proChipDiscrete}>
                       <Text style={styles.proChipText}>PRO</Text>

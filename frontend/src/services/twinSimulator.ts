@@ -56,8 +56,9 @@ export function simulatePurchase(input: {
 
   // Disponible réel du mois (déjà net des dépenses payées, charges
   // récurrentes et factures à venir — voir selectors.ts), moins la
-  // réserve d'épargne éventuelle.
-  const availableBefore = Math.max(0, snapshot.realAvailableThisMonth - reservedSavings);
+  // réserve d'épargne éventuelle. Peut être négatif : l'explication
+  // du calcul doit rester cohérente ligne à ligne, sans écrêtage.
+  const availableBefore = snapshot.realAvailableThisMonth - reservedSavings;
   const availableAfter = availableBefore - amount;
 
   // Seuil de confort : il doit rester au moins 10 % du revenu mensuel

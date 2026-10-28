@@ -158,6 +158,12 @@ export default function SavingsScreen() {
   };
 
   const handleDelete = (id: string) => {
+    // RN-Web : Alert.alert à boutons est inopérant — confirmation navigateur
+    if (Platform.OS === 'web') {
+      const ok = typeof window !== 'undefined' && window.confirm(`${t('common.delete')}\n\n${t('common.deleteConfirm')}`);
+      if (ok) deleteSavingsGoal(id);
+      return;
+    }
     Alert.alert(
       t('common.delete'),
       t('common.deleteConfirm'),
@@ -420,6 +426,7 @@ export default function SavingsScreen() {
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.deleteButton}
+                    testID={`savings-delete-${goal.id}`}
                     onPress={() => handleDelete(goal.id)}
                   >
                     <Ionicons name="trash-outline" size={18} color={theme.textTertiary} />

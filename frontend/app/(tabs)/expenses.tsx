@@ -336,10 +336,13 @@ export default function ExpensesScreen() {
             {activeTab === 'daily' ? t('expenses.summaryDaily') : t('expenses.summaryPro')}
           </Text>
           <Text style={styles.summaryAmount}>
-            {CUR} {formatNumber(activeTab === 'daily' ? monthTotal : totalPro)}
+            {CUR} {activeTab === 'daily' ? formatNumber(monthTotal, 2) : formatNumber(totalPro)}
           </Text>
           <Text style={styles.summaryCount}>
-            {activeTab === 'daily' ? monthTx.length : proExpenses.length} {t('common.items')}
+            {(() => {
+              const n = activeTab === 'daily' ? monthTx.length : proExpenses.length;
+              return `${n} ${n === 1 ? t('expensesV2.oneItem') : t('common.items')}`;
+            })()}
           </Text>
         </Card>
 
@@ -428,7 +431,9 @@ export default function ExpensesScreen() {
                           </Text>
                         </View>
                       )}
-                      <TouchableOpacity onPress={() => setTxActionsCtx({
+                      <TouchableOpacity
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        onPress={() => setTxActionsCtx({
                         id: tx.id,
                         title: tx.title,
                         subtitle: `${CUR} ${formatNumber(tx.amount, 2)} · ${tx.date}`,

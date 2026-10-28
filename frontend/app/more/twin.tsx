@@ -233,8 +233,9 @@ const makeStyles = (C: any) =>
     inputRow: { flexDirection: 'row', alignItems: 'baseline', gap: Spacing.sm },
     inputCurrency: { color: C.textSecondary, fontSize: FontSizes.lg, fontWeight: FontWeights.semibold },
     input: {
-      flex: 1, color: C.text, fontSize: 40, fontWeight: FontWeights.black,
+      flex: 1, minWidth: 0, color: C.text, fontSize: 40, fontWeight: FontWeights.black,
       letterSpacing: -1.5, padding: 0, fontVariant: ['tabular-nums'],
+      ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as any) : {}),
     },
 
     switchCard: {

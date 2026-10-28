@@ -79,6 +79,13 @@ export function EntityActionsSheet({
     if (Platform.OS !== 'web') {
       try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning); } catch {}
     }
+    // RN-Web : Alert.alert à boutons est inopérant — confirmation navigateur
+    if (Platform.OS === 'web') {
+      const ok = typeof window !== 'undefined' &&
+        window.confirm(`${deleteConfirmTitle ?? t('entitySheet.deleteTitle')}\n\n${deleteConfirmMessage ?? t('entitySheet.deleteMessage')}`);
+      if (ok) onDelete();
+      return;
+    }
     Alert.alert(
       deleteConfirmTitle ?? t('entitySheet.deleteTitle'),
       deleteConfirmMessage ?? t('entitySheet.deleteMessage'),

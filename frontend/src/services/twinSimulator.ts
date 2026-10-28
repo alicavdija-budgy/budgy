@@ -16,6 +16,15 @@ import type { FinancialSnapshot } from '../stores/selectors';
 export type TwinVerdict = 'yes' | 'tight' | 'no';
 export type TwinDataQuality = 'ok' | 'partial' | 'none';
 
+export interface TwinInput {
+  amount: number;
+  snapshot: FinancialSnapshot;
+  /** Somme des autoSave mensuels des objectifs d'épargne actifs */
+  monthlyAutoSave: number;
+  /** true = préserver les versements d'épargne prévus ce mois */
+  protectSavings: boolean;
+}
+
 export interface TwinResult {
   amount: number;
   /** Disponible du mois AVANT l'achat (après réserve d'épargne éventuelle) */
@@ -39,14 +48,7 @@ export interface TwinResult {
   };
 }
 
-export function simulatePurchase(input: {
-  amount: number;
-  snapshot: FinancialSnapshot;
-  /** Somme des autoSave mensuels des objectifs d'épargne actifs */
-  monthlyAutoSave: number;
-  /** true = préserver les versements d'épargne prévus ce mois */
-  protectSavings: boolean;
-}): TwinResult {
+export function simulatePurchase(input: TwinInput): TwinResult {
   const { snapshot } = input;
   const amount = isFinite(input.amount) && input.amount > 0 ? input.amount : 0;
 
@@ -54,11 +56,18 @@ export function simulatePurchase(input: {
     ? Math.max(0, isFinite(input.monthlyAutoSave) ? input.monthlyAutoSave : 0)
     : 0;
 
-  // Disponible réel du mois (déjà net des dépenses payées, charges
-  // récurrentes et factures à venir — voir selectors.ts), moins la
-  // réserve d'épargne éventuelle. Peut être négatif : l'explication
-  // du calcul doit rester cohérente ligne à ligne, sans écrêtage.
-  const availableBefore = snapshot.realAvailableThisMonth - reservedSavings;
+  // Disponible RÉEL du mois, recalculé ici à partir des composantes brutes
+  // (revenus − dépenses payées − charges récurrentes − factures à venir)
+  // SANS l'écrêtage à 0 appliqué par snapshot.realAvailableThisMonth :
+  // un déficit préexistant doit rester visible et le détail du calcul doit
+  // correspondre exactement, ligne à ligne, au total affiché.
+  // Le moteur mensuel (selectors.ts) n'est PAS modifié.
+  const rawAvailable =
+    snapshot.monthlyIncome -
+    snapshot.paidExpenses -
+    snapshot.recurringExpenses -
+    snapshot.upcomingBills;
+  const availableBefore = rawAvailable - reservedSavings;
   const availableAfter = availableBefore - amount;
 
   // Seuil de confort : il doit rester au moins 10 % du revenu mensuel

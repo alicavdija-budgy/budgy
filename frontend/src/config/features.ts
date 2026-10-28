@@ -114,3 +114,10 @@ export const FEATURE_CATEGORIES: FeatureCategory[] = [
 
 export const CATEGORY_BY_ID: Record<string, FeatureCategory> =
   Object.fromEntries(FEATURE_CATEGORIES.map((c) => [c.id, c]));
+
+// ── Budgy Smart 4.0 — alertes externes (carburant, actualités CH) ────────
+// DÉSACTIVÉ tant que des sources officielles (OFSP/Priminfo, administrations
+// fiscales, TCS ou fournisseur carburant autorisé) ne sont pas validées :
+// faisabilité, licence de réutilisation, fréquence et coûts à confirmer.
+// Aucune donnée ne doit être inventée ni scrapée sans autorisation.
+export const EXTERNAL_ALERTS_ENABLED = false;

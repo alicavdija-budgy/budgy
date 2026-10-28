@@ -17,6 +17,28 @@ import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAlertsStore, DEFAULT_ALERTS_PREFS } from '../stores/useAlertsStore';
+
+// ─── Budgy Alerts preferences (Phase 3) ─────────────────────────────────
+// Read outside React via getState(); safe fallback to defaults.
+function alertsPrefs() {
+  try {
+    return useAlertsStore.getState().prefs || DEFAULT_ALERTS_PREFS;
+  } catch {
+    return DEFAULT_ALERTS_PREFS;
+  }
+}
+
+/** True when the current local time falls inside the user's quiet hours. */
+export function isQuietNow(prefs = alertsPrefs()): boolean {
+  if (!prefs.quietEnabled) return false;
+  const h = new Date().getHours();
+  const { quietStart, quietEnd } = prefs;
+  // Plage pouvant traverser minuit (ex. 22h → 7h)
+  return quietStart <= quietEnd
+    ? h >= quietStart && h < quietEnd
+    : h >= quietStart || h < quietEnd;
+}
 
 // Configure notification handler
 Notifications.setNotificationHandler({
@@ -97,14 +119,33 @@ export async function sendBudgetAlert(
   limit: number,
   percentage: number
 ) {
+  const prefs = alertsPrefs();
+  // Catégorie désactivée ou heures silencieuses : pas de notification
+  // immédiate (le flux in-app Budgy Alerts reste la source d'information).
+  if (!prefs.categories.budget || isQuietNow(prefs)) return;
+
+  // Anti-répétition : une seule alerte par catégorie de budget et par mois.
+  const now = new Date();
+  const dedupeKey = `budgy_budget_alert_${category}_${now.getFullYear()}-${now.getMonth() + 1}`;
+  try {
+    if (await AsyncStorage.getItem(dedupeKey)) return;
+    await AsyncStorage.setItem(dedupeKey, '1');
+  } catch {}
+
   const isExceeded = percentage >= 100;
+  // Confidentialité : aucun montant sur l'écran verrouillé sans opt-in.
+  const showAmounts = prefs.showAmountsOnLockScreen;
 
   await Notifications.scheduleNotificationAsync({
     content: {
       title: isExceeded ? `⚠️ Budget ${category} dépassé!` : `📊 Budget ${category}: ${Math.round(percentage)}%`,
-      body: isExceeded
-        ? `Vous avez dépensé CHF ${spent.toFixed(0)} sur un budget de CHF ${limit.toFixed(0)}.`
-        : `Attention: CHF ${spent.toFixed(0)} / ${limit.toFixed(0)}. Il reste CHF ${(limit - spent).toFixed(0)}.`,
+      body: showAmounts
+        ? (isExceeded
+          ? `Vous avez dépensé CHF ${spent.toFixed(0)} sur un budget de CHF ${limit.toFixed(0)}.`
+          : `Attention: CHF ${spent.toFixed(0)} / ${limit.toFixed(0)}. Il reste CHF ${(limit - spent).toFixed(0)}.`)
+        : (isExceeded
+          ? 'Ouvrez Budgy pour voir le détail de ce budget.'
+          : 'Ce budget approche de sa limite. Ouvrez Budgy pour le détail.'),
       data: { type: 'budget_alert', category },
       ...(Platform.OS === 'android' && { channelId: 'budget-alerts' }),
     },
@@ -149,8 +190,11 @@ export async function scheduleMonthlyReminder() {
   await Notifications.cancelScheduledNotificationAsync(MONTHLY_REMINDER_ID).catch(() => {});
   await Notifications.cancelScheduledNotificationAsync(LAMAL_REMINDER_ID).catch(() => {});
 
-  // Schedule reminder on the 1st of each month at 9:00
-  await Notifications.scheduleNotificationAsync({
+  const prefs = alertsPrefs();
+
+  // Schedule reminder on the 1st of each month at 9:00 (catégorie Budget)
+  if (prefs.categories.budget) {
+    await Notifications.scheduleNotificationAsync({
     identifier: MONTHLY_REMINDER_ID,
     content: {
       title: '📅 Nouveau mois, nouveau budget!',
@@ -165,9 +209,11 @@ export async function scheduleMonthlyReminder() {
       minute: 0,
     },
   });
+  }
 
-  // LAMal reminder - November 15 each year
-  await Notifications.scheduleNotificationAsync({
+  // LAMal reminder - November 15 each year (catégorie Contrats & assurances)
+  if (prefs.categories.contracts) {
+    await Notifications.scheduleNotificationAsync({
     identifier: LAMAL_REMINDER_ID,
     content: {
       title: '🏥 Rappel LAMal - Changement d\'assurance',
@@ -183,6 +229,7 @@ export async function scheduleMonthlyReminder() {
       minute: 0,
     },
   });
+  }
 }
 
 // Check all budgets and send alerts
@@ -225,6 +272,13 @@ export async function scheduleDeadlineReminders(
 ): Promise<string[]> {
   if (Platform.OS === 'web') return [];
   try {
+    // Préférences Budgy Alerts : contrats/récurrents → 'contracts',
+    // factures → 'invoices'. Catégorie désactivée = aucun rappel planifié.
+    const prefs = alertsPrefs();
+    const categoryEnabled =
+      input.type === 'invoice' ? prefs.categories.invoices : prefs.categories.contracts;
+    if (!categoryEnabled) return [];
+
     const due = new Date(input.dueDate);
     if (isNaN(due.getTime())) return [];
 
@@ -249,7 +303,7 @@ export async function scheduleDeadlineReminders(
         year: 'numeric',
       });
       const amountLabel =
-        input.amount && input.amount > 0
+        prefs.showAmountsOnLockScreen && input.amount && input.amount > 0
           ? ` (CHF ${input.amount.toFixed(2)})`
           : '';
 

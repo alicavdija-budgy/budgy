@@ -27,6 +27,8 @@ import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getSupabase, isSupabaseConfigured } from '../../src/lib/supabase';
 import { usePremiumStore } from '../../src/stores/usePremiumStore';
+import { useAlertsStore } from '../../src/stores/useAlertsStore';
+import { cancelAllEntityReminders } from '../../src/services/notifications';
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
@@ -79,6 +81,17 @@ export default function SettingsScreen() {
                 console.warn('[logout] premium reset failed (non-fatal):', e);
               }
 
+              // 2c. Phase 4 — Confidentialité : annule les rappels OS liés
+              // aux entités (factures/contrats) de ce compte, de manière
+              // ciblée (les rappels génériques mensuel/LAMal sont conservés).
+              // Le scope Budgy Alerts bascule automatiquement sur 'guest'
+              // via initAlertsScopeSync (user → null).
+              try {
+                await cancelAllEntityReminders();
+              } catch (e) {
+                console.warn('[logout] entity reminders cleanup failed (non-fatal):', e);
+              }
+
               // 3. Purge Supabase auth tokens cached in AsyncStorage
               try {
                 const allKeys = await AsyncStorage.getAllKeys();
@@ -116,7 +129,13 @@ export default function SettingsScreen() {
         {
           text: t('common.delete'),
           style: 'destructive',
-          onPress: clearAllData,
+          onPress: () => {
+            clearAllData();
+            // Phase 4 — « Supprimer mes données » inclut l'historique
+            // d'alertes du compte courant et ses rappels OS d'entités.
+            try { useAlertsStore.getState().clearActiveScope(); } catch {}
+            cancelAllEntityReminders().catch(() => {});
+          },
         },
       ]
     );

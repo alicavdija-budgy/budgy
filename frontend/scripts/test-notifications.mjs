@@ -40,5 +40,25 @@ ok('contract deadline reminders (J-90/J-30/J-7/J-1) remain intact', () => {
   assert.match(src, /cancel previously scheduled deadline reminders/i);
 });
 
+// ── Phase 4 — hygiène des rappels ─────────────────────────────────────
+ok('cancelAllEntityReminders: nettoyage CIBLÉ (jamais cancelAll global)', () => {
+  assert.match(src, /export async function cancelAllEntityReminders/);
+  assert.match(src, /startsWith\('budgy_notif_ids_'\)/);
+  assert.ok(!src.includes('cancelAllScheduledNotificationsAsync'));
+});
+
+ok('facture marquée payée → rappels annulés ; repassée à payer → reprogrammés', () => {
+  const inv = fs.readFileSync(path.join(root, 'app', 'more', 'invoices.tsx'), 'utf8');
+  const fn = inv.slice(inv.indexOf('const toggleStatus'), inv.indexOf('const toggleStatus') + 900);
+  assert.match(fn, /becomesPaid/);
+  assert.match(fn, /cancelDeadlineRemindersForEntity\(id\)/);
+  assert.match(fn, /scheduleDeadlineRemindersForEntity\(id/);
+});
+
+ok('déconnexion → cancelAllEntityReminders appelé (settings)', () => {
+  const st = fs.readFileSync(path.join(root, 'app', 'more', 'settings.tsx'), 'utf8');
+  assert.match(st, /await cancelAllEntityReminders\(\)/);
+});
+
 console.log(`\n[test-notifications] ${passed} passed, ${failed} failed\n`);
 process.exit(failed === 0 ? 0 : 1);

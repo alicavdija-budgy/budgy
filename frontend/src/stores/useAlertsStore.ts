@@ -35,6 +35,18 @@ export const DEFAULT_ALERTS_PREFS: AlertsPrefs = {
 interface AlertsState {
   prefs: AlertsPrefs;
   alerts: BudgyAlert[];
+  /** Scope de données actif : 'guest', 'demo' ou 'user:<id>' */
+  activeScope: string;
+  /** Données des autres scopes (isolation par compte sur le même appareil) */
+  scopes: Record<string, { prefs: AlertsPrefs; alerts: BudgyAlert[] }>;
+  /** Bascule vers le scope d'un compte : snapshot du scope courant, puis
+   *  chargement du scope cible. Les ALERTES ne traversent JAMAIS les
+   *  comptes ; seules les préférences du scope invité servent de graine
+   *  (migration non destructive des réglages de l'appareil). */
+  setActiveScope: (scope: string) => void;
+  /** Efface définitivement les alertes/préférences du scope courant
+   *  (utilisé par « Supprimer mes données »). */
+  clearActiveScope: () => void;
   setCategoryEnabled: (cat: AlertCategory, enabled: boolean) => void;
   setQuietHours: (enabled: boolean, start?: number, end?: number) => void;
   setFrequency: (f: AlertsPrefs['frequency']) => void;
@@ -54,6 +66,33 @@ export const useAlertsStore = create<AlertsState>()(
     (set, get) => ({
       prefs: DEFAULT_ALERTS_PREFS,
       alerts: [],
+      activeScope: 'guest',
+      scopes: {},
+
+      setActiveScope: (scope) => {
+        const s = get();
+        if (scope === s.activeScope) return;
+        // Snapshot du scope courant
+        const scopes = { ...s.scopes, [s.activeScope]: { prefs: s.prefs, alerts: s.alerts } };
+        // Chargement du scope cible — jamais d'alertes d'un autre compte.
+        // Nouveau scope : préférences héritées du scope invité (réglages de
+        // l'appareil, non sensibles), alertes vides.
+        const seedPrefs = scopes[scope]?.prefs
+          ?? scopes.guest?.prefs
+          ?? DEFAULT_ALERTS_PREFS;
+        const next = scopes[scope] ?? {
+          prefs: { ...seedPrefs, categories: { ...seedPrefs.categories } },
+          alerts: [],
+        };
+        set({ activeScope: scope, scopes, prefs: next.prefs, alerts: next.alerts });
+      },
+
+      clearActiveScope: () => {
+        const s = get();
+        const scopes = { ...s.scopes };
+        delete scopes[s.activeScope];
+        set({ scopes, prefs: DEFAULT_ALERTS_PREFS, alerts: [] });
+      },
 
       setCategoryEnabled: (cat, enabled) =>
         set((s) => ({ prefs: { ...s.prefs, categories: { ...s.prefs.categories, [cat]: enabled } } })),
@@ -111,6 +150,20 @@ export const useAlertsStore = create<AlertsState>()(
     {
       name: 'budgy-alerts-storage',
       storage: createJSONStorage(() => AsyncStorage),
+      version: 2,
+      // Migration non destructive : l'historique/préférences pré-Phase 4
+      // (non scopés) deviennent le scope 'guest' de l'appareil.
+      migrate: (persisted: any, version) => {
+        if (version < 2 && persisted) {
+          return {
+            prefs: persisted.prefs ?? DEFAULT_ALERTS_PREFS,
+            alerts: persisted.alerts ?? [],
+            activeScope: 'guest',
+            scopes: {},
+          };
+        }
+        return persisted;
+      },
     },
   ),
 );

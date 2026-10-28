@@ -14,6 +14,7 @@ import {
   requestNotificationPermissions,
   scheduleMonthlyReminder,
 } from '../src/services/notifications';
+import { initAlertsScopeSync } from '../src/services/alertsScope';
 import { startSyncMonitor, bootstrapSession } from '../src/services/sync';
 import { pullAllFromCloud, pushAllToCloud, isSignedInToSupabase } from '../src/services/cloudSync';
 import { startAutoSync } from '../src/lib/autoSync';
@@ -70,6 +71,8 @@ export default function RootLayout() {
 
   // Initialize push notifications on app start (native only)
   useEffect(() => {
+    // Isolation Budgy Alerts par compte (guest/demo/user:<id>) — Phase 4
+    const unsubAlertsScope = initAlertsScopeSync();
     if (Platform.OS !== 'web') {
       requestNotificationPermissions().then((granted) => {
         if (granted) {
@@ -96,6 +99,9 @@ export default function RootLayout() {
         console.warn('[bootstrap-sync] failed:', e);
       }
     })();
+    return () => {
+      try { unsubAlertsScope(); } catch {}
+    };
   }, []);
 
   // Auto-sync with cloud on AppState changes:

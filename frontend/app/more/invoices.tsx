@@ -151,10 +151,23 @@ export default function InvoicesScreen() {
   const toggleStatus = (id: string) => {
     const inv = storeInvoices.find((i) => i.id === id);
     if (!inv) return;
+    const becomesPaid = inv.status !== 'paid';
     updateInvoice(id, {
-      status: inv.status === 'paid' ? 'pending' : 'paid',
-      paidAt: inv.status === 'paid' ? undefined : Date.now(),
+      status: becomesPaid ? 'paid' : 'pending',
+      paidAt: becomesPaid ? Date.now() : undefined,
     });
+    // Phase 4 — hygiène des rappels OS : une facture payée ne doit plus
+    // rappeler son échéance ; repasser en « à payer » reprogramme J-90/30/7/1.
+    if (becomesPaid) {
+      cancelDeadlineRemindersForEntity(id);
+    } else if (inv.dueDate) {
+      scheduleDeadlineRemindersForEntity(id, {
+        type: 'invoice',
+        name: inv.title,
+        dueDate: inv.dueDate,
+        amount: inv.amount,
+      });
+    }
   };
 
   const deleteInvoice = (id: string) => {

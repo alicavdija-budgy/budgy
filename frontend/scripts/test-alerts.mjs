@@ -119,5 +119,18 @@ check('ids stables entre deux évaluations (dédup garantie)', r1[0].id === r2[0
 
 check('carburant/actualités: jamais aucune alerte générée', !/'fuel'|'news'/.test(js.split('── CARBURANT')[1] || '') && !evaluate({ ...base, totalCommitted: 9999 }).some((a) => a.category === 'fuel' || a.category === 'news'));
 
+// ── Phase 4 : isolation des données par compte ────────────────────────
+const scopeSrc = read('src/services/alertsScope.ts');
+const layoutSrc = read('app/_layout.tsx');
+const settingsSrc = read('app/more/settings.tsx');
+check('store: scopes par compte (activeScope + scopes map)', /activeScope: string/.test(storeSrc) && /scopes: Record<string/.test(storeSrc));
+check('store: bascule de scope ne transfère JAMAIS les alertes', /alerts: \[\],\s*\};/.test(storeSrc.split('const next = scopes[scope] ??')[1] || ''));
+check('store: migration non destructive v2 (legacy → guest)', /version: 2/.test(storeSrc) && /migrate:/.test(storeSrc) && /activeScope: 'guest'/.test(storeSrc));
+check('store: clearActiveScope pour « Supprimer mes données »', /clearActiveScope: \(\) =>/.test(storeSrc));
+check("scope: mapping guest/demo/user:<id>", /return 'guest'/.test(scopeSrc) && /return 'demo'/.test(scopeSrc) && /`user:\$\{user\.id\}`/.test(scopeSrc));
+check('scope: synchronisé au démarrage (_layout)', layoutSrc.includes('initAlertsScopeSync'));
+check('logout: rappels d\'entités annulés de façon ciblée', settingsSrc.includes('cancelAllEntityReminders'));
+check('supprimer mes données: scope alertes purgé', settingsSrc.includes('clearActiveScope'));
+
 console.log(`\n[test-alerts] ${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

@@ -377,8 +377,7 @@ export async function scheduleDeadlineRemindersForEntity(
   return ids;
 }
 
-/**
- * Cancel all reminders previously scheduled for an entity and forget the IDs.
+/** Cancel all reminders previously scheduled for an entity and forget the IDs.
  * Safe to call multiple times — never throws.
  */
 export async function cancelDeadlineRemindersForEntity(entityId: string): Promise<void> {
@@ -391,5 +390,30 @@ export async function cancelDeadlineRemindersForEntity(entityId: string): Promis
       await cancelDeadlineReminders(ids);
     }
     await AsyncStorage.removeItem(NOTIF_IDS_KEY(entityId));
+  } catch {}
+}
+
+/**
+ * Phase 4 — Confidentialité à la déconnexion / changement de compte :
+ * annule TOUS les rappels d'entités (factures, contrats, récurrents) encore
+ * programmés sur l'appareil, de manière CIBLÉE via les identifiants
+ * persistés (jamais via l'API d'annulation globale — les rappels
+ * génériques mensuel/LAMal, sans données personnelles, sont conservés).
+ */
+export async function cancelAllEntityReminders(): Promise<void> {
+  if (Platform.OS === 'web') return;
+  try {
+    const keys = await AsyncStorage.getAllKeys();
+    const entityKeys = keys.filter((k) => k.startsWith('budgy_notif_ids_'));
+    for (const key of entityKeys) {
+      try {
+        const raw = await AsyncStorage.getItem(key);
+        if (raw) {
+          const ids: string[] = JSON.parse(raw);
+          if (Array.isArray(ids) && ids.length) await cancelDeadlineReminders(ids);
+        }
+        await AsyncStorage.removeItem(key);
+      } catch {}
+    }
   } catch {}
 }

@@ -145,3 +145,11 @@ Commit local `dd1732a1` sur main (base edfd866f). Pas de credentials GitHub dans
 - AUCUN fichier de l'app mobile modifié. Validé localement via npx serve (tous 200, 404 réel, 0 lien cassé, titles/desc/H1 uniques, JSON-LD valide).
 - PUSH EN ATTENTE via "Save to GitHub" (commits de la session précédente déjà poussés par l'utilisateur ; nouveau commit 7e807012 local).
 - Après déploiement : soumettre https://budgy.ch/sitemap.xml dans Google Search Console.
+
+## Session Budgy Smart 4.0 — Phase 1 (branche budgy-smart-4.0, main INTACTE)
+- Audit : workspace = GitHub main fecf80038, aucune divergence.
+- Commit b2ba6115 : FIX CRITIQUE notifications — scheduleMonthlyReminder() effaçait TOUTES les notifications programmées (rappels contrats J-90/30/7/1) à chaque démarrage. Identifiants fixes + test-notifications.mjs (4/4).
+- Commit dd6e9530 : Menu Plus en 5 rubriques premium (Mes finances / Mes documents / Intelligence & projets / Services suisses / Compte & réglages) via FEATURE_CATEGORIES + écran /more/category/[id] (réutilise MenuList exporté de more.tsx). Toutes routes et droits Free/Pro conservés. i18n moreHub.* ×4 langues. Validé visuellement (mode démo) + tsc + lint + i18n + 9 suites de tests vertes.
+- Essai 7 jours (Étape 3) : CODE DÉJÀ PRÊT (paywall affiche introOffer StoreKit). Action UTILISATEUR : App Store Connect → Abonnements → SKU com.budgy.ch.budgy.annual/.monthly → Offre d'introduction → Gratuit 1 semaine.
+- RESTANT (phases non réalisées, à prioriser) : refonte visuelle accueil/dépenses/épargne (gros chantier, design_agent recommandé), centre d'alertes (préférences par catégorie + heures silencieuses, sources Internet derrière flag), Budgy Twin (simulateur déterministe "puis-je me le permettre"), alertes serveur planifiées (OFSP/AFC/TCS).
+- AUCUN déploiement, OTA, build ni modification App Store effectués. PUSH de la branche via "Save to GitHub" par l'utilisateur.

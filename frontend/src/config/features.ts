@@ -91,3 +91,25 @@ export function isProRoute(route: string): boolean {
 export function featuresByGroup(group: FeatureGroup): BudgyFeature[] {
   return FEATURES.filter((f) => f.group === group);
 }
+
+// ── Budgy Smart 4.0 — hub "Plus" en 5 rubriques ──────────────────────────
+// Simple regrouping of the existing catalog: every route and Free/Pro tier
+// stays exactly as defined above. No feature is removed or re-gated.
+export interface FeatureCategory {
+  id: 'finances' | 'documents' | 'intelligence' | 'suisse' | 'account';
+  titleKey: string;
+  subtitleKey: string;
+  icon: BudgyFeature['icon'];
+  featureIds: string[];
+}
+
+export const FEATURE_CATEGORIES: FeatureCategory[] = [
+  { id: 'finances', titleKey: 'moreHub.finances', subtitleKey: 'moreHub.financesSub', icon: 'wallet', featureIds: ['incomes', 'budgets', 'recurring', 'invoices', 'debts'] },
+  { id: 'documents', titleKey: 'moreHub.documents', subtitleKey: 'moreHub.documentsSub', icon: 'folder-open', featureIds: ['receipts', 'documents', 'family', 'email-import'] },
+  { id: 'intelligence', titleKey: 'moreHub.intelligence', subtitleKey: 'moreHub.intelligenceSub', icon: 'sparkles', featureIds: ['budgy-score', 'ai-optimizer', 'savings-radar', 'predict', 'investments', 'calendar', 'export-pdf'] },
+  { id: 'suisse', titleKey: 'moreHub.suisse', subtitleKey: 'moreHub.suisseSub', icon: 'shield-checkmark', featureIds: ['lamal', 'tax'] },
+  { id: 'account', titleKey: 'moreHub.account', subtitleKey: 'moreHub.accountSub', icon: 'settings', featureIds: ['subscription', 'cloud-sync', 'security', 'notifications', 'settings', 'legal'] },
+];
+
+export const CATEGORY_BY_ID: Record<string, FeatureCategory> =
+  Object.fromEntries(FEATURE_CATEGORIES.map((c) => [c.id, c]));

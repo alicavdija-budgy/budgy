@@ -26,12 +26,12 @@ import { usePremiumStore } from '../../src/stores/usePremiumStore';
 import { useTranslation } from '../../src/hooks/useTranslation';
 import PressScale from '../../src/components/PressScale';
 import {
-  featuresByGroup,
+  FEATURE_CATEGORIES,
   type BudgyFeature,
 } from '../../src/config/features';
 
 // Slim finance list — Savings surfaces at top (soft entry point)
-const SAVINGS_ROUTE: BudgyFeature = {
+export const SAVINGS_ROUTE: BudgyFeature = {
   id: 'savings',
   route: '/(tabs)/savings',
   tier: 'free',
@@ -60,15 +60,6 @@ export default function MoreScreen() {
 
   const getInitials = (name: string) =>
     name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
-
-  // Finance list — insert Savings BEFORE the catalog "budgets/incomes/..." group
-  const finance = useMemo(() => {
-    const catalog = featuresByGroup('finance');
-    return [SAVINGS_ROUTE, ...catalog];
-  }, []);
-  const documents = featuresByGroup('documents');
-  const account = featuresByGroup('account');
-  const help = featuresByGroup('help');
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -191,21 +182,38 @@ export default function MoreScreen() {
           </View>
         )}
 
-        {/* ── C. My finances ─────────────────────────────────────── */}
-        <SectionTitle title={t('moreV2.myFinances')} C={C} />
-        <MenuList items={finance} isPro={isPro} C={C} t={t} router={router} styles={styles} />
-
-        {/* ── D. Documents & sharing ─────────────────────────────── */}
-        <SectionTitle title={t('moreV2.documentsSharing')} C={C} />
-        <MenuList items={documents} isPro={isPro} C={C} t={t} router={router} styles={styles} />
-
-        {/* ── E. Account & security ──────────────────────────────── */}
-        <SectionTitle title={t('moreV2.accountSecurity')} C={C} />
-        <MenuList items={account} isPro={isPro} C={C} t={t} router={router} styles={styles} />
-
-        {/* ── F. Help & info ─────────────────────────────────────── */}
-        <SectionTitle title={t('moreV2.helpInfo')} C={C} />
-        <MenuList items={help} isPro={isPro} C={C} t={t} router={router} styles={styles} />
+        {/* ── C. Hub — 5 rubriques premium (Budgy Smart 4.0) ─────── */}
+        <SectionTitle title={t('moreHub.sections')} C={C} />
+        <View style={styles.menuCard}>
+          {FEATURE_CATEGORIES.map((cat, i) => (
+            <TouchableOpacity
+              key={cat.id}
+              activeOpacity={0.7}
+              onPress={() => router.push(`/more/category/${cat.id}` as any)}
+              style={[
+                styles.menuItem,
+                i < FEATURE_CATEGORIES.length - 1 && styles.menuItemBorder,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={t(cat.titleKey)}
+            >
+              <View style={styles.menuItemInner}>
+                <View style={styles.menuIcon}>
+                  <Ionicons name={cat.icon} size={17} color={C.textSecondary} />
+                </View>
+                <View style={styles.menuContent}>
+                  <Text style={styles.menuTitle} numberOfLines={1}>
+                    {t(cat.titleKey)}
+                  </Text>
+                  <Text style={styles.menuSubtitle} numberOfLines={1}>
+                    {t(cat.subtitleKey)}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={C.textTertiary} />
+              </View>
+            </TouchableOpacity>
+          ))}
+        </View>
 
         {/* Footer */}
         <View style={styles.footer}>
@@ -242,7 +250,7 @@ function SectionTitle({ title, C }: { title: string; C: any }) {
   );
 }
 
-function MenuList({
+export function MenuList({
   items,
   isPro,
   C,
@@ -320,7 +328,7 @@ function MenuList({
 }
 
 // ── Styles ────────────────────────────────────────────────────────────────
-const makeStyles = (C: any) =>
+export const makeStyles = (C: any) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: C.background },
     content: {

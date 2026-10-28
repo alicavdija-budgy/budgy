@@ -1,0 +1,45 @@
+{
+  "summary": "FRONTEND-only test of Budgy Alerts (Phase 3) on the Expo web preview at 390x844, local demo mode (Français). PASSING: navigation Plus > Compte & réglages > Notifications works, the header reads 'Budgy Alerts' and the back button returns to /more/category/account. With no data, the empty state 'Tout est sous contrôle' shows. An invoice entered with an ISO due date (YYYY-MM-DD) creates the alert 'Facture à payer bientôt', unread with a dot, and the header shows 'N non lues'. Tapping an alert marks it read (checked in localStorage) and opens /more/invoices (invoices-screen). 'Tout lire' marks everything read and the counter disappears. Deduplication works: reopening keeps 2 alerts with 2 unique ids. The 5 categories render, with Fuel and News greyed, badged BIENTÔT and their switch disabled. Disabling Factures persists after reopen and after a full reload, and no new invoice alert is generated while it is off. Generation resumes when it is turned back on, including 'Facture en retard'. Quiet hours on/off and the 21h-7h, 22h-7h and 23h-8h presets work and persist after reload; the presets hide when quiet hours are off and the label shows 'Désactivées'. Frequency Normale / Réduite persists. The privacy switch is off by default. The light theme is readable. Home and Dépenses render with 0 page errors. FAILURES: (1) HIGH: a due date typed in the Swiss format shown by the form placeholder (30.04.2026) is never parsed. 'Swisscom 31.10.2026' created NO alert, and in V8 '05.11.2026' parses as 11 May 2026, which would create a FALSE 'Facture en retard' alert. (2) MEDIUM: the day count is off by one (a date 3 days ahead shows '2 jour(s)', 3 days late shows '4 jour(s)'). (3) MINOR: the privacy subtitle stays 'Désactivé : …' when the switch is ON. (4) MINOR: the alert date shows in US format (10/28/2026) on the French UI. No testIDs on the Budgy Alerts screen.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "alertsEngine.parseDue + invoices form", "issue": "Invoice form placeholder suggests the Swiss format DD.MM.YYYY (placeholderDueDate '30.04.2026') and stores the raw string. parseDue uses new Date(s): '31.10.2026' gives Invalid Date (no alert generated, reproduced with Swisscom CHF 80 due in 3 days). '05.11.2026' gives May 11 2026, a misparse that would create a FALSE 'Facture en retard de N jours' alert, against the 'rien n'est inventé' rule. Reference: src/services/alertsEngine.ts:45-49, app/more/invoices.tsx:194,454", "testID": "n/a", "priority": "HIGH"},
+      {"component": "notifications.scheduleDeadlineRemindersForEntity", "issue": "Same raw new Date(input.dueDate) parsing. Swiss-format due dates give no OS reminders (Invalid) or reminders at wrong dates (DD/MM swapped). Reference: src/services/notifications.ts:282", "testID": "n/a", "priority": "HIGH"},
+      {"component": "alertsEngine day count", "issue": "days = Math.floor((due - now)/DAY_MS), with ISO date-only strings parsed as UTC midnight. A due date 3 calendar days ahead shows '2 jour(s)', +5 shows 4, and -3 (late) shows '4 jour(s)'. It should compare local calendar days (startOfDay both sides, Math.round). Reference: src/services/alertsEngine.ts:98", "testID": "n/a", "priority": "MEDIUM"},
+      {"component": "Privacy switch subtitle", "issue": "lockPrivacySub is static: 'Désactivé : les notifications n'affichent aucun montant' stays visible when the 'Montants sur l'écran verrouillé' switch is ON, which is contradictory. Reference: app/more/notifications.tsx:255", "testID": "n/a", "priority": "LOW"},
+      {"component": "Alert meta date", "issue": "new Date(a.createdAt).toLocaleDateString() has no locale, so the French UI shows '10/28/2026' (US format) on web. Pass the app locale, e.g. 'fr-CH', giving 28.10.2026. Reference: app/more/notifications.tsx:135", "testID": "n/a", "priority": "LOW"}
+    ],
+    "integration_issues": [
+      {"flow": "Alerts vs invoice lifecycle", "issue": "Alerts are never removed or updated when an invoice is marked paid, edited (new dueDate) or deleted. A stale 'Facture à payer bientôt' stays in the feed. Code review only, not reproduced in UI.", "affected_testIDs": []},
+      {"flow": "Tout lire vs legacy notifications", "issue": "unreadCount includes useStore.notifications, but markAllRead only marks useAlertsStore alerts. If legacy in-app notifications exist, the 'non lues' counter will not disappear after 'Tout lire'. Code review only: demo mode had no legacy notifications. Reference: app/more/notifications.tsx:78,98", "affected_testIDs": []}
+    ],
+    "design_issues": [
+      {"screen": "Budgy Alerts", "issues": ["No testID on any interactive element (back button, Tout lire, alert rows, category switches, quiet presets, frequency segments, privacy switch).", "Quiet-hour preset chips are about 30px tall and the 'Tout lire' text button is small (hitSlop helps on native only). Touch targets are below 44pt.", "Light theme: the disabled Fuel/News switches (white track on white card) have very low contrast."]},
+      {"screen": "Factures", "issues": ["The header '+' add button has no testID or accessibilityLabel (the test had to click by coordinates). The due date is a free-text field with no date picker or format validation, which is the root of the parsing bug."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [".screenshots/alerts_empty.png", ".screenshots/alerts_feed.png", ".screenshots/disabled.png", ".screenshots/prefs_quiet_off.png", ".screenshots/alerts_light.png"],
+  "action_items": [
+    "HIGH: Add a shared parseDueDate(s) helper that accepts DD.MM.YYYY (Swiss, as in the placeholder), DD/MM/YYYY and ISO YYYY-MM-DD and builds a LOCAL date. Use it in alertsEngine.parseDue and notifications.ts:282 (also contracts/recurring callers), or normalize dueDate to ISO when saving invoices (invoices.tsx handleAdd and edit form), ideally with a date picker or validation.",
+    "MEDIUM: Compute the day difference on local calendar days: startOfDay(due) - startOfDay(now), then Math.round(/DAY_MS), so '3 jours' really means 3.",
+    "LOW: Make the lockPrivacySub text depend on prefs.showAmountsOnLockScreen (add an 'Activé : …' variant in fr/en/de/it).",
+    "LOW: Format the alert date with the app locale (fr-CH, giving dd.mm.yyyy).",
+    "Prune or refresh alerts when the source invoice is paid or deleted or its dueDate changes (for example, re-evaluate and drop invoice-* alerts whose invoice is no longer pending/unpaid).",
+    "Make 'Tout lire' also mark legacy useStore.notifications as read, or count only alerts.",
+    "Add testIDs on the Budgy Alerts controls and the Factures '+' button. Raise chip and segment touch targets to at least 44pt."
+  ],
+  "critical_code_review_comments": [
+    "alertsEngine.ts:47 new Date(s) on user free text is locale/engine dependent (V8 reads MM.DD.YYYY, Hermes differs). This breaks determinism across web and native.",
+    "notifications.tsx useEffect has [] deps, so alerts are generated only on mount. Acceptable, but data changed while the screen is open is not reflected until it is reopened.",
+    "upsertAlerts in reduced mode counts already-existing alerts created today, so the first-day behaviour is correct. OK.",
+    "Disabling a category keeps the existing alerts of that category in the feed (expected per spec, but they could be filtered from the view)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (not requested)", "frontend": "92% (11/12 requested checks pass; invoice alert works only with ISO dates, not with the Swiss format suggested by the placeholder)"},
+  "seed_data_creation": "Demo-mode localStorage only: TEST invoices Swisscom/Sunrise/Salt/Cablecom/Retard SA created in ephemeral browser contexts.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Each run: Français > Continuer > 'Explorer en mode démo'. After that, page.goto('/more/notifications') or '/more/invoices' keeps state (localStorage keys guardian-money-storage and budgy-alerts-storage). Factures add button: mouse.click(354,32) at 390x844. Placeholders: 'Loyer mai 2026' (title), '0.00' (amount), '30.04.2026' (dueDate); submit with 'Ajouter la facture'. On the Budgy Alerts screen, switches are input[type=checkbox] in this order: contracts, budget, invoices, fuel, news, quiet, privacy. Back button: mouse.click(35,31). Theme: /more/settings, then 'Clair'.",
+  "rca_of_issue": "The Swiss-format due date gets no alert because invoices.tsx stores dueDate as raw text in the format of its placeholder (DD.MM.YYYY). alertsEngine.parseDue does new Date('31.10.2026'), which is Invalid Date, so the invoice is skipped. new Date('05.11.2026') gives 2026-05-11, which would give a false 'en retard' alert. To reproduce: demo mode > Factures > + > Swisscom, 80, 31.10.2026 > Ajouter > /more/notifications > no alert. The same steps with 2026-10-31 give an alert. Mitigation: a strict local-date parser for DD.MM.YYYY and ISO, plus normalizing to ISO when saving."
+}

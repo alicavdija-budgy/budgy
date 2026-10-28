@@ -25,6 +25,7 @@ import { useAlertsStore } from '../../src/stores/useAlertsStore';
 import { evaluateAlerts, type AlertCategory } from '../../src/services/alertsEngine';
 import { getMonthlyFinancialSnapshot } from '../../src/stores/selectors';
 import { EXTERNAL_ALERTS_ENABLED } from '../../src/config/features';
+import { DATE_LOCALES } from '../../src/i18n/translations';
 
 const CATEGORY_META: Record<AlertCategory, { icon: any; labelKey: string; subKey: string }> = {
   contracts: { icon: 'document-text', labelKey: 'alerts.catContracts', subKey: 'alerts.catContractsSub' },
@@ -41,7 +42,8 @@ const QUIET_PRESETS: { start: number; end: number }[] = [
 ];
 
 export default function NotificationsScreen() {
-  const { t } = useTranslation();
+  const { t, lang } = useTranslation();
+  const dateLocale = DATE_LOCALES[lang as keyof typeof DATE_LOCALES] || 'fr-CH';
   const theme = useTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
@@ -50,7 +52,7 @@ export default function NotificationsScreen() {
   const { notifications, markNotificationRead, incomes, transactions, recurringExpenses, invoices } = useStore();
   const {
     prefs, alerts, setCategoryEnabled, setQuietHours, setFrequency, setShowAmounts,
-    upsertAlerts, markRead, markAllRead,
+    upsertAlerts, resolveMissing, markRead, markAllRead,
   } = useAlertsStore();
 
   // ── Génération déterministe des alertes à l'ouverture ──
@@ -72,6 +74,9 @@ export default function NotificationsScreen() {
       enabled: prefs.categories,
     });
     if (fresh.length) upsertAlerts(fresh);
+    // Résout les alertes obsolètes (ex. facture payée/supprimée depuis)
+    resolveMissing('invoices', fresh.filter((a) => a.category === 'invoices').map((a) => a.id));
+    resolveMissing('budget', fresh.filter((a) => a.category === 'budget').map((a) => a.id));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -95,7 +100,14 @@ export default function NotificationsScreen() {
           )}
         </View>
         {(alerts.length > 0 || notifications.length > 0) && (
-          <TouchableOpacity onPress={markAllRead} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <TouchableOpacity
+            onPress={() => {
+              markAllRead();
+              notifications.forEach((n) => { if (!n.read) markNotificationRead(n.id); });
+            }}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            testID="alerts-mark-all"
+          >
             <Text style={styles.markAllBtn}>{t('alerts.markAllRead')}</Text>
           </TouchableOpacity>
         )}
@@ -132,7 +144,7 @@ export default function NotificationsScreen() {
                   </Text>
                   <Text style={styles.alertBody} numberOfLines={2}>{t(a.bodyKey, a.params as any)}</Text>
                   <Text style={styles.alertMeta}>
-                    {t(CATEGORY_META[a.category].labelKey)} · {new Date(a.createdAt).toLocaleDateString()}
+                    {t(CATEGORY_META[a.category].labelKey)} · {new Date(a.createdAt).toLocaleDateString(dateLocale, { day: 'numeric', month: 'short' })}
                   </Text>
                 </View>
                 {!a.read && <View style={styles.unreadDot} />}
@@ -252,7 +264,9 @@ export default function NotificationsScreen() {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.prefTitle}>{t('alerts.lockPrivacy')}</Text>
-            <Text style={styles.prefSub}>{t('alerts.lockPrivacySub')}</Text>
+            <Text style={styles.prefSub}>
+              {prefs.showAmountsOnLockScreen ? t('alerts.lockPrivacySubOn') : t('alerts.lockPrivacySub')}
+            </Text>
           </View>
           <Switch
             value={prefs.showAmountsOnLockScreen}
@@ -329,7 +343,7 @@ const makeStyles = (C: ThemePalette) =>
 
     chipsRow: { flexDirection: 'row', gap: Spacing.xs, marginTop: Spacing.md },
     chip: {
-      paddingHorizontal: Spacing.md, paddingVertical: 7, borderRadius: 999,
+      paddingHorizontal: Spacing.md, paddingVertical: 10, borderRadius: 999,
       backgroundColor: C.background, borderWidth: 1, borderColor: C.cardBorder,
     },
     chipActive: { backgroundColor: C.primary, borderColor: C.primary },

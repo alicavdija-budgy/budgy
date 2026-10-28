@@ -18,6 +18,7 @@ import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAlertsStore, DEFAULT_ALERTS_PREFS } from '../stores/useAlertsStore';
+import { parseFlexibleDate } from './alertsEngine';
 
 // ─── Budgy Alerts preferences (Phase 3) ─────────────────────────────────
 // Read outside React via getState(); safe fallback to defaults.
@@ -279,8 +280,8 @@ export async function scheduleDeadlineReminders(
       input.type === 'invoice' ? prefs.categories.invoices : prefs.categories.contracts;
     if (!categoryEnabled) return [];
 
-    const due = new Date(input.dueDate);
-    if (isNaN(due.getTime())) return [];
+    const due = parseFlexibleDate(input.dueDate);
+    if (!due) return [];
 
     const titles: Record<DeadlineReminderInput['type'], string> = {
       contract: 'Contrat bientôt à échéance',

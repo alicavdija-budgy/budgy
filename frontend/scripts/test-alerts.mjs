@@ -56,7 +56,9 @@ check('défaut: heures silencieuses 22h→7h actives', /quietStart: 22[\s\S]*?qu
 let js = engineSrc
   .replace(/^export type.*$/gm, '')
   .replace(/^export interface [\s\S]*?^\}/gm, '')
-  .replace('function parseDue(s?: string): Date | null {', 'function parseDue(s) {')
+  .replace('export function parseFlexibleDate(s?: string): Date | null {', 'export function parseFlexibleDate(s) {')
+  .replace('const startOfDay = (d: Date) =>', 'const startOfDay = (d) =>')
+  .replace('export function calendarDaysUntil(due: Date, now: Date): number {', 'export function calendarDaysUntil(due, now) {')
   .replace('export function evaluateAlerts(input: AlertsEvalInput): BudgyAlert[] {', 'export function evaluateAlerts(input) {')
   .replace('const out: BudgyAlert[] = [];', 'const out = [];');
 check('transform: annotations TS retirées', !/interface |: Alerts|: BudgyAlert/.test(js));
@@ -101,6 +103,12 @@ const dueAlert = r.find((a) => a.id === 'invoice-due-a1');
 const lateAlert = r.find((a) => a.id === 'invoice-late-a2');
 check('factures: paramètres corrects (d=3 / retard d=5)', dueAlert.params.d === 3 && lateAlert.params.d === 5, JSON.stringify([dueAlert.params, lateAlert.params]));
 check('factures: route vers /more/invoices', dueAlert.route === '/more/invoices');
+
+// Format suisse DD.MM.YYYY : même résultat que l'ISO (dates locales, pas UTC)
+r = evaluate({ ...base, invoices: [{ id: 'ch1', title: 'TWINT', amount: 50, dueDate: '18.06.2026', status: 'pending' }] });
+check('format suisse 18.06.2026 → due dans 3 jours calendaires', r.length === 1 && r[0].id === 'invoice-due-ch1' && r[0].params.d === 3, JSON.stringify(r));
+r = evaluate({ ...base, invoices: [{ id: 'ch2', title: 'EWZ', amount: 50, dueDate: '05.11.2026', status: 'pending' }] });
+check('format suisse 05.11.2026 (lointain) → aucune fausse alerte retard', r.length === 0, JSON.stringify(r));
 
 r = evaluate({ ...base, invoices, totalCommitted: 9000, enabled: { ...allOn, budget: false, invoices: false } });
 check('catégories désactivées → aucune alerte générée', r.length === 0, `got ${r.length}`);

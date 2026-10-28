@@ -41,6 +41,7 @@ interface AlertsState {
   setShowAmounts: (v: boolean) => void;
   /** Ajoute uniquement les alertes nouvelles (dédupliquées par id stable). */
   upsertAlerts: (incoming: BudgyAlert[]) => void;
+  resolveMissing: (category: AlertCategory, freshIds: string[]) => void;
   markRead: (id: string) => void;
   markAllRead: () => void;
   clearAll: () => void;
@@ -89,6 +90,17 @@ export const useAlertsStore = create<AlertsState>()(
         }
         if (!fresh.length) return;
         set({ alerts: [...fresh, ...alerts].slice(0, MAX_ALERTS) });
+      },
+
+      /** Marque lues les alertes non lues d'une catégorie dont l'id n'existe
+       *  plus dans l'évaluation courante (ex. facture payée/supprimée). */
+      resolveMissing: (category, freshIds) => {
+        const valid = new Set(freshIds);
+        set((s) => ({
+          alerts: s.alerts.map((a) =>
+            a.category === category && !a.read && !valid.has(a.id) ? { ...a, read: true } : a,
+          ),
+        }));
       },
 
       markRead: (id) =>

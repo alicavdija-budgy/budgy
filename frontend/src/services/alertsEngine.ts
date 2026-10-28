@@ -42,10 +42,26 @@ export interface AlertsEvalInput {
 
 const DAY_MS = 86400000;
 
-function parseDue(s?: string): Date | null {
+/**
+ * Parse tolérant des dates : ISO (YYYY-MM-DD) et format suisse (DD.MM.YYYY),
+ * toujours construit en date LOCALE (new Date('2026-06-18') serait minuit UTC
+ * et décalerait d'un jour). Partagé avec notifications.ts.
+ */
+export function parseFlexibleDate(s?: string): Date | null {
   if (!s) return null;
+  const iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (iso) return new Date(parseInt(iso[1]), parseInt(iso[2]) - 1, parseInt(iso[3]));
+  const eu = s.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})/);
+  if (eu) return new Date(parseInt(eu[3]), parseInt(eu[2]) - 1, parseInt(eu[1]));
   const d = new Date(s);
   return isNaN(d.getTime()) ? null : d;
+}
+
+const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+
+/** Différence en jours CALENDAIRES locaux (évite les décalages UTC). */
+export function calendarDaysUntil(due: Date, now: Date): number {
+  return Math.round((startOfDay(due).getTime() - startOfDay(now).getTime()) / DAY_MS);
 }
 
 export function evaluateAlerts(input: AlertsEvalInput): BudgyAlert[] {
@@ -93,9 +109,9 @@ export function evaluateAlerts(input: AlertsEvalInput): BudgyAlert[] {
   if (input.enabled.invoices) {
     for (const inv of input.invoices) {
       if (inv.status === 'paid') continue;
-      const due = parseDue(inv.dueDate);
+      const due = parseFlexibleDate(inv.dueDate);
       if (!due) continue;
-      const days = Math.floor((due.getTime() - now.getTime()) / DAY_MS);
+      const days = calendarDaysUntil(due, now);
       if (days < 0) {
         out.push({
           id: `invoice-late-${inv.id}`,

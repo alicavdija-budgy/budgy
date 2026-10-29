@@ -86,7 +86,7 @@ ok('configuration failure is not presented as bad credentials', () => {
 });
 
 ok('Build identity is active (iOS 83 / Android 82)', () => {
-  assert.equal(app.expo.ios.buildNumber, '83');
+  assert.equal(app.expo.ios.buildNumber, '84');
   assert.equal(app.expo.android.versionCode, 82);
 });
 

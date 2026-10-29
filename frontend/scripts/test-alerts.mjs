@@ -157,8 +157,8 @@ check('eas: submit.testflight = même identité Apple que production',
   eas.submit.testflight?.ios?.ascAppId === eas.submit.production.ios.ascAppId &&
   eas.submit.testflight?.ios?.appleTeamId === eas.submit.production.ios.appleTeamId);
 const appJson = JSON.parse(read('app.json'));
-check('build iOS 83 confirmé (version 3.9.0, bundle inchangé)',
-  appJson.expo.ios.buildNumber === '83' && appJson.expo.version === '3.9.0' &&
+check('build iOS 84 confirmé (version 3.9.1, bundle inchangé)',
+  appJson.expo.ios.buildNumber === '84' && appJson.expo.version === '3.9.1' &&
   appJson.expo.ios.bundleIdentifier === 'com.budgy.ch.budgy');
 
 // ── Comportement réel du store de scopes (import du creator zustand) ─────

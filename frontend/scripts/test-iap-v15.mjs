@@ -195,12 +195,12 @@ ok('paywall has no hardcoded subscription CHF prices', () => {
   assert.doesNotMatch(paywallSrc, /CHF\s*39\.90/);
 });
 
-ok('app version is 3.9.0', () => {
-  assert.equal(appJson.expo.version, '3.9.0');
+ok('app version is 3.9.1', () => {
+  assert.equal(appJson.expo.version, '3.9.1');
 });
 
-ok('iOS buildNumber is 83 (TestFlight Smart 4.0)', () => {
-  assert.equal(appJson.expo.ios.buildNumber, '83');
+ok('iOS buildNumber is 84 (TestFlight Smart 4.0)', () => {
+  assert.equal(appJson.expo.ios.buildNumber, '84');
 });
 
 ok('Android versionCode is 82', () => {

@@ -57,6 +57,11 @@
     "testflight": {
       "extends": "production",
       "channel": "testflight",
+      "ios": {
+        "simulator": false,
+        "resourceClass": "m-medium",
+        "image": "sdk-54"
+      },
       "env": {
         "EXPO_PUBLIC_BACKEND_URL": "https://api.budgy.ch",
         "EXPO_PUBLIC_SUPABASE_URL": "https://supabase.budgy.ch"

@@ -36,6 +36,18 @@ export function nextMonthlyChargeInDays(recurring: RecurringLike[], now: Date = 
   return best;
 }
 
+/**
+ * Masquage des montants personnels :
+ * - `hide === false` (préférence hydratée, masquage désactivé) => valeur réelle;
+ * - `hide === true` (masquage actif) OU `hide === null` (préférence pas encore
+ *   hydratée depuis AsyncStorage) => masqué. Aucun montant réel ne peut donc
+ *   apparaître temporairement avant l'hydratation (premier démarrage,
+ *   redémarrage, changement de compte).
+ */
+export function maskAmount(value: string, hide: boolean | null): string {
+  return hide === false ? value : '•••••';
+}
+
 export interface InvoiceLike {
   dueDate?: string;
 }

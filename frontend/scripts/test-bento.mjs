@@ -34,9 +34,12 @@ src = src
   .replace(/: \(s: string\) => Date \| null/g, '')
   .replace(/: \(d: Date, now: Date\) => number/g, '')
   .replace(/: number \| null/g, '')
+  .replace(/: boolean \| null/g, '')
+  .replace(/\(value: string, hide\)/g, '(value, hide)')
+  .replace(/\): string \{/g, ') {')
   .replace(/: Date = new Date\(\)/g, ' = new Date()');
 const mod = await import('data:text/javascript;base64,' + Buffer.from(src).toString('base64'));
-const { nextMonthlyChargeInDays, nearestPendingInvoiceDays } = mod;
+const { nextMonthlyChargeInDays, nearestPendingInvoiceDays, maskAmount } = mod;
 
 console.log('\n— Charges fixes : prochaine échéance réelle —');
 const R = (dayOfMonth, extra = {}) => ({ title: `d${dayOfMonth}`, dayOfMonth, active: true, frequency: 'monthly', ...extra });
@@ -79,12 +82,18 @@ const home = read('app/(tabs)/index.tsx');
 const i18n = read('src/i18n/translations.ts');
 
 console.log('\n— Masquage des montants : Accueil → Plus → Accueil —');
+check('maskAmount : préférence NON hydratée (null) => masqué (fail-safe démarrage/redémarrage/changement de compte)',
+  maskAmount('CHF 1234', null) === '•••••');
+check('maskAmount : masquage actif => masqué', maskAmount('CHF 1234', true) === '•••••');
+check('maskAmount : masquage désactivé et hydraté => valeur réelle', maskAmount('CHF 1234', false) === 'CHF 1234');
 check('l\'Accueil persiste budgy.hideAmounts', home.includes("budgy.hideAmounts"));
 check('BentoPlus lit la même clé budgy.hideAmounts', bento.includes("budgy.hideAmounts"));
 check('BentoPlus resynchronise à CHAQUE focus (pas seulement au montage)',
   bento.includes('useFocusEffect'));
-check('aucun flash de montants réels : cache de dernière valeur connue',
-  bento.includes('lastKnownHide'));
+check('aucun flash de montants réels : cache initialisé à null (masqué tant que non hydraté)',
+  bento.includes('let lastKnownHide: boolean | null = null') &&
+  bento.includes('useState<boolean | null>(lastKnownHide)'));
+check('le composant utilise bien la fonction testée maskAmount', bento.includes('maskAmount(v, hide)'));
 check('plus de lecture unique au montage ([]) via useEffect',
   !/useEffect\(\(\) => \{\s*AsyncStorage.getItem\('budgy.hideAmounts'\)/.test(bento));
 

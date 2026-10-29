@@ -22,16 +22,18 @@ import { useTranslation } from '../hooks/useTranslation';
 import { useMoney } from '../hooks/useMoney';
 import { getMonthlyFinancialSnapshot } from '../stores/selectors';
 import { parseFlexibleDate, calendarDaysUntil } from '../services/alertsEngine';
-import { nextMonthlyChargeInDays, nearestPendingInvoiceDays } from '../services/bentoMetrics';
+import { nextMonthlyChargeInDays, nearestPendingInvoiceDays, maskAmount } from '../services/bentoMetrics';
 import { FEATURE_BY_ID } from '../config/features';
 import PressScale from './PressScale';
 import FinancialHealthScore from './FinancialHealthScore';
 
 const TOOL_IDS = ['debts', 'receipts', 'documents', 'twin', 'calendar', 'export-pdf'];
 
-// Dernière valeur connue du masquage : évite tout flash de montants réels
-// au (re)montage avant la lecture AsyncStorage.
-let lastKnownHide = false;
+// Dernière valeur connue du masquage. `null` tant que la préférence n'a
+// jamais été hydratée depuis AsyncStorage : dans ce cas les montants restent
+// MASQUÉS par défaut (fail-safe), aucun flash de montants réels possible au
+// premier démarrage, après redémarrage ou après changement de compte.
+let lastKnownHide: boolean | null = null;
 
 export default function BentoPlus() {
   const C = useTheme();
@@ -48,8 +50,9 @@ export default function BentoPlus() {
   // Masquage des montants — même préférence que l'accueil (budgy.hideAmounts).
   // Relu à CHAQUE focus de l'onglet : un masquage activé sur l'Accueil est
   // appliqué immédiatement en arrivant sur Plus, même si les deux onglets
-  // restent montés. Le cache module évite un flash de montants réels.
-  const [hide, setHide] = useState(lastKnownHide);
+  // restent montés. Tant que la préférence n'est pas hydratée (null), les
+  // montants restent masqués (maskAmount) : zéro flash de montants réels.
+  const [hide, setHide] = useState<boolean | null>(lastKnownHide);
   useFocusEffect(
     useCallback(() => {
       let alive = true;
@@ -62,7 +65,7 @@ export default function BentoPlus() {
       return () => { alive = false; };
     }, []),
   );
-  const mask = (v: string) => (hide ? '•••••' : v);
+  const mask = (v: string) => maskAmount(v, hide);
 
   const snapshot = useMemo(
     () => getMonthlyFinancialSnapshot({ incomes, transactions, recurringExpenses, invoices }),

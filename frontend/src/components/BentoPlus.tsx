@@ -7,11 +7,11 @@
  * Gratuit/Pro et les thèmes clair/sombre.
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BorderRadius, Spacing, FontSizes, FontWeights } from '../constants/theme';
@@ -22,11 +22,16 @@ import { useTranslation } from '../hooks/useTranslation';
 import { useMoney } from '../hooks/useMoney';
 import { getMonthlyFinancialSnapshot } from '../stores/selectors';
 import { parseFlexibleDate, calendarDaysUntil } from '../services/alertsEngine';
+import { nextMonthlyChargeInDays, nearestPendingInvoiceDays } from '../services/bentoMetrics';
 import { FEATURE_BY_ID } from '../config/features';
 import PressScale from './PressScale';
 import FinancialHealthScore from './FinancialHealthScore';
 
 const TOOL_IDS = ['debts', 'receipts', 'documents', 'twin', 'calendar', 'export-pdf'];
+
+// Dernière valeur connue du masquage : évite tout flash de montants réels
+// au (re)montage avant la lecture AsyncStorage.
+let lastKnownHide = false;
 
 export default function BentoPlus() {
   const C = useTheme();
@@ -34,18 +39,29 @@ export default function BentoPlus() {
   const router = useRouter();
   const m = useMoney();
   const { incomes, transactions, recurringExpenses, invoices, savingsGoals, budgets } = useStore();
-  const isPro = usePremiumStore(
-    (s) => s.isPro || (s.trialEndsAt !== null && s.trialEndsAt > Date.now())
-  );
+  // Source canonique des droits Pro : couvre l'abonnement confirmé serveur,
+  // l'essai ET l'accès provisoire légitime après une transaction StoreKit
+  // en attente de validation. Aucune duplication de logique locale.
+  const isPro = usePremiumStore((s) => s.hasPremiumAccess());
   const styles = useMemo(() => makeStyles(C), [C]);
 
-  // Masquage des montants — même préférence que l'accueil
-  const [hide, setHide] = useState(false);
-  useEffect(() => {
-    AsyncStorage.getItem('budgy.hideAmounts')
-      .then((v) => setHide(v === '1'))
-      .catch(() => {});
-  }, []);
+  // Masquage des montants — même préférence que l'accueil (budgy.hideAmounts).
+  // Relu à CHAQUE focus de l'onglet : un masquage activé sur l'Accueil est
+  // appliqué immédiatement en arrivant sur Plus, même si les deux onglets
+  // restent montés. Le cache module évite un flash de montants réels.
+  const [hide, setHide] = useState(lastKnownHide);
+  useFocusEffect(
+    useCallback(() => {
+      let alive = true;
+      AsyncStorage.getItem('budgy.hideAmounts')
+        .then((v) => {
+          lastKnownHide = v === '1';
+          if (alive) setHide(lastKnownHide);
+        })
+        .catch(() => {});
+      return () => { alive = false; };
+    }, []),
+  );
   const mask = (v: string) => (hide ? '•••••' : v);
 
   const snapshot = useMemo(
@@ -72,32 +88,16 @@ export default function BentoPlus() {
     return { remaining: limit - spent, pct: limit > 0 ? Math.min(100, Math.round((spent / limit) * 100)) : 0 };
   }, [budgets, transactions]);
 
-  // Charges fixes : total mensuel (moteur snapshot) + prochaine échéance réelle
-  const nextCharge = useMemo(() => {
-    const today = new Date().getDate();
-    const actives = recurringExpenses.filter((r) => r.active && r.frequency === 'monthly');
-    if (!actives.length) return null;
-    let best: { title: string; inDays: number } | null = null;
-    for (const r of actives) {
-      const d = r.dayOfMonth >= today ? r.dayOfMonth - today : null;
-      if (d !== null && (best === null || d < best.inDays)) best = { title: r.title, inDays: d };
-    }
-    return best;
-  }, [recurringExpenses]);
+  // Charges fixes : total mensuel (moteur snapshot) + prochaine échéance
+  // réelle, y compris le passage au mois suivant (métrique pure testée).
+  const nextCharge = useMemo(() => nextMonthlyChargeInDays(recurringExpenses), [recurringExpenses]);
 
-  // Factures en attente (réelles)
+  // Factures en attente (réelles) : prochaine échéance ou retard explicite
   const pendingInvoices = useMemo(() => invoices.filter((i) => i.status !== 'paid'), [invoices]);
-  const nextInvoiceDays = useMemo(() => {
-    const now = new Date();
-    let best: number | null = null;
-    for (const inv of pendingInvoices) {
-      const d = parseFlexibleDate(inv.dueDate);
-      if (!d) continue;
-      const days = calendarDaysUntil(d, now);
-      if (days >= 0 && (best === null || days < best)) best = days;
-    }
-    return best;
-  }, [pendingInvoices]);
+  const nextInvoiceDays = useMemo(
+    () => nearestPendingInvoiceDays(pendingInvoices, parseFlexibleDate, calendarDaysUntil),
+    [pendingInvoices],
+  );
 
   const tools = TOOL_IDS.map((id) => FEATURE_BY_ID[id]).filter(Boolean);
 
@@ -197,12 +197,21 @@ export default function BentoPlus() {
           <View style={styles.tileIcon}><Ionicons name="receipt" size={15} color={C.warning} /></View>
           <Text style={styles.cardLabel}>{t('plusV2.invoices')}</Text>
           <Text style={styles.midNumber}>{pendingInvoices.length}</Text>
-          <Text style={[styles.subtle, nextInvoiceDays !== null && nextInvoiceDays <= 3 && { color: C.warning }]} numberOfLines={1}>
+          <Text
+            style={[
+              styles.subtle,
+              nextInvoiceDays !== null && nextInvoiceDays >= 0 && nextInvoiceDays <= 3 && { color: C.warning },
+              nextInvoiceDays !== null && nextInvoiceDays < 0 && { color: C.error },
+            ]}
+            numberOfLines={1}
+          >
             {pendingInvoices.length === 0
               ? t('plusV2.allPaid')
-              : nextInvoiceDays !== null
-                ? t('plusV2.nextDueIn', { d: nextInvoiceDays })
-                : t('plusV2.pending')}
+              : nextInvoiceDays === null
+                ? t('plusV2.pending')
+                : nextInvoiceDays < 0
+                  ? t('plusV2.overdue')
+                  : t('plusV2.nextDueIn', { d: nextInvoiceDays })}
           </Text>
         </PressScale>
       </Animated.View>

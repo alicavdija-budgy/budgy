@@ -52,9 +52,8 @@ export default function MoreScreen() {
   const legacyUnread = useStore((s) => s.notifications.filter((n) => !n.read).length);
   const alertsUnread = useAlertsStore((s) => s.alerts.filter((a) => !a.read).length);
   const unread = legacyUnread + alertsUnread;
-  const isPro = usePremiumStore(
-    (s) => s.isPro || (s.trialEndsAt !== null && s.trialEndsAt > Date.now())
-  );
+  // Source canonique des droits Pro (couvre l'accès provisoire StoreKit)
+  const isPro = usePremiumStore((s) => s.hasPremiumAccess());
   const isTrial = usePremiumStore(
     (s) => s.trialEndsAt !== null && s.trialEndsAt > Date.now() && !s.plan
   );

@@ -204,3 +204,9 @@ test
 - scripts/test-bento.mjs : 36/36 ; 12 suites de garde + tsc + eslint + i18n verts ; captures Accueil + Plus OK.
 - Config TestFlight verifiee sans modification : 3.9.0 / build 83 / bundle com.budgy.ch.budgy / profil eas testflight (canal distinct) + submit.testflight.
 - ATTENTION : le profil testflight pointe sur backend/Supabase de PRODUCTION (api.budgy.ch, supabase.budgy.ch) -> tester avec un compte dedie, aucune action destructive sur compte reel ; isolation serveur a envisager si tests intensifs.
+
+## Session Derniere etape avant TestFlight (base 8cc3265c)
+- Confidentialite durcie : lastKnownHide initialise a null + maskAmount(value, hide) pure (reel UNIQUEMENT si hide===false) => montants masques par defaut tant que budgy.hideAmounts n est pas hydrate (premier demarrage, redemarrage, changement de compte). Valide e2e navigateur : oeil Accueil -> Plus masque instantanement -> demasquage propage.
+- test-bento.mjs : 40/40 (tests comportementaux reels de maskAmount inclus) ; 12 suites + tsc + eslint + i18n verts.
+- Config verifiee inchangee : 3.9.0 / build 83 / com.budgy.ch.budgy / logo / profil eas testflight (canal distinct) / StoreKit & Pro intacts / main intacte.
+- Commandes TestFlight fournies SANS --latest (selection par BUILD_ID exact) ; rappel : profil testflight = backend/Supabase de PRODUCTION, compte de test dedie obligatoire.

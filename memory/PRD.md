@@ -196,3 +196,11 @@ test
 - Donnees 100% reelles (snapshot, goals saved/target, budgets restant, factures pending, prochaine echeance) ; etats vides elegants ; masquage budgy.hideAmounts respecte ; i18n plusV2 x4 ; valide 390px + 320px clair/sombre.
 - ACCUEIL ANIME NON TOUCHE (critere absolu). Fichiers Claude = reference visuelle seulement.
 - Idees Claude NON integrees (avec raisons) : prevision fin de mois (risque double comptage avec recurrents, a specifier), serie de jours (jour sans donnees != reussite), simulateur epargne (a integrer plus tard dans Epargne, doublon partiel Budgy Twin), pilier 3a (plafond officiel/situation prevoyance manquants, pas de chiffres fictifs), categorisation intelligente (memorisation correction = phase dediee + isolation comptes), resume hebdo (backlog), widgets/Siri/Dynamic Island (integration native, phase ulterieure).
+
+## Session Finalisation TestFlight 83 (commit ci-dessus, base 68c76dde)
+- Masquage montants reactif : BentoPlus relit budgy.hideAmounts a chaque focus (useFocusEffect) + cache anti-flash ; Accueil->Plus->Accueil teste statiquement ; index.tsx NON modifie.
+- Droits Pro harmonises sur usePremiumStore.hasPremiumAccess() (couvre acces provisoire StoreKit) dans BentoPlus et more.tsx.
+- Charges fixes : rollover mois suivant + clamp 29/30/31 (src/services/bentoMetrics.ts, pur, teste) ; factures en retard affichees explicitement (plusV2.overdue x4).
+- scripts/test-bento.mjs : 36/36 ; 12 suites de garde + tsc + eslint + i18n verts ; captures Accueil + Plus OK.
+- Config TestFlight verifiee sans modification : 3.9.0 / build 83 / bundle com.budgy.ch.budgy / profil eas testflight (canal distinct) + submit.testflight.
+- ATTENTION : le profil testflight pointe sur backend/Supabase de PRODUCTION (api.budgy.ch, supabase.budgy.ch) -> tester avec un compte dedie, aucune action destructive sur compte reel ; isolation serveur a envisager si tests intensifs.

@@ -184,3 +184,9 @@ Commit local `dd1732a1` sur main (base edfd866f). Pas de credentials GitHub dans
 - Paywall honnête : checkIntroEligibilityIOS (RNIAP v15 isEligibleForIntroOfferIOS par subscriptionGroupIdIOS, nouveau champ IapProduct) → bannière essai masquée si Apple confirme non-éligible ; null (web/Android/indéterminé) = comportement actuel, feuille Apple autoritaire.
 - Build iOS 83 préparé (app.json ios.buildNumber='83' UNIQUEMENT ; version 3.9.0, bundle, prix, Android versionCode 82 inchangés). Suites test-iap-v15 et test-auth-production mises à jour (83). EAS production vérifié : distribution store, channel production, image latest — build ≠ OTA (eas update séparé, workflow manuel). AUCUN build/submit/OTA lancé.
 - Commandes TestFlight (à lancer PAR L'UTILISATEUR depuis frontend/ sur la branche budgy-smart-4.0) : npx eas build --platform ios --profile production ; puis npx eas submit --platform ios --latest (profil submit ascAppId 6767026949 déjà configuré).
+test
+
+## Session TestFlight 83 (branche budgy-smart-4.0, commit 7401b85c)
+- Paywall iOS : essai annonce UNIQUEMENT si introEligible === true (StoreKit) ; chargement/indetermine = offre standard prix exact ; cache par subscriptionGroup ; Android inchange.
+- eas.json : profil build testflight (extends production, channel testflight separe, OTA production jamais livrees) + submit.testflight. Production intact. Build iOS 83 / v3.9.0 confirmes. test-alerts 56/56.
+- Commandes : npx eas build --platform ios --profile testflight ; npx eas submit --platform ios --profile testflight --id BUILD_ID. AUCUN build/submit/OTA lance.

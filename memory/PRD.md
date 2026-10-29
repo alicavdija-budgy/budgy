@@ -215,3 +215,9 @@ test
 - Echec build GitHub Actions n35 : Apple 403 "PLA Update available" -> le titulaire du compte Apple Developer doit accepter le License Agreement sur developer.apple.com (action manuelle, aucun contournement tente).
 - .github/workflows/eas-build.yml : profil testflight ajoute et par defaut (recommande tests iOS), production/preview/development conserves, declenchement manuel uniquement, submit=false par defaut ; si submit=true -> attend la fin, verifie status FINISHED, soumet le binaire EXACT via --id (plus jamais --latest), refuse platform=all.
 - Aucun code applicatif touche ; YAML valide + coherence eas.json verifiee ; aucun build/submit/OTA lance.
+
+## Session Fix EAS iOS image (base 1c897110, commit ad1215b5)
+- Build iOS post-PLA echouait dans Xcode : production ios.image=latest => Xcode 27.1, incompatible Expo SDK 54.
+- Correctif minimal : profil testflight epingle ios.image=sdk-54 avec bloc ios complet replique (simulator:false, resourceClass m-medium) car extends EAS REMPLACE les objets de premier niveau (pas de fusion profonde).
+- production/canaux/distribution store/submit (appleId, ascAppId)/bundle/logo/ShareExtension/StoreKit/Supabase/Pro inchanges ; tsc + i18n + tests iap/bento verts ; aucun build lance.
+- Si un futur echec persiste malgre sdk-54 : recuperer la PREMIERE erreur dans la section "Run fastlane"/xcodebuild des logs expo.dev (ignorer les warnings de deployment target), probablement liee a ShareExtension ou a un pod.

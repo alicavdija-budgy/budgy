@@ -210,3 +210,8 @@ test
 - test-bento.mjs : 40/40 (tests comportementaux reels de maskAmount inclus) ; 12 suites + tsc + eslint + i18n verts.
 - Config verifiee inchangee : 3.9.0 / build 83 / com.budgy.ch.budgy / logo / profil eas testflight (canal distinct) / StoreKit & Pro intacts / main intacte.
 - Commandes TestFlight fournies SANS --latest (selection par BUILD_ID exact) ; rappel : profil testflight = backend/Supabase de PRODUCTION, compte de test dedie obligatoire.
+
+## Session CI TestFlight (base dd3df160)
+- Echec build GitHub Actions n35 : Apple 403 "PLA Update available" -> le titulaire du compte Apple Developer doit accepter le License Agreement sur developer.apple.com (action manuelle, aucun contournement tente).
+- .github/workflows/eas-build.yml : profil testflight ajoute et par defaut (recommande tests iOS), production/preview/development conserves, declenchement manuel uniquement, submit=false par defaut ; si submit=true -> attend la fin, verifie status FINISHED, soumet le binaire EXACT via --id (plus jamais --latest), refuse platform=all.
+- Aucun code applicatif touche ; YAML valide + coherence eas.json verifiee ; aucun build/submit/OTA lance.

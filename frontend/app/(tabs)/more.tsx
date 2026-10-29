@@ -25,6 +25,8 @@ import { useStore } from '../../src/stores/useStore';
 import { usePremiumStore } from '../../src/stores/usePremiumStore';
 import { useTranslation } from '../../src/hooks/useTranslation';
 import PressScale from '../../src/components/PressScale';
+import BentoPlus from '../../src/components/BentoPlus';
+import { useAlertsStore } from '../../src/stores/useAlertsStore';
 import {
   FEATURE_CATEGORIES,
   type BudgyFeature,
@@ -47,6 +49,9 @@ export default function MoreScreen() {
   const router = useRouter();
   const C = useTheme();
   const { user } = useStore();
+  const legacyUnread = useStore((s) => s.notifications.filter((n) => !n.read).length);
+  const alertsUnread = useAlertsStore((s) => s.alerts.filter((a) => !a.read).length);
+  const unread = legacyUnread + alertsUnread;
   const isPro = usePremiumStore(
     (s) => s.isPro || (s.trialEndsAt !== null && s.trialEndsAt > Date.now())
   );
@@ -67,101 +72,39 @@ export default function MoreScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* ── A. Compact profile ─────────────────────────────────── */}
+        {/* ── A. En-tête bento : salutation, titre, alertes, avatar ── */}
         <Animated.View entering={FadeInDown.duration(300)}>
-          <View style={styles.profileCard}>
-            <LinearGradient
-              colors={C.gradientPrimary as [string, string]}
-              style={styles.avatar}
-            >
-              <Text style={styles.avatarText}>
-                {getInitials(user?.name || 'User')}
+          <View style={styles.bentoHeader}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.bentoGreeting} numberOfLines={1}>
+                {t('plusV2.greeting', { name: (user?.name || '').split(' ')[0] || t('more.title') })}
               </Text>
-            </LinearGradient>
-            <View style={styles.profileInfo}>
-              <Text style={styles.profileName} numberOfLines={1}>
-                {user?.name || t('more.title')}
-              </Text>
-              <Text style={styles.profileEmail} numberOfLines={1}>
-                {user?.email || ''}
-              </Text>
+              <Text style={styles.bentoTitle}>{t('more.title')}</Text>
             </View>
-            {isPro ? (
-              <View style={styles.proBadgeElegant}>
-                <Ionicons name="diamond" size={11} color="#FFF" />
-                <Text style={styles.proBadgeElegantText}>PRO</Text>
-              </View>
-            ) : (
-              <View style={styles.freeTag}>
-                <Text style={styles.freeTagText}>{t('moreV2.freeAccount')}</Text>
-              </View>
-            )}
-          </View>
-        </Animated.View>
-
-        {/* ── B. Budgy Pro hero — SINGLE call-to-action to /pro ─── */}
-        <Animated.View
-          entering={FadeInDown.duration(400).delay(80)}
-          style={{ marginBottom: Spacing.md }}
-        >
-          <TouchableOpacity
-            activeOpacity={0.92}
-            onPress={() => router.push('/pro' as any)}
-            accessibilityRole="button"
-            accessibilityLabel={
-              isPro ? t('proScreen.ctaManage') : t('proScreen.ctaDiscover')
-            }
-          >
-            <LinearGradient
-              colors={
-                isPro
-                  ? ['#064E3B', '#0F766E', '#22D3EE']
-                  : ['#0F766E', '#14B8A6', '#22D3EE']
-              }
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.proHero}
+            <PressScale
+              haptic="selection"
+              onPress={() => router.push('/more/notifications' as any)}
+              style={styles.bellBtn}
+              accessibilityLabel="Budgy Alerts"
             >
-              {/* Ambient decorative blobs (pure JS shapes) */}
-              <View style={styles.heroBlobA} />
-              <View style={styles.heroBlobB} />
-
-              <View style={styles.proHeroTop}>
-                <View style={styles.proHeroIconWrap}>
-                  <Ionicons name="diamond" size={16} color="#FFFFFF" />
-                </View>
-                <Text style={styles.proHeroBrand}>
-                  {t('proScreen.heroBrand')}
-                </Text>
+              <Ionicons name="notifications-outline" size={18} color={C.text} />
+              {unread > 0 && <View style={styles.bellDot} />}
+            </PressScale>
+            <PressScale
+              haptic="selection"
+              onPress={() => router.push('/more/settings' as any)}
+              accessibilityLabel={t('plusV2.prefs')}
+            >
+              <LinearGradient colors={C.gradientPrimary as [string, string]} style={styles.avatar}>
+                <Text style={styles.avatarText}>{getInitials(user?.name || 'User')}</Text>
                 {isPro && (
-                  <View style={styles.proHeroStatusChip}>
-                    <View style={styles.proHeroStatusDot} />
-                    <Text style={styles.proHeroStatusText}>
-                      {t('proScreen.matrix.priority').split(' ')[0].toUpperCase() /* placeholder short */}
-                    </Text>
+                  <View style={styles.avatarProDot}>
+                    <Ionicons name="diamond" size={8} color="#FFF" />
                   </View>
                 )}
-              </View>
-
-              <Text style={styles.proHeroTitle}>
-                {isPro
-                  ? t('more.subscriptionActive')
-                  : t('proScreen.heroTitle')}
-              </Text>
-              <Text style={styles.proHeroDetails}>
-                {t('proScreen.heroSub')}
-              </Text>
-
-              <View style={styles.proHeroCtaRow}>
-                <Text style={styles.proHeroCta}>
-                  {isPro
-                    ? t('proScreen.ctaManage')
-                    : t('proScreen.ctaDiscover')}
-                </Text>
-                <Ionicons name="arrow-forward" size={17} color="#FFFFFF" />
-              </View>
-            </LinearGradient>
-          </TouchableOpacity>
+              </LinearGradient>
+            </PressScale>
+          </View>
         </Animated.View>
 
         {/* Trial banner */}
@@ -182,7 +125,10 @@ export default function MoreScreen() {
           </View>
         )}
 
-        {/* ── C. Hub — 5 rubriques premium (Budgy Smart 4.0) ─────── */}
+        {/* ── B→I. Tableau de bord bento (données réelles) ───────── */}
+        <BentoPlus />
+
+        {/* ── J. Hub — 5 rubriques premium (Budgy Smart 4.0) ─────── */}
         <SectionTitle title={t('moreHub.sections')} C={C} />
         <View style={styles.menuCard}>
           {FEATURE_CATEGORIES.map((cat, i) => (
@@ -342,6 +288,29 @@ export function MenuList({
 export const makeStyles = (C: any) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: C.background },
+    // ── Bento header ──
+    bentoHeader: {
+      flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
+      marginBottom: Spacing.md,
+    },
+    bentoGreeting: { color: C.textTertiary, fontSize: FontSizes.xs, fontWeight: FontWeights.semibold },
+    bentoTitle: { color: C.text, fontSize: 26, fontWeight: FontWeights.black, letterSpacing: -0.6 },
+    bellBtn: {
+      width: 40, height: 40, borderRadius: 20,
+      backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder,
+      alignItems: 'center', justifyContent: 'center',
+    },
+    bellDot: {
+      position: 'absolute', top: 9, right: 10,
+      width: 8, height: 8, borderRadius: 4, backgroundColor: C.error,
+      borderWidth: 1.5, borderColor: C.card,
+    },
+    avatarProDot: {
+      position: 'absolute', bottom: -2, right: -2,
+      width: 16, height: 16, borderRadius: 8, backgroundColor: '#B45309',
+      alignItems: 'center', justifyContent: 'center',
+      borderWidth: 1.5, borderColor: C.background,
+    },
     content: {
       padding: Spacing.lg,
       maxWidth: 760,

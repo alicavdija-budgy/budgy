@@ -14,25 +14,25 @@ on:
         type: choice
         options: [ios, android, all]
       profile:
-        description: 'Profil EAS'
+        description: "Profil EAS — testflight recommandé pour les tests iOS (canal OTA isolé de la production)"
         required: true
-        default: 'production'
+        default: 'testflight'
         type: choice
-        options: [development, preview, production]
+        options: [testflight, production, preview, development]
       submit:
-        description: 'Auto-submit TestFlight / Play Store après le build (attend la fin)'
+        description: 'Auto-submit TestFlight / Play Store après le build (attend la fin, soumet CE build précis par son ID)'
         required: true
         default: 'false'
         type: choice
         options: ['true', 'false']
 
 concurrency:
-  group: eas-build-${{ github.ref }}-${{ github.event.inputs.platform || 'ios' }}-${{ github.event.inputs.profile || 'production' }}
+  group: eas-build-${{ github.ref }}-${{ github.event.inputs.platform || 'ios' }}-${{ github.event.inputs.profile || 'testflight' }}
   cancel-in-progress: false
 
 jobs:
   build:
-    name: "EAS Build (${{ github.event.inputs.platform || 'ios' }} / ${{ github.event.inputs.profile || 'production' }})"
+    name: "EAS Build (${{ github.event.inputs.platform || 'ios' }} / ${{ github.event.inputs.profile || 'testflight' }})"
     runs-on: ubuntu-latest
 
     defaults:
@@ -113,17 +113,38 @@ jobs:
           eas whoami
 
       - name: EAS build
+        id: build
         run: |
           PLATFORM="${{ github.event.inputs.platform || 'ios' }}"
-          PROFILE="${{ github.event.inputs.profile || 'production' }}"
+          PROFILE="${{ github.event.inputs.profile || 'testflight' }}"
           SUBMIT="${{ github.event.inputs.submit || 'false' }}"
+
+          if [ "$SUBMIT" = "true" ] && [ "$PLATFORM" = "all" ]; then
+            echo "❌ submit=true n'est pas supporté avec platform=all : lancer iOS et Android séparément pour soumettre un binaire précis."
+            exit 1
+          fi
 
           echo "Launching EAS build platform=$PLATFORM profile=$PROFILE submit=$SUBMIT"
           if [ "$SUBMIT" = "true" ]; then
+            # Attend la fin du build et capture l'identifiant EXACT du binaire
+            # produit par CE run (jamais de soumission aveugle du dernier build).
             eas build \
               --platform "$PLATFORM" \
               --profile "$PROFILE" \
-              --non-interactive
+              --non-interactive \
+              --json > /tmp/eas-build-result.json
+
+            node -e "
+              const r = JSON.parse(require('fs').readFileSync('/tmp/eas-build-result.json','utf8'));
+              const b = Array.isArray(r) ? r[0] : r;
+              if (!b || !b.id) { console.error('❌ Impossible d\'identifier le build produit.'); process.exit(1); }
+              if (b.status && String(b.status).toUpperCase() !== 'FINISHED') {
+                console.error('❌ Build non terminé (status=' + b.status + ') : soumission annulée.');
+                process.exit(1);
+              }
+              console.log('✅ Build terminé:', b.id, '| version', b.appVersion || '?', '| buildNumber', (b.appBuildVersion || '?'));
+              require('fs').appendFileSync(process.env.GITHUB_OUTPUT, 'build_id=' + b.id + '\n');
+            "
           else
             eas build \
               --platform "$PLATFORM" \
@@ -132,11 +153,19 @@ jobs:
               --no-wait
           fi
 
-      - name: EAS submit (optional)
+      - name: EAS submit (optional — binaire exact de ce run)
         if: ${{ github.event.inputs.submit == 'true' }}
         run: |
           PLATFORM="${{ github.event.inputs.platform || 'ios' }}"
+          PROFILE="${{ github.event.inputs.profile || 'testflight' }}"
+          BUILD_ID="${{ steps.build.outputs.build_id }}"
+          if [ -z "$BUILD_ID" ]; then
+            echo "❌ Aucun build_id capturé : soumission refusée (jamais de --latest)."
+            exit 1
+          fi
+          echo "Submitting exact build $BUILD_ID (profile=$PROFILE)"
           eas submit \
             --platform "$PLATFORM" \
-            --latest \
+            --profile "$PROFILE" \
+            --id "$BUILD_ID" \
             --non-interactive

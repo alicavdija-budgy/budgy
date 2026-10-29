@@ -221,3 +221,8 @@ test
 - Correctif minimal : profil testflight epingle ios.image=sdk-54 avec bloc ios complet replique (simulator:false, resourceClass m-medium) car extends EAS REMPLACE les objets de premier niveau (pas de fusion profonde).
 - production/canaux/distribution store/submit (appleId, ascAppId)/bundle/logo/ShareExtension/StoreKit/Supabase/Pro inchanges ; tsc + i18n + tests iap/bento verts ; aucun build lance.
 - Si un futur echec persiste malgre sdk-54 : recuperer la PREMIERE erreur dans la section "Run fastlane"/xcodebuild des logs expo.dev (ignorer les warnings de deployment target), probablement liee a ShareExtension ou a un pod.
+
+## Session Bump 3.9.1 (84) (base 9bcc9c8d)
+- Refus Apple build 83 : ITMS-90062 (version non superieure) + ITMS-90186 (train TestFlight 3.9.0 ferme) -> app.json passe a version 3.9.1 / buildNumber 84 ; ShareExtension herite automatiquement (expo-share-intent, prebuild) ; bundle/signature/SDK54/image sdk-54/canaux/dependances intacts ; Android 82 intact.
+- Tests de garde mis a jour (3.9.1/84) ; 12 suites + tsc + i18n verts ; aucun build lance.
+- Impossible de verifier depuis le pod si Apple a deja recu 3.9.1(84) : si refus identique, incrementer buildNumber seulement (85).

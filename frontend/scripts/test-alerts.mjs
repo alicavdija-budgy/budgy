@@ -141,7 +141,25 @@ check('migration v2: anciennes alertes JAMAIS exposées (alerts: [])', /alerts: 
 const iapSrc = read('src/services/iap.ts');
 const paywallSrc = read('app/paywall.tsx');
 check('iap: checkIntroEligibilityIOS (StoreKit isEligibleForIntroOfferIOS)', /isEligibleForIntroOfferIOS/.test(iapSrc) && /return null/.test(iapSrc));
-check('paywall: essai annoncé seulement si éligible (introEligible !== false)', /showTrial = hasIntroductoryFreeTrial\(selectedProduct\) && introEligible !== false/.test(paywallSrc));
+check('paywall: essai annoncé UNIQUEMENT si éligibilité confirmée (iOS introEligible === true)',
+  /Platform\.OS === 'ios' \? introEligible === true : true/.test(paywallSrc));
+check('paywall: pendant le chargement → offre standard (reset null)', /setIntroEligible\(null\); \/\/ pendant le chargement/.test(paywallSrc));
+check('paywall: cache par groupe (pas de flicker mensuel/annuel)', /eligCache/.test(paywallSrc));
+check('paywall: Android non dégradé (true côté non-iOS)', /: true\);/.test(paywallSrc));
+
+const easSrc = read('eas.json');
+const eas = JSON.parse(easSrc);
+check('eas: profil testflight distribution store + canal testflight séparé',
+  eas.build.testflight?.extends === 'production' && eas.build.testflight?.channel === 'testflight');
+check('eas: profil production intact (channel production, store)',
+  eas.build.production.channel === 'production' && eas.build.production.distribution === 'store');
+check('eas: submit.testflight = même identité Apple que production',
+  eas.submit.testflight?.ios?.ascAppId === eas.submit.production.ios.ascAppId &&
+  eas.submit.testflight?.ios?.appleTeamId === eas.submit.production.ios.appleTeamId);
+const appJson = JSON.parse(read('app.json'));
+check('build iOS 83 confirmé (version 3.9.0, bundle inchangé)',
+  appJson.expo.ios.buildNumber === '83' && appJson.expo.version === '3.9.0' &&
+  appJson.expo.ios.bundleIdentifier === 'com.budgy.ch.budgy');
 
 // ── Comportement réel du store de scopes (import du creator zustand) ─────
 const defStart = storeSrc.indexOf('export const DEFAULT_ALERTS_PREFS');

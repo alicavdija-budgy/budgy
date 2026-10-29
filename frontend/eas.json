@@ -53,9 +53,25 @@
         "EXPO_PUBLIC_BACKEND_URL": "https://api.budgy.ch",
         "EXPO_PUBLIC_SUPABASE_URL": "https://supabase.budgy.ch"
       }
+    },
+    "testflight": {
+      "extends": "production",
+      "channel": "testflight",
+      "env": {
+        "EXPO_PUBLIC_BACKEND_URL": "https://api.budgy.ch",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://supabase.budgy.ch"
+      }
     }
   },
   "submit": {
+    "testflight": {
+      "ios": {
+        "appleId": "alic.avdija@gmail.com",
+        "ascAppId": "6767026949",
+        "appleTeamId": "N69NHCB9S3",
+        "language": "fr-FR"
+      }
+    },
     "production": {
       "ios": {
         "appleId": "alic.avdija@gmail.com",

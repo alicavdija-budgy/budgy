@@ -154,17 +154,34 @@ export default function PaywallScreen() {
   );
 
   // Éligibilité réelle à l'essai (StoreKit, iOS) : true/false confirmé,
-  // null = indéterminé (on garde l'affichage actuel, Apple reste l'autorité).
+  // null = en cours / indéterminé. iOS : l'essai n'est annoncé que sur
+  // confirmation EXPLICITE (true) ; en attendant, l'offre standard avec son
+  // prix exact est affichée. Cache par groupe d'abonnement pour éviter tout
+  // affichage transitoire incorrect en basculant mensuel/annuel (les deux
+  // SKU partagent le même groupe Apple).
   const [introEligible, setIntroEligible] = useState<boolean | null>(null);
+  const eligCache = React.useRef<Record<string, boolean>>({});
   useEffect(() => {
     let active = true;
+    const groupId = selectedProduct?.subscriptionGroupIdIOS || '';
+    if (groupId && eligCache.current[groupId] !== undefined) {
+      setIntroEligible(eligCache.current[groupId]);
+      return;
+    }
+    setIntroEligible(null); // pendant le chargement : offre standard, prix exact
     checkIntroEligibilityIOS(selectedProduct).then((v) => {
-      if (active) setIntroEligible(v);
+      if (!active) return;
+      if (typeof v === 'boolean' && groupId) eligCache.current[groupId] = v;
+      setIntroEligible(v);
     }).catch(() => {});
     return () => { active = false; };
   }, [selectedProduct]);
 
-  const showTrial = hasIntroductoryFreeTrial(selectedProduct) && introEligible !== false;
+  // iOS : essai annoncé UNIQUEMENT si StoreKit confirme l'éligibilité (true).
+  // Android : éligibilité gérée par Google via l'offerToken — inchangé.
+  const showTrial =
+    hasIntroductoryFreeTrial(selectedProduct) &&
+    (Platform.OS === 'ios' ? introEligible === true : true);
   const trialDays = formatIntroductoryPeriodDays(selectedProduct);
 
   const buyDisabled =

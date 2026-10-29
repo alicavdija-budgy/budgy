@@ -51,6 +51,7 @@ import { usePremiumStore, type Plan } from '../src/stores/usePremiumStore';
 import { useTranslation } from '../src/hooks/useTranslation';
 import { useIAP } from '../src/hooks/useIAP';
 import type { IapProduct } from '../src/services/iap';
+import { checkIntroEligibilityIOS } from '../src/services/iap';
 
 // Static, brand-independent benefits (no price, no currency)
 const BENEFIT_KEYS = [
@@ -152,7 +153,18 @@ export default function PaywallScreen() {
     [selected, iap.annual, iap.monthly]
   );
 
-  const showTrial = hasIntroductoryFreeTrial(selectedProduct);
+  // Éligibilité réelle à l'essai (StoreKit, iOS) : true/false confirmé,
+  // null = indéterminé (on garde l'affichage actuel, Apple reste l'autorité).
+  const [introEligible, setIntroEligible] = useState<boolean | null>(null);
+  useEffect(() => {
+    let active = true;
+    checkIntroEligibilityIOS(selectedProduct).then((v) => {
+      if (active) setIntroEligible(v);
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [selectedProduct]);
+
+  const showTrial = hasIntroductoryFreeTrial(selectedProduct) && introEligible !== false;
   const trialDays = formatIntroductoryPeriodDays(selectedProduct);
 
   const buyDisabled =

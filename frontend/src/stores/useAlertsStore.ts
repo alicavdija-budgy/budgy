@@ -156,8 +156,14 @@ export const useAlertsStore = create<AlertsState>()(
       migrate: (persisted: any, version) => {
         if (version < 2 && persisted) {
           return {
+            // Préférences : migrées (non destructif, réglages de l'appareil)
             prefs: persisted.prefs ?? DEFAULT_ALERTS_PREFS,
-            alerts: persisted.alerts ?? [],
+            // Historique : NON migré — les anciennes alertes (noms de
+            // factures, montants) appartenaient au compte alors connecté et
+            // ne doivent apparaître ni en mode invité ni dans un autre
+            // compte. Elles sont dérivées des données : le moteur les
+            // régénère à l'ouverture pour le bon compte.
+            alerts: [],
             activeScope: 'guest',
             scopes: {},
           };

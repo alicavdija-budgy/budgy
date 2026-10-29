@@ -130,11 +130,13 @@ export default function SettingsScreen() {
           text: t('common.delete'),
           style: 'destructive',
           onPress: () => {
-            clearAllData();
-            // Phase 4 — « Supprimer mes données » inclut l'historique
-            // d'alertes du compte courant et ses rappels OS d'entités.
+            // Phase 4.1 — ORDRE CRITIQUE : purger le scope d'alertes du
+            // compte AVANT clearAllData() : la remise à zéro de
+            // l'utilisateur fait basculer le scope sur 'guest' (via
+            // initAlertsScopeSync) et on effacerait sinon le mauvais scope.
             try { useAlertsStore.getState().clearActiveScope(); } catch {}
             cancelAllEntityReminders().catch(() => {});
+            clearAllData();
           },
         },
       ]

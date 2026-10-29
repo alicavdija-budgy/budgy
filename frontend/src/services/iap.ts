@@ -79,6 +79,8 @@ export interface IapProduct {
   description: string;
   introOffer: IapIntroOffer | null;
   androidOfferToken: string | null;
+  /** iOS : identifiant du groupe d'abonnements (éligibilité offre d'intro) */
+  subscriptionGroupIdIOS: string | null;
 }
 
 export interface IapPurchaseReceipt {
@@ -321,7 +323,31 @@ export function mapProduct(raw: any): IapProduct {
       androidOfferToken = legacy?.offerToken || null;
     }
   }
-  return { productId, price: numericPrice != null ? String(numericPrice) : '', localizedPrice: displayPrice || (currency && numericPrice != null ? `${currency} ${numericPrice}` : ''), currency: currency || 'CHF', title: raw?.title || raw?.displayName || raw?.displayNameIOS || '', description: raw?.description || '', introOffer: extractIntroOffer(raw), androidOfferToken };
+  return { productId, price: numericPrice != null ? String(numericPrice) : '', localizedPrice: displayPrice || (currency && numericPrice != null ? `${currency} ${numericPrice}` : ''), title: raw?.title || raw?.displayName || raw?.displayNameIOS || '', description: raw?.description || '', introOffer: extractIntroOffer(raw), androidOfferToken, currency: currency || 'CHF', subscriptionGroupIdIOS: raw?.subscriptionGroupIdIOS || raw?.subscription?.subscriptionGroupId || null };
+}
+
+/**
+ * iOS — Éligibilité réelle à l'offre d'introduction (StoreKit 2).
+ * Apple retourne les métadonnées d'offre d'intro à TOUS les utilisateurs ;
+ * seul `isEligibleForIntroOfferIOS(groupID)` dit si CE compte Apple y a
+ * encore droit (nouveaux abonnés uniquement). Retourne :
+ *  - true/false : éligibilité confirmée par StoreKit ;
+ *  - null       : indéterminé (Android, web, API indisponible, erreur) —
+ *                 dans ce cas l'UI garde le comportement actuel et la
+ *                 feuille d'achat Apple reste l'autorité finale.
+ * Aucune modification des produits, prix ou droits Pro.
+ */
+export async function checkIntroEligibilityIOS(product: IapProduct | null): Promise<boolean | null> {
+  if (Platform.OS !== 'ios') return null;
+  if (!product?.introOffer) return null;
+  const groupId = product.subscriptionGroupIdIOS;
+  if (!groupId || !RNIap || typeof RNIap.isEligibleForIntroOfferIOS !== 'function') return null;
+  try {
+    const res = await RNIap.isEligibleForIntroOfferIOS(groupId);
+    return typeof res === 'boolean' ? res : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function fetchSubscriptions(): Promise<IapProduct[]> {

@@ -132,5 +132,52 @@ check('scope: synchronisé au démarrage (_layout)', layoutSrc.includes('initAle
 check('logout: rappels d\'entités annulés de façon ciblée', settingsSrc.includes('cancelAllEntityReminders'));
 check('supprimer mes données: scope alertes purgé', settingsSrc.includes('clearActiveScope'));
 
+// ── Phase 4.1 : ordre de purge, migration sans fuite, éligibilité essai ──
+check('supprimer mes données: clearActiveScope AVANT clearAllData (ordre critique)',
+  /try \{ useAlertsStore\.getState\(\)\.clearActiveScope\(\); \} catch \{\}\s*cancelAllEntityReminders\(\)\.catch\(\(\) => \{\}\);\s*clearAllData\(\);/.test(settingsSrc));
+const migrateBlock = storeSrc.slice(storeSrc.indexOf('migrate:'), storeSrc.indexOf('return persisted;'));
+check('migration v2: anciennes alertes JAMAIS exposées (alerts: [])', /alerts: \[\],/.test(migrateBlock) && !/persisted\.alerts/.test(migrateBlock));
+
+const iapSrc = read('src/services/iap.ts');
+const paywallSrc = read('app/paywall.tsx');
+check('iap: checkIntroEligibilityIOS (StoreKit isEligibleForIntroOfferIOS)', /isEligibleForIntroOfferIOS/.test(iapSrc) && /return null/.test(iapSrc));
+check('paywall: essai annoncé seulement si éligible (introEligible !== false)', /showTrial = hasIntroductoryFreeTrial\(selectedProduct\) && introEligible !== false/.test(paywallSrc));
+
+// ── Comportement réel du store de scopes (import du creator zustand) ─────
+const defStart = storeSrc.indexOf('export const DEFAULT_ALERTS_PREFS');
+const defBlock = storeSrc.slice(defStart, storeSrc.indexOf('};', defStart) + 2)
+  .replace(': AlertsPrefs =', ' =');
+const creatorStart = storeSrc.indexOf('(set, get) => ({');
+const creatorEnd = storeSrc.lastIndexOf('}),', storeSrc.indexOf("'budgy-alerts-storage'")) + 2;
+let creator = storeSrc.slice(creatorStart, creatorEnd)
+  .replace('const fresh: BudgyAlert[] = [];', 'const fresh = [];')
+  .replace('const addedToday: Record<string, number> = {};', 'const addedToday = {};');
+check('scopes: creator extrait sans annotation TS', !/: Budgy|: Record</.test(creator));
+const storeMod = await import('data:text/javascript;base64,' + Buffer.from(
+  'const MAX_ALERTS = 50;\n' +
+  defBlock.replace('export const', 'const') +
+  '\nexport function makeStore() { let state; const set = (p) => { state = { ...state, ...(typeof p === "function" ? p(state) : p) }; }; const get = () => state; state = (' +
+  creator + ')(set, get); return () => state; }'
+).toString('base64'));
+const S = storeMod.makeStore();
+const mkAlert = (id) => ({ id, category: 'invoices', titleKey: 't', bodyKey: 'b', createdAt: Date.now(), read: false });
+
+S().setActiveScope('user:A');
+S().upsertAlerts([mkAlert('invoice-due-secretA')]);
+check('scopes: alerte créée dans le compte A', S().alerts.length === 1);
+S().setActiveScope('user:B');
+check('scopes: compte B ne voit RIEN du compte A', S().alerts.length === 0);
+S().upsertAlerts([mkAlert('invoice-due-secretB')]);
+S().setActiveScope('user:A');
+check('scopes: retour compte A → son alerte restaurée', S().alerts.length === 1 && S().alerts[0].id === 'invoice-due-secretA');
+// « Supprimer mes données » (ordre corrigé) : purge du scope PUIS bascule guest
+S().clearActiveScope();
+S().setActiveScope('guest'); // simulate user → null (initAlertsScopeSync)
+check('suppression données A: invité ne voit rien', S().alerts.length === 0);
+S().setActiveScope('user:A');
+check('suppression données A: le compte A est réellement vide ensuite', S().alerts.length === 0);
+S().setActiveScope('user:B');
+check('suppression données A: le compte B conserve SON historique intact', S().alerts.length === 1 && S().alerts[0].id === 'invoice-due-secretB');
+
 console.log(`\n[test-alerts] ${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

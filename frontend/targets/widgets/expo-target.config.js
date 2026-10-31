@@ -7,6 +7,9 @@ module.exports = {
   name: 'BudgyWidget',
   displayName: 'Budgy',
   deploymentTarget: '17.0',
+  entitlements: {
+    'com.apple.security.application-groups': ['group.com.budgy.ch.budgy'],
+  },
   colors: {
     $widgetBackground: { light: '#0B0E14', dark: '#0B0E14' },
     $accent: { light: '#34D399', dark: '#34D399' },

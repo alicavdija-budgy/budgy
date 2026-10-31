@@ -1,7 +1,7 @@
 import Foundation
 
 /// Stockage partagé Budgy pour Siri / Raccourcis — règles strictes :
-/// - aucun fallback UserDefaults.standard ;
+/// - aucun repli vers un stockage non partagé ;
 /// - aucune valeur fictive ;
 /// - la file des dépenses dictées n'est JAMAIS vidée ici : chaque entrée a un
 ///   identifiant unique et n'est retirée par l'app qu'après enregistrement

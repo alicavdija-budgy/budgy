@@ -320,6 +320,23 @@ export default function LamalComparatorScreen() {
           </>
         )}
 
+        {/* Sources, limites et résiliation AOS — transparence obligatoire */}
+        <View style={styles.srcCard}>
+          <View style={styles.srcInfoRow}>
+            <Ionicons name="library" size={15} color={theme.primary} />
+            <Text style={styles.srcTitle}>{t('lamalInfo.sourcesTitle')}</Text>
+          </View>
+          <Text style={styles.srcText}>{t('lamalInfo.sourcesBody')}</Text>
+          <Text style={styles.srcText}>{t('lamalInfo.limitsBody')}</Text>
+          <View style={[styles.srcInfoRow, { marginTop: 10 }]}>
+            <Ionicons name="calendar" size={15} color={theme.warning} />
+            <Text style={styles.srcTitle}>{t('lamalInfo.cancelTitle')}</Text>
+          </View>
+          <Text style={styles.srcText}>{t('lamalInfo.cancelBody1')}</Text>
+          <Text style={styles.srcText}>{t('lamalInfo.cancelBody2')}</Text>
+          <Text style={[styles.srcText, { fontStyle: 'italic' }]}>{t('lamalInfo.lcaNote')}</Text>
+        </View>
+
         <View style={{ height: 40 }} />
       </ScrollView>
     </View>
@@ -402,6 +419,13 @@ const makeStyles = (Colors: ThemePalette) => StyleSheet.create({
     marginTop: Spacing.md,
   },
   priminfoBtnTxt: { color: Colors.primary, fontSize: FontSizes.sm, fontWeight: FontWeights.bold, flex: 1, textAlign: 'center' },
+  srcCard: {
+    backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder,
+    borderRadius: 16, padding: 14, marginTop: Spacing.md, gap: 6,
+  },
+  srcInfoRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  srcTitle: { color: Colors.text, fontSize: FontSizes.sm, fontWeight: FontWeights.bold },
+  srcText: { color: Colors.textSecondary, fontSize: 12, lineHeight: 17 },
   optCard: { marginBottom: Spacing.md },
   optRow: { flexDirection: 'row', gap: Spacing.md },
   optBox: { flex: 1, alignItems: 'center', padding: Spacing.md, borderRadius: BorderRadius.md, borderWidth: 2, backgroundColor: Colors.card },

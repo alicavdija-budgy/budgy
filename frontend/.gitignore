@@ -41,3 +41,7 @@ app-example
 # Metro/Expo bundler cache (never version)
 .metro-cache/
 .expo/
+
+# Continuous Native Generation (expo prebuild) — ne jamais committer
+/ios
+/android

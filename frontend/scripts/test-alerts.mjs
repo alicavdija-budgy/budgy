@@ -134,7 +134,7 @@ check('supprimer mes données: scope alertes purgé', settingsSrc.includes('clea
 
 // ── Phase 4.1 : ordre de purge, migration sans fuite, éligibilité essai ──
 check('supprimer mes données: clearActiveScope AVANT clearAllData (ordre critique)',
-  /try \{ useAlertsStore\.getState\(\)\.clearActiveScope\(\); \} catch \{\}\s*cancelAllEntityReminders\(\)\.catch\(\(\) => \{\}\);\s*clearAllData\(\);/.test(settingsSrc));
+  /try \{ useAlertsStore\.getState\(\)\.clearActiveScope\(\); \} catch \{\}\s*cancelAllEntityReminders\(\)\.catch\(\(\) => \{\}\);\s*(\/\/[^\n]*\n\s*)?clearWidgetData\(\)\.catch\(\(\) => \{\}\);\s*clearAllData\(\);/.test(settingsSrc));
 const migrateBlock = storeSrc.slice(storeSrc.indexOf('migrate:'), storeSrc.indexOf('return persisted;'));
 check('migration v2: anciennes alertes JAMAIS exposées (alerts: [])', /alerts: \[\],/.test(migrateBlock) && !/persisted\.alerts/.test(migrateBlock));
 

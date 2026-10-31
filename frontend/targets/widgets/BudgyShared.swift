@@ -2,7 +2,7 @@ import Foundation
 
 /// Lecture sécurisée du snapshot partagé Budgy (App Group).
 /// Règles de confidentialité :
-/// - AUCUN fallback vers UserDefaults.standard : si l'App Group est
+/// - AUCUN repli vers le stockage non partagé : si l'App Group est
 ///   inaccessible, on n'affiche rien de financier.
 /// - AUCUNE valeur de démonstration : pas de snapshot => état « Ouvrez Budgy ».
 /// - Les montants ne sont affichés que si l'utilisateur a activé les widgets

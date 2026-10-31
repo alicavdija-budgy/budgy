@@ -6,4 +6,7 @@ module.exports = {
   name: 'BudgyIntents',
   displayName: 'Budgy Siri',
   deploymentTarget: '17.0',
+  entitlements: {
+    'com.apple.security.application-groups': ['group.com.budgy.ch.budgy'],
+  },
 };

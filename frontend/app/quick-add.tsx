@@ -42,6 +42,9 @@ import { useTheme } from '../src/hooks/useTheme';
 import { useTranslation } from '../src/hooks/useTranslation';
 import type { ThemePalette } from '../src/constants/palettes';
 import { smartInput, type SmartInputSource, type SmartInputResult } from '../src/lib/smartInput';
+import {
+  resolvePendingExpense, isAlreadyProcessed, refreshWidgetSnapshot,
+} from '../src/services/widgetBridge';
 import { useStore } from '../src/stores/useStore';
 import { Button } from '../src/components/ui';
 import { humanizeError } from '../src/lib/errorSanitizer';
@@ -67,8 +70,9 @@ export default function QuickAddScreen() {
     google_assistant: t('quickAdd.sourceGoogleAssistant'),
   };
 
-  const params = useLocalSearchParams<{ text?: string; source?: string }>();
+  const params = useLocalSearchParams<{ text?: string; source?: string; pid?: string }>();
   const incomingText = (params.text || '').toString();
+  const pendingId = (params.pid || '').toString() || null;
   const source: SmartInputSource = (() => {
     const s = (params.source || '').toString().toLowerCase();
     if (s === 'siri' || s === 'google_assistant' || s === 'keyboard_voice') return s;
@@ -105,10 +109,17 @@ export default function QuickAddScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const commit = () => {
+  const commit = async () => {
     if (!result || !result.ok) return;
+    // Anti-doublon absolu (Siri) : si cette demande a déjà été enregistrée
+    // (interruption, redémarrage), on la retire de la file sans la resauver.
+    if (pendingId && (await isAlreadyProcessed(pendingId))) {
+      await resolvePendingExpense(pendingId);
+      router.replace('/');
+      return;
+    }
     const type = result.type || 'expense';
-    const id = `qa_${Date.now()}`;
+    const id = pendingId ? `siri_${pendingId}` : `qa_${Date.now()}`;
     const now = new Date().toISOString().slice(0, 10);
 
     try {
@@ -147,6 +158,10 @@ export default function QuickAddScreen() {
         } as any);
       }
       try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
+      // Dépense Siri : ne retirer de la file partagée qu'APRÈS la sauvegarde
+      // réellement effectuée dans le store (aucune perte possible).
+      if (pendingId) await resolvePendingExpense(pendingId);
+      refreshWidgetSnapshot();
       router.replace('/');
     } catch (e: any) {
       Alert.alert(t('quickAdd.saveError'), humanizeError(e).message);

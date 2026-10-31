@@ -46,6 +46,12 @@
         "NSMicrophoneUsageDescription": "Dictate expenses and income with your voice to log transactions hands-free.",
         "NSSpeechRecognitionUsageDescription": "Convert your voice into expense and income transactions automatically.",
         "UIRequiresFullScreen": false
+      },
+      "appleTeamId": "N69NHCB9S3",
+      "entitlements": {
+        "com.apple.security.application-groups": [
+          "group.com.budgy.ch.budgy"
+        ]
       }
     },
     "android": {
@@ -169,6 +175,7 @@
       ],
       "expo-web-browser",
       "react-native-iap",
+      "@bacons/apple-targets",
       "./plugins/withForcedInfoPlist",
       "expo-font"
     ],

@@ -98,7 +98,15 @@ export default function HomeScreen() {
   }, []);
   const toggleHideAmounts = useCallback(() => {
     setHideAmounts((prev) => {
-      AsyncStorage.setItem('budgy.hideAmounts', prev ? '0' : '1').catch(() => {});
+      AsyncStorage.setItem('budgy.hideAmounts', prev ? '0' : '1')
+        .then(() => {
+          // Widgets iOS : appliquer le masquage immédiatement (lazy import,
+          // zéro impact sur les animations de l'accueil).
+          import('../../src/services/widgetBridge')
+            .then((m) => m.refreshWidgetSnapshot())
+            .catch(() => {});
+        })
+        .catch(() => {});
       return !prev;
     });
   }, []);

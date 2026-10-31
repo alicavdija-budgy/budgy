@@ -68,6 +68,7 @@ export const FEATURES: BudgyFeature[] = [
   // Compte & sécurité
   { id: 'cloud-sync',     route: '/more/cloud-sync',          tier: 'pro',  titleKey: 'more.cloudSync',         subtitleKey: 'more.cloudSyncSub',     icon: 'cloud-done',          accent: 'info',    group: 'account' },
   { id: 'security',       route: '/more/security',            tier: 'free', titleKey: 'more.security',          subtitleKey: 'more.securitySub',      icon: 'shield-checkmark',    accent: 'success', group: 'account' },
+  { id: 'widgets',        route: '/more/widgets-settings',    tier: 'free', titleKey: 'widgets.title',          subtitleKey: 'widgets.subtitle',      icon: 'apps',                accent: 'info',    group: 'account' },
   { id: 'settings',       route: '/more/settings',            tier: 'free', titleKey: 'more.preferences',       subtitleKey: 'more.preferencesSub',   icon: 'settings',            accent: 'primary', group: 'account' },
   { id: 'notifications',  route: '/more/notifications',       tier: 'free', titleKey: 'featuresCatalog.notifications',                                icon: 'notifications',      accent: 'warning', group: 'account' },
 

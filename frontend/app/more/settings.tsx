@@ -29,6 +29,7 @@ import { getSupabase, isSupabaseConfigured } from '../../src/lib/supabase';
 import { usePremiumStore } from '../../src/stores/usePremiumStore';
 import { useAlertsStore } from '../../src/stores/useAlertsStore';
 import { cancelAllEntityReminders } from '../../src/services/notifications';
+import { clearWidgetData } from '../../src/services/widgetBridge';
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
@@ -105,6 +106,10 @@ export default function SettingsScreen() {
                 console.warn('[logout] async storage cleanup failed (non-fatal):', e);
               }
 
+              // 3bis. Widgets iOS : aucune donnée financière de l'ancien
+              // compte ne doit rester dans l'App Group partagé.
+              try { await clearWidgetData(); } catch {}
+
               // 4. Visual confirmation + redirect to login
               Alert.alert(t('smallUi.settingsSignOutOk'), '', [
                 { text: 'OK', onPress: () => router.replace('/auth' as any) },
@@ -136,6 +141,8 @@ export default function SettingsScreen() {
             // initAlertsScopeSync) et on effacerait sinon le mauvais scope.
             try { useAlertsStore.getState().clearActiveScope(); } catch {}
             cancelAllEntityReminders().catch(() => {});
+            // Widgets iOS : purge du snapshot partagé et de la file Siri
+            clearWidgetData().catch(() => {});
             clearAllData();
           },
         },

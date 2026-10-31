@@ -22,6 +22,7 @@ import { retryPendingValidationOnce, syncSubscriptionFromBackendOnce } from '../
 import { useStore } from '../src/stores/useStore';
 import LockScreen from './lock';
 import ShareIntentRouter from '../src/components/ShareIntentRouter';
+import WidgetSync from '../src/components/WidgetSync';
 import { OfflineBanner } from '../src/components/OfflineBanner';
 import LanguageOnboardModal from '../src/components/LanguageOnboardModal';
 
@@ -143,6 +144,7 @@ export default function RootLayout() {
         <OfflineBanner />
         <LanguageOnboardModal />
         <ShareIntentRouter />
+        <WidgetSync />
         <LockGate>
         <Stack
           screenOptions={{

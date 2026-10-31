@@ -12,7 +12,7 @@
  * On web/Expo Go where camera isn't available, falls back to manual entry.
  */
 
-import React, { useRef, useState, useEffect, useMemo } from 'react';
+import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -45,11 +45,13 @@ import { safeFetchJson, apiFetchJson } from '../src/lib/network';
 import { normalizeImageForUpload } from '../src/lib/imageUpload';
 import { AppErrorModal, buildErrorFromResult, type ErrorPayload } from '../src/components/AppErrorModal';
 import { mergeOcrWithFallback } from '../src/lib/ocrFallback';
+import * as Haptics from 'expo-haptics';
+import { isSwissQrBill, parseSwissQrBill, findDuplicateInvoice, type SwissQrBill } from '../src/services/qrBill';
 
 const BACKEND_URL =
   process.env.EXPO_PUBLIC_BACKEND_URL || 'https://api.budgy.ch';
 
-type Stage = 'permission' | 'camera' | 'ocr' | 'edit' | 'saving';
+type Stage = 'permission' | 'camera' | 'ocr' | 'edit' | 'saving' | 'qrbill';
 
 export default function ScannerModal() {
   const theme = useTheme();
@@ -72,6 +74,71 @@ export default function ScannerModal() {
   const [capturing, setCapturing] = useState(false);
   const [appError, setAppError] = useState<ErrorPayload | null>(null);
   const cameraRef = useRef<CameraView | null>(null);
+
+  // --- QR-facture suisse (SIX) ---
+  const invoices = useStore((s) => s.invoices);
+  const [qrBill, setQrBill] = useState<SwissQrBill | null>(null);
+  const [qrDupTitle, setQrDupTitle] = useState<string | null>(null);
+  const [qrAmount, setQrAmount] = useState('');
+  const [qrCategory, setQrCategory] = useState('autres');
+  const [qrDueDate, setQrDueDate] = useState('');
+  const [qrNotes, setQrNotes] = useState('');
+  const lastQrScanRef = useRef(0);
+
+  const handleBarcodeScanned = useCallback(
+    ({ data }: { data: string }) => {
+      // Un seul traitement toutes les 2 s, uniquement en phase caméra.
+      const now = Date.now();
+      if (now - lastQrScanRef.current < 2000 || !data) return;
+      if (!isSwissQrBill(data)) return;
+      lastQrScanRef.current = now;
+      try {
+        const bill = parseSwissQrBill(data);
+        try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
+        setQrBill(bill);
+        setQrDupTitle(findDuplicateInvoice(bill, invoices as any)?.title ?? null);
+        setQrAmount(bill.amount !== null ? bill.amount.toFixed(2) : '');
+        setQrDueDate(''); // une QR-facture ne fournit pas d'échéance : rien n'est inventé
+        setQrNotes(bill.message || '');
+        setStage('qrbill');
+      } catch (e: any) {
+        Alert.alert(t('qrbill.invalidTitle'), e?.message || t('qrbill.invalidBody'));
+      }
+    },
+    [invoices, t],
+  );
+
+  const handleQrSave = useCallback(() => {
+    if (!qrBill) return;
+    const amt = parseFloat(qrAmount.replace(',', '.'));
+    if (!Number.isFinite(amt) || amt <= 0) {
+      Alert.alert(t('qrbill.amountRequired'));
+      return;
+    }
+    const due = qrDueDate.trim();
+    if (due && !/^\d{1,2}\.\d{1,2}\.\d{4}$/.test(due)) {
+      Alert.alert(t('qrbill.badDueDate'));
+      return;
+    }
+    const now = new Date();
+    addInvoice({
+      id: `inv_qr_${now.getTime()}`,
+      title: qrBill.creditor.name.slice(0, 80),
+      issuer: qrBill.creditor.name.slice(0, 80),
+      amount: Math.round(amt * 100) / 100,
+      currency: qrBill.currency,
+      dueDate: due || undefined,
+      invoiceDate: now.toISOString().split('T')[0],
+      iban: qrBill.iban,
+      reference: qrBill.reference || undefined,
+      category: qrCategory,
+      status: 'pending',
+      source: 'scan',
+      createdAt: now.getTime(),
+    } as any);
+    try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
+    router.back();
+  }, [qrBill, qrAmount, qrDueDate, qrCategory, addInvoice, router, t]);
 
   // Form state for edit stage
   const [title, setTitle] = useState('');
@@ -355,6 +422,112 @@ export default function ScannerModal() {
     );
   }
 
+  // ---------- QR-FACTURE SUISSE : Contrôler → Corriger → Confirmer ----------
+  if (stage === 'qrbill' && qrBill) {
+    const qs = makeQrStyles(theme);
+    return (
+      <KeyboardAvoidingView
+        style={[qs.container, { paddingTop: insets.top + 8 }]}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <View style={qs.header}>
+          <TouchableOpacity onPress={() => { setQrBill(null); setStage('camera'); }} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+            <Ionicons name="chevron-back" size={24} color={theme.text} />
+          </TouchableOpacity>
+          <Text style={qs.title}>{t('qrbill.title')}</Text>
+          <TouchableOpacity onPress={handleClose} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+            <Ionicons name="close" size={24} color={theme.text} />
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView contentContainerStyle={{ gap: 12, paddingBottom: insets.bottom + 24 }} keyboardShouldPersistTaps="handled">
+          {qrDupTitle && (
+            <View style={qs.dupCard}>
+              <Ionicons name="copy" size={16} color={theme.warning} />
+              <Text style={qs.dupText}>{t('qrbill.duplicate', { title: qrDupTitle })}</Text>
+            </View>
+          )}
+
+          <View style={qs.card}>
+            <Text style={qs.cardLabel}>{t('qrbill.creditor')}</Text>
+            <Text style={qs.cardValue}>{qrBill.creditor.name}</Text>
+            {!!qrBill.creditor.addressLine1 && <Text style={qs.cardSub}>{qrBill.creditor.addressLine1}</Text>}
+            {!!qrBill.creditor.addressLine2 && (
+              <Text style={qs.cardSub}>{qrBill.creditor.addressLine2}{qrBill.creditor.country ? ` (${qrBill.creditor.country})` : ''}</Text>
+            )}
+            <Text style={qs.cardMeta}>
+              {qrBill.isQrIban ? 'QR-IBAN' : 'IBAN'} · {qrBill.iban.replace(/(.{4})/g, '$1 ').trim()}
+            </Text>
+            {qrBill.refType !== 'NON' && (
+              <Text style={qs.cardMeta}>{t('qrbill.reference')} ({qrBill.refType}) · {qrBill.reference}</Text>
+            )}
+            {qrBill.debtor && <Text style={qs.cardMeta}>{t('qrbill.debtor')} · {qrBill.debtor.name}</Text>}
+          </View>
+
+          <View>
+            <Text style={qs.label}>{t('qrbill.amount')} ({qrBill.currency})</Text>
+            <TextInput
+              style={qs.input}
+              value={qrAmount}
+              onChangeText={setQrAmount}
+              keyboardType="decimal-pad"
+              placeholder={qrBill.amount === null ? t('qrbill.openAmount') : '0.00'}
+              placeholderTextColor={theme.textSecondary}
+            />
+          </View>
+
+          <View>
+            <Text style={qs.label}>{t('qrbill.dueDate')}</Text>
+            <TextInput
+              style={qs.input}
+              value={qrDueDate}
+              onChangeText={setQrDueDate}
+              placeholder={t('qrbill.dueDatePlaceholder')}
+              placeholderTextColor={theme.textSecondary}
+            />
+            <Text style={qs.hint}>{t('qrbill.noDueDateInQr')}</Text>
+          </View>
+
+          <View>
+            <Text style={qs.label}>{t('qrbill.category')}</Text>
+            <View style={qs.catRow}>
+              {EXPENSE_CATEGORIES.map((c) => (
+                <TouchableOpacity
+                  key={c.id}
+                  style={[qs.catChip, qrCategory === c.id && { borderColor: theme.primary, backgroundColor: theme.primary + '18' }]}
+                  onPress={() => setQrCategory(c.id)}
+                >
+                  <Text style={[qs.catText, qrCategory === c.id && { color: theme.primary }]}>{c.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          <View>
+            <Text style={qs.label}>{t('qrbill.notes')}</Text>
+            <TextInput
+              style={[qs.input, { minHeight: 60 }]}
+              value={qrNotes}
+              onChangeText={setQrNotes}
+              multiline
+              placeholder="—"
+              placeholderTextColor={theme.textSecondary}
+            />
+          </View>
+
+          <TouchableOpacity style={qs.saveBtn} onPress={handleQrSave}>
+            <Ionicons name="checkmark-circle" size={18} color="#06281B" />
+            <Text style={qs.saveText}>{t('qrbill.confirm')}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={qs.cancelBtn} onPress={() => { setQrBill(null); setStage('camera'); }}>
+            <Text style={qs.cancelText}>{t('common.cancel')}</Text>
+          </TouchableOpacity>
+          <Text style={qs.hint}>{t('qrbill.noAutoPay')}</Text>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    );
+  }
+
   // ---------- CAMERA STAGE ----------
   if (stage === 'camera') {
     return (
@@ -364,6 +537,8 @@ export default function ScannerModal() {
           style={StyleSheet.absoluteFill}
           facing={facing}
           flash={flash}
+          barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+          onBarcodeScanned={handleBarcodeScanned}
         />
 
         {/* Top bar */}
@@ -1052,3 +1227,44 @@ const makeStyles = (Colors: ThemePalette) => StyleSheet.create({
     color: Colors.text,
   },
 });
+
+// Styles de l'étape QR-facture suisse (thème dynamique)
+const makeQrStyles = (T: any) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: T.background, paddingHorizontal: 18 },
+    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10 },
+    title: { color: T.text, fontSize: 17, fontWeight: '800' },
+    card: {
+      backgroundColor: T.surface, borderWidth: 1, borderColor: T.border,
+      borderRadius: 16, padding: 14, gap: 3,
+    },
+    cardLabel: { color: T.textSecondary, fontSize: 11.5, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4 },
+    cardValue: { color: T.text, fontSize: 16.5, fontWeight: '800' },
+    cardSub: { color: T.textSecondary, fontSize: 12.5 },
+    cardMeta: { color: T.textSecondary, fontSize: 11.5, marginTop: 3 },
+    dupCard: {
+      flexDirection: 'row', alignItems: 'flex-start', gap: 8,
+      backgroundColor: T.warning + '16', borderWidth: 1, borderColor: T.warning + '55',
+      borderRadius: 14, padding: 12,
+    },
+    dupText: { flex: 1, color: T.text, fontSize: 12.5, lineHeight: 17 },
+    label: { color: T.textSecondary, fontSize: 12.5, fontWeight: '700', marginBottom: 6 },
+    input: {
+      backgroundColor: T.surface, borderWidth: 1, borderColor: T.border, borderRadius: 14,
+      paddingHorizontal: 14, paddingVertical: 11, color: T.text, fontSize: 16, fontWeight: '600',
+    },
+    hint: { color: T.textSecondary, fontSize: 11, marginTop: 6, lineHeight: 15 },
+    catRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    catChip: {
+      borderWidth: 1, borderColor: T.border, borderRadius: 999,
+      paddingHorizontal: 12, paddingVertical: 7, backgroundColor: T.surface,
+    },
+    catText: { color: T.textSecondary, fontSize: 12.5, fontWeight: '600' },
+    saveBtn: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+      backgroundColor: T.primary, borderRadius: 16, paddingVertical: 14, marginTop: 6,
+    },
+    saveText: { color: '#06281B', fontSize: 15, fontWeight: '800' },
+    cancelBtn: { alignItems: 'center', paddingVertical: 10 },
+    cancelText: { color: T.textSecondary, fontSize: 13, fontWeight: '600' },
+  });

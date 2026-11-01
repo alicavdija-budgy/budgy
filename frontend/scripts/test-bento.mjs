@@ -102,8 +102,9 @@ check('BentoPlus utilise hasPremiumAccess()', bento.includes('s.hasPremiumAccess
 check('more.tsx (en-tête/avatar) utilise hasPremiumAccess()', more.includes('s.hasPremiumAccess()'));
 check('plus de duplication trialEndsAt > Date.now() dans BentoPlus',
   !bento.includes('trialEndsAt'));
-check('verrou Pro des outils redirige vers /pro',
-  bento.includes("tier === 'pro' && !isPro") && bento.includes("router.push('/pro'"));
+const premiumTools = read('src/components/PremiumTools.tsx');
+check('verrou Pro des outils redirige vers /pro (grille premium)',
+  premiumTools.includes("tier === 'pro' && !isPro") && premiumTools.includes("router.push('/pro'"));
 
 console.log('\n— Calculs & états explicites —');
 check('charges fixes via métrique pure testée', bento.includes('nextMonthlyChargeInDays(recurringExpenses)'));
@@ -112,7 +113,12 @@ check('retard affiché explicitement (plusV2.overdue)', bento.includes("t('plusV
 check('budgets : dépenses du mois courant uniquement',
   bento.includes('d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()'));
 check('revenus mensualisés via le moteur snapshot', bento.includes('snapshot.monthlyIncome'));
-check('santé financière : composant canonique réutilisé', bento.includes('<FinancialHealthScore />'));
+check('santé financière : AUCUN doublon dans Plus (référence = Accueil)',
+  !bento.includes('FinancialHealthScore') && home.includes('FinancialHealthScore'));
+check('grille outils premium branchée (6 illustrations + carte Pro diamant)',
+  bento.includes('<PremiumTools isPro={isPro} />') &&
+  ['dettes_icon', 'tickets_recus_icon', 'budgy_twin_icon', 'mon_classeur_icon', 'calendrier_financier_icon', 'export_pdf_icon', 'budgy_pro_icon']
+    .every((img) => premiumTools.includes(img)));
 check('aucune valeur fictive (pas de 840 CHF, 96, +4 pts)',
   !/840|'96'|\+4 ?pts/.test(bento));
 for (const lang of ['fr', 'en', 'de', 'it']) {

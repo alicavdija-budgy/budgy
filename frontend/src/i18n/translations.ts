@@ -3335,7 +3335,7 @@ export const TRANSLATIONS = {
       charges: 'Charges fixes', dueToday: '{{name}} aujourd\'hui', dueIn: '{{name}} dans {{d}} j', perMonth: 'par mois',
       swiss: 'SERVICE SUISSE', lamalTitle: 'LAMal & subsides', lamalText: 'Comparez vos primes et explorez les économies possibles', compare: 'Comparer',
       incomes: 'Revenus', invoices: 'Factures', allPaid: 'Tout est payé', nextDueIn: 'Prochaine dans {{d}} j', pending: 'en attente', overdue: 'En retard',
-      tools: 'Outils', proActive: 'Abonnement actif — merci !', proDiscover: 'Découvrez tous les avantages',
+      tools: 'Mes outils', overview: 'Mon aperçu financier', proActive: 'Abonnement actif — merci !', proDiscover: 'Découvrez tous les avantages',
       security: 'Sécurité', prefs: 'Préférences',
     },
     en: {
@@ -3344,7 +3344,7 @@ export const TRANSLATIONS = {
       charges: 'Fixed costs', dueToday: '{{name}} today', dueIn: '{{name}} in {{d}}d', perMonth: 'per month',
       swiss: 'SWISS SERVICE', lamalTitle: 'LAMal & subsidies', lamalText: 'Compare your premiums and explore possible savings', compare: 'Compare',
       incomes: 'Income', invoices: 'Bills', allPaid: 'All paid', nextDueIn: 'Next in {{d}}d', pending: 'pending', overdue: 'Overdue',
-      tools: 'Tools', proActive: 'Subscription active — thank you!', proDiscover: 'Discover all the benefits',
+      tools: 'My tools', overview: 'My financial overview', proActive: 'Subscription active — thank you!', proDiscover: 'Discover all the benefits',
       security: 'Security', prefs: 'Preferences',
     },
     de: {
@@ -3353,7 +3353,7 @@ export const TRANSLATIONS = {
       charges: 'Fixkosten', dueToday: '{{name}} heute', dueIn: '{{name}} in {{d}} T.', perMonth: 'pro Monat',
       swiss: 'SCHWEIZER DIENST', lamalTitle: 'KVG & Verbilligungen', lamalText: 'Vergleichen Sie Ihre Prämien und mögliche Einsparungen', compare: 'Vergleichen',
       incomes: 'Einnahmen', invoices: 'Rechnungen', allPaid: 'Alles bezahlt', nextDueIn: 'Nächste in {{d}} T.', pending: 'offen', overdue: 'Überfällig',
-      tools: 'Tools', proActive: 'Abo aktiv — danke!', proDiscover: 'Alle Vorteile entdecken',
+      tools: 'Meine Tools', overview: 'Meine Finanzübersicht', proActive: 'Abo aktiv — danke!', proDiscover: 'Alle Vorteile entdecken',
       security: 'Sicherheit', prefs: 'Einstellungen',
     },
     it: {
@@ -3362,7 +3362,7 @@ export const TRANSLATIONS = {
       charges: 'Spese fisse', dueToday: '{{name}} oggi', dueIn: '{{name}} tra {{d}} g', perMonth: 'al mese',
       swiss: 'SERVIZIO SVIZZERO', lamalTitle: 'LAMal & sussidi', lamalText: 'Confronta i tuoi premi ed esplora i possibili risparmi', compare: 'Confronta',
       incomes: 'Entrate', invoices: 'Fatture', allPaid: 'Tutto pagato', nextDueIn: 'Prossima tra {{d}} g', pending: 'in attesa', overdue: 'In ritardo',
-      tools: 'Strumenti', proActive: 'Abbonamento attivo — grazie!', proDiscover: 'Scopri tutti i vantaggi',
+      tools: 'I miei strumenti', overview: 'La mia panoramica finanziaria', proActive: 'Abbonamento attivo — grazie!', proDiscover: 'Scopri tutti i vantaggi',
       security: 'Sicurezza', prefs: 'Preferenze',
     },
   },

@@ -8,7 +8,7 @@
  */
 
 import React, { useCallback, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -23,11 +23,8 @@ import { useMoney } from '../hooks/useMoney';
 import { getMonthlyFinancialSnapshot } from '../stores/selectors';
 import { parseFlexibleDate, calendarDaysUntil } from '../services/alertsEngine';
 import { nextMonthlyChargeInDays, nearestPendingInvoiceDays, maskAmount } from '../services/bentoMetrics';
-import { FEATURE_BY_ID } from '../config/features';
+import PremiumTools from './PremiumTools';
 import PressScale from './PressScale';
-import FinancialHealthScore from './FinancialHealthScore';
-
-const TOOL_IDS = ['debts', 'receipts', 'documents', 'twin', 'calendar', 'export-pdf'];
 
 // Dernière valeur connue du masquage. `null` tant que la préférence n'a
 // jamais été hydratée depuis AsyncStorage : dans ce cas les montants restent
@@ -102,21 +99,15 @@ export default function BentoPlus() {
     [pendingInvoices],
   );
 
-  const tools = TOOL_IDS.map((id) => FEATURE_BY_ID[id]).filter(Boolean);
-
-  const go = (route: string, tier?: string) => {
-    if (tier === 'pro' && !isPro) router.push('/pro' as any);
-    else router.push(route as any);
-  };
-
   return (
     <View>
-      {/* ── B. Santé financière (moteur + anneau animé existants) ── */}
-      <Animated.View entering={FadeInDown.duration(400).delay(60)}>
-        <FinancialHealthScore />
-      </Animated.View>
+      {/* ── B+C. Mes outils premium 3D + Budgy Pro ── */}
+      <PremiumTools isPro={isPro} />
 
-      {/* ── C. Épargne — pleine largeur ── */}
+      {/* ── D. Mon aperçu financier ── */}
+      <Text style={styles.sectionLabel}>{t('plusV2.overview')}</Text>
+
+      {/* Épargne — pleine largeur */}
       <Animated.View entering={FadeInDown.duration(400).delay(110)}>
         <PressScale haptic="light" onPress={() => router.push('/(tabs)/savings' as any)} style={styles.card}>
           <View style={styles.cardHeader}>
@@ -171,23 +162,6 @@ export default function BentoPlus() {
         </PressScale>
       </Animated.View>
 
-      {/* ── E. LAMal & subsides — violet premium ── */}
-      <Animated.View entering={FadeInDown.duration(400).delay(210)}>
-        <PressScale haptic="light" onPress={() => router.push('/more/lamal-comparator' as any)}>
-          <LinearGradient colors={['#312E81', '#4C1D95', '#6D28D9']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.lamalCard}>
-            <View style={{ flex: 1 }}>
-              <View style={styles.lamalBadge}>
-                <Ionicons name="shield-checkmark" size={12} color="#DDD6FE" />
-                <Text style={styles.lamalBadgeText}>{t('plusV2.swiss')}</Text>
-              </View>
-              <Text style={styles.lamalTitle}>{t('plusV2.lamalTitle')}</Text>
-              <Text style={styles.lamalSub}>{t('plusV2.lamalText')}</Text>
-            </View>
-            <View style={styles.lamalCta}><Text style={styles.lamalCtaText}>{t('plusV2.compare')}</Text></View>
-          </LinearGradient>
-        </PressScale>
-      </Animated.View>
-
       {/* ── F. Revenus + Factures ── */}
       <Animated.View entering={FadeInDown.duration(400).delay(260)} style={styles.row}>
         <PressScale haptic="light" onPress={() => router.push('/more/incomes' as any)} style={[styles.card, styles.half]}>
@@ -219,37 +193,24 @@ export default function BentoPlus() {
         </PressScale>
       </Animated.View>
 
-      {/* ── G. Outils — pastilles horizontales ── */}
-      <Text style={styles.sectionLabel}>{t('plusV2.tools')}</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.toolsScroll} contentContainerStyle={styles.toolsRow}>
-        {tools.map((f) => {
-          const locked = f.tier === 'pro' && !isPro;
-          return (
-            <PressScale key={f.id} haptic="selection" onPress={() => go(f.route, f.tier)} style={styles.toolChip}>
-              <Ionicons name={f.icon as any} size={15} color={locked ? C.textTertiary : C.textSecondary} />
-              <Text style={[styles.toolText, locked && { color: C.textTertiary }]}>{t(f.titleKey)}</Text>
-              {locked && <Ionicons name="lock-closed" size={11} color={C.textTertiary} />}
-            </PressScale>
-          );
-        })}
-      </ScrollView>
-
-      {/* ── H. Budgy Pro — carte discrète ── */}
+      {/* ── E. LAMal & subsides — carte suisse violette (données 2027) ── */}
       <Animated.View entering={FadeInDown.duration(400).delay(310)}>
-        <PressScale haptic="light" onPress={() => router.push('/pro' as any)} style={[styles.card, styles.proRow]}>
-          <View style={[styles.tileIcon, { backgroundColor: isPro ? `${C.success}16` : `${C.secondary}16`, marginBottom: 0 }]}>
-            <Ionicons name="diamond" size={15} color={isPro ? C.success : C.secondary} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.proTitle}>Budgy Pro</Text>
-            <Text style={styles.subtle} numberOfLines={1}>{isPro ? t('plusV2.proActive') : t('plusV2.proDiscover')}</Text>
-          </View>
-          {isPro && <View style={[styles.activeDot, { backgroundColor: C.success }]} />}
-          <Ionicons name="chevron-forward" size={15} color={C.textTertiary} />
+        <PressScale haptic="light" onPress={() => router.push('/more/lamal-comparator' as any)}>
+          <LinearGradient colors={['#312E81', '#4C1D95', '#6D28D9']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.lamalCard}>
+            <View style={{ flex: 1 }}>
+              <View style={styles.lamalBadge}>
+                <Ionicons name="shield-checkmark" size={12} color="#DDD6FE" />
+                <Text style={styles.lamalBadgeText}>{t('plusV2.swiss')}</Text>
+              </View>
+              <Text style={styles.lamalTitle}>{t('plusV2.lamalTitle')}</Text>
+              <Text style={styles.lamalSub}>{t('plusV2.lamalText')}</Text>
+            </View>
+            <View style={styles.lamalCta}><Text style={styles.lamalCtaText}>{t('plusV2.compare')}</Text></View>
+          </LinearGradient>
         </PressScale>
       </Animated.View>
 
-      {/* ── I. Réglages — rangée discrète ── */}
+      {/* ── F. Réglages — rangée discrète ── */}
       <View style={styles.settingsRow}>
         {([
           { icon: 'lock-closed', label: t('plusV2.security'), route: '/more/security' },

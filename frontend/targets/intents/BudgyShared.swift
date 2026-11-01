@@ -60,12 +60,14 @@ enum BudgyIntentStore {
         return list
     }
 
-    /// Ajoute à la file (persistée, plafonnée) SANS toucher au solde affiché :
-    /// le montant n'existe officiellement qu'après confirmation dans Budgy.
+    /// Ajoute à la file (persistée, plafonnée) SANS toucher au solde affiché.
+    /// REFUSE l'ajout si aucun compte n'est identifiable (pas de snapshot) :
+    /// aucune dépense d'origine non vérifiable ne doit pouvoir être proposée
+    /// à n'importe quel compte — Budgy s'ouvrira pour authentification.
     @discardableResult
     static func enqueue(amount: Double, label: String) -> Bool {
         guard let d = BudgyShared.defaults else { return false }
-        let scope = loadSnapshot()?.scope ?? "unknown"
+        guard let scope = loadSnapshot()?.scope, !scope.isEmpty else { return false }
         var list = pending()
         guard list.count < 20 else { return false }
         list.append(PendingExpense(

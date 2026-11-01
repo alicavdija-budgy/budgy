@@ -27,7 +27,10 @@ struct AddExpenseIntent: AppIntent {
         }
         let cleanLabel = String(label.prefix(80))
         guard BudgyIntentStore.enqueue(amount: amount, label: cleanLabel) else {
-            return .result(dialog: "Impossible pour le moment. Ouvrez Budgy pour ajouter la dépense.")
+            // Compte non identifiable ou file saturée : ouverture de Budgy pour
+            // authentification et saisie manuelle — aucune écriture automatique.
+            BudgyIntentStore.setRoute("quick-add")
+            return .result(dialog: "Ouvrez Budgy pour vous authentifier et confirmer la dépense.")
         }
         BudgyIntentStore.setRoute("quick-add")
         return .result(dialog: "D'accord, confirmez \(BudgyIntentStore.chf(amount)) francs pour \(cleanLabel) dans Budgy.")

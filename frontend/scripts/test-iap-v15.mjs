@@ -199,8 +199,8 @@ ok('app version is 3.9.1', () => {
   assert.equal(appJson.expo.version, '3.9.1');
 });
 
-ok('iOS buildNumber is 84 (TestFlight Smart 4.0)', () => {
-  assert.equal(appJson.expo.ios.buildNumber, '84');
+ok('iOS buildNumber is 85 (TestFlight Smart 4.0)', () => {
+  assert.equal(appJson.expo.ios.buildNumber, '85');
 });
 
 ok('Android versionCode is 82', () => {

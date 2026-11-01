@@ -118,9 +118,20 @@ export default function QuickAddScreen() {
       router.replace('/');
       return;
     }
-    const type = result.type || 'expense';
+    // Une dépense demandée à Siri reste une DÉPENSE : le parseur ne peut pas
+    // la requalifier silencieusement en revenu ou abonnement.
+    const type = pendingId ? 'expense' : (result.type || 'expense');
     const id = pendingId ? `siri_${pendingId}` : `qa_${Date.now()}`;
     const now = new Date().toISOString().slice(0, 10);
+
+    // Écriture idempotente : si l'app s'est interrompue entre la sauvegarde
+    // réelle du store et la mise à jour du registre processedIds, la
+    // transaction `siri_<pid>` existe déjà => on ne la recrée JAMAIS.
+    if (pendingId && useStore.getState().transactions.some((tx) => tx.id === id)) {
+      await resolvePendingExpense(pendingId);
+      router.replace('/');
+      return;
+    }
 
     try {
       if (type === 'income') {

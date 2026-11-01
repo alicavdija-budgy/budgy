@@ -59,11 +59,23 @@ export default function WidgetSync() {
       }
     });
 
-    // Changements réels de données → republier (signature légère).
-    let lastSig = '';
-    const sig = (s: ReturnType<typeof useStore.getState>) =>
-      `${s.user?.id || ''}|${s.transactions.length}|${s.incomes.length}|${s.invoices.length}|${s.recurringExpenses.length}|${(s.savingsGoals || []).length}`;
-    lastSig = sig(useStore.getState());
+    // Changements réels de données → republier. La signature couvre le
+    // contenu (montants, dates, statuts, objectifs), pas seulement les
+    // longueurs : modification, paiement ou suppression déclenchent aussi.
+    const hash = (acc: number, s: string) => {
+      for (let i = 0; i < s.length; i++) acc = (acc * 31 + s.charCodeAt(i)) | 0;
+      return acc;
+    };
+    const sig = (s: ReturnType<typeof useStore.getState>) => {
+      let a = 0;
+      for (const t of s.transactions) a = hash(a, `${t.id}${t.amount}${t.date}${t.category}`);
+      for (const i of s.incomes) a = hash(a, `${i.id}${i.amount}${(i as any).type || ''}`);
+      for (const v of s.invoices) a = hash(a, `${v.id}${v.amount}${v.status}${v.dueDate || ''}`);
+      for (const r of s.recurringExpenses) a = hash(a, `${r.id}${r.amount}${r.dayOfMonth}${r.active}`);
+      for (const g of s.savingsGoals || []) a = hash(a, `${g.id}${(g as any).saved || 0}${(g as any).target || 0}`);
+      return `${s.user?.id || ''}|${a}`;
+    };
+    let lastSig = sig(useStore.getState());
     const unsubStore = useStore.subscribe((s) => {
       const next = sig(s);
       if (next !== lastSig) {

@@ -138,8 +138,17 @@ export function peekPendingExpenses(): PendingExpense[] {
     if (!raw) return [];
     const list = JSON.parse(raw) as PendingExpense[];
     const scope = activeScope();
-    return list.filter(
-      (e) => e && typeof e.id === 'string' && e.amount > 0 && (e.scope === scope || e.scope === 'unknown'),
+    // Association STRICTE au compte : une entrée dont le scope est inconnu ou
+    // différent n'est jamais proposée (et encore moins enregistrée). Elle
+    // reste en file pour le bon compte ; les entrées 'unknown' sont purgées
+    // après 48 h (aucune écriture automatique d'origine non vérifiable).
+    const cutoff = Date.now() / 1000 - 48 * 3600;
+    const kept = list.filter((e) => !(e.scope === 'unknown' && e.createdAt < cutoff));
+    if (kept.length !== list.length) {
+      try { storage.set(PENDING_KEY, JSON.stringify(kept)); } catch {}
+    }
+    return kept.filter(
+      (e) => e && typeof e.id === 'string' && e.amount > 0 && e.scope === scope,
     );
   } catch {
     return [];

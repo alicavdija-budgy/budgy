@@ -3172,10 +3172,44 @@ export const TRANSLATIONS = {
     de: { committed: 'Gebunden', vsLastMonth: 'ggü. Vormonat', recentOps: 'Letzte Bewegungen', dictate: 'Diktieren', hideAmounts: 'Beträge ausblenden', showAmounts: 'Beträge anzeigen' },
     it: { committed: 'Impegnati', vsLastMonth: 'vs mese scorso', recentOps: 'Ultime operazioni', dictate: 'Detta', hideAmounts: 'Nascondi importi', showAmounts: 'Mostra importi' },
   },
+  lamal2027: {
+    fr: {
+      title: 'Classement officiel {{year}}', region: 'Région', withAccident: 'Avec accident', withoutAccident: 'Sans accident',
+      profile: 'Profil : {{canton}} · {{age}} · franchise {{fr}} CHF — prime mensuelle AOS, offre la moins chère par assureur',
+      age_KIN: 'enfant (0–18)', age_JUG: 'jeune adulte (19–25)', age_ERW: 'adulte (26+)',
+      standardModel: 'Modèle standard (libre choix)', noData: 'Aucune offre officielle pour ce profil.',
+      showAll: 'Voir les {{n}} assureurs', showLess: 'Réduire',
+      sourceNote: 'Source : OFSP / Priminfo — primes {{year}} approuvées (collecte {{survey}}), Prämien_CH.csv officiel. Classement neutre, aucune caisse favorisée. Vérifiez l\'offre exacte sur priminfo.admin.ch.',
+    },
+    en: {
+      title: 'Official ranking {{year}}', region: 'Region', withAccident: 'With accident', withoutAccident: 'Without accident',
+      profile: 'Profile: {{canton}} · {{age}} · {{fr}} CHF deductible — monthly OKP premium, cheapest offer per insurer',
+      age_KIN: 'child (0–18)', age_JUG: 'young adult (19–25)', age_ERW: 'adult (26+)',
+      standardModel: 'Standard model (free choice)', noData: 'No official offer for this profile.',
+      showAll: 'Show all {{n}} insurers', showLess: 'Show less',
+      sourceNote: 'Source: FOPH / Priminfo — approved {{year}} premiums (survey {{survey}}), official Prämien_CH.csv. Neutral ranking, no insurer favoured. Verify the exact offer on priminfo.admin.ch.',
+    },
+    de: {
+      title: 'Offizielle Rangliste {{year}}', region: 'Region', withAccident: 'Mit Unfall', withoutAccident: 'Ohne Unfall',
+      profile: 'Profil: {{canton}} · {{age}} · Franchise {{fr}} CHF — OKP-Monatsprämie, günstigstes Angebot pro Kasse',
+      age_KIN: 'Kind (0–18)', age_JUG: 'junge Erwachsene (19–25)', age_ERW: 'Erwachsene (26+)',
+      standardModel: 'Standardmodell (freie Arztwahl)', noData: 'Kein offizielles Angebot für dieses Profil.',
+      showAll: 'Alle {{n}} Kassen anzeigen', showLess: 'Weniger anzeigen',
+      sourceNote: 'Quelle: BAG / Priminfo — genehmigte Prämien {{year}} (Erhebung {{survey}}), offizielle Prämien_CH.csv. Neutrale Rangliste, keine Kasse bevorzugt. Prüfen Sie das genaue Angebot auf priminfo.admin.ch.',
+    },
+    it: {
+      title: 'Classifica ufficiale {{year}}', region: 'Regione', withAccident: 'Con infortunio', withoutAccident: 'Senza infortunio',
+      profile: 'Profilo: {{canton}} · {{age}} · franchigia {{fr}} CHF — premio mensile AOMS, offerta più conveniente per cassa',
+      age_KIN: 'bambino (0–18)', age_JUG: 'giovane adulto (19–25)', age_ERW: 'adulto (26+)',
+      standardModel: 'Modello standard (libera scelta)', noData: 'Nessuna offerta ufficiale per questo profilo.',
+      showAll: 'Mostra tutte le {{n}} casse', showLess: 'Riduci',
+      sourceNote: 'Fonte: UFSP / Priminfo — premi {{year}} approvati (rilevamento {{survey}}), Prämien_CH.csv ufficiale. Classifica neutrale, nessuna cassa favorita. Verifica l\'offerta esatta su priminfo.admin.ch.',
+    },
+  },
   lamalInfo: {
     fr: {
       sourcesTitle: 'Sources et limites',
-      sourcesBody: 'Primes de référence : OFSP / Priminfo (priminfo.admin.ch), année 2026. Les primes officielles 2027 au format données ouvertes n\'ont pas encore été publiées par l\'OFSP ; elles seront intégrées dès leur parution, sans valeur inventée.',
+      sourcesBody: 'Primes : OFSP / Priminfo — primes AOS 2027 officielles approuvées (Prämien_CH.csv, données ouvertes OFSP), intégrées dans le classement ci-dessous. Les autres estimations de cet écran restent indicatives.',
       limitsBody: 'Les montants affichés sont des estimations indicatives par canton, classe d\'âge, franchise et modèle : la prime exacte dépend de votre région de prime et de l\'offre retenue. Budgy ne favorise commercialement aucune caisse. Vérifiez toujours l\'offre sur priminfo.admin.ch avant de décider.',
       cancelTitle: 'Résiliation — assurance de base (AOS)',
       cancelBody1: 'Changement au 1er janvier : votre résiliation écrite doit PARVENIR à votre caisse au plus tard le 30 novembre (après l\'annonce de la nouvelle prime).',
@@ -3184,7 +3218,7 @@ export const TRANSLATIONS = {
     },
     en: {
       sourcesTitle: 'Sources and limits',
-      sourcesBody: 'Reference premiums: FOPH / Priminfo (priminfo.admin.ch), year 2026. Official 2027 open-data premiums have not yet been published by the FOPH; they will be integrated as soon as released — no invented values.',
+      sourcesBody: 'Premiums: FOPH / Priminfo — official approved 2027 OKP premiums (Prämien_CH.csv, FOPH open data), integrated in the ranking below. Other estimates on this screen remain indicative.',
       limitsBody: 'Displayed amounts are indicative estimates by canton, age class, deductible and model: the exact premium depends on your premium region and the chosen offer. Budgy does not commercially favour any insurer. Always verify on priminfo.admin.ch before deciding.',
       cancelTitle: 'Termination — basic insurance (OKP)',
       cancelBody1: 'Switch on 1 January: your written notice must REACH your insurer by 30 November at the latest (after the new premium announcement).',
@@ -3193,7 +3227,7 @@ export const TRANSLATIONS = {
     },
     de: {
       sourcesTitle: 'Quellen und Grenzen',
-      sourcesBody: 'Referenzprämien: BAG / Priminfo (priminfo.admin.ch), Jahr 2026. Die offiziellen Open-Data-Prämien 2027 wurden vom BAG noch nicht publiziert; sie werden nach Erscheinen integriert — keine erfundenen Werte.',
+      sourcesBody: 'Prämien: BAG / Priminfo — offizielle genehmigte OKP-Prämien 2027 (Prämien_CH.csv, BAG Open Data), in die untenstehende Rangliste integriert. Übrige Schätzungen auf diesem Bildschirm bleiben Richtwerte.',
       limitsBody: 'Die angezeigten Beträge sind Richtwerte nach Kanton, Altersklasse, Franchise und Modell: die genaue Prämie hängt von Ihrer Prämienregion und dem gewählten Angebot ab. Budgy bevorzugt keine Kasse kommerziell. Prüfen Sie das Angebot immer auf priminfo.admin.ch.',
       cancelTitle: 'Kündigung — Grundversicherung (OKP)',
       cancelBody1: 'Wechsel per 1. Januar: Ihre schriftliche Kündigung muss spätestens am 30. November bei der Kasse EINTREFFEN (nach Ankündigung der neuen Prämie).',
@@ -3202,7 +3236,7 @@ export const TRANSLATIONS = {
     },
     it: {
       sourcesTitle: 'Fonti e limiti',
-      sourcesBody: 'Premi di riferimento: UFSP / Priminfo (priminfo.admin.ch), anno 2026. I premi ufficiali 2027 in formato open data non sono ancora stati pubblicati dall\'UFSP; saranno integrati appena disponibili — nessun valore inventato.',
+      sourcesBody: 'Premi: UFSP / Priminfo — premi AOMS 2027 ufficiali approvati (Prämien_CH.csv, open data UFSP), integrati nella classifica qui sotto. Le altre stime di questa schermata restano indicative.',
       limitsBody: 'Gli importi mostrati sono stime indicative per cantone, classe d\'età, franchigia e modello: il premio esatto dipende dalla vostra regione di premio e dall\'offerta scelta. Budgy non favorisce commercialmente alcuna cassa. Verificate sempre su priminfo.admin.ch prima di decidere.',
       cancelTitle: 'Disdetta — assicurazione di base (AOMS)',
       cancelBody1: 'Cambio al 1° gennaio: la disdetta scritta deve PERVENIRE alla cassa entro il 30 novembre (dopo l\'annuncio del nuovo premio).',

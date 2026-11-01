@@ -22,6 +22,7 @@ import { Card, Badge, ProgressBar } from '../../src/components/ui';
 import { CANTONS, FRANCHISES, INSURANCE_MODELS, getCantonName, type CantonCode } from '../../src/data/swiss-data';
 import { formatNumber } from '../../src/utils/calculations';
 import { useTranslation } from '../../src/hooks/useTranslation';
+import LamalOfficial2027 from '../../src/components/LamalOfficial2027';
 import {
   PRIMINFO_PREMIUMS_2026, SWISS_AVG_PREMIUM_2026,
   calculatePriminfoPremium, getTopInsurers, getCantonRanking,
@@ -319,6 +320,9 @@ export default function LamalComparatorScreen() {
             ))}
           </>
         )}
+
+        {/* Classement officiel OFSP/Priminfo (primes réelles approuvées) */}
+        <LamalOfficial2027 theme={theme} canton={canton} age={age} franchise={franchise} lang={lang} />
 
         {/* Sources, limites et résiliation AOS — transparence obligatoire */}
         <View style={styles.srcCard}>

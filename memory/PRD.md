@@ -240,3 +240,9 @@ test
 - Durcissements : signature WidgetSync par CONTENU (montants/dates/statuts/objectifs), Siri scope strict (unknown jamais enregistre, purge 48h, enqueue Swift refuse sans compte), confirmation idempotente via id deterministe siri_<pid> verifie dans le store (crash entre sauvegarde et registre ne duplique plus), depense Siri jamais requalifiee.
 - Build iOS 85 (84 consomme par le build pre-natif). prebuild --clean revalide (4 cibles + App Group).
 - EAS DISABLE dans ce pod (politique) : compilation Swift via GitHub Actions uniquement -> Save to GitHub puis Run workflow ios/testflight. 15 suites + tsc + i18n verts.
+
+## Session Design premium 3D (base 714c3fa8)
+- 7 illustrations PNG 480x480 integrees en imports statiques (assets/images/premium-tools) ; references full_french_reference utilisees pour le style seulement (titres = i18n x4).
+- Nouveau PremiumTools.tsx : grille 2 colonnes (6 outils, bleu nuit + lueur menthe, haptique, FadeInDown, badge BETA, verrou Pro discret, VoiceOver, 1 colonne <340px) + carte Budgy Pro diamant pleine largeur (hasPremiumAccess canonique).
+- BentoPlus reordonne : outils -> Pro -> Mon apercu financier -> LAMal 2027 -> reglages ; doublon FinancialHealthScore SUPPRIME de Plus (reference = Accueil, 0 ligne modifiee sur index.tsx, composant conserve).
+- test-bento 41/41 ; tsc/eslint/i18n verts ; captures navigateur 390px validees (grille, Pro, apercu, LAMal, Tout Budgy). Natif/Siri/QR/LAMal/EAS intacts, build 85 inchange, aucun build lance.

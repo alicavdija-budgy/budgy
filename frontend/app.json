@@ -21,7 +21,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.budgy.ch.budgy",
-      "buildNumber": "85",
+      "buildNumber": "86",
       "associatedDomains": [
         "applinks:budgy.ch",
         "applinks:www.budgy.ch"

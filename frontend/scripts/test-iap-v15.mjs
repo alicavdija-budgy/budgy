@@ -199,8 +199,24 @@ ok('app version is 3.9.1', () => {
   assert.equal(appJson.expo.version, '3.9.1');
 });
 
-ok('iOS buildNumber is 85 (TestFlight Smart 4.0)', () => {
-  assert.equal(appJson.expo.ios.buildNumber, '85');
+ok('iOS buildNumber is 86 (TestFlight Smart 4.0, after Apple ITMS-90896)', () => {
+  assert.equal(appJson.expo.ios.buildNumber, '86');
+});
+
+ok('BudgyIntents App Intents extension has its required Swift @main entrypoint', () => {
+  const entry = fs.readFileSync(
+    path.join(__dirname, '..', 'targets', 'intents', 'BudgyIntentsExtension.swift'),
+    'utf8',
+  );
+  assert.match(entry, /@main\s+struct\s+BudgyIntentsExtension\s*:\s*AppIntentsExtension\s*\{/);
+});
+
+ok('BudgyWidget keeps its WidgetKit @main entrypoint', () => {
+  const widget = fs.readFileSync(
+    path.join(__dirname, '..', 'targets', 'widgets', 'BudgyWidget.swift'),
+    'utf8',
+  );
+  assert.match(widget, /@main\s+struct\s+BudgyWidgetBundle\s*:\s*WidgetBundle\s*\{/);
 });
 
 ok('Android versionCode is 82', () => {

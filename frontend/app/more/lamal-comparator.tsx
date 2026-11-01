@@ -1,95 +1,131 @@
 /**
- * BUDGY - Comparateur LAMal 2026 — NEUTRE (aucun nom commercial visible)
- * Données primes : OFSP Priminfo 2026 · Aucune publicité, aucun partenaire.
+ * BUDGY — Comparateur LAMal officiel (OFSP / Priminfo).
  *
- * App Store Compliance : les noms commerciaux des assureurs sont anonymisés
- * en "Assureur A", "Assureur B"... à l'affichage. Les données restent réelles
- * pour le calcul des écarts de prix et des subsides — Budgy reste neutre.
+ * UNE seule source de tarifs : les primes AOS officielles approuvées, servies
+ * par src/services/lamalData.ts (cache validé → secours embarqué 2027), avec
+ * actualisation automatique non bloquante (manifest versionné publié par le
+ * service GitHub Actions — aucun nouveau build par millésime).
+ *
+ * Supprimé définitivement : modèles « HMO −10% / Telmed −8% », remises
+ * théoriques, « Assureur A/B/C », top 10 modélisé 2026, économies vs moyenne,
+ * classement des cantons modélisé. Le moteur choisit automatiquement l'offre
+ * admissible la moins chère de chaque assureur (modèle réel affiché).
+ *
+ * Région de prime : déterminée par la COMMUNE officielle (praemienregionen,
+ * clé n° OFS) — jamais « première région du canton » par défaut. Sélection
+ * manuelle explicite en secours. Profil incomplet → aucun classement présenté
+ * comme personnel.
  */
-
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-  View, Text, ScrollView, StyleSheet, TouchableOpacity,
+  View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import Slider from '@react-native-community/slider';
-import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
+import { Spacing, FontSizes, FontWeights, BorderRadius } from '../../src/constants/theme';
 import { useTheme } from '../../src/hooks/useTheme';
 import type { ThemePalette } from '../../src/constants/palettes';
-import { Card, Badge, ProgressBar } from '../../src/components/ui';
-import { CANTONS, FRANCHISES, INSURANCE_MODELS, getCantonName, type CantonCode } from '../../src/data/swiss-data';
-import { formatNumber } from '../../src/utils/calculations';
+import { Card } from '../../src/components/ui';
 import { useTranslation } from '../../src/hooks/useTranslation';
-import LamalOfficial2027 from '../../src/components/LamalOfficial2027';
-import {
-  PRIMINFO_PREMIUMS_2026, SWISS_AVG_PREMIUM_2026,
-  calculatePriminfoPremium, getTopInsurers, getCantonRanking,
-} from '../../src/data/priminfo-2026';
+import { loadLamalData, refreshLamalData, type LamalData } from '../../src/services/lamalData';
 
-const TOP_N = 10;
-
-type Tab = 'compare' | 'optimize' | 'subsidy' | 'ranking';
-
-// ALL 26 cantons
-const ALL_CANTONS: CantonCode[] = [
+const ALL_CANTONS = [
   'ZH', 'BE', 'LU', 'UR', 'SZ', 'OW', 'NW', 'GL', 'ZG', 'FR',
   'SO', 'BS', 'BL', 'SH', 'AR', 'AI', 'SG', 'GR', 'AG', 'TG',
   'TI', 'VD', 'VS', 'NE', 'GE', 'JU',
 ];
+const ADULT_FR = [300, 500, 1000, 1500, 2000, 2500];
+const CHILD_FR = [0, 100, 200, 300, 400, 600];
+type AgeClass = 'KIN' | 'JUG' | 'ERW';
+
+const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
 export default function LamalComparatorScreen() {
   const theme = useTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [canton, setCanton] = useState<CantonCode>('VD');
-  const [model, setModel] = useState<'std' | 'hmo' | 'div'>('std');
-  const [franchise, setFranchise] = useState(300);
-  const [age, setAge] = useState(35);
-  const [income, setIncome] = useState(65000);
-  const [married, setMarried] = useState(false);
-  const [children, setChildren] = useState(0);
-  const [activeTab, setActiveTab] = useState<Tab>('compare');
-
-  const premiums = useMemo(() => calculatePriminfoPremium(canton, franchise, model, age), [canton, franchise, model, age]);
-  const insurerList = useMemo(() => getTopInsurers(canton, franchise, model, age, TOP_N), [canton, franchise, model, age]);
-  const cantonRanking = useMemo(() => getCantonRanking(franchise, model, age), [franchise, model, age]);
   const { t, lang } = useTranslation();
 
-  const subsidy = useMemo(() => {
-    const cd = CANTONS[canton];
-    if (!cd) return 0;
-    const threshold = cd.subsidyThreshold * (married ? 1.6 : 1) + children * 8000;
-    if (income > threshold * 1.3) return 0;
-    const maxContrib = income * (income < threshold * 0.7 ? 0.08 : 0.10);
-    const sub = Math.max(0, premiums.avg * 12 - maxContrib);
-    return income > threshold ? Math.round(sub * (1 - (income - threshold) / (threshold * 0.3)) / 12) : Math.round(sub / 12);
-  }, [canton, income, married, children, premiums]);
+  const [data, setData] = useState<LamalData | null>(null);
+  const [canton, setCanton] = useState('VD');
+  const [communeQuery, setCommuneQuery] = useState('');
+  const [commune, setCommune] = useState<{ name: string; region: number } | null>(null);
+  const [manualRegion, setManualRegion] = useState<string | null>(null);
+  const [ageClass, setAgeClass] = useState<AgeClass>('ERW');
+  const [franchise, setFranchise] = useState(300);
+  const [accident, setAccident] = useState(true);
+  const [expanded, setExpanded] = useState(false);
 
-  const savingsHighFranchise = useMemo(() => {
-    const low = calculatePriminfoPremium(canton, 300, model, age);
-    const high = calculatePriminfoPremium(canton, 2500, model, age);
-    return (low.avg - high.avg) * 12;
-  }, [canton, model, age]);
+  useEffect(() => {
+    let alive = true;
+    // 1. Dernières données validées (cache/embarqué) — immédiat.
+    loadLamalData().then((d) => { if (alive) setData(d); });
+    // 2. Vérification distante non bloquante (manifest versionné).
+    refreshLamalData().then((d) => { if (alive) setData(d); });
+    return () => { alive = false; };
+  }, []);
 
-  const cantonChange = PRIMINFO_PREMIUMS_2026[canton]?.change || 0;
-  const cheapest = insurerList[0];
+  const premiums = data?.premiums;
+  const regions = data?.regions;
 
-  /**
-   * Anonymisation des noms d'assureurs (App Store compliance / neutralité Budgy).
-   * Les données réelles servent uniquement aux calculs internes ;
-   * l'utilisateur ne voit jamais de nom commercial.
-   */
-  const anonInsurer = (idx: number) => t('lamalComparator.insurerAnonymous', { letter: String.fromCharCode(65 + (idx % 26)) });
+  // Régions de prime réellement présentes dans le jeu officiel pour ce canton
+  const cantonRegions = useMemo(() => {
+    if (!premiums) return [];
+    const set = new Set<string>();
+    for (const key of Object.keys(premiums.profiles)) {
+      if (key.startsWith(`${canton}|`)) set.add(key.split('|')[1]);
+    }
+    return [...set].sort();
+  }, [premiums, canton]);
+  const singleRegion = cantonRegions.length === 1;
 
-  const tabs: { key: Tab; label: string; icon: string }[] = [
-    { key: 'compare', label: t('lamalUi.comparePremiums'), icon: 'list' },
-    { key: 'subsidy', label: t('lamalUi.checkSubsidies'), icon: 'heart' },
-    { key: 'optimize', label: t('lamalUi.optimizeDeductible'), icon: 'flash' },
-    { key: 'ranking', label: t('lamalUi.potentialSavings'), icon: 'trending-down' },
-  ];
+  const communes = regions?.cantons[canton] || [];
+  const matches = useMemo(() => {
+    if (singleRegion || commune || communeQuery.trim().length < 2) return [];
+    const q = norm(communeQuery.trim());
+    return communes.filter(([name]) => norm(name).includes(q)).slice(0, 8);
+  }, [communes, communeQuery, commune, singleRegion]);
+
+  // Jamais de région implicite : commune officielle, sinon choix manuel explicite.
+  const region = singleRegion
+    ? cantonRegions[0]
+    : commune ? `R${commune.region}`
+    : manualRegion && cantonRegions.includes(manualRegion) ? manualRegion
+    : null;
+  const profileComplete = region !== null;
+
+  const allowedFr = ageClass === 'KIN' ? CHILD_FR : ADULT_FR;
+  const fr = allowedFr.includes(franchise) ? franchise : allowedFr[0];
+
+  const offers = useMemo(() => {
+    if (!premiums || !region) return [];
+    return premiums.profiles[`${canton}|${region}|${ageClass}|${fr}|${accident ? 1 : 0}`] || [];
+  }, [premiums, canton, region, ageClass, fr, accident]);
+  const best = offers[0];
+  const shown = expanded ? offers : offers.slice(0, 8);
+
+  const modelName = (ins: number, tarif: string) => {
+    const m = premiums?.models[`${ins}|${tarif}`];
+    if (!m) return tarif === 'BASE' ? t('lamal2027.standardModel') : tarif;
+    return (m as any)[lang] || m.fr;
+  };
+
+  const pickCanton = (c: string) => {
+    setCanton(c); setCommune(null); setCommuneQuery(''); setManualRegion(null); setExpanded(false);
+  };
+  const pickAge = (a: AgeClass) => {
+    setAgeClass(a);
+    setFranchise(a === 'KIN' ? 0 : 300);
+  };
+  const fmtDate = (iso: string | null) => {
+    if (!iso) return null;
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? null : d.toLocaleDateString();
+  };
+
+  const status = data?.status;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]} testID="lamal-screen">
@@ -98,240 +134,212 @@ export default function LamalComparatorScreen() {
           <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
-          <Text style={styles.title}>{t('lamal.title')}</Text>
-          <Text style={styles.subtitle}>{t('lamal.subtitle')}</Text>
+          <Text style={styles.title}>{t('lamalV2.title')}</Text>
+          <Text style={styles.subtitle}>{t('lamalV2.subtitle', { year: status?.year ?? '' })}</Text>
         </View>
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Config */}
-        <Card style={styles.configCard}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Indépendance + état réel des données (aucune promesse non prouvée) */}
+        <View style={styles.statusCard}>
+          <View style={styles.statusRow}>
+            <Ionicons name="shield-checkmark" size={14} color={theme.success} />
+            <Text style={styles.statusOfficial}>{t('lamalV2.independent')}</Text>
+          </View>
+          <View style={styles.statusRow}>
+            <Ionicons
+              name={status?.offline ? 'cloud-offline' : status?.origin === 'bundled' ? 'archive' : 'cloud-done'}
+              size={13}
+              color={status?.offline ? theme.warning : theme.textSecondary}
+            />
+            <Text style={[styles.statusTxt, status?.offline && { color: theme.warning }]}>
+              {status?.offline
+                ? t('lamalV2.statusOffline')
+                : status?.origin === 'bundled'
+                  ? t('lamalV2.statusBundled', { year: status.year })
+                  : t('lamalV2.statusChecked', { date: fmtDate(status?.checkedAt ?? null) ?? '—' })}
+            </Text>
+          </View>
+        </View>
+
+        {/* ── Profil ── */}
+        <Card style={styles.card}>
           <Text style={styles.label}>{t('lamalComparator.cantonLabel')}</Text>
           <View style={styles.cantonGrid}>
-            {ALL_CANTONS.map(c => (
-              <TouchableOpacity key={c} style={[styles.chip, canton === c && styles.chipOn]} onPress={() => setCanton(c)}>
+            {ALL_CANTONS.map((c) => (
+              <TouchableOpacity key={c} style={[styles.chip, canton === c && styles.chipOn]} onPress={() => pickCanton(c)}>
                 <Text style={[styles.chipTxt, canton === c && styles.chipTxtOn]}>{c}</Text>
               </TouchableOpacity>
             ))}
           </View>
 
-          <View style={styles.sliderRow}>
-            <Text style={styles.label}>{t('lamal.age')}</Text>
-            <Text style={styles.sliderVal}>{age < 19 ? t('lamal.child') : age < 26 ? t('lamal.young', { n: age }) : t('lamal.adultYears', { n: age })}</Text>
+          {/* Commune → région officielle (clé OFS), jamais de région implicite */}
+          <Text style={styles.label}>{t('lamalV2.communeLabel')}</Text>
+          {singleRegion ? (
+            <View style={styles.singleRegionRow}>
+              <Ionicons name="location" size={14} color={theme.success} />
+              <Text style={styles.singleRegionTxt}>{t('lamalV2.singleRegion')}</Text>
+            </View>
+          ) : commune ? (
+            <View style={styles.communeSelRow}>
+              <Ionicons name="location" size={15} color={theme.primary} />
+              <Text style={styles.communeSelTxt}>
+                {commune.name} — {t('lamal2027.region')} {commune.region}
+              </Text>
+              <TouchableOpacity onPress={() => { setCommune(null); setCommuneQuery(''); }} hitSlop={8}>
+                <Ionicons name="close-circle" size={18} color={theme.textTertiary} />
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <>
+              <TextInput
+                style={styles.input}
+                placeholder={t('lamalV2.communePlaceholder')}
+                placeholderTextColor={theme.textTertiary}
+                value={communeQuery}
+                onChangeText={(v) => { setCommuneQuery(v); setManualRegion(null); }}
+                autoCorrect={false}
+                testID="commune-search"
+              />
+              {matches.map(([name, reg]) => (
+                <TouchableOpacity key={name} style={styles.matchRow} onPress={() => setCommune({ name, region: reg })}>
+                  <Text style={styles.matchName}>{name}</Text>
+                  <Text style={styles.matchRegion}>{t('lamal2027.region')} {reg}</Text>
+                </TouchableOpacity>
+              ))}
+              {communeQuery.trim().length >= 2 && matches.length === 0 && (
+                <Text style={styles.noMatch}>{t('lamalV2.communeNone')}</Text>
+              )}
+              {/* Secours explicite : choix manuel de la région officielle */}
+              <Text style={styles.manualLabel}>{t('lamalV2.manualRegion')}</Text>
+              <View style={styles.rowWrap}>
+                {cantonRegions.map((r) => (
+                  <TouchableOpacity key={r} style={[styles.chip, manualRegion === r && styles.chipOn]} onPress={() => setManualRegion(r)}>
+                    <Text style={[styles.chipTxt, manualRegion === r && styles.chipTxtOn]}>
+                      {t('lamal2027.region')} {r.replace('R', '')}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </>
+          )}
+
+          <Text style={styles.label}>{t('lamal.age')}</Text>
+          <View style={styles.rowWrap}>
+            {(['KIN', 'JUG', 'ERW'] as AgeClass[]).map((a) => (
+              <TouchableOpacity key={a} style={[styles.chip, ageClass === a && styles.chipOn]} onPress={() => pickAge(a)}>
+                <Text style={[styles.chipTxt, ageClass === a && styles.chipTxtOn]}>{t(`lamal2027.age_${a}`)}</Text>
+              </TouchableOpacity>
+            ))}
           </View>
-          <Slider style={styles.slider} minimumValue={0} maximumValue={70} step={1} value={age} onValueChange={setAge}
-            minimumTrackTintColor={theme.primary} maximumTrackTintColor={theme.cardBorder} thumbTintColor={theme.primary} />
 
           <Text style={styles.label}>{t('lamal.franchise')}</Text>
-          <View style={styles.franchiseRow}>
-            {FRANCHISES.map(f => (
-              <TouchableOpacity key={f.value} style={[styles.fChip, franchise === f.value && styles.fChipOn]} onPress={() => setFranchise(f.value)}>
-                <Text style={[styles.fTxt, franchise === f.value && styles.fTxtOn]}>{formatNumber(f.value)}</Text>
+          <View style={styles.rowWrap}>
+            {allowedFr.map((f) => (
+              <TouchableOpacity key={f} style={[styles.chip, fr === f && styles.chipOn]} onPress={() => setFranchise(f)}>
+                <Text style={[styles.chipTxt, fr === f && styles.chipTxtOn]}>{f}</Text>
               </TouchableOpacity>
             ))}
           </View>
 
-          <Text style={styles.label}>{t('lamal.model')}</Text>
-          {INSURANCE_MODELS.map(m => (
-            <TouchableOpacity key={m.value} style={[styles.modelChip, model === m.value && styles.modelOn]} onPress={() => setModel(m.value as any)}>
-              <Text style={[styles.modelTxt, model === m.value && styles.modelTxtOn]}>
-                {m.label}{m.discount > 0 ? ` (-${Math.round(m.discount * 100)}%)` : ''}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </Card>
-
-        {/* Hero */}
-        <Card style={styles.heroCard}>
-          <View style={styles.srcRow}>
-            <Ionicons name="shield-checkmark" size={14} color={theme.success} />
-            <Text style={styles.srcTxt}>{t('lamal.dataSource')}</Text>
-          </View>
-          <Text style={styles.heroLabel}>{t('lamal.bestOffer', { c: getCantonName(canton, lang) })}</Text>
-          <View style={styles.heroAmtRow}>
-            <Text style={styles.heroAmt}>{cheapest ? formatNumber(cheapest.premium) : '—'}</Text>
-            <View>
-              <Text style={styles.heroInsurer}>{cheapest ? anonInsurer(0) : '—'}</Text>
-              <Text style={styles.heroUnit}>{t('lamal.perMonth')}</Text>
-            </View>
-          </View>
-          <View style={styles.heroStats}>
-            <View style={styles.heroStat}><Text style={styles.hsl}>{t('lamal.min')}</Text><Text style={[styles.hsv, { color: theme.success }]}>{formatNumber(premiums.min)}</Text></View>
-            <View style={styles.heroStat}><Text style={styles.hsl}>{t('lamal.avg')}</Text><Text style={styles.hsv}>{formatNumber(premiums.avg)}</Text></View>
-            <View style={styles.heroStat}><Text style={styles.hsl}>{t('lamal.max')}</Text><Text style={[styles.hsv, { color: theme.error }]}>{formatNumber(premiums.max)}</Text></View>
-          </View>
-          <View style={styles.changeRow}>
-            <Ionicons name={cantonChange > 0 ? 'trending-up' : 'trending-down'} size={14} color={cantonChange > 4.4 ? theme.error : theme.warning} />
-            <Text style={[styles.changeTxt, { color: cantonChange > 4.4 ? theme.error : theme.warning }]}>
-              {cantonChange > 0 ? '+' : ''}{t('lamal.vsLast', { p: cantonChange })}
-            </Text>
-            <Text style={styles.changeAvg}>{t('lamal.avgCh', { n: formatNumber(Math.round(SWISS_AVG_PREMIUM_2026)) })}</Text>
-          </View>
-          {subsidy > 0 && (
-            <View style={styles.subsidyBadge}>
-              <Ionicons name="heart" size={14} color={theme.success} />
-              <Text style={styles.subsidyBadgeTxt}>{t('lamal.subsidyBadge', { n: formatNumber(subsidy) })}</Text>
-            </View>
-          )}
-        </Card>
-
-        {/* Tabs */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: Spacing.md }}>
-          <View style={styles.tabs}>
-            {tabs.map(t => (
-              <TouchableOpacity key={t.key} style={[styles.tab, activeTab === t.key && styles.tabOn]} onPress={() => setActiveTab(t.key)}>
-                <Ionicons name={t.icon as any} size={16} color={activeTab === t.key ? theme.text : theme.textTertiary} />
-                <Text style={[styles.tabTxt, activeTab === t.key && styles.tabTxtOn]}>{t.label}</Text>
+          <View style={styles.rowWrap}>
+            {[true, false].map((v) => (
+              <TouchableOpacity key={String(v)} style={[styles.chip, accident === v && styles.chipOn]} onPress={() => setAccident(v)}>
+                <Text style={[styles.chipTxt, accident === v && styles.chipTxtOn]}>
+                  {v ? t('lamal2027.withAccident') : t('lamal2027.withoutAccident')}
+                </Text>
               </TouchableOpacity>
             ))}
           </View>
-        </ScrollView>
+        </Card>
 
-        {/* Assureurs Tab */}
-        {activeTab === 'compare' && (
+        {!profileComplete ? (
+          /* Profil incomplet : aucun classement présenté comme personnel */
+          <Card style={styles.promptCard}>
+            <Ionicons name="pin" size={22} color={theme.primary} />
+            <Text style={styles.promptTxt}>{t('lamalV2.selectCommune')}</Text>
+          </Card>
+        ) : offers.length === 0 ? (
+          <Card style={styles.promptCard}>
+            <Ionicons name="alert-circle" size={22} color={theme.warning} />
+            <Text style={styles.promptTxt}>{t('lamal2027.noData')}</Text>
+          </Card>
+        ) : (
           <>
-            <Text style={styles.secTitle}>{t('lamal.topInsurers', { n: TOP_N, c: getCantonName(canton, lang) })}</Text>
-            <Text style={styles.secSub}>{t('lamal.franchiseLabel', { n: formatNumber(franchise), m: INSURANCE_MODELS.find(m => m.value === model)?.label })}</Text>
+            {/* ── Meilleure offre officielle ── */}
+            <Card style={styles.bestCard}>
+              <Text style={styles.bestLabel} testID="best-offer">{t('lamalV2.bestOffer')}</Text>
+              <View style={styles.bestRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.bestInsurer}>{premiums!.insurers[best[0]]}</Text>
+                  <Text style={styles.bestModel}>{modelName(best[0], best[1])}</Text>
+                </View>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={styles.bestAmt}>{best[2].toFixed(2)}</Text>
+                  <Text style={styles.bestUnit}>CHF {t('lamal.perMonth')}</Text>
+                </View>
+              </View>
+              <Text style={styles.bestProfile}>
+                {t('lamal2027.profile', { canton, age: t(`lamal2027.age_${ageClass}`), fr: String(fr) })}
+              </Text>
+            </Card>
 
-            {insurerList.map((item, idx) => {
-              const isFirst = idx === 0;
-              return (
-                <Card key={item.insurer.id} style={[styles.insurerCard, isFirst && { borderColor: `${theme.success}40` }]}>
-                  <View style={styles.insurerRow}>
-                    <View style={[styles.rankCircle, isFirst && { backgroundColor: `${theme.success}20` }]}>
-                      <Text style={[styles.rankNum, isFirst && { color: theme.success }]}>#{idx + 1}</Text>
-                    </View>
-                    <View style={styles.insurerInfo}>
-                      <Text style={styles.insurerName}>{anonInsurer(idx)}</Text>
-                      {item.savingsVsAvg > 0 && (
-                        <Text style={styles.savingsTxt}>
-                          {t('lamal.savingsVs', { n: formatNumber(item.savingsVsAvg) })}
-                        </Text>
-                      )}
-                    </View>
-                    <View style={styles.insurerPrice}>
-                      <Text style={[styles.insurerAmt, isFirst && { color: theme.success }]}>{formatNumber(item.premium)}</Text>
-                      <Text style={styles.insurerUnit}>{t('lamal.perMonth')}</Text>
-                      <Text style={styles.insurerAnnual}>{t('lamal.annualPerYear', { n: formatNumber(item.annual) })}</Text>
-                    </View>
+            {/* ── Classement officiel (≤ 20 assureurs, prime croissante) ── */}
+            <Text style={styles.secTitle}>{t('lamal2027.title', { year: premiums!.year })}</Text>
+            <Card style={styles.listCard}>
+              {shown.map(([ins, tarif, premium], i) => (
+                <View key={`${ins}-${tarif}`} style={[styles.row, i === 0 && styles.rowFirst]}>
+                  <Text style={[styles.rank, i === 0 && { color: theme.primary }]}>{i + 1}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.insurer} numberOfLines={1}>{premiums!.insurers[ins]}</Text>
+                    <Text style={styles.model} numberOfLines={1}>{modelName(ins, tarif)}</Text>
                   </View>
-                  <ProgressBar value={100 - ((item.premium - premiums.min) / Math.max(premiums.max - premiums.min, 1) * 100)}
-                    color={isFirst ? theme.success : theme.primary} height={4} />
-                </Card>
-              );
-            })}
-
-            <Card style={styles.noteCard}>
-              <Ionicons name="information-circle" size={18} color={theme.info} />
-              <Text style={styles.noteTxt}>{t('lamal.noteText')}</Text>
-            </Card>
-          </>
-        )}
-
-        {/* Optimize Tab */}
-        {activeTab === 'optimize' && (
-          <>
-            <Text style={styles.secTitle}>{t('lamal.optimizeFranchise')}</Text>
-            <Card style={styles.optCard}>
-              <View style={styles.optRow}>
-                <View style={[styles.optBox, { borderColor: theme.success }]}>
-                  <Ionicons name="fitness" size={28} color={theme.success} />
-                  <Text style={styles.optLabel}>{t('lamal.goodHealth')}</Text>
-                  <Text style={[styles.optVal, { color: theme.success }]}>CHF 2'500</Text>
-                  <Text style={styles.optHint}>{t('lamal.savingPerYear', { n: formatNumber(savingsHighFranchise) })}</Text>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={[styles.premium, i === 0 && { color: theme.primary }]}>{premium.toFixed(2)}</Text>
+                    {i > 0 && <Text style={styles.diff}>+{(premium - best[2]).toFixed(2)}</Text>}
+                  </View>
                 </View>
-                <View style={[styles.optBox, { borderColor: theme.error }]}>
-                  <Ionicons name="medkit" size={28} color={theme.error} />
-                  <Text style={styles.optLabel}>{t('lamal.chronic')}</Text>
-                  <Text style={[styles.optVal, { color: theme.error }]}>CHF 300</Text>
-                  <Text style={styles.optHint}>{t('lamal.maxCoverage')}</Text>
-                </View>
-              </View>
-            </Card>
-            <Card style={styles.tipCard}>
-              <Text style={styles.tipTitle}>{t('lamal.importantDates')}</Text>
-              <View style={styles.tipItem}><Ionicons name="calendar" size={16} color={theme.warning} /><Text style={styles.tipItemTxt}>{t('lamal.date1')}</Text></View>
-              <View style={styles.tipItem}><Ionicons name="mail" size={16} color={theme.warning} /><Text style={styles.tipItemTxt}>{t('lamal.date2')}</Text></View>
-              <View style={styles.tipItem}><Ionicons name="swap-horizontal" size={16} color={theme.info} /><Text style={styles.tipItemTxt}>{t('lamal.date3')}</Text></View>
-              <View style={styles.tipItem}><Ionicons name="shield-checkmark" size={16} color={theme.success} /><Text style={styles.tipItemTxt}>{t('lamal.date4')}</Text></View>
-            </Card>
-          </>
-        )}
-
-        {/* Subsidy Tab */}
-        {activeTab === 'subsidy' && (
-          <>
-            <Text style={styles.secTitle}>{t('lamal.subsidyTitle')}</Text>
-            <Card style={styles.subsidyInput}>
-              <View style={styles.sliderRow}>
-                <Text style={styles.label}>{t('lamal.annualIncome')}</Text>
-                <Text style={styles.sliderVal}>CHF {formatNumber(income)}</Text>
-              </View>
-              <Slider style={styles.slider} minimumValue={20000} maximumValue={150000} step={1000} value={income} onValueChange={setIncome}
-                minimumTrackTintColor={theme.success} maximumTrackTintColor={theme.cardBorder} thumbTintColor={theme.success} />
-              <View style={styles.statusRow}>
-                {[{ v: false, l: t('lamal.single') }, { v: true, l: t('lamal.married') }].map(o => (
-                  <TouchableOpacity key={o.l} style={[styles.statusBtn, married === o.v && styles.statusBtnOn]} onPress={() => setMarried(o.v)}>
-                    <Text style={[styles.statusTxt, married === o.v && styles.statusTxtOn]}>{o.l}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              <Text style={styles.label}>{t('lamal.childrenLabel')}</Text>
-              <View style={styles.childRow}>
-                {[0, 1, 2, 3].map(n => (
-                  <TouchableOpacity key={n} style={[styles.childChip, children === n && styles.childOn]} onPress={() => setChildren(n)}>
-                    <Text style={[styles.childTxt, children === n && styles.childTxtOn]}>{n}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </Card>
-            <Card style={[styles.subsidyResult, { borderColor: subsidy > 0 ? theme.success : theme.cardBorder }]}>
-              <Ionicons name={subsidy > 0 ? 'checkmark-circle' : 'close-circle'} size={32} color={subsidy > 0 ? theme.success : theme.error} />
-              <Text style={[styles.subsidySt, { color: subsidy > 0 ? theme.success : theme.error }]}>
-                {subsidy > 0 ? t('lamal.eligible') : t('lamal.notEligible')}
-              </Text>
-              {subsidy > 0 && (
-                <>
-                  <Text style={styles.subsidyAmt}>{t('lamal.subsidyMonth', { n: formatNumber(subsidy) })}</Text>
-                  <Text style={styles.subsidyAnn}>{t('lamal.subsidyYear', { n: formatNumber(subsidy * 12) })}</Text>
-                </>
+              ))}
+              {offers.length > 8 && (
+                <TouchableOpacity style={styles.moreBtn} onPress={() => setExpanded(!expanded)}>
+                  <Text style={styles.moreTxt}>
+                    {expanded ? t('lamal2027.showLess') : t('lamal2027.showAll', { n: offers.length })}
+                  </Text>
+                </TouchableOpacity>
               )}
             </Card>
           </>
         )}
 
-        {/* Ranking Tab */}
-        {activeTab === 'ranking' && (
-          <>
-            <Text style={styles.secTitle}>{t('lamal.cantonsTitle')}</Text>
-            {cantonRanking.map((c, idx) => (
-              <TouchableOpacity key={c.code} style={[styles.rkItem, canton === c.code && styles.rkItemOn]} onPress={() => setCanton(c.code)}>
-                <Text style={[styles.rkPos, idx < 3 && { color: idx === 0 ? '#FFD700' : idx === 1 ? '#C0C0C0' : '#CD7F32' }]}>#{idx + 1}</Text>
-                <View style={styles.rkInfo}>
-                  <Text style={styles.rkName}>{c.name} ({c.code})</Text>
-                  <View style={styles.rkChgRow}>
-                    <Ionicons name={c.change > 4.4 ? 'arrow-up' : 'arrow-down'} size={11} color={c.change > 4.4 ? theme.error : theme.success} />
-                    <Text style={[styles.rkChg, { color: c.change > 4.4 ? theme.error : theme.success }]}>{c.change > 0 ? '+' : ''}{c.change}%</Text>
-                  </View>
-                </View>
-                <Text style={styles.rkPrem}>CHF {formatNumber(c.premium)}</Text>
-              </TouchableOpacity>
-            ))}
-          </>
-        )}
+        {/* ── Subsides (écran dédié, simulation explicitement indicative) ── */}
+        <TouchableOpacity style={styles.subsidyLink} onPress={() => router.push('/more/lamal-subsidy' as any)}>
+          <Ionicons name="heart" size={16} color={theme.success} />
+          <Text style={styles.subsidyTxt}>{t('lamalV2.subsidyLink')}</Text>
+          <Ionicons name="chevron-forward" size={16} color={theme.textTertiary} />
+        </TouchableOpacity>
 
-        {/* Classement officiel OFSP/Priminfo (primes réelles approuvées) */}
-        <LamalOfficial2027 theme={theme} canton={canton} age={age} franchise={franchise} lang={lang} />
-
-        {/* Sources, limites et résiliation AOS — transparence obligatoire */}
+        {/* ── Sources, état des données, résiliation ── */}
         <View style={styles.srcCard}>
           <View style={styles.srcInfoRow}>
             <Ionicons name="library" size={15} color={theme.primary} />
             <Text style={styles.srcTitle}>{t('lamalInfo.sourcesTitle')}</Text>
           </View>
-          <Text style={styles.srcText}>{t('lamalInfo.sourcesBody')}</Text>
+          <Text style={styles.srcText}>{t('lamalInfo.sourcesBody', { year: status?.year ?? '' })}</Text>
+          {!!fmtDate(status?.publishedAt ?? null) && (
+            <Text style={styles.srcText}>{t('lamalV2.publishedAt', { date: fmtDate(status!.publishedAt) })}</Text>
+          )}
+          {!!fmtDate(status?.checkedAt ?? null) && (
+            <Text style={styles.srcText}>{t('lamalV2.checkedAt', { date: fmtDate(status!.checkedAt) })}</Text>
+          )}
           <Text style={styles.srcText}>{t('lamalInfo.limitsBody')}</Text>
+          <TouchableOpacity
+            style={styles.priminfoBtn}
+            onPress={() => Linking.openURL('https://www.priminfo.admin.ch')}
+          >
+            <Ionicons name="open-outline" size={15} color={theme.primary} />
+            <Text style={styles.priminfoTxt}>{t('lamalV2.openPriminfo')}</Text>
+          </TouchableOpacity>
           <View style={[styles.srcInfoRow, { marginTop: 10 }]}>
             <Ionicons name="calendar" size={15} color={theme.warning} />
             <Text style={styles.srcTitle}>{t('lamalInfo.cancelTitle')}</Text>
@@ -347,120 +355,93 @@ export default function LamalComparatorScreen() {
   );
 }
 
-const makeStyles = (Colors: ThemePalette) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+const makeStyles = (C: ThemePalette) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: C.background },
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md },
   backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   headerCenter: { flex: 1, alignItems: 'center' },
-  title: { color: Colors.text, fontSize: FontSizes.xl, fontWeight: FontWeights.bold },
-  subtitle: { color: Colors.success, fontSize: FontSizes.xs, fontWeight: FontWeights.bold },
-  scroll: { flex: 1 },
+  title: { color: C.text, fontSize: FontSizes.xl, fontWeight: FontWeights.bold },
+  subtitle: { color: C.success, fontSize: FontSizes.xs, fontWeight: FontWeights.bold, marginTop: 1 },
   content: { padding: Spacing.lg },
-  configCard: { marginBottom: Spacing.md },
-  label: { color: Colors.textSecondary, fontSize: FontSizes.sm, marginBottom: Spacing.sm, marginTop: Spacing.md },
-  chipRow: { flexDirection: 'row', gap: Spacing.sm },
-  cantonGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
-  chip: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: BorderRadius.md, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder },
-  chipOn: { backgroundColor: `${Colors.primary}20`, borderColor: Colors.primary },
-  chipTxt: { color: Colors.textSecondary, fontSize: FontSizes.sm, fontWeight: FontWeights.bold },
-  chipTxtOn: { color: Colors.primary },
-  sliderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  sliderVal: { color: Colors.text, fontSize: FontSizes.md, fontWeight: FontWeights.bold },
-  slider: { width: '100%', height: 40 },
-  franchiseRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
-  fChip: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: BorderRadius.md, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder },
-  fChipOn: { backgroundColor: `${Colors.primary}20`, borderColor: Colors.primary },
-  fTxt: { color: Colors.textSecondary, fontSize: FontSizes.sm, fontWeight: FontWeights.bold },
-  fTxtOn: { color: Colors.primary },
-  modelChip: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: BorderRadius.md, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, marginBottom: Spacing.xs },
-  modelOn: { backgroundColor: `${Colors.primary}20`, borderColor: Colors.primary },
-  modelTxt: { color: Colors.textSecondary, fontSize: FontSizes.sm },
-  modelTxtOn: { color: Colors.primary, fontWeight: FontWeights.semibold },
-  heroCard: { marginBottom: Spacing.md, backgroundColor: `${Colors.success}05`, borderColor: `${Colors.success}25` },
-  srcRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, marginBottom: Spacing.sm },
-  srcTxt: { color: Colors.success, fontSize: FontSizes.xs, fontWeight: FontWeights.bold },
-  heroLabel: { color: Colors.textSecondary, fontSize: FontSizes.sm },
-  heroAmtRow: { flexDirection: 'row', alignItems: 'baseline', gap: Spacing.md, marginVertical: Spacing.sm },
-  heroAmt: { color: Colors.text, fontSize: FontSizes.hero, fontWeight: FontWeights.black },
-  heroInsurer: { color: Colors.success, fontSize: FontSizes.md, fontWeight: FontWeights.bold },
-  heroUnit: { color: Colors.textSecondary, fontSize: FontSizes.xs },
-  heroStats: { flexDirection: 'row', gap: Spacing.md, marginTop: Spacing.md },
-  heroStat: { flex: 1, backgroundColor: Colors.card, borderRadius: BorderRadius.sm, padding: Spacing.sm, alignItems: 'center' },
-  hsl: { color: Colors.textTertiary, fontSize: FontSizes.xs },
-  hsv: { color: Colors.text, fontSize: FontSizes.md, fontWeight: FontWeights.bold },
-  changeRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginTop: Spacing.md },
-  changeTxt: { fontSize: FontSizes.sm, fontWeight: FontWeights.semibold },
-  changeAvg: { color: Colors.textTertiary, fontSize: FontSizes.xs, marginLeft: 'auto' },
-  subsidyBadge: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, marginTop: Spacing.md, backgroundColor: `${Colors.success}15`, padding: Spacing.sm, borderRadius: BorderRadius.sm },
-  subsidyBadgeTxt: { color: Colors.success, fontSize: FontSizes.sm, fontWeight: FontWeights.semibold },
-  tabs: { flexDirection: 'row', gap: Spacing.sm },
-  tab: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: BorderRadius.md, backgroundColor: Colors.card },
-  tabOn: { backgroundColor: Colors.success },
-  tabTxt: { color: Colors.textTertiary, fontSize: FontSizes.sm, fontWeight: FontWeights.semibold },
-  tabTxtOn: { color: Colors.text },
-  secTitle: { color: Colors.text, fontSize: FontSizes.lg, fontWeight: FontWeights.bold, marginBottom: Spacing.xs },
-  secSub: { color: Colors.textSecondary, fontSize: FontSizes.sm, marginBottom: Spacing.md },
-  insurerCard: { marginBottom: Spacing.sm },
-  insurerRow: { flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.sm },
-  rankCircle: { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.card, alignItems: 'center', justifyContent: 'center', marginRight: Spacing.md },
-  rankNum: { color: Colors.textSecondary, fontSize: FontSizes.sm, fontWeight: FontWeights.bold },
-  insurerInfo: { flex: 1 },
-  insurerName: { color: Colors.text, fontSize: FontSizes.md, fontWeight: FontWeights.semibold },
-  savingsTxt: { color: Colors.success, fontSize: FontSizes.xs },
-  insurerPrice: { alignItems: 'flex-end' },
-  insurerAmt: { color: Colors.text, fontSize: FontSizes.xl, fontWeight: FontWeights.black },
-  insurerUnit: { color: Colors.textSecondary, fontSize: FontSizes.xs },
-  insurerAnnual: { color: Colors.textTertiary, fontSize: FontSizes.xs },
-  noteCard: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, marginTop: Spacing.md },
-  noteTxt: { flex: 1, color: Colors.textSecondary, fontSize: FontSizes.sm, lineHeight: 20 },
-  priminfoBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: Spacing.sm,
-    backgroundColor: 'rgba(52,211,153,0.1)',
-    borderWidth: 1, borderColor: Colors.primary,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.md,
-    marginTop: Spacing.md,
+  statusCard: {
+    backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder,
+    borderRadius: 14, padding: 12, gap: 6, marginBottom: Spacing.md,
   },
-  priminfoBtnTxt: { color: Colors.primary, fontSize: FontSizes.sm, fontWeight: FontWeights.bold, flex: 1, textAlign: 'center' },
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  statusOfficial: { color: C.success, fontSize: 11.5, fontWeight: FontWeights.bold, flex: 1 },
+  statusTxt: { color: C.textSecondary, fontSize: 11.5, flex: 1 },
+  card: { marginBottom: Spacing.md },
+  label: { color: C.textSecondary, fontSize: FontSizes.sm, marginBottom: Spacing.sm, marginTop: Spacing.md },
+  cantonGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+  rowWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+  chip: {
+    paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: BorderRadius.md,
+    backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder,
+  },
+  chipOn: { backgroundColor: `${C.primary}20`, borderColor: C.primary },
+  chipTxt: { color: C.textSecondary, fontSize: FontSizes.sm, fontWeight: FontWeights.bold },
+  chipTxtOn: { color: C.primary },
+  input: {
+    backgroundColor: C.background, borderWidth: 1, borderColor: C.cardBorder, borderRadius: BorderRadius.md,
+    paddingHorizontal: Spacing.md, paddingVertical: 10, color: C.text, fontSize: FontSizes.sm,
+  },
+  matchRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 9, paddingHorizontal: 4, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.cardBorder,
+  },
+  matchName: { color: C.text, fontSize: FontSizes.sm, fontWeight: FontWeights.semibold, flex: 1 },
+  matchRegion: { color: C.primary, fontSize: FontSizes.xs, fontWeight: FontWeights.bold },
+  noMatch: { color: C.textTertiary, fontSize: FontSizes.xs, marginTop: Spacing.sm },
+  manualLabel: { color: C.textTertiary, fontSize: FontSizes.xs, marginTop: Spacing.md, marginBottom: Spacing.sm },
+  communeSelRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: `${C.primary}12`, borderWidth: 1, borderColor: `${C.primary}40`,
+    borderRadius: BorderRadius.md, paddingHorizontal: Spacing.md, paddingVertical: 10,
+  },
+  communeSelTxt: { color: C.text, fontSize: FontSizes.sm, fontWeight: FontWeights.semibold, flex: 1 },
+  singleRegionRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  singleRegionTxt: { color: C.textSecondary, fontSize: FontSizes.sm },
+  promptCard: { alignItems: 'center', gap: 8, paddingVertical: Spacing.xl, marginBottom: Spacing.md },
+  promptTxt: { color: C.textSecondary, fontSize: FontSizes.sm, textAlign: 'center', lineHeight: 20, paddingHorizontal: Spacing.md },
+  bestCard: { backgroundColor: `${C.success}08`, borderColor: `${C.success}30`, marginBottom: Spacing.md },
+  bestLabel: { color: C.success, fontSize: FontSizes.xs, fontWeight: FontWeights.bold, textTransform: 'uppercase', letterSpacing: 0.5 },
+  bestRow: { flexDirection: 'row', alignItems: 'center', marginTop: Spacing.sm },
+  bestInsurer: { color: C.text, fontSize: FontSizes.lg, fontWeight: FontWeights.bold },
+  bestModel: { color: C.textSecondary, fontSize: FontSizes.sm, marginTop: 2 },
+  bestAmt: { color: C.success, fontSize: FontSizes.xxxl, fontWeight: FontWeights.black, fontVariant: ['tabular-nums'] },
+  bestUnit: { color: C.textSecondary, fontSize: FontSizes.xs },
+  bestProfile: { color: C.textTertiary, fontSize: FontSizes.xs, marginTop: Spacing.sm, lineHeight: 16 },
+  secTitle: { color: C.text, fontSize: FontSizes.md, fontWeight: FontWeights.bold, marginBottom: Spacing.sm },
+  listCard: { marginBottom: Spacing.md },
+  row: {
+    flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9,
+    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.cardBorder,
+  },
+  rowFirst: { borderTopWidth: 0 },
+  rank: { width: 22, color: C.textSecondary, fontSize: 12.5, fontWeight: FontWeights.black, textAlign: 'center' },
+  insurer: { color: C.text, fontSize: 13.5, fontWeight: FontWeights.bold },
+  model: { color: C.textSecondary, fontSize: 11.5, marginTop: 1 },
+  premium: { color: C.text, fontSize: 14.5, fontWeight: FontWeights.black, fontVariant: ['tabular-nums'] },
+  diff: { color: C.textSecondary, fontSize: 10.5, marginTop: 1 },
+  moreBtn: { alignItems: 'center', paddingVertical: 8 },
+  moreTxt: { color: C.primary, fontSize: 12.5, fontWeight: FontWeights.bold },
+  subsidyLink: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder,
+    borderRadius: 14, paddingHorizontal: Spacing.md, paddingVertical: 12, marginBottom: Spacing.md,
+  },
+  subsidyTxt: { color: C.text, fontSize: FontSizes.sm, fontWeight: FontWeights.semibold, flex: 1 },
   srcCard: {
-    backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder,
-    borderRadius: 16, padding: 14, marginTop: Spacing.md, gap: 6,
+    backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder,
+    borderRadius: 16, padding: 14, gap: 6,
   },
   srcInfoRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  srcTitle: { color: Colors.text, fontSize: FontSizes.sm, fontWeight: FontWeights.bold },
-  srcText: { color: Colors.textSecondary, fontSize: 12, lineHeight: 17 },
-  optCard: { marginBottom: Spacing.md },
-  optRow: { flexDirection: 'row', gap: Spacing.md },
-  optBox: { flex: 1, alignItems: 'center', padding: Spacing.md, borderRadius: BorderRadius.md, borderWidth: 2, backgroundColor: Colors.card },
-  optLabel: { color: Colors.textSecondary, fontSize: FontSizes.sm, marginTop: Spacing.sm },
-  optVal: { fontSize: FontSizes.lg, fontWeight: FontWeights.bold, marginTop: Spacing.xs },
-  optHint: { color: Colors.textTertiary, fontSize: FontSizes.xs, textAlign: 'center', marginTop: Spacing.xs },
-  tipCard: { marginBottom: Spacing.md },
-  tipTitle: { color: Colors.text, fontSize: FontSizes.md, fontWeight: FontWeights.bold, marginBottom: Spacing.md },
-  tipItem: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: Spacing.sm },
-  tipItemTxt: { color: Colors.textSecondary, fontSize: FontSizes.sm },
-  subsidyInput: { marginBottom: Spacing.md },
-  statusRow: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.md },
-  statusBtn: { flex: 1, paddingVertical: Spacing.md, borderRadius: BorderRadius.md, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, alignItems: 'center' },
-  statusBtnOn: { backgroundColor: `${Colors.success}20`, borderColor: Colors.success },
-  statusTxt: { color: Colors.textSecondary, fontSize: FontSizes.sm, fontWeight: FontWeights.semibold },
-  statusTxtOn: { color: Colors.success },
-  childRow: { flexDirection: 'row', gap: Spacing.sm },
-  childChip: { flex: 1, paddingVertical: Spacing.sm, borderRadius: BorderRadius.md, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder, alignItems: 'center' },
-  childOn: { backgroundColor: `${Colors.success}20`, borderColor: Colors.success },
-  childTxt: { color: Colors.textSecondary, fontSize: FontSizes.md, fontWeight: FontWeights.bold },
-  childTxtOn: { color: Colors.success },
-  subsidyResult: { marginBottom: Spacing.md, borderWidth: 2, alignItems: 'center', padding: Spacing.xl },
-  subsidySt: { fontSize: FontSizes.lg, fontWeight: FontWeights.bold, marginTop: Spacing.sm },
-  subsidyAmt: { color: Colors.success, fontSize: FontSizes.xxxl, fontWeight: FontWeights.black, marginTop: Spacing.md },
-  subsidyAnn: { color: Colors.success, fontSize: FontSizes.sm },
-  rkItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: Spacing.sm, borderBottomWidth: 1, borderBottomColor: Colors.cardBorder },
-  rkItemOn: { backgroundColor: `${Colors.primary}10`, marginHorizontal: -Spacing.md, paddingHorizontal: Spacing.md, borderRadius: BorderRadius.sm },
-  rkPos: { color: Colors.textSecondary, fontSize: FontSizes.sm, fontWeight: FontWeights.bold, width: 40 },
-  rkInfo: { flex: 1 },
-  rkName: { color: Colors.text, fontSize: FontSizes.sm, fontWeight: FontWeights.semibold },
-  rkChgRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  rkChg: { fontSize: FontSizes.xs },
-  rkPrem: { color: Colors.text, fontSize: FontSizes.md, fontWeight: FontWeights.bold },
+  srcTitle: { color: C.text, fontSize: FontSizes.sm, fontWeight: FontWeights.bold },
+  srcText: { color: C.textSecondary, fontSize: 12, lineHeight: 17 },
+  priminfoBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    borderWidth: 1, borderColor: `${C.primary}50`, borderRadius: BorderRadius.md,
+    paddingVertical: 10, marginTop: 6,
+  },
+  priminfoTxt: { color: C.primary, fontSize: FontSizes.sm, fontWeight: FontWeights.bold },
 });

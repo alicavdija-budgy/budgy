@@ -147,7 +147,7 @@ for (const key of ['ZH|R1|ERW|300|1', 'GE|R0|ERW|2500|0', 'TI|R1|KIN|0|1']) {
 const out = {
   year: YEAR,
   surveyYear,
-  source: 'OFSP / Priminfo — primes AOS officielles approuvées (opendata.swiss « Health insurance premiums », fichiers OFSP opendata.bagnet.ch, Prämien_CH.csv du 29.09.2026)',
+  source: `OFSP / Priminfo — primes AOS ${YEAR} officielles approuvées (opendata.swiss « Health insurance premiums », fichiers OFSP opendata.bagnet.ch, Prämien_CH.csv)`,
   generatedAt: new Date().toISOString(),
   stats: { kept, rejected, wrongYear, otherTerritory, discountVariantsExcluded: subVariant,
     cantons: cantonsSeen.size, insurers: insurersSeen.size, profiles: Object.keys(profiles).length },

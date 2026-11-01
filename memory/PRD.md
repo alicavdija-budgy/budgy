@@ -246,3 +246,11 @@ test
 - Nouveau PremiumTools.tsx : grille 2 colonnes (6 outils, bleu nuit + lueur menthe, haptique, FadeInDown, badge BETA, verrou Pro discret, VoiceOver, 1 colonne <340px) + carte Budgy Pro diamant pleine largeur (hasPremiumAccess canonique).
 - BentoPlus reordonne : outils -> Pro -> Mon apercu financier -> LAMal 2027 -> reglages ; doublon FinancialHealthScore SUPPRIME de Plus (reference = Accueil, 0 ligne modifiee sur index.tsx, composant conserve).
 - test-bento 41/41 ; tsc/eslint/i18n verts ; captures navigateur 390px validees (grille, Pro, apercu, LAMal, Tout Budgy). Natif/Siri/QR/LAMal/EAS intacts, build 85 inchange, aucun build lance.
+
+## Session Reorganisation premium Plus (base d0539d44)
+- Budgy Pro desormais PREMIER element de Plus : carte horizontale compacte ~100pt (diamant 62pt, statut exact hasPremiumAccess, chevron), entierement cliquable.
+- Cause racine alignement corrigee : PressScale stylait le wrapper Animated.View -> nouveau prop additif contentStyle applique au Pressable (aucun autre ecran impacte).
+- Outils en 3 colonnes x 2 rangees, cartes ~122pt, visuels 58pt, badges discrets ; <360px libelle court Calendrier (VoiceOver = titre complet) ; fontScale>=1.4 -> 2 colonnes adaptatives.
+- Halos carres sombres retires des 7 PNG par feather radial alpha (r210->237), medaillons/3D preserves.
+- Styles morts BentoPlus purges ; apercu/LAMal/reglages/Tout Budgy intacts ; index.tsx 0 ligne.
+- tsc/eslint/i18n verts, test-bento 41/41, captures 320 et 390 px validees. Build 85 inchange, aucun build lance.

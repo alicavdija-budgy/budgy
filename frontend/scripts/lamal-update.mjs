@@ -27,7 +27,7 @@
  *  - fichiers OFSP servis par opendata.bagnet.ch (URLs publiées par CKAN)
  *  - https://www.priminfo.admin.ch/downloads/praemienregionen-<année>.xlsx
  */
-import { readFileSync, writeFileSync, existsSync, mkdirSync, copyFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, renameSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
@@ -107,6 +107,9 @@ for (const line of text.split('\n').slice(1)) {
 }
 const year = Number(Object.keys(counts).filter((y) => counts[y] >= 50000).sort().pop());
 if (!year) die(`Aucun millésime substantiel détecté (${JSON.stringify(counts)})`);
+// Jamais de retour en arrière : on ne republie pas un millésime plus ancien
+// que celui déjà validé et servi.
+if (state.year && year < state.year) die(`Millésime détecté ${year} < millésime publié ${state.year} (rétrogradation refusée)`);
 console.log(`→ millésime officiel détecté : ${year} (${counts[year]} lignes)`);
 
 // ── 4. Construction + validations strictes (échec = aucun fichier publié) ──
@@ -140,12 +143,22 @@ for (const [canton, communes] of Object.entries(regions.cantons)) {
 }
 
 // ── 6. Publication atomique versionnée ──────────────────────────────────────
+// Écritures via fichier temporaire + rename (atomique sur le même système de
+// fichiers), manifest en DERNIER : une interruption ne laisse jamais un
+// manifest pointant vers des fichiers incohérents. L'atomicité réelle côté
+// consommateurs est garantie par git : le workflow ne pousse la branche
+// lamal-data qu'après un script entièrement réussi (PUBLISHED).
+const atomicWrite = (path, content) => {
+  const tmpPath = `${path}.tmp`;
+  writeFileSync(tmpPath, content);
+  renameSync(tmpPath, path);
+};
 const now = new Date().toISOString();
 const version = `${year}.${(modified || now).slice(0, 10).replace(/-/g, '')}`;
 if (state.version === version && !force) console.log('⚠️ version identique republiée (données corrigées à date égale)');
-copyFileSync(resolve(ROOT, `src/data/priminfo-${year}.json`), resolve(dataDir, `premiums-${year}.json`));
-copyFileSync(resolve(tmp, `regions-${year}.json`), resolve(dataDir, `regions-${year}.json`));
-writeFileSync(resolve(dataDir, 'manifest.json'), JSON.stringify({
+atomicWrite(resolve(dataDir, `premiums-${year}.json`), readFileSync(resolve(ROOT, `src/data/priminfo-${year}.json`)));
+atomicWrite(resolve(dataDir, `regions-${year}.json`), readFileSync(resolve(tmp, `regions-${year}.json`)));
+atomicWrite(resolve(dataDir, 'manifest.json'), JSON.stringify({
   schema: 1,
   latestYear: year,
   version,
@@ -154,7 +167,7 @@ writeFileSync(resolve(dataDir, 'manifest.json'), JSON.stringify({
   source: premiums.source,
   files: { premiums: `premiums-${year}.json`, regions: `regions-${year}.json` },
 }, null, 2));
-writeFileSync(statePath, JSON.stringify({
+atomicWrite(statePath, JSON.stringify({
   metadataModified: modified, premiumsSha256: hash, year, version, checkedAt: now, publishedAt: now,
 }, null, 2));
 console.log(`PUBLISHED — primes ${year}, version ${version} (${premiums.stats.kept} offres, ${premiums.stats.insurers} assureurs, ${Object.keys(regions.cantons).length} cantons de régions).`);

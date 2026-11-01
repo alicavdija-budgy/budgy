@@ -39,19 +39,22 @@ jobs:
         with:
           ref: budgy-smart-4.0
 
-      - name: Checkout données publiées (branche lamal-data)
-        uses: actions/checkout@v4
-        continue-on-error: true
-        with:
-          ref: lamal-data
-          path: lamal-data-repo
-
-      - name: Préparer la branche lamal-data si absente
+      # Premier lancement : la branche lamal-data peut ne pas exister.
+      # On la clone si elle existe, sinon on l'initialise proprement ;
+      # le premier push la créera sur GitHub (permissions: contents: write).
+      - name: Préparer la branche de données lamal-data
+        env:
+          REPO_URL: https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git
         run: |
-          if [ ! -d lamal-data-repo/.git ]; then
-            mkdir -p lamal-data-repo && cd lamal-data-repo
+          set -e
+          if git ls-remote --exit-code --heads "$REPO_URL" lamal-data >/dev/null 2>&1; then
+            git clone --depth 1 --branch lamal-data "$REPO_URL" lamal-data-repo
+          else
+            mkdir lamal-data-repo
+            cd lamal-data-repo
             git init -b lamal-data
-            git remote add origin "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+            git remote add origin "$REPO_URL"
+            printf '# Budgy — données LAMal officielles publiées automatiquement.\n# Générées par .github/workflows/lamal-data-update.yml ; ne pas éditer à la main.\n' > README.md
           fi
 
       - uses: actions/setup-node@v4
@@ -85,7 +88,7 @@ jobs:
         run: |
           git config user.name "budgy-lamal-bot"
           git config user.email "lamal-data@budgy.ch"
-          git add -A data
+          git add -A
           VERSION=$(python3 -c "import json;print(json.load(open('data/manifest.json'))['version'])")
           git commit -m "data(lamal): primes officielles OFSP/Priminfo version $VERSION"
           git push origin HEAD:lamal-data
@@ -94,10 +97,10 @@ jobs:
         if: steps.update.outputs.published == 'false'
         working-directory: lamal-data-repo
         run: |
-          if [ -n "$(git status --porcelain data 2>/dev/null)" ]; then
+          if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
             git config user.name "budgy-lamal-bot"
             git config user.email "lamal-data@budgy.ch"
-            git add -A data
+            git add -A
             git commit -m "chore(lamal): vérification officielle, aucune nouvelle donnée"
             git push origin HEAD:lamal-data || true
           fi

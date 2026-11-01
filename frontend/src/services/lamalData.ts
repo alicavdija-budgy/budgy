@@ -113,7 +113,15 @@ export async function loadLamalData(): Promise<LamalData> {
       const premiums = JSON.parse(p);
       const regions = JSON.parse(r);
       const meta = JSON.parse(m);
-      if (validatePremiums(premiums) && validateRegions(regions) && premiums.year >= BUNDLED_PREMIUMS.year) {
+      // Cache cohérent UNIQUEMENT : primes, régions et métadonnées sur le MÊME
+      // millésime (jamais de cache partiellement écrit), et jamais plus ancien
+      // que le jeu officiel embarqué (pas de rétrogradation silencieuse).
+      if (
+        validatePremiums(premiums) && validateRegions(regions) &&
+        regions.year === premiums.year && meta.year === premiums.year &&
+        typeof meta.version === 'string' &&
+        premiums.year >= BUNDLED_PREMIUMS.year
+      ) {
         memory = {
           premiums,
           regions,
@@ -162,6 +170,12 @@ export async function refreshLamalData(): Promise<LamalData> {
       typeof manifest.version !== 'string' || !manifest.files?.premiums || !manifest.files?.regions
     ) throw new Error('lamal/manifest-invalid');
 
+    // Jamais de rétrogradation automatique : un manifest annonçant un
+    // millésime plus ancien que celui déjà affiché est ignoré.
+    if (manifest.latestYear < current.premiums.year) {
+      memory = { ...current, status: { ...current.status, checkedAt, offline: false } };
+      return memory;
+    }
     if (manifest.version === current.status.version) {
       memory = { ...current, status: { ...current.status, checkedAt, publishedAt: manifest.publishedAt ?? current.status.publishedAt, offline: false } };
       return memory;
@@ -179,7 +193,7 @@ export async function refreshLamalData(): Promise<LamalData> {
     await Promise.all([
       AsyncStorage.setItem(K_PREMIUMS, JSON.stringify(premiums)),
       AsyncStorage.setItem(K_REGIONS, JSON.stringify(regions)),
-      AsyncStorage.setItem(K_META, JSON.stringify({ version: manifest.version, publishedAt: manifest.publishedAt ?? null, checkedAt })),
+      AsyncStorage.setItem(K_META, JSON.stringify({ version: manifest.version, year: premiums.year, publishedAt: manifest.publishedAt ?? null, checkedAt })),
     ]);
     memory = {
       premiums, regions,

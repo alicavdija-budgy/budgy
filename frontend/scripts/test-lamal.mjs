@@ -122,6 +122,8 @@ check('validation stricte côté client (régions)', svc.includes('validateRegio
 check('mise à jour non bloquante avec délai', svc.includes('AbortController') && svc.includes('FETCH_TIMEOUT_MS'));
 check('mise à jour invalide refusée (jamais de données douteuses)', svc.includes('lamal/remote-invalid') && svc.includes('lamal/manifest-invalid'));
 check('état hors ligne signalé sans bloquer', svc.includes('offline: true'));
+check('cache cohérent exigé (primes/régions/méta sur le même millésime)', svc.includes('regions.year === premiums.year') && svc.includes('meta.year === premiums.year'));
+check('aucune rétrogradation automatique de millésime', svc.includes('manifest.latestYear < current.premiums.year'));
 check('aucune promesse « temps réel »', !/temps réel|real.?time/i.test(svc) && !/temps réel|real.?time/i.test(comp));
 check('nouveau millésime automatique (latestYear, aucun code par année)', svc.includes('manifest.latestYear') && !svc.includes('2028'));
 
@@ -134,7 +136,12 @@ check('millésime auto-détecté (max Geschäftsjahr substantiel)', upd.includes
 check('régions officielles priminfo par millésime', upd.includes('praemienregionen-${y}.xlsx'));
 check('cohérence vs version précédente (dérive médiane)', upd.includes('drift'));
 check('échec = aucune publication partielle', upd.includes('publication refusée'));
+check('publication atomique (tmp + rename, manifest en dernier)', upd.includes('atomicWrite') && upd.includes('renameSync'));
+check('rétrogradation de millésime refusée côté publication', upd.includes('rétrogradation refusée'));
 const wf = readFileSync(resolve(root, '../.github/workflows/lamal-data-update.yml'), 'utf8');
+check('premier lancement : branche lamal-data créée proprement', wf.includes('ls-remote') && wf.includes('git init -b lamal-data'));
+check('permissions GitHub Actions explicites (contents: write)', wf.includes('contents: write'));
+check('le workflow exécute le code vérifié de budgy-smart-4.0', wf.includes('ref: budgy-smart-4.0'));
 check('planification : hebdomadaire + quotidienne sept.–nov.', wf.includes('23 5 * * 1') && wf.includes('23 5 * 9-11 *'));
 check('publication versionnée sur branche dédiée (retour arrière git)', wf.includes('lamal-data') && wf.includes('manifest.json'));
 

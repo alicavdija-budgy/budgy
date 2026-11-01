@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "latestYear": 2027,
+  "version": "2027.20260929",
+  "publishedAt": "2026-09-29T12:25:29.564489",
+  "checkedAt": "2026-11-01T15:57:17.322Z",
+  "source": "OFSP / Priminfo — primes AOS 2027 officielles approuvées (opendata.swiss « Health insurance premiums », fichiers OFSP opendata.bagnet.ch, Prämien_CH.csv)",
+  "files": {
+    "premiums": "premiums-2027.json",
+    "regions": "regions-2027.json"
+  }
+}

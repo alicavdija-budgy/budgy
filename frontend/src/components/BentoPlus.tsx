@@ -290,17 +290,6 @@ const makeStyles = (C: any) =>
       letterSpacing: 1, textTransform: 'uppercase',
       marginTop: Spacing.md, marginBottom: Spacing.sm, marginLeft: 2,
     },
-    toolsScroll: { marginHorizontal: -Spacing.lg, marginBottom: Spacing.sm },
-    toolsRow: { paddingHorizontal: Spacing.lg, gap: Spacing.xs, flexDirection: 'row' },
-    toolChip: {
-      flexDirection: 'row', alignItems: 'center', gap: 7,
-      backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder,
-      borderRadius: 999, paddingHorizontal: Spacing.md, paddingVertical: 10,
-    },
-    toolText: { color: C.text, fontSize: FontSizes.sm, fontWeight: FontWeights.semibold },
-    proRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
-    proTitle: { color: C.text, fontSize: FontSizes.md, fontWeight: FontWeights.bold },
-    activeDot: { width: 8, height: 8, borderRadius: 4 },
     settingsRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.xs },
     settingTile: {
       flex: 1, alignItems: 'center', gap: 5,

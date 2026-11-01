@@ -17,6 +17,13 @@ interface Props extends Omit<PressableProps, 'style'> {
   scaleTo?: number;
   haptic?: 'light' | 'medium' | 'heavy' | 'selection' | 'none';
   style?: StyleProp<ViewStyle>;
+  /**
+   * Optional style applied to the inner Pressable (the touch surface).
+   * Use it for layout of children (flexDirection, padding, alignItems…):
+   * `style` lives on the outer Animated.View and does NOT lay out children.
+   * Additive prop — existing call sites are unaffected.
+   */
+  contentStyle?: StyleProp<ViewStyle>;
 }
 
 export const PressScale: React.FC<Props> = ({
@@ -27,6 +34,7 @@ export const PressScale: React.FC<Props> = ({
   onPressOut,
   onPress,
   style,
+  contentStyle,
   ...rest
 }) => {
   const scale = useSharedValue(1);
@@ -53,6 +61,7 @@ export const PressScale: React.FC<Props> = ({
     <Animated.View style={[animStyle, style]}>
       <Pressable
         {...rest}
+        style={contentStyle}
         onPressIn={(e) => {
           scale.value = withSpring(scaleTo, { damping: 15, stiffness: 200 });
           onPressIn?.(e);

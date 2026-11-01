@@ -1,0 +1,106 @@
+name: LAMal data update (OFSP/Priminfo)
+
+# Service d'actualisation automatique des primes LAMal.
+# - Une seule tâche partagée pour tous les utilisateurs (aucun appel individuel OFSP).
+# - Vérification hebdomadaire toute l'année, quotidienne de septembre à novembre
+#   (période de publication des primes).
+# - Télécharge UNIQUEMENT si les métadonnées officielles ont changé, valide
+#   strictement, puis publie un jeu versionné sur la branche `lamal-data`
+#   (historique git = retour arrière). L'app lit manifest.json côté client :
+#   aucune nouvelle version iPhone ni OTA n'est nécessaire.
+# NOTE ACTIVATION : les déclencheurs `schedule` ne s'exécutent que lorsque ce
+# fichier est présent sur la branche PAR DÉFAUT du dépôt. Tant qu'il ne vit que
+# sur budgy-smart-4.0, utiliser le déclenchement manuel (workflow_dispatch).
+
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Forcer le retraitement même sans changement officiel"
+        type: boolean
+        default: false
+  schedule:
+    - cron: "23 5 * * 1"     # chaque lundi 05:23 UTC
+    - cron: "23 5 * 9-11 *"  # tous les jours en sept.–nov. (publication des primes)
+
+permissions:
+  contents: write
+
+concurrency:
+  group: lamal-data-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code (budgy-smart-4.0)
+        uses: actions/checkout@v4
+        with:
+          ref: budgy-smart-4.0
+
+      # Premier lancement : la branche lamal-data peut ne pas exister.
+      # On la clone si elle existe, sinon on l'initialise proprement ;
+      # le premier push la créera sur GitHub (permissions: contents: write).
+      - name: Préparer la branche de données lamal-data
+        env:
+          REPO_URL: https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git
+        run: |
+          set -e
+          if git ls-remote --exit-code --heads "$REPO_URL" lamal-data >/dev/null 2>&1; then
+            git clone --depth 1 --branch lamal-data "$REPO_URL" lamal-data-repo
+          else
+            mkdir lamal-data-repo
+            cd lamal-data-repo
+            git init -b lamal-data
+            git remote add origin "$REPO_URL"
+            printf '# Budgy — données LAMal officielles publiées automatiquement.\n# Générées par .github/workflows/lamal-data-update.yml ; ne pas éditer à la main.\n' > README.md
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Dépendances (lecture xlsx officiel)
+        run: pip install --quiet openpyxl
+
+      - name: Vérifier / importer les données officielles
+        id: update
+        working-directory: frontend
+        run: |
+          set -o pipefail
+          FORCE_FLAG=""
+          if [ "${{ inputs.force }}" = "true" ]; then FORCE_FLAG="--force"; fi
+          node scripts/lamal-update.mjs --data-dir "$GITHUB_WORKSPACE/lamal-data-repo/data" $FORCE_FLAG | tee /tmp/lamal-update.log
+          if grep -q '^PUBLISHED' /tmp/lamal-update.log; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publier le jeu validé (branche lamal-data)
+        if: steps.update.outputs.published == 'true'
+        working-directory: lamal-data-repo
+        run: |
+          git config user.name "budgy-lamal-bot"
+          git config user.email "lamal-data@budgy.ch"
+          git add -A
+          VERSION=$(python3 -c "import json;print(json.load(open('data/manifest.json'))['version'])")
+          git commit -m "data(lamal): primes officielles OFSP/Priminfo version $VERSION"
+          git push origin HEAD:lamal-data
+
+      - name: Journaliser la vérification (sans republication)
+        if: steps.update.outputs.published == 'false'
+        working-directory: lamal-data-repo
+        run: |
+          if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
+            git config user.name "budgy-lamal-bot"
+            git config user.email "lamal-data@budgy.ch"
+            git add -A
+            git commit -m "chore(lamal): vérification officielle, aucune nouvelle donnée"
+            git push origin HEAD:lamal-data || true
+          fi

@@ -254,3 +254,10 @@ test
 - Halos carres sombres retires des 7 PNG par feather radial alpha (r210->237), medaillons/3D preserves.
 - Styles morts BentoPlus purges ; apercu/LAMal/reglages/Tout Budgy intacts ; index.tsx 0 ligne.
 - tsc/eslint/i18n verts, test-bento 41/41, captures 320 et 390 px validees. Build 85 inchange, aucun build lance.
+
+## Session Deblocage CI i18n (base cff3e251) -> commit 1af8f83b
+- QrBillError porte uniquement un code stable precis (18 codes : spc, version, coding, length, ibanFormat, ibanChecksum, creditorMissing, addressType, amountFormat, amountRange, currency, referenceQrrInvalid, referenceQrrRequiresQrIban, referenceScorInvalid, referenceQrIbanRequiresQrr, referenceNonNotEmpty, referenceTypeUnknown, trailer) ; message technique qrbill/<code> ; validations SIX inchangees.
+- scanner-modal traduit le code a l affichage (qrbill.errors.<code>) avec repli generique traduit ; e?.message supprime.
+- translations.ts : 19 cles qrbill.errors x4 langues.
+- audit-i18n : commentaires // en fin de ligne retires (quote-aware), identifiants SIX QRR/SCOR/NON/SPC/EPD classes TECHNICAL, +3 fixtures self-test, expectUserVisibleMax ; audit toujours strict et present dans le workflow.
+- Resultats : audit USER_VISIBLE=0, self-test 7/7, parity i18n PASS, test-qrbill 42/42, tsc/eslint verts, 7 suites verertes. REVIEW_MANUALLY=7 justifies (Budgy Alerts = nom produit, 5 warnings dev internes). Build 85 inchange, aucun build lance, main intacte.

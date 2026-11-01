@@ -125,5 +125,34 @@ check('aucune échéance inventée (dueDate vide au scan)', scanner.includes("se
 check('détection doublon branchée', scanner.includes('findDuplicateInvoice(bill'));
 check('aucun paiement automatique (mention)', scanner.includes('noAutoPay'));
 
+// ── i18n des erreurs QR : chaque code levé est traduit dans les 4 langues ──
+console.log('\n— Erreurs traduites (fr/en/de/it) —');
+const rawQr = readFileSync(resolve(root, 'src/services/qrBill.ts'), 'utf8');
+const thrownCodes = [...new Set([...rawQr.matchAll(/new QrBillError\('([a-zA-Z]+)'\)/g)].map((m) => m[1]))];
+check('le parseur lève des codes stables (≥ 15)', thrownCodes.length >= 15, `codes=${thrownCodes.length}`);
+check('aucun texte français codé en dur dans les exceptions', !/new QrBillError\('[a-zA-Z]+',/.test(rawQr));
+
+const trSrc = readFileSync(resolve(root, 'src/i18n/translations.ts'), 'utf8');
+const sliceBlock = (src, fromIdx) => {
+  const i = src.indexOf('{', fromIdx);
+  let d = 0;
+  for (let j = i; j < src.length; j++) {
+    if (src[j] === '{') d++;
+    else if (src[j] === '}' && --d === 0) return src.slice(i, j + 1);
+  }
+  return '';
+};
+const qrbillBlock = sliceBlock(trSrc, trSrc.indexOf('qrbill: {'));
+for (const lang of ['fr', 'en', 'de', 'it']) {
+  const langBlock = sliceBlock(qrbillBlock, qrbillBlock.indexOf(`${lang}: {`));
+  const errBlock = sliceBlock(langBlock, langBlock.indexOf('errors: {'));
+  const missing = [...thrownCodes, 'generic'].filter((c) => !new RegExp(`\\b${c}:`).test(errBlock));
+  check(`qrbill.errors complet en ${lang}`, errBlock.length > 0 && missing.length === 0,
+    missing.length ? `manquants: ${missing.join(', ')}` : '');
+}
+check('le scanner traduit le code au moment de l\'affichage', scanner.includes('qrbill.errors.${') || scanner.includes("qrbill.errors.' +"));
+check('message générique traduit en secours', scanner.includes("t('qrbill.errors.generic')"));
+check('aucun message technique brut affiché (e?.message supprimé)', !scanner.includes('e?.message'));
+
 console.log(`\nRésultat : ${passed} réussis, ${failed} échoués`);
 if (failed > 0) process.exit(1);

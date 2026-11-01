@@ -37,10 +37,21 @@ export type SwissQrBill = {
   billingInfo: string;
 };
 
+/**
+ * Erreur de validation QR-facture. `code` est un identifiant STABLE et précis
+ * (jamais un texte utilisateur) : l'interface le traduit via i18n
+ * `qrbill.errors.<code>` dans les quatre langues. `message` reste technique.
+ *
+ * Codes émis : spc, version, coding, length, ibanFormat, ibanChecksum,
+ * creditorMissing, addressType, amountFormat, amountRange, currency,
+ * referenceQrrInvalid, referenceQrrRequiresQrIban, referenceScorInvalid,
+ * referenceQrIbanRequiresQrr, referenceNonNotEmpty, referenceTypeUnknown,
+ * trailer.
+ */
 export class QrBillError extends Error {
   code: string;
-  constructor(code: string, message: string) {
-    super(message);
+  constructor(code: string) {
+    super(`qrbill/${code}`);
     this.code = code;
   }
 }
@@ -91,11 +102,11 @@ function parseParty(L: string[], base: number, required: boolean): QrParty | nul
   const adrTp = L[base] || '';
   const name = L[base + 1] || '';
   if (!name) {
-    if (required) throw new QrBillError('creditor', 'Créancier manquant dans la QR-facture.');
+    if (required) throw new QrBillError('creditorMissing');
     return null;
   }
   if (adrTp !== 'S' && adrTp !== 'K') {
-    if (required) throw new QrBillError('addressType', 'Type d\'adresse invalide dans la QR-facture.');
+    if (required) throw new QrBillError('addressType');
     return null;
   }
   if (adrTp === 'S') {
@@ -111,17 +122,17 @@ function parseParty(L: string[], base: number, required: boolean): QrParty | nul
 export function parseSwissQrBill(payload: string): SwissQrBill {
   const L = payload.split(/\r?\n/).map((s) => s.trim());
 
-  if (L[0] !== 'SPC') throw new QrBillError('spc', 'Ce QR code n\'est pas une facture QR suisse.');
-  if (!/^02\d\d$/.test(L[1] || '')) throw new QrBillError('version', 'Version de QR-facture non supportée.');
-  if ((L[2] || '') !== '1') throw new QrBillError('coding', 'Encodage de QR-facture non supporté.');
-  if (L.length < 32) throw new QrBillError('length', 'QR-facture incomplète.');
+  if (L[0] !== 'SPC') throw new QrBillError('spc');
+  if (!/^02\d\d$/.test(L[1] || '')) throw new QrBillError('version');
+  if ((L[2] || '') !== '1') throw new QrBillError('coding');
+  if (L.length < 32) throw new QrBillError('length');
 
   // IBAN
   const iban = (L[3] || '').replace(/\s+/g, '').toUpperCase();
   if (!/^(CH|LI)\d{19}$/.test(iban)) {
-    throw new QrBillError('iban', 'IBAN invalide : seul un IBAN suisse ou liechtensteinois est admis.');
+    throw new QrBillError('ibanFormat');
   }
-  if (!mod97Valid(iban)) throw new QrBillError('iban', 'IBAN invalide (contrôle modulo 97).');
+  if (!mod97Valid(iban)) throw new QrBillError('ibanChecksum');
   const qrIban = isQrIban(iban);
 
   // Créancier (obligatoire) — éléments 4..10
@@ -132,16 +143,16 @@ export function parseSwissQrBill(payload: string): SwissQrBill {
   let amount: number | null = null;
   if (amtRaw !== '') {
     if (!/^\d{1,9}\.\d{2}$/.test(amtRaw)) {
-      throw new QrBillError('amount', 'Montant invalide dans la QR-facture.');
+      throw new QrBillError('amountFormat');
     }
     amount = Number(amtRaw);
     if (!(amount >= 0.01 && amount <= 999999999.99)) {
-      throw new QrBillError('amount', 'Montant hors limites (0.01 à 999 999 999.99).');
+      throw new QrBillError('amountRange');
     }
   }
   const currency = L[19] as 'CHF' | 'EUR';
   if (currency !== 'CHF' && currency !== 'EUR') {
-    throw new QrBillError('currency', 'Devise non admise : seuls CHF et EUR sont autorisés.');
+    throw new QrBillError('currency');
   }
 
   // Débiteur (facultatif) — éléments 20..26
@@ -152,24 +163,24 @@ export function parseSwissQrBill(payload: string): SwissQrBill {
   const reference = (L[28] || '').replace(/\s+/g, '').toUpperCase();
   if (refType === 'QRR') {
     if (!/^\d{27}$/.test(reference) || !mod10Valid(reference)) {
-      throw new QrBillError('reference', 'Référence QR (QRR) invalide.');
+      throw new QrBillError('referenceQrrInvalid');
     }
-    if (!qrIban) throw new QrBillError('reference', 'Une référence QRR exige un QR-IBAN.');
+    if (!qrIban) throw new QrBillError('referenceQrrRequiresQrIban');
   } else if (refType === 'SCOR') {
     if (!/^RF\d{2}[A-Z0-9]{1,21}$/.test(reference) || !mod97Valid(reference)) {
-      throw new QrBillError('reference', 'Référence créancier (SCOR / ISO 11649) invalide.');
+      throw new QrBillError('referenceScorInvalid');
     }
-    if (qrIban) throw new QrBillError('reference', 'Un QR-IBAN exige une référence QRR.');
+    if (qrIban) throw new QrBillError('referenceQrIbanRequiresQrr');
   } else if (refType === 'NON') {
-    if (reference !== '') throw new QrBillError('reference', 'La référence doit être vide avec le type NON.');
-    if (qrIban) throw new QrBillError('reference', 'Un QR-IBAN exige une référence QRR.');
+    if (reference !== '') throw new QrBillError('referenceNonNotEmpty');
+    if (qrIban) throw new QrBillError('referenceQrIbanRequiresQrr');
   } else {
-    throw new QrBillError('reference', 'Type de référence inconnu.');
+    throw new QrBillError('referenceTypeUnknown');
   }
 
   // Message / trailer / informations de facture
   const message = L[29] || '';
-  if ((L[30] || '') !== 'EPD') throw new QrBillError('trailer', 'QR-facture incomplète (EPD manquant).');
+  if ((L[30] || '') !== 'EPD') throw new QrBillError('trailer');
   const billingInfo = L[31] || '';
 
   return {

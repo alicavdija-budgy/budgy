@@ -100,6 +100,25 @@ const RX_TECHNICAL_LITERAL = new RegExp(
 );
 
 // Regex to extract quoted strings from source code.
+// Trailing `//` comments are stripped with quote-awareness so that a French
+// developer comment after code (e.g. `setX(''); // pas d'échéance…`) is never
+// mistaken for a user-visible string. Real strings keep being detected.
+function stripLineComment(line) {
+  let quote = null;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (quote) {
+      if (c === '\\') { i++; continue; }
+      if (c === quote) quote = null;
+    } else if (c === "'" || c === '"' || c === '`') {
+      quote = c;
+    } else if (c === '/' && line[i + 1] === '/') {
+      return line.slice(0, i);
+    }
+  }
+  return line;
+}
+
 function extractStrings(source) {
   const results = [];
   const lines = source.split('\n');
@@ -107,11 +126,14 @@ function extractStrings(source) {
   lines.forEach((line, idx) => {
     // Skip full-line comments
     if (/^\s*(\/\/|\*|\/\*)/.test(line)) return;
+    const code = stripLineComment(line);
     let m;
     rx.lastIndex = 0;
-    while ((m = rx.exec(line)) !== null) {
+    while ((m = rx.exec(code)) !== null) {
       const val = m[2];
       if (!val || val.length < 3) continue;
+      // `raw` keeps the full original line so the line-level
+      // `// i18n-technical` directive stays detectable.
       results.push({ value: val, line: idx + 1, raw: line.trim() });
     }
   });
@@ -140,6 +162,10 @@ function classify(entry, filePath) {
   if (/^[\p{Extended_Pictographic}\s\u200D\uFE0F]+$/u.test(v)) return 'TECHNICAL';
   // Currency codes / cantons
   if (/^(CHF|EUR|USD|GBP|CAD|VD|GE|ZH|BE|VS|FR|TI|BS|BL|SG|LU|AG|SO|SH|NE|JU|OW|NW|GL|GR|TG|UR|SZ|AI|AR)$/.test(v)) return 'TECHNICAL';
+  // SIX Swiss QR bill protocol identifiers (Swiss Implementation Guidelines):
+  // reference types QRR/SCOR/NON, header SPC, trailer EPD. These are wire
+  // values that MUST NOT be translated ('NON' is NOT the Italian word).
+  if (/^(QRR|SCOR|NON|SPC|EPD)$/.test(v)) return 'TECHNICAL';
   // Brand
   if (v === 'Budgy' || v === 'BUDGY') return 'TECHNICAL';
   // Numeric formatters keys
@@ -272,6 +298,37 @@ function selfTestRun() {
         '  throw new Error("Bonjour serveur"); // i18n-technical\n' +
         '}\n',
       expectUserVisibleMin: 0,
+      expectUserVisibleMax: 0,
+      expectIgnoredDirective: false,
+    },
+    {
+      // Trailing FR dev comment after code must NOT be flagged…
+      rel: 'app/trailing-comment.tsx',
+      src:
+        'export function f(setX){\n' +
+        "  setX(''); // une QR-facture ne fournit pas d'échéance : rien n'est inventé\n" +
+        '}\n',
+      expectUserVisibleMin: 0,
+      expectUserVisibleMax: 0,
+      expectIgnoredDirective: false,
+    },
+    {
+      // …while a real string BEFORE a comment is still detected.
+      rel: 'app/string-before-comment.tsx',
+      src:
+        'export function f(){\n' +
+        '  Alert.alert("Impossible de récupérer les données"); // note\n' +
+        '}\n',
+      expectUserVisibleMin: 1,
+      expectIgnoredDirective: false,
+    },
+    {
+      // SIX QR bill protocol identifiers are technical, never translated.
+      rel: 'app/six-protocol.tsx',
+      src:
+        "export function f(b){ return b.refType !== 'NON' && b.h === 'SPC' && b.r === 'QRR' && b.s === 'SCOR' && b.t === 'EPD'; }\n",
+      expectUserVisibleMin: 0,
+      expectUserVisibleMax: 0,
       expectIgnoredDirective: false,
     },
   ];
@@ -281,7 +338,8 @@ function selfTestRun() {
     const f = runAudit([fx]);
     const uvCount = f.USER_VISIBLE.length;
     const hasIgnored = f.IGNORED_DIRECTIVES.includes(fx.rel);
-    const okUV = uvCount >= fx.expectUserVisibleMin;
+    const okUV = uvCount >= fx.expectUserVisibleMin &&
+      (fx.expectUserVisibleMax === undefined || uvCount <= fx.expectUserVisibleMax);
     const okIgn = hasIgnored === fx.expectIgnoredDirective;
     const status = okUV && okIgn ? 'PASS' : 'FAIL';
     if (status === 'FAIL') failed++;

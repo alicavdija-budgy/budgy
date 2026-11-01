@@ -46,7 +46,7 @@ import { normalizeImageForUpload } from '../src/lib/imageUpload';
 import { AppErrorModal, buildErrorFromResult, type ErrorPayload } from '../src/components/AppErrorModal';
 import { mergeOcrWithFallback } from '../src/lib/ocrFallback';
 import * as Haptics from 'expo-haptics';
-import { isSwissQrBill, parseSwissQrBill, findDuplicateInvoice, type SwissQrBill } from '../src/services/qrBill';
+import { isSwissQrBill, parseSwissQrBill, findDuplicateInvoice, QrBillError, type SwissQrBill } from '../src/services/qrBill';
 
 const BACKEND_URL =
   process.env.EXPO_PUBLIC_BACKEND_URL || 'https://api.budgy.ch';
@@ -102,7 +102,15 @@ export default function ScannerModal() {
         setQrNotes(bill.message || '');
         setStage('qrbill');
       } catch (e: any) {
-        Alert.alert(t('qrbill.invalidTitle'), e?.message || t('qrbill.invalidBody'));
+        // Erreur métier (code stable) → message traduit ; sinon message générique
+        // traduit. Jamais de message technique brut à l'utilisateur.
+        const code = e instanceof QrBillError ? e.code : '';
+        const key = `qrbill.errors.${code}`;
+        const translated = code ? t(key) : '';
+        Alert.alert(
+          t('qrbill.invalidTitle'),
+          translated && translated !== key ? translated : t('qrbill.errors.generic'),
+        );
       }
     },
     [invoices, t],

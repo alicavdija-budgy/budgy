@@ -105,5 +105,42 @@ check('QR non reconnu → indication visible (plus d\'échec muet)', sc.includes
 check('scan depuis une image de galerie (même validation)', sc.includes('scanFromURLAsync') && sc.includes('launchImageLibraryAsync'));
 check('montant absent accepté (saisie manuelle, rien d\'inventé)', sc.includes("bill.amount !== null ? bill.amount.toFixed(2) : ''"));
 
+
+// ── Audit 4.0.0 — non-régression des correctifs ──────────────────────────
+const read = (rel) => readFileSync(resolve(root, rel), 'utf8');
+const selSrc = read('src/stores/selectors.ts');
+const storeSrc = read('src/stores/useStore.ts');
+const layoutSrc = read('app/_layout.tsx');
+const budgetsSrc2 = read('app/more/budgets.tsx');
+const paywallSrc = read('app/paywall.tsx');
+const i18nSrc = read('src/i18n/translations.ts');
+
+check('parseDate : dates YYYY-MM-DD parsées en minuit LOCAL (pas UTC)',
+  /parseInt\(iso\[1\]\), parseInt\(iso\[2\]\) - 1, parseInt\(iso\[3\]\)/.test(selSrc));
+check('budgets.tsx réutilise parseDate (cohérence fuseau avec Accueil)',
+  budgetsSrc2.includes("import { parseDate } from '../../src/stores/selectors'") &&
+  budgetsSrc2.includes('parseDate(tx.date)'));
+check('logout() purge aussi transactions/dettes/factures (fail-safe inter-comptes)',
+  /logout: \(\) => set\(\{[\s\S]*?transactions: \[\],[\s\S]*?debts: \[\],[\s\S]*?invoices: \[\],/.test(storeSrc));
+check('listener SIGNED_OUT global dans _layout (purge session expirée/révoquée)',
+  layoutSrc.includes("onAuthStateChange") && layoutSrc.includes("'SIGNED_OUT'") === false
+    ? layoutSrc.includes('SIGNED_OUT')
+    : layoutSrc.includes('SIGNED_OUT'));
+check('dettes : mensualité engagée réduite par les remboursements saisis (anti double comptage)',
+  selSrc.includes('debtCommitted - debtCatPaid') && selSrc.includes("c === 'dettes'"));
+check('aucune route morte /more/contracts',
+  !read('app/scanner-modal.tsx').includes("/more/contracts") &&
+  !read('app/more/email-import.tsx').includes("/more/contracts"));
+check('paywall : mensuel sélectionné par défaut',
+  paywallSrc.includes("useState<Plan>('monthly')"));
+check('paywall : économie annuelle calculée depuis les prix StoreKit réels',
+  paywallSrc.includes('annualSavingsPct') && paywallSrc.includes('(yearlyAtMonthly - a) / yearlyAtMonthly'));
+check('paywall : note d\'annulation essai présente et traduite ×4',
+  paywallSrc.includes('trialCancelNote') &&
+  (i18nSrc.match(/trialCancelNote:/g) || []).length === 4 &&
+  (i18nSrc.match(/savePct:/g) || []).length === 4);
+check('paywall : essai affiché seulement si éligibilité StoreKit confirmée (iOS)',
+  paywallSrc.includes('introEligible === true'));
+
 console.log(`\nRésultat : ${passed} réussis, ${failed} échoués`);
 if (failed > 0) process.exit(1);

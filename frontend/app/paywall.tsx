@@ -57,9 +57,9 @@ import { checkIntroEligibilityIOS } from '../src/services/iap';
 const BENEFIT_KEYS = [
   { icon: 'sparkles', color: '#34D399', titleKey: 'softPaywall.benefit1', descKey: 'softPaywall.voiceSubtitle' },
   { icon: 'analytics', color: '#22D3EE', titleKey: 'softPaywall.benefit2', descKey: 'softPaywall.timelineSubtitle' },
-  { icon: 'flash', color: '#F59E0B', titleKey: 'softPaywall.benefit3', descKey: 'softPaywall.benefit3' },
-  { icon: 'cloud-done', color: '#8B5CF6', titleKey: 'softPaywall.benefit5', descKey: 'softPaywall.benefit5' },
-  { icon: 'trophy', color: '#EC4899', titleKey: 'softPaywall.benefit4', descKey: 'softPaywall.benefit4' },
+  { icon: 'flash', color: '#F59E0B', titleKey: 'softPaywall.benefit3', descKey: 'softPaywall.benefit3Sub' },
+  { icon: 'cloud-done', color: '#8B5CF6', titleKey: 'softPaywall.benefit5', descKey: 'softPaywall.benefit5Sub' },
+  { icon: 'trophy', color: '#EC4899', titleKey: 'softPaywall.benefit4', descKey: 'softPaywall.benefit4Sub' },
 ] as const;
 
 const TERMS_URL = 'https://budgy.ch/terms';
@@ -107,7 +107,8 @@ export default function PaywallScreen() {
   const params = useLocalSearchParams<{ trigger?: string }>();
   const { t } = useTranslation();
 
-  const [selected, setSelected] = useState<Plan>('annual');
+  // Mensuel en premier et sélectionné par défaut (l'annuel reste à un tap).
+  const [selected, setSelected] = useState<Plan>('monthly');
   const [processing, setProcessing] = useState(false);
 
   const markDismissed = usePremiumStore((s) => s.markPaywallDismissed);
@@ -316,6 +317,19 @@ export default function PaywallScreen() {
     return `${cur} ${per.toFixed(2)}`.trim();
   })();
 
+  // Économie annuelle réelle : calculée uniquement à partir des prix StoreKit
+  // (12 × mensuel − annuel), même devise exigée. Jamais de pourcentage inventé.
+  const annualSavingsPct = (() => {
+    const m = Number(iap.monthly?.price);
+    const a = Number(iap.annual?.price);
+    if (!m || !a || Number.isNaN(m) || Number.isNaN(a)) return null;
+    if ((iap.monthly?.currency || '') !== (iap.annual?.currency || '')) return null;
+    const yearlyAtMonthly = m * 12;
+    if (yearlyAtMonthly <= a) return null;
+    const pct = Math.round(((yearlyAtMonthly - a) / yearlyAtMonthly) * 100);
+    return pct >= 1 ? pct : null;
+  })();
+
   const ctaLabel = (() => {
     if (iap.phase === 'restoring') return t('iap.btnRestoreInProgress');
     if (iap.phase === 'validating') return t('iap.btnValidating');
@@ -463,14 +477,37 @@ export default function PaywallScreen() {
           {/* ── Plans (only when StoreKit responded successfully) ─────── */}
           {productsAvailable && (
             <View style={styles.plans}>
-              {/* Annual */}
+              {/* Monthly — first and selected by default */}
+              {iap.monthly && (
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  onPress={() => setSelected('monthly')}
+                  style={[styles.plan, selected === 'monthly' && styles.planActive]}
+                >
+                  <View style={styles.planRow}>
+                    <View style={styles.planRadio}>
+                      {selected === 'monthly' && <View style={styles.planRadioDot} />}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.planTitle}>{t('paywall.monthly')}</Text>
+                      <Text style={styles.planSub}>{t('paywallTriggers.monthlyFlex')}</Text>
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={styles.planPrice}>{monthlyPriceLabel}</Text>
+                      <Text style={styles.planPriceUnit}>{t('paywallTriggers.periodMonth')}</Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              )}
+
+              {/* Annual — real StoreKit savings badge when computable */}
               {iap.annual && (
                 <TouchableOpacity
                   activeOpacity={0.9}
                   onPress={() => setSelected('annual')}
                   style={[styles.plan, selected === 'annual' && styles.planActive]}
                 >
-                  {selected === 'annual' && (
+                  {(annualSavingsPct != null || selected === 'annual') && (
                     <LinearGradient
                       colors={['#34D399', '#22D3EE']}
                       start={{ x: 0, y: 0 }}
@@ -478,7 +515,9 @@ export default function PaywallScreen() {
                       style={styles.recommendBadge}
                     >
                       <Text style={styles.recommendText}>
-                        ⭐ {t('paywall.bestOffer')}
+                        {annualSavingsPct != null
+                          ? `⭐ ${t('paywallTriggers.savePct', { pct: annualSavingsPct })}`
+                          : `⭐ ${t('paywall.bestOffer')}`}
                       </Text>
                     </LinearGradient>
                   )}
@@ -506,29 +545,6 @@ export default function PaywallScreen() {
                   </View>
                 </TouchableOpacity>
               )}
-
-              {/* Monthly */}
-              {iap.monthly && (
-                <TouchableOpacity
-                  activeOpacity={0.9}
-                  onPress={() => setSelected('monthly')}
-                  style={[styles.plan, selected === 'monthly' && styles.planActive]}
-                >
-                  <View style={styles.planRow}>
-                    <View style={styles.planRadio}>
-                      {selected === 'monthly' && <View style={styles.planRadioDot} />}
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.planTitle}>{t('paywall.monthly')}</Text>
-                      <Text style={styles.planSub}>{t('paywallTriggers.monthlyFlex')}</Text>
-                    </View>
-                    <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={styles.planPrice}>{monthlyPriceLabel}</Text>
-                      <Text style={styles.planPriceUnit}>{t('paywallTriggers.periodMonth')}</Text>
-                    </View>
-                  </View>
-                </TouchableOpacity>
-              )}
             </View>
           )}
 
@@ -548,17 +564,23 @@ export default function PaywallScreen() {
             </View>
           </View>
 
-          {/* Trial fine-print (only if StoreKit exposes an Intro Offer) */}
-          {productsAvailable && showTrial && trialDays && annualPriceLabel && (
-            <Text style={styles.trialLine}>
-              {t('paywallTriggers.introHasTrial', {
-                days: trialDays,
-                price:
-                  selected === 'annual'
-                    ? `${annualPriceLabel} ${t('paywallTriggers.annualLabel')}`
-                    : `${monthlyPriceLabel} ${t('paywallTriggers.monthlyLabel')}`,
-              })}
-            </Text>
+          {/* Trial fine-print (only if StoreKit confirms offer AND eligibility) */}
+          {productsAvailable && showTrial && trialDays &&
+            (selected === 'annual' ? annualPriceLabel : monthlyPriceLabel) && (
+            <>
+              <Text style={styles.trialLine}>
+                {t('paywallTriggers.introHasTrial', {
+                  days: trialDays,
+                  price:
+                    selected === 'annual'
+                      ? `${annualPriceLabel} ${t('paywallTriggers.annualLabel')}`
+                      : `${monthlyPriceLabel} ${t('paywallTriggers.monthlyLabel')}`,
+                })}
+              </Text>
+              <Text style={styles.trialCancelNote}>
+                {t('paywallTriggers.trialCancelNote')}
+              </Text>
+            </>
           )}
 
           {/* Legal + Terms/Privacy links */}
@@ -869,6 +891,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 4,
     marginBottom: 8,
+  },
+  trialCancelNote: {
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: 11,
+    textAlign: 'center',
+    marginBottom: 8,
+    paddingHorizontal: 12,
   },
   fineprint: {
     color: 'rgba(255,255,255,0.55)',

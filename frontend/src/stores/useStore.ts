@@ -513,6 +513,27 @@ export const useStore = create<AppState>()(
         isAuthenticated: false,
         isPro: false, // v3.9.0 Build 74: never leak Pro across accounts
         preferences: { ...get().preferences, onboarded: false },
+        // v4.0.0 fail-safe : logout seul ne doit JAMAIS laisser les données
+        // financières du compte précédent visibles (même purge que clearAllData,
+        // préférences d'appareil conservées).
+        transactions: [],
+        proExpenses: [],
+        incomes: [],
+        savingsGoals: [],
+        budgets: [],
+        recurringExpenses: [],
+        contracts: [],
+        debts: [],
+        investments: [],
+        notifications: [],
+        chatHistory: [],
+        receipts: [],
+        invoices: [],
+        syncQueue: [],
+        documents: [],
+        groups: [],
+        groupExpenses: [],
+        groupSettlements: [],
       }),
     }),
     {

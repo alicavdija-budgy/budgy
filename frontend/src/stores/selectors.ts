@@ -57,13 +57,16 @@ function toMonthlyAmount(amount: number, frequency: string | undefined): number 
 /**
  * Parse une date en objet Date robuste (accepte ISO et fr-CH "DD.MM.YYYY").
  */
-function parseDate(s?: string | number | null): Date | null {
+export function parseDate(s?: string | number | null): Date | null {
   if (s == null) return null;
   if (typeof s === 'number') return new Date(s);
   if (typeof s !== 'string') return null;
   if (!s.trim()) return null;
   const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (iso) return new Date(s);
+  // Date-only strings are parsed as LOCAL midnight (never UTC) so a
+  // transaction dated the 1st is never attributed to the previous month
+  // in negative-offset timezones.
+  if (iso) return new Date(parseInt(iso[1]), parseInt(iso[2]) - 1, parseInt(iso[3]));
   const eu = s.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})/);
   if (eu) return new Date(parseInt(eu[3]), parseInt(eu[2]) - 1, parseInt(eu[1]));
   const d = new Date(s);
@@ -125,11 +128,19 @@ export function getMonthlyFinancialSnapshot(input: {
     .reduce((s, inv) => s + (Number(inv.amount) || 0), 0);
 
   // 4b) Mensualités de dettes en cours (capital restant > 0) — intégrées à la
-  // trésorerie engagée. Pas de double comptage : la dette vit dans son module,
-  // seule sa mensualité pèse ici (ni facture ni charge récurrente dupliquée).
-  const debtPayments = (input.debts || [])
+  // trésorerie engagée. Anti double comptage : si l'utilisateur a DÉJÀ saisi
+  // manuellement un remboursement ce mois (catégorie dettes), ce montant est
+  // déduit de l'engagement restant (jamais en dessous de 0).
+  const debtCommitted = (input.debts || [])
     .filter((d) => (Number(d.total) || 0) - (Number(d.paid) || 0) > 0)
     .reduce((s, d) => s + (Number(d.monthlyPayment) || 0), 0);
+  const debtCatPaid = thisMonthTx
+    .filter((t) => {
+      const c = (t.category || '').toLowerCase();
+      return c === 'dettes' || c === 'debt' || c === 'debts';
+    })
+    .reduce((s, t) => s + Math.max(0, Number(t.amount) || 0), 0);
+  const debtPayments = Math.max(0, debtCommitted - debtCatPaid);
 
   const totalCommitted = paidExpenses + recurringExpenses + upcomingBills + debtPayments;
   const realAvailableThisMonth = Math.max(0, monthlyIncome - totalCommitted);

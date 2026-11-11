@@ -22,6 +22,7 @@ import { Spacing, FontSizes, FontWeights, BorderRadius } from '../../src/constan
 import { useTheme } from '../../src/hooks/useTheme';
 import type { ThemePalette } from '../../src/constants/palettes';
 import { Card } from '../../src/components/ui';
+import { parseDate } from '../../src/stores/selectors';
 import { useTranslation } from '../../src/hooks/useTranslation';
 import { useStore } from '../../src/stores/useStore';
 import { EXPENSE_CATEGORIES } from '../../src/data/swiss-data';
@@ -77,8 +78,8 @@ export default function BudgetsScreen() {
   // ── Moteur : dépenses du MOIS sélectionné uniquement (convention Accueil :
   // somme des montants ; un remboursement négatif réduit le dépensé). ──
   const monthTx = useMemo(() => transactions.filter((tx) => {
-    const d = new Date(tx.date);
-    return !Number.isNaN(d.getTime()) && d.getFullYear() === py && d.getMonth() === pm;
+    const d = parseDate(tx.date);
+    return !!d && d.getFullYear() === py && d.getMonth() === pm;
   }), [transactions, py, pm]);
 
   const data = useMemo(() => budgets.map((b) => {

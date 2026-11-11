@@ -74,6 +74,17 @@ export default function DebtsScreen() {
   const totalDebt = useMemo(() => debts.reduce((s, d) => s + Math.max(0, d.total - d.paid), 0), [debts]);
   const totalMonthly = useMemo(() => debts.reduce((s, d) => s + (d.monthlyPayment || 0), 0), [debts]);
   const avgRate = useMemo(() => {
+    // Moyenne PONDÉRÉE par le capital restant — un petit prêt à taux élevé ne
+    // fausse plus le taux global.
+    let weighted = 0; let weightSum = 0;
+    for (const d of debts) {
+      const remaining = Math.max(0, (d.total || 0) - (d.paid || 0));
+      if (remaining > 0 && (d.interestRate || 0) > 0) {
+        weighted += (d.interestRate || 0) * remaining;
+        weightSum += remaining;
+      }
+    }
+    if (weightSum > 0) return weighted / weightSum;
     if (debts.length === 0) return 0;
     return debts.reduce((s, d) => s + (d.interestRate || 0), 0) / debts.length;
   }, [debts]);

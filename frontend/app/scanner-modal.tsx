@@ -272,7 +272,7 @@ export default function ScannerModal() {
                   text: t('scanner.openBinder'),
                   onPress: () => {
                     try { router.back(); } catch {}
-                    router.push('/more/contracts' as any);
+                    router.push('/more/documents' as any);
                   },
                 },
               ],

@@ -263,7 +263,7 @@ export default function ImportInvoiceScreen() {
       t('emailImport.contractSavedBody'),
       [
         { text: t('emailImport.okBtn'), style: 'cancel' },
-        { text: t('emailImport.openBinderCta'), onPress: () => router.push('/more/contracts' as any) },
+        { text: t('emailImport.openBinderCta'), onPress: () => router.push('/more/documents' as any) },
       ],
     );
     setResult(null);

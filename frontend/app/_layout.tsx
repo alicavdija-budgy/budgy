@@ -20,6 +20,9 @@ import { pullAllFromCloud, pushAllToCloud, isSignedInToSupabase } from '../src/s
 import { startAutoSync } from '../src/lib/autoSync';
 import { retryPendingValidationOnce, syncSubscriptionFromBackendOnce } from '../src/hooks/useIAP';
 import { useStore } from '../src/stores/useStore';
+import { usePremiumStore } from '../src/stores/usePremiumStore';
+import { clearWidgetData } from '../src/services/widgetBridge';
+import { supabase, isSupabaseConfigured } from '../src/lib/supabase';
 import LockScreen from './lock';
 import ShareIntentRouter from '../src/components/ShareIntentRouter';
 import WidgetSync from '../src/components/WidgetSync';
@@ -100,8 +103,29 @@ export default function RootLayout() {
         console.warn('[bootstrap-sync] failed:', e);
       }
     })();
+    // v4.0.0 — Purge fail-safe sur déconnexion Supabase EXTERNE (session
+    // expirée/révoquée serveur, signOut depuis un autre écran) : les données
+    // financières du compte ne doivent jamais rester visibles. Le bouton
+    // Déconnexion de Réglages fait déjà cette purge ; ce listener couvre tous
+    // les autres chemins. Ignore l'état initial (INITIAL_SESSION).
+    let unsubAuth: (() => void) | null = null;
+    if (isSupabaseConfigured()) {
+      try {
+        const { data } = supabase.auth.onAuthStateChange((event) => {
+          if (event !== 'SIGNED_OUT') return;
+          const s = useStore.getState();
+          if (!s.user && !s.isAuthenticated) return; // déjà purgé (logout UI)
+          try { s.logout(); } catch {}
+          try { usePremiumStore.getState().resetForUserChange(); } catch {}
+          clearWidgetData().catch(() => {});
+        });
+        unsubAuth = () => data?.subscription?.unsubscribe?.();
+      } catch {}
+    }
+
     return () => {
       try { unsubAlertsScope(); } catch {}
+      try { unsubAuth?.(); } catch {}
     };
   }, []);
 

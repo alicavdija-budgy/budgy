@@ -276,3 +276,24 @@ test
 - TESTS REELS : creation branche au 1er push (simulation git bare) ; import 2027 PUBLISHED ; re-verification UP_TO_DATE sans telechargement ; millesime 2028 simule OK (zero code par annee) ; CSV invalide refuse ; interruption mi-pipeline -> repertoire publie intact ; test-lamal 77/77 ; tsc/eslint verts.
 - RESTE A FAIRE PAR UTILISATEUR (GitHub) : 1) Save to GitHub ; 2) ouvrir la PR minimale vers main contenant UNIQUEMENT .github/workflows/lamal-data-update.yml (GitHub web : main -> Add file -> coller le fichier -> Propose new file -> PR), NE PAS fusionner sans autorisation ; 3) apres fusion, lancer le workflow manuellement une fois (cree lamal-data) ; cron hebdo + quotidien sept-nov actifs ensuite. NB : workflow_dispatch ET schedule exigent le fichier sur la branche par defaut. 4) Depot prive = raw.githubusercontent inaccessible : prevoir hebergement public (constante DATA_BASE_URL unique).
 - Automatisation NON encore active en conditions reelles (aucun workflow GitHub execute) ; l app le signale honnetement et utilise le secours embarque 2027.
+
+## Session Budgy Smart 4.0 majeure (base a8550802) -> commit e3a3ab17, version 4.0.0 build 87
+- P0 Siri : WidgetSync consommait la file avec un minuteur aveugle 600ms au lancement a froid (push avale par expo-router avant montage + hydratation tardive du scope) -> navigation conditionnee a useRootNavigationState + 15 reessais x800ms + anti double-push par pid + consommation au changement de compte.
+- P0 montants suisses : EntityEditModal normalise 1 apostrophe 200.50 / espaces insecables avant parseFloat (les montants ne retrecissent plus).
+- P0 charges : total mensuel reellement mensualise par frequence, periodicite editable (hebdo->annuelle, semiannual ajoute au selecteur), modifier une date ne touche jamais un montant.
+- P0 budgets : moteur corrige (filtre mois+annee reels, remboursements negatifs deduits, reconciliation avec Accueil).
+- P0 QR : feedback visible si QR non reconnu + scan depuis image galerie (scanFromURLAsync) ; montant absent = saisie manuelle.
+- Dettes : mensualites (capital restant>0) integrees au cashflow engage (snapshot debtPayments, passe par Accueil/Plus/widgets), dettes soldees exclues.
+- P1 Plus Luminous Rows : 6 lignes horizontales (52pt art + description x4 langues + chevron/BETA/cadenas, verre bleu nuit + reflets emeraude) + carte Pro hero (reflet diagonal, statut reel).
+- P1 Budgets : navigation mensuelle, recap (consomme 
+## Session Budgy Smart 4.0 majeure (base a8550802) -> commit e3a3ab17, version 4.0.0 build 87
+- P0 Siri : WidgetSync consommait la file avec un minuteur aveugle 600ms au lancement a froid (push avale par expo-router avant montage + hydratation tardive du scope) -> navigation conditionnee a useRootNavigationState + 15 reessais x800ms + anti double-push par pid + consommation au changement de compte.
+- P0 montants suisses : EntityEditModal normalise 1'200.50 / 1 200,50 avant parseFloat (les montants ne retrecissent plus).
+- P0 charges : total mensuel reellement mensualise par frequence, periodicite editable (hebdo->annuelle, semiannual ajoute au selecteur), modifier une date ne touche jamais un montant.
+- P0 budgets : moteur corrige (filtre mois+annee reels, remboursements negatifs deduits, reconciliation avec Accueil).
+- P0 QR : feedback visible si QR non reconnu + scan depuis image galerie (scanFromURLAsync) ; montant absent = saisie manuelle.
+- Dettes : mensualites (capital restant>0) integrees au cashflow engage (snapshot debtPayments, passe par Accueil/Plus/widgets), dettes soldees exclues.
+- P1 Plus Luminous Rows : 6 lignes horizontales (52pt art + description x4 langues + chevron/BETA/cadenas, verre bleu nuit + reflets emeraude) + carte Pro hero (reflet diagonal, statut StoreKit reel).
+- P1 Budgets : navigation mensuelle, recap (consomme %, dispo != solde bancaire, depassement total), grille 2 colonnes anneaux (plafond 100%, depassement explicite), detail categorie (tx du mois, modifier limite, ajout rapide), Budgy Pulse verifiable.
+- P2 : barre onglets iOS verre systeme (expo-blur systemChromeMaterial, sans regression layout ; vrais native tabs Liquid Glass iOS26 = Xcode 26, volontairement non migre) ; categories menage suisse additives ; version 4.0.0 (87).
+- Tests : tsc/eslint/i18n/audit verts ; test-budgets 37/37 (nouveau) ; bento 41/41, widgets 44/44, alerts 56/56 (maj build 87), qrbill/premium/pro-gating/twin/lamal verts ; e2e navigateur Plus + Budgets valides. RESTE : tests iPhone physique (Siri voix, camera QR) sur build TestFlight 87 ; aucun build lance, main intacte.

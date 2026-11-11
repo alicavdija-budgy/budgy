@@ -2,7 +2,7 @@
   "expo": {
     "name": "Budgy",
     "slug": "budgy",
-    "version": "3.9.1",
+    "version": "4.0.0",
     "description": "Budgy — Votre coach financier suisse premium. Budgets, LAMal, impôts, IA et épargne pour les 26 cantons. 🇨🇭",
     "primaryColor": "#34D399",
     "orientation": "portrait",
@@ -21,7 +21,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.budgy.ch.budgy",
-      "buildNumber": "85",
+      "buildNumber": "87",
       "associatedDomains": [
         "applinks:budgy.ch",
         "applinks:www.budgy.ch"

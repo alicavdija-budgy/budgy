@@ -12,6 +12,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { Tabs } from 'expo-router';
 import { View, StyleSheet, Platform } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -42,9 +43,31 @@ export default function TabLayout() {
       <Tabs
         screenOptions={{
           headerShown: false,
+          // iOS : véritable verre système (UIVisualEffectView via expo-blur) —
+          // le contenu diffuse derrière la barre, adaptation auto clair/sombre.
+          // (Le rendu Liquid Glass natif complet d'iOS 26+ exige les onglets
+          // natifs compilés avec Xcode 26 ; ce matériau système est l'option
+          // vérifiée et stable pour cette build.) Android : barre opaque thémée.
+          ...(Platform.OS === 'ios'
+            ? {
+                tabBarBackground: () => (
+                  <BlurView
+                    tint={String(theme.background).toLowerCase().startsWith('#0')
+                      ? 'systemChromeMaterialDark'
+                      : 'systemChromeMaterialLight'}
+                    intensity={85}
+                    style={[StyleSheet.absoluteFill, {
+                      borderTopLeftRadius: BorderRadius.xl,
+                      borderTopRightRadius: BorderRadius.xl,
+                      overflow: 'hidden',
+                    }]}
+                  />
+                ),
+              }
+            : {}),
           tabBarStyle: {
-            backgroundColor: theme.tabBarBackground,
-            borderTopColor: theme.tabBarBorder,
+            backgroundColor: Platform.OS === 'ios' ? 'transparent' : theme.tabBarBackground,
+            borderTopColor: Platform.OS === 'ios' ? 'rgba(52,211,153,0.22)' : theme.tabBarBorder,
             borderTopWidth: StyleSheet.hairlineWidth,
             // v3.8.0 — Modern iOS-style rounded top corners for premium feel.
             // On Android, radius still applies but shadow is replaced by elevation.

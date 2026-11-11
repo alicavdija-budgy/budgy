@@ -81,7 +81,9 @@ export function EntityEditModal({
     const out: Record<string, any> = { ...values };
     for (const f of fields) {
       if (f.type === 'number' && typeof out[f.key] === 'string') {
-        const n = parseFloat(String(out[f.key]).replace(',', '.'));
+        // Formats suisses acceptés : « 1'200.50 », « 1 200,50 », « 12,50 » —
+        // les séparateurs de milliers ne doivent JAMAIS tronquer le montant.
+        const n = parseFloat(String(out[f.key]).replace(/['’\u00A0 ]/g, '').replace(',', '.'));
         out[f.key] = isNaN(n) ? 0 : n;
       }
     }

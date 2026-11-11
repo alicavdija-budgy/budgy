@@ -10,7 +10,7 @@
  */
 import { useEffect, useRef } from 'react';
 import { AppState, Platform } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useRootNavigationState } from 'expo-router';
 import { useStore } from '../stores/useStore';
 import { useAlertsStore } from '../stores/useAlertsStore';
 import {
@@ -25,10 +25,13 @@ const ROUTES: Record<string, string> = {
 
 export default function WidgetSync() {
   const router = useRouter();
+  const rootState = useRootNavigationState();
+  const navReady = !!rootState?.key; // expo-router avale les push avant montage
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pushedPid = useRef<string | null>(null);
 
   useEffect(() => {
-    if (Platform.OS !== 'ios' || !widgetBridgeAvailable()) return;
+    if (Platform.OS !== 'ios' || !widgetBridgeAvailable() || !navReady) return;
 
     const schedule = () => {
       if (debounce.current) clearTimeout(debounce.current);
@@ -40,17 +43,33 @@ export default function WidgetSync() {
       const pending = peekPendingExpenses();
       if (pending.length > 0) {
         const e = pending[0];
+        // Une seule présentation par dépense dictée : jamais de double push
+        // pendant que l'utilisateur confirme dans /quick-add.
+        if (pushedPid.current === e.id) return true;
+        pushedPid.current = e.id;
         router.push(
           `/quick-add?text=${encodeURIComponent(`${e.amount} CHF ${e.label}`)}&source=siri&pid=${encodeURIComponent(e.id)}` as any,
         );
-      } else if (route && ROUTES[route]) {
-        router.push(ROUTES[route] as any);
+        return true;
       }
+      if (route && ROUTES[route]) {
+        router.push(ROUTES[route] as any);
+        return true;
+      }
+      return false;
     };
 
-    // Démarrage : republier + consommer ce que Siri a laissé.
+    // Démarrage (navigateur prêt) : republier, puis consommer avec réessais —
+    // sur un lancement à froid par Siri, la file et le compte actif ne sont
+    // visibles qu'après l'hydratation des stores persistés. On réessaie donc
+    // brièvement au lieu d'un unique minuteur aveugle.
     refreshWidgetSnapshot();
-    setTimeout(consumeNative, 600);
+    let tries = 0;
+    const boot = setInterval(() => {
+      tries += 1;
+      const consumed = consumeNative();
+      if (consumed || tries >= 15) clearInterval(boot);
+    }, 800);
 
     const appSub = AppState.addEventListener('change', (st) => {
       if (st === 'active') {
@@ -84,12 +103,14 @@ export default function WidgetSync() {
       }
     });
     // Changement de compte (scope) → republier immédiatement : les chiffres de
-    // l'ancien compte sont écrasés ou purgés (fail-safe dans le bridge).
+    // l'ancien compte sont écrasés ou purgés (fail-safe dans le bridge), et la
+    // file Siri du nouveau compte est consommée (hydratation tardive couverte).
     let lastScope = useAlertsStore.getState().activeScope;
     const unsubScope = useAlertsStore.subscribe((s) => {
       if (s.activeScope !== lastScope) {
         lastScope = s.activeScope;
         refreshWidgetSnapshot();
+        consumeNative();
       }
     });
 
@@ -97,9 +118,10 @@ export default function WidgetSync() {
       appSub.remove();
       unsubStore();
       unsubScope();
+      clearInterval(boot);
       if (debounce.current) clearTimeout(debounce.current);
     };
-  }, [router]);
+  }, [router, navReady]);
 
   return null;
 }

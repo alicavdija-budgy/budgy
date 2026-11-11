@@ -37,7 +37,7 @@ export default function BentoPlus() {
   const { t } = useTranslation();
   const router = useRouter();
   const m = useMoney();
-  const { incomes, transactions, recurringExpenses, invoices, savingsGoals, budgets } = useStore();
+  const { incomes, transactions, recurringExpenses, invoices, savingsGoals, budgets, debts } = useStore();
   // Source canonique des droits Pro : couvre l'abonnement confirmé serveur,
   // l'essai ET l'accès provisoire légitime après une transaction StoreKit
   // en attente de validation. Aucune duplication de logique locale.
@@ -65,8 +65,8 @@ export default function BentoPlus() {
   const mask = (v: string) => maskAmount(v, hide);
 
   const snapshot = useMemo(
-    () => getMonthlyFinancialSnapshot({ incomes, transactions, recurringExpenses, invoices }),
-    [incomes, transactions, recurringExpenses, invoices],
+    () => getMonthlyFinancialSnapshot({ incomes, transactions, recurringExpenses, invoices, debts }),
+    [incomes, transactions, recurringExpenses, invoices, debts],
   );
 
   // Épargne (réelle)

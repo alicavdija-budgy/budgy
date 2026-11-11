@@ -14,7 +14,7 @@
  *     - upcomingBills (factures du mois encore à payer)
  */
 
-import type { Transaction, Income, RecurringExpense, Invoice, Contract, Budget, SavingsGoal } from '../types';
+import type { Transaction, Income, RecurringExpense, Invoice, Contract, Budget, SavingsGoal, Debt } from '../types';
 
 export interface FinancialSnapshot {
   monthlyIncome: number;
@@ -44,6 +44,8 @@ function toMonthlyAmount(amount: number, frequency: string | undefined): number 
     case 'biweekly':  return amount * 2.166;
     case 'monthly':   return amount;
     case 'quarterly': return amount / 3;
+    case 'semiannual':
+    case 'biannual':  return amount / 6;
     case 'yearly':    return amount / 12;
     case 'one_time':
     case 'one-time':
@@ -77,6 +79,7 @@ export function getMonthlyFinancialSnapshot(input: {
   transactions: Transaction[];
   recurringExpenses: RecurringExpense[];
   invoices?: Invoice[];
+  debts?: Debt[];
   contracts?: Contract[];
   budgets?: Budget[];
   savingsGoals?: SavingsGoal[];
@@ -121,7 +124,14 @@ export function getMonthlyFinancialSnapshot(input: {
     })
     .reduce((s, inv) => s + (Number(inv.amount) || 0), 0);
 
-  const totalCommitted = paidExpenses + recurringExpenses + upcomingBills;
+  // 4b) Mensualités de dettes en cours (capital restant > 0) — intégrées à la
+  // trésorerie engagée. Pas de double comptage : la dette vit dans son module,
+  // seule sa mensualité pèse ici (ni facture ni charge récurrente dupliquée).
+  const debtPayments = (input.debts || [])
+    .filter((d) => (Number(d.total) || 0) - (Number(d.paid) || 0) > 0)
+    .reduce((s, d) => s + (Number(d.monthlyPayment) || 0), 0);
+
+  const totalCommitted = paidExpenses + recurringExpenses + upcomingBills + debtPayments;
   const realAvailableThisMonth = Math.max(0, monthlyIncome - totalCommitted);
 
   const monthLabel = now.toLocaleDateString(input.locale || 'fr-CH', { month: 'long', year: 'numeric' });

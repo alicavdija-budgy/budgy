@@ -92,6 +92,7 @@ export async function refreshWidgetSnapshot(): Promise<void> {
       transactions: s.transactions,
       recurringExpenses: s.recurringExpenses,
       invoices: s.invoices,
+      debts: s.debts,
     });
     const goal = (s.savingsGoals || []).find((g: any) => (g.target || 0) > 0);
     const payload = {

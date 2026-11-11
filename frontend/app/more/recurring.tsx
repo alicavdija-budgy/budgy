@@ -70,6 +70,13 @@ export default function RecurringScreen() {
     { key: 'amount', label: t('recurringScreen.amountCHF', { currency: 'CHF' }), type: 'number', icon: 'cash-outline', placeholder: '17.90', required: true },
     { key: 'category', label: t('recurringUi.category'), type: 'select', options: EXPENSE_CATEGORIES.slice(0, 12).map((c) => ({ value: c.id, label: c.name, color: c.color })) },
     { key: 'dayOfMonth', label: t('recurringUi.dayOfMonth'), type: 'number', icon: 'calendar-outline', placeholder: '8' },
+    { key: 'frequency', label: t('recurringUi.frequency'), type: 'select', options: [
+      { value: 'weekly', label: t('recurringUi.freqWeekly') },
+      { value: 'monthly', label: t('recurringUi.freqMonthly') },
+      { value: 'quarterly', label: t('recurringUi.freqQuarterly') },
+      { value: 'semiannual', label: t('recurringUi.freqSemiannual') },
+      { value: 'yearly', label: t('recurringUi.freqYearly') },
+    ] },
     { key: 'active', label: t('recurringScreen.active'), type: 'switch' },
   ], [t]);
   const handleEditRecSubmit = (values: Record<string, any>) => {
@@ -81,6 +88,7 @@ export default function RecurringScreen() {
       amount: amt,
       category: values.category || editingRec.category,
       dayOfMonth: day,
+      frequency: (values.frequency || (editingRec as any).frequency || 'monthly') as any,
       color: getCategoryColor(values.category || editingRec.category),
       active: typeof values.active === 'boolean' ? values.active : editingRec.active,
     });
@@ -99,8 +107,13 @@ export default function RecurringScreen() {
     }, 0);
   }, [incomes]);
 
+  // Équivalent mensuel RÉEL : chaque périodicité est mensualisée. Modifier une
+  // échéance ne change JAMAIS un montant — seules fréquence/montant comptent.
   const totalMonthly = useMemo(() => {
-    return recurringExpenses.filter(r => r.active).reduce((sum, r) => sum + r.amount, 0);
+    const perMonth: Record<string, number> = { weekly: 4.333, biweekly: 2.166, monthly: 1, quarterly: 1 / 3, semiannual: 1 / 6, biannual: 1 / 6, yearly: 1 / 12 };
+    return recurringExpenses
+      .filter((r) => r.active)
+      .reduce((sum, r) => sum + (Number(r.amount) || 0) * (perMonth[String((r as any).frequency || 'monthly').toLowerCase()] ?? 1), 0);
   }, [recurringExpenses]);
 
   const totalYearly = totalMonthly * 12;

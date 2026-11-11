@@ -30,7 +30,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { CameraView, useCameraPermissions, type CameraType } from 'expo-camera';
+import { CameraView, useCameraPermissions, scanFromURLAsync, type CameraType } from 'expo-camera';
+import * as ImagePicker from 'expo-image-picker';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../src/constants/theme';
 import { useTheme } from '../src/hooks/useTheme';
 import type { ThemePalette } from '../src/constants/palettes';
@@ -83,14 +84,25 @@ export default function ScannerModal() {
   const [qrCategory, setQrCategory] = useState('autres');
   const [qrDueDate, setQrDueDate] = useState('');
   const [qrNotes, setQrNotes] = useState('');
+  const [qrHint, setQrHint] = useState(false);
   const lastQrScanRef = useRef(0);
+  const lastHintRef = useRef(0);
 
   const handleBarcodeScanned = useCallback(
     ({ data }: { data: string }) => {
       // Un seul traitement toutes les 2 s, uniquement en phase caméra.
       const now = Date.now();
       if (now - lastQrScanRef.current < 2000 || !data) return;
-      if (!isSwissQrBill(data)) return;
+      if (!isSwissQrBill(data)) {
+        // QR lu mais pas une QR-facture (ou lecture partielle) : feedback
+        // visible et nouvel essai immédiat possible — jamais d'échec muet.
+        if (now - lastHintRef.current > 2500) {
+          lastHintRef.current = now;
+          setQrHint(true);
+          setTimeout(() => setQrHint(false), 2200);
+        }
+        return;
+      }
       lastQrScanRef.current = now;
       try {
         const bill = parseSwissQrBill(data);
@@ -115,6 +127,26 @@ export default function ScannerModal() {
     },
     [invoices, t],
   );
+
+  // QR-facture depuis une image de la galerie (photo, capture d'écran, PDF
+  // exporté en image) — même chaîne de validation que la caméra.
+  const handleScanFromImage = useCallback(async () => {
+    try {
+      const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
+      const uri = res.assets?.[0]?.uri;
+      if (res.canceled || !uri) return;
+      const codes = await scanFromURLAsync(uri, ['qr']);
+      const payload = codes.find((c) => isSwissQrBill(c.data))?.data;
+      if (!payload) {
+        Alert.alert(t('qrbill.invalidTitle'), t('qrbill.errors.spc'));
+        return;
+      }
+      lastQrScanRef.current = 0;
+      handleBarcodeScanned({ data: payload });
+    } catch {
+      Alert.alert(t('qrbill.invalidTitle'), t('qrbill.errors.generic'));
+    }
+  }, [handleBarcodeScanned, t]);
 
   const handleQrSave = useCallback(() => {
     if (!qrBill) return;
@@ -576,6 +608,11 @@ export default function ScannerModal() {
             <View style={[styles.corner, styles.cornerBR]} />
           </View>
           <Text style={styles.frameHint}>Placez le ticket dans le cadre</Text>
+          {qrHint && (
+            <Text style={[styles.frameHint, { color: theme.warning, marginTop: 6 }]}>
+              {t('qrbill.errors.spc')}
+            </Text>
+          )}
         </View>
 
         {/* Bottom controls */}
@@ -585,6 +622,14 @@ export default function ScannerModal() {
             onPress={() => setStage('edit')}
           >
             <Ionicons name="create-outline" size={22} color={theme.text} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.cameraIconBtn}
+            onPress={handleScanFromImage}
+            accessibilityLabel={t('qrbill.title')}
+          >
+            <Ionicons name="images-outline" size={22} color={theme.text} />
           </TouchableOpacity>
 
           <TouchableOpacity

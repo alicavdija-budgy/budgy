@@ -134,6 +134,23 @@ export const EXPENSE_CATEGORIES = [
   { id: 'repas_affaires', name: 'Repas affaires', icon: 'wine', color: '#F59E0B' },
   { id: 'hebergement', name: 'Hébergement', icon: 'bed', color: '#10B981' },
   { id: 'telecoms', name: 'Télécoms', icon: 'call', color: '#0EA5E9' },
+  // ── Classification ménage suisse (inspirée Budget-conseil Suisse) — ajouts
+  // additifs : les catégories existantes et les transactions déjà saisies
+  // restent valides, aucune migration nécessaire. ──
+  { id: 'loyer', name: 'Loyer', icon: 'key', color: '#14B8A6' },
+  { id: 'hypotheque', name: 'Hypothèque', icon: 'business', color: '#0D9488' },
+  { id: 'energie', name: 'Électricité & énergie', icon: 'flash', color: '#FACC15' },
+  { id: 'lamal', name: 'Santé / LAMal', icon: 'shield-checkmark', color: '#EF4444' },
+  { id: 'assurances_lca', name: 'Assurances compl. (LCA)', icon: 'shield-half', color: '#F87171' },
+  { id: 'rc_menage', name: 'RC & ménage', icon: 'umbrella', color: '#FB923C' },
+  { id: 'impots', name: 'Impôts', icon: 'receipt', color: '#A78BFA' },
+  { id: 'tp', name: 'Transports publics', icon: 'train', color: '#3B82F6' },
+  { id: 'auto', name: 'Automobile & leasing', icon: 'car-sport', color: '#60A5FA' },
+  { id: 'garde_enfants', name: 'Garde d\'enfants', icon: 'happy', color: '#FB7185' },
+  { id: 'pension', name: 'Pensions alimentaires', icon: 'people', color: '#F472B6' },
+  { id: 'prevoyance', name: 'Prévoyance 3a/3b', icon: 'lock-closed', color: '#34D399' },
+  { id: 'dettes', name: 'Dettes & crédits', icon: 'trending-down', color: '#DC2626' },
+  { id: 'provisions', name: 'Provisions annuelles', icon: 'archive', color: '#94A3B8' },
 ] as const;
 
 // Income categories

@@ -78,6 +78,7 @@ export default function HomeScreen() {
     savingsGoals,
     recurringExpenses,
     invoices,
+    debts,
     notifications,
     loadSeedData,
   } = useStore();
@@ -128,8 +129,9 @@ export default function HomeScreen() {
       transactions,
       recurringExpenses,
       invoices,
+      debts,
     }),
-    [incomes, transactions, recurringExpenses, invoices],
+    [incomes, transactions, recurringExpenses, invoices, debts],
   );
   const monthlyIncome = snapshot.monthlyIncome;
   const monthExpenses = snapshot.paidExpenses;

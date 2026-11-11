@@ -12,6 +12,7 @@
 import React, { useMemo, useState } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity, Modal, TextInput, Alert,
+  KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -25,8 +26,9 @@ import { Card } from '../../src/components/ui';
 import { parseDate } from '../../src/stores/selectors';
 import { useTranslation } from '../../src/hooks/useTranslation';
 import { useStore } from '../../src/stores/useStore';
-import { EXPENSE_CATEGORIES } from '../../src/data/swiss-data';
+import { EXPENSE_CATEGORIES, BUDGET_CATEGORY_GROUPS } from '../../src/data/swiss-data';
 import { getCategoryColor } from '../../src/components/CategoryIcon';
+import { CategoryGroupPicker } from '../../src/components/CategoryGroupPicker';
 import EntityEditModal, { type EditField } from '../../src/components/EntityEditModal';
 import PressScale from '../../src/components/PressScale';
 
@@ -57,7 +59,22 @@ export default function BudgetsScreen() {
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { preferences, budgets, transactions, addBudget, updateBudget, deleteBudget } = useStore();
+  const { preferences, budgets, transactions, addBudget, updateBudget, deleteBudget, customCategories } = useStore();
+
+  // Helpers catégorie (taxonomie officielle + catégories personnelles)
+  const catColorOf = (id: string) =>
+    customCategories.find((c) => c.id === id)?.color || getCategoryColor(id);
+  const catIconOf = (id: string) =>
+    customCategories.find((c) => c.id === id)?.icon
+    || EXPENSE_CATEGORIES.find((c) => c.id === id)?.icon || 'pricetag';
+  const catLabelOf = (id: string) => {
+    const custom = customCategories.find((c) => c.id === id);
+    if (custom) return custom.name;
+    const key = id === 'loyer' ? 'categoryLabels.loyerExpense' : `categoryLabels.${id}`;
+    const tr = t(key);
+    if (tr && tr !== key) return tr;
+    return EXPENSE_CATEGORIES.find((c) => c.id === id)?.name || id;
+  };
   const CUR = preferences.currency;
 
   // ── Mois sélectionné (navigation passé/présent) ──
@@ -71,8 +88,12 @@ export default function BudgetsScreen() {
 
   const [detailCat, setDetailCat] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
-  const [newCat, setNewCat] = useState('courses');
+  const [showCatPicker, setShowCatPicker] = useState(false);
+  const [newCat, setNewCat] = useState<string | null>(null);
   const [newLimit, setNewLimit] = useState('');
+  const [newName, setNewName] = useState('');
+  const [newAlerts, setNewAlerts] = useState(true);
+  const [amountError, setAmountError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
 
   // ── Moteur : dépenses du MOIS sélectionné uniquement (convention Accueil :
@@ -126,11 +147,34 @@ export default function BudgetsScreen() {
   const detailTx = detail ? monthTx.filter((tx) => tx.category === detail.category) : [];
   const catMeta = (id: string) => EXPENSE_CATEGORIES.find((c) => c.id === id);
 
+  // Validation stricte : jamais de conversion silencieuse en CHF 0.
+  const parseAmountStrict = (raw: string): number | null => {
+    const cleaned = raw.trim().replace(/['’\u00A0\u202F ]/g, '').replace(',', '.');
+    if (!cleaned) return null;
+    if (!/^\d+(\.\d{1,2})?$/.test(cleaned)) return null;
+    const v = parseFloat(cleaned);
+    return Number.isFinite(v) && v > 0 ? v : null;
+  };
+
+  const resetAddForm = () => {
+    setNewCat(null); setNewLimit(''); setNewName(''); setNewAlerts(true); setAmountError(null);
+  };
+
   const handleAdd = () => {
-    const limit = parseFloat(newLimit.replace(/['’\u00A0 ]/g, '').replace(',', '.'));
-    if (!limit || limit <= 0) return;
-    addBudget({ id: `b_${Date.now()}`, category: newCat, limit, color: getCategoryColor(newCat) } as any);
-    setShowAdd(false); setNewLimit('');
+    if (!newCat) { setAmountError(t('budgetsForm.errNoCategory')); return; }
+    const limit = parseAmountStrict(newLimit);
+    if (limit == null) { setAmountError(t('budgetsForm.errAmount')); return; }
+    addBudget({
+      id: `b_${Date.now()}`,
+      category: newCat,
+      limit,
+      color: customCategories.find((c) => c.id === newCat)?.color || getCategoryColor(newCat),
+      createdAt: Date.now(),
+      name: newName.trim() || undefined,
+      alertsEnabled: newAlerts,
+    });
+    setShowAdd(false);
+    resetAddForm();
   };
 
   return (
@@ -201,7 +245,8 @@ export default function BudgetsScreen() {
           <View style={styles.grid}>
             {data.map((b, i) => {
               const meta = catMeta(b.category);
-              const color = b.over > 0 ? theme.error : (meta?.color || theme.primary);
+              const warn80 = b.alertsEnabled !== false && b.pctUsed >= 0.8 && b.over <= 0;
+              const color = b.over > 0 ? theme.error : warn80 ? '#F59E0B' : (meta?.color || catColorOf(b.category));
               return (
                 <Animated.View key={b.id} entering={FadeInDown.duration(320).delay(60 + i * 35)} style={styles.cell}>
                   <PressScale
@@ -227,7 +272,7 @@ export default function BudgetsScreen() {
                       </View>
                     </View>
                     <Text style={styles.catName} numberOfLines={1}>
-                      {(t(`categoryLabels.${b.category}`) || meta?.name || b.category).toUpperCase()}
+                      {(b.name || catLabelOf(b.category)).toUpperCase()}
                     </Text>
                     <Text style={styles.catAmts}>
                       {fmt(b.spent)} / {fmt(b.limit)}
@@ -293,42 +338,92 @@ export default function BudgetsScreen() {
         </View>
       </Modal>
 
-      {/* ── Ajouter un budget ── */}
+      {/* ── Ajouter un budget — formulaire premium (clavier géré, validation stricte) ── */}
       <Modal visible={showAdd} transparent animationType="slide" onRequestClose={() => setShowAdd(false)}>
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
             <View style={styles.sheetHeader}>
               <Text style={styles.sheetTitle}>{t('budgetsV2.addTitle')}</Text>
-              <TouchableOpacity onPress={() => setShowAdd(false)} hitSlop={10}>
+              <TouchableOpacity onPress={() => { setShowAdd(false); resetAddForm(); }} hitSlop={10}>
                 <Ionicons name="close" size={22} color={theme.textSecondary} />
               </TouchableOpacity>
             </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
-              {EXPENSE_CATEGORIES.filter((c) => !budgets.some((b) => b.category === c.id)).map((c) => (
-                <TouchableOpacity
-                  key={c.id}
-                  style={[styles.catChip, newCat === c.id && { borderColor: c.color, backgroundColor: `${c.color}18` }]}
-                  onPress={() => setNewCat(c.id)}
-                >
-                  <Ionicons name={c.icon as any} size={14} color={c.color} />
-                  <Text style={styles.catChipTxt}>{t(`categoryLabels.${c.id}`) || c.name}</Text>
-                </TouchableOpacity>
-              ))}
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} style={{ flexGrow: 0 }}>
+              {/* 1. Catégorie */}
+              <Text style={styles.formLabel}>{t('budgetsForm.category')}</Text>
+              <TouchableOpacity style={styles.catSelect} onPress={() => setShowCatPicker(true)}>
+                {newCat ? (
+                  <>
+                    <View style={[styles.catSelectIcon, { backgroundColor: `${catColorOf(newCat)}1C` }]}>
+                      <Ionicons name={catIconOf(newCat) as any} size={17} color={catColorOf(newCat)} />
+                    </View>
+                    <Text style={styles.catSelectTxt}>{catLabelOf(newCat)}</Text>
+                  </>
+                ) : (
+                  <Text style={[styles.catSelectTxt, { color: theme.textTertiary }]}>{t('budgetsForm.chooseCategory')}</Text>
+                )}
+                <Ionicons name="chevron-down" size={16} color={theme.textTertiary} />
+              </TouchableOpacity>
+
+              {/* 2. Montant */}
+              <Text style={styles.formLabel}>{t('budgetsUi.monthLimit')}</Text>
+              <TextInput
+                style={[styles.input, amountError && { borderColor: theme.error }]}
+                placeholder={t('budgetsForm.amountPlaceholder')}
+                placeholderTextColor={theme.textTertiary}
+                keyboardType="decimal-pad"
+                value={newLimit}
+                onChangeText={(v) => { setNewLimit(v); if (amountError) setAmountError(null); }}
+                returnKeyType="done"
+                testID="budget-amount-input"
+              />
+              {amountError && <Text style={styles.errTxt}>{amountError}</Text>}
+
+              {/* 3. Période (mensuelle) */}
+              <Text style={styles.formLabel}>{t('budgetsForm.period')}</Text>
+              <View style={styles.periodPill}>
+                <Ionicons name="calendar-outline" size={14} color={theme.primary} />
+                <Text style={styles.periodPillTxt}>{t('budgetsForm.periodMonthly')}</Text>
+              </View>
+
+              {/* 4. Nom personnalisé (facultatif) */}
+              <Text style={styles.formLabel}>{t('budgetsForm.customName')}</Text>
+              <TextInput
+                style={styles.input}
+                placeholder={t('budgetsForm.customNamePlaceholder')}
+                placeholderTextColor={theme.textTertiary}
+                value={newName}
+                onChangeText={setNewName}
+                returnKeyType="done"
+              />
+
+              {/* 5. Alerte de dépassement */}
+              <TouchableOpacity style={styles.alertRow} onPress={() => setNewAlerts((v) => !v)}>
+                <Ionicons name={newAlerts ? 'checkbox' : 'square-outline'} size={22} color={theme.primary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.alertRowTitle}>{t('budgetsForm.alertTitle')}</Text>
+                  <Text style={styles.alertRowSub}>{t('budgetsForm.alertSub')}</Text>
+                </View>
+              </TouchableOpacity>
             </ScrollView>
-            <TextInput
-              style={styles.input}
-              placeholder={t('budgetsUi.monthLimit')}
-              placeholderTextColor={theme.textTertiary}
-              keyboardType="decimal-pad"
-              value={newLimit}
-              onChangeText={setNewLimit}
-            />
-            <TouchableOpacity style={[styles.sheetBtn, styles.sheetBtnPrimary, { marginTop: 12 }]} onPress={handleAdd}>
-              <Text style={[styles.sheetBtnTxt, { color: '#07111F' }]}>{t('common.add')}</Text>
+            <TouchableOpacity
+              style={[styles.sheetBtn, styles.sheetBtnPrimary, { marginTop: 12, minHeight: 48 }]}
+              onPress={handleAdd}
+              testID="budget-create-btn"
+            >
+              <Text style={[styles.sheetBtnTxt, { color: '#07111F' }]}>{t('budgetsForm.createCta')}</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
+
+      <CategoryGroupPicker
+        visible={showCatPicker}
+        onClose={() => setShowCatPicker(false)}
+        onSelect={(id) => { setNewCat(id); setShowCatPicker(false); }}
+        groups={BUDGET_CATEGORY_GROUPS}
+        excludeIds={budgets.map((b) => b.category)}
+      />
 
       <EntityEditModal
         visible={!!editing}
@@ -401,6 +496,28 @@ const makeStyles = (C: ThemePalette) => StyleSheet.create({
     borderWidth: 1, borderColor: C.cardBorder, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8,
   },
   catChipTxt: { color: C.text, fontSize: FontSizes.xs, fontWeight: FontWeights.semibold },
+  // v4.0 — formulaire premium de création
+  formLabel: {
+    color: C.textTertiary, fontSize: 11, fontWeight: FontWeights.black,
+    letterSpacing: 1, textTransform: 'uppercase', marginTop: Spacing.md, marginBottom: 6,
+  },
+  catSelect: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
+    backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder,
+    borderRadius: BorderRadius.md, paddingHorizontal: Spacing.md, paddingVertical: 11, minHeight: 48,
+  },
+  catSelectIcon: { width: 30, height: 30, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  catSelectTxt: { flex: 1, color: C.text, fontSize: FontSizes.md, fontWeight: FontWeights.semibold },
+  errTxt: { color: C.error, fontSize: FontSizes.xs, marginTop: 6 },
+  periodPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start',
+    backgroundColor: `${C.primary}14`, borderWidth: 1, borderColor: `${C.primary}40`,
+    borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7,
+  },
+  periodPillTxt: { color: C.primary, fontSize: FontSizes.xs, fontWeight: FontWeights.bold },
+  alertRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginTop: Spacing.lg, minHeight: 44 },
+  alertRowTitle: { color: C.text, fontSize: FontSizes.sm, fontWeight: FontWeights.semibold },
+  alertRowSub: { color: C.textTertiary, fontSize: FontSizes.xs, marginTop: 1 },
   input: {
     backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder, borderRadius: BorderRadius.md,
     paddingHorizontal: Spacing.md, paddingVertical: 12, color: C.text, fontSize: FontSizes.md,

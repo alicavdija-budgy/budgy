@@ -151,7 +151,51 @@ export const EXPENSE_CATEGORIES = [
   { id: 'prevoyance', name: 'Prévoyance 3a/3b', icon: 'lock-closed', color: '#34D399' },
   { id: 'dettes', name: 'Dettes & crédits', icon: 'trending-down', color: '#DC2626' },
   { id: 'provisions', name: 'Provisions annuelles', icon: 'archive', color: '#94A3B8' },
+  // v4.0 — compléments ménages suisses (Budget-conseil Suisse)
+  { id: 'lca', name: 'Assurance complémentaire LCA', icon: 'add-circle', color: '#F472B6' },
+  { id: 'assurances', name: 'Assurances RC / ménage', icon: 'umbrella', color: '#38BDF8' },
+  { id: 'famille', name: 'Famille & enfants', icon: 'people', color: '#FB923C' },
+  { id: 'animaux', name: 'Animaux', icon: 'paw', color: '#A78BFA' },
+  { id: 'vacances', name: 'Vacances & voyages', icon: 'airplane', color: '#2DD4BF' },
+  { id: 'cadeaux', name: 'Cadeaux & dons', icon: 'gift', color: '#F87171' },
 ] as const;
+
+/**
+ * v4.0 — Groupes de catégories pour la CRÉATION DE BUDGETS (plafonds de
+ * dépenses des ménages suisses). Les ids référencent EXPENSE_CATEGORIES :
+ * une seule taxonomie, aucune classification parallèle.
+ */
+export const BUDGET_CATEGORY_GROUPS: { key: string; ids: string[] }[] = [
+  { key: 'food', ids: ['courses', 'restaurant'] },
+  { key: 'home', ids: ['maison', 'loyer', 'energie'] },
+  { key: 'mobility', ids: ['transport', 'tp', 'auto'] },
+  { key: 'health', ids: ['sante', 'sport', 'lamal', 'lca'] },
+  { key: 'family', ids: ['famille', 'garde_enfants', 'education'] },
+  { key: 'leisure', ids: ['loisirs', 'vacances', 'hebergement'] },
+  { key: 'shopping', ids: ['shopping', 'telecoms', 'abonnements'] },
+  { key: 'pets', ids: ['animaux'] },
+  { key: 'misc', ids: ['cadeaux', 'autre'] },
+  { key: 'fixed', ids: ['hypotheque', 'impots', 'assurances', 'dettes', 'pension', 'prevoyance', 'provisions'] },
+];
+
+/**
+ * v4.0 — Groupes pour les CHARGES RÉCURRENTES (engagements suisses).
+ * Même taxonomie EXPENSE_CATEGORIES, regroupée par domaine.
+ */
+export const RECURRING_CATEGORY_GROUPS: { key: string; ids: string[] }[] = [
+  { key: 'housing', ids: ['loyer', 'hypotheque', 'maison'] },
+  { key: 'energy', ids: ['energie'] },
+  { key: 'telecom', ids: ['telecoms', 'abonnements'] },
+  { key: 'healthIns', ids: ['lamal', 'lca', 'sante'] },
+  { key: 'insurance', ids: ['assurances', 'prevoyance'] },
+  { key: 'taxes', ids: ['impots'] },
+  { key: 'transport', ids: ['auto', 'tp', 'transport'] },
+  { key: 'family', ids: ['garde_enfants', 'pension', 'famille', 'education'] },
+  { key: 'credits', ids: ['dettes'] },
+  { key: 'memberships', ids: ['sport', 'loisirs'] },
+  { key: 'provisions', ids: ['provisions', 'vacances'] },
+  { key: 'other', ids: ['autre'] },
+];
 
 // Income categories
 export const INCOME_CATEGORIES = [

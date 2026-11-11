@@ -7,6 +7,7 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type {
+  CustomCategory,
   User,
   UserPreferences,
   Transaction,
@@ -96,6 +97,10 @@ interface AppState {
   addBudget: (budget: Budget) => void;
   updateBudget: (id: string, budget: Partial<Budget>) => void;
   deleteBudget: (id: string) => void;
+  // v4.0 — catégories personnelles de l'utilisateur
+  customCategories: CustomCategory[];
+  addCustomCategory: (cat: CustomCategory) => void;
+  deleteCustomCategory: (id: string) => void;
   
   // Recurring expense actions
   addRecurringExpense: (expense: RecurringExpense) => void;
@@ -289,6 +294,14 @@ export const useStore = create<AppState>()(
       // Budget actions
       addBudget: (budget) => set((state) => ({
         budgets: [budget, ...state.budgets.filter((b) => b.category !== budget.category)],
+      })),
+
+      customCategories: [],
+      addCustomCategory: (cat) => set((state) => ({
+        customCategories: [cat, ...state.customCategories.filter((c) => c.id !== cat.id)],
+      })),
+      deleteCustomCategory: (id) => set((state) => ({
+        customCategories: state.customCategories.filter((c) => c.id !== id),
       })),
       
       updateBudget: (id, budget) => set((state) => ({

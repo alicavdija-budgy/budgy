@@ -32,18 +32,87 @@ import { Card, Button, EmptyState } from '../../src/components/ui';
 import { CategoryIcon, getCategoryName, getCategoryColor } from '../../src/components/CategoryIcon';
 import BrandLogo from '../../src/components/BrandLogo';
 import { formatNumber } from '../../src/utils/calculations';
-import { EXPENSE_CATEGORIES } from '../../src/data/swiss-data';
+import { EXPENSE_CATEGORIES, RECURRING_CATEGORY_GROUPS } from '../../src/data/swiss-data';
+import { CategoryGroupPicker } from '../../src/components/CategoryGroupPicker';
 import { EntityActionsSheet, type EntityActionsContext } from '../../src/components/EntityActionsSheet';
 import { deleteEntityWithCloud } from '../../src/services/cloudDelete';
 import { EntityEditModal, type EditField } from '../../src/components/EntityEditModal';
 
 export default function RecurringScreen() {
-  const { t } = useTranslation();
+  const { t, lang } = useTranslation();
   const theme = useTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { preferences, recurringExpenses, incomes, addRecurringExpense, updateRecurringExpense, toggleRecurringExpense, deleteRecurringExpense } = useStore();
+  const { preferences, recurringExpenses, incomes, addRecurringExpense, updateRecurringExpense, toggleRecurringExpense, deleteRecurringExpense, addTransaction, deleteTransaction, transactions } = useStore();
+
+  // ── v4.0 — paiements & échéances ──────────────────────────────────────────
+  const nowD = new Date();
+  const dateLocale = lang === 'de' ? 'de-CH' : lang === 'it' ? 'it-CH' : lang === 'en' ? 'en-CH' : 'fr-CH';
+  const monthKey = `${nowD.getFullYear()}-${String(nowD.getMonth() + 1).padStart(2, '0')}`;
+  const FREQ_MONTHS: Record<string, number> = { monthly: 1, quarterly: 3, semiannual: 6, yearly: 12 };
+
+  /** Prochaine échéance — ne modifie JAMAIS aucun montant. */
+  const nextDueOf = (rec: any): Date => {
+    const day = Math.max(1, Math.min(31, Number(rec.dayOfMonth) || 1));
+    const freq = String(rec.frequency || 'monthly');
+    if (freq === 'weekly') {
+      const d = new Date(nowD); d.setDate(d.getDate() + ((7 - d.getDay() + 1) % 7 || 7));
+      return d;
+    }
+    const step = FREQ_MONTHS[freq] ?? 1;
+    const anchor = new Date(rec.createdAt || Date.now());
+    const d = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+    while (d < new Date(nowD.getFullYear(), nowD.getMonth(), 1) || (d.getMonth() === nowD.getMonth() && d.getFullYear() === nowD.getFullYear() && day < nowD.getDate() && rec.lastPaidMonth === monthKey)) {
+      d.setMonth(d.getMonth() + step);
+    }
+    const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    return new Date(d.getFullYear(), d.getMonth(), Math.min(day, lastDay));
+  };
+
+  const isPaidThisMonth = (rec: any) => rec.lastPaidMonth === monthKey;
+
+  /** Marquer payée : crée UNE transaction liée (recurringId) et sort la charge
+   *  de l'engagement du mois — remplacement, jamais double déduction. */
+  const markPaid = (rec: any) => {
+    if (isPaidThisMonth(rec)) return;
+    const txId = `recpay_${rec.id}_${monthKey}`;
+    const nowTs = Date.now();
+    addTransaction({
+      id: txId,
+      title: rec.title,
+      amount: Math.abs(Number(rec.amount) || 0),
+      date: new Date().toISOString().slice(0, 10),
+      category: rec.category,
+      createdAt: nowTs,
+      updatedAt: nowTs,
+      synced: false,
+      type: 'expense',
+      source: 'recurring',
+      recurringId: rec.id,
+    } as any);
+    updateRecurringExpense(rec.id, {
+      lastPaidMonth: monthKey,
+      paymentHistory: [
+        ...((rec.paymentHistory as any[]) || []),
+        { date: new Date().toISOString().slice(0, 10), amount: Number(rec.amount) || 0, transactionId: txId },
+      ],
+    } as any);
+  };
+
+  /** Annuler le paiement du mois : retire la transaction liée (idempotent). */
+  const undoPaid = (rec: any) => {
+    if (!isPaidThisMonth(rec)) return;
+    const hist = ((rec.paymentHistory as any[]) || []);
+    const last = hist[hist.length - 1];
+    if (last?.transactionId && transactions.some((tx) => tx.id === last.transactionId)) {
+      deleteTransaction(last.transactionId);
+    }
+    updateRecurringExpense(rec.id, {
+      lastPaidMonth: undefined,
+      paymentHistory: hist.slice(0, -1),
+    } as any);
+  };
 
   // Build 82 hotfix — cloud-first deletion: the Supabase row is removed and
   // confirmed BEFORE the local Zustand deletion, so pullAllFromCloud() can no
@@ -56,7 +125,8 @@ export default function RecurringScreen() {
   };
 
   const [showAddModal, setShowAddModal] = useState(false);
-  const [newRec, setNewRec] = useState({ title: '', amount: '', category: 'abonnements', dayOfMonth: '1' });
+  const [showCatPicker, setShowCatPicker] = useState(false);
+  const [newRec, setNewRec] = useState({ title: '', amount: '', category: 'abonnements', dayOfMonth: '1', frequency: 'monthly' as string });
 
   // CRUD: actions sheet & edit modal
   const [actionsCtx, setActionsCtx] = useState<EntityActionsContext | null>(null);
@@ -68,7 +138,7 @@ export default function RecurringScreen() {
   const REC_EDIT_FIELDS: EditField[] = useMemo(() => [
     { key: 'title', label: t('recurringScreen.titleField'), type: 'text', icon: 'document-text-outline', placeholder: 'Netflix', required: true },
     { key: 'amount', label: t('recurringScreen.amountCHF', { currency: 'CHF' }), type: 'number', icon: 'cash-outline', placeholder: '17.90', required: true },
-    { key: 'category', label: t('recurringUi.category'), type: 'select', options: EXPENSE_CATEGORIES.slice(0, 12).map((c) => ({ value: c.id, label: c.name, color: c.color })) },
+    { key: 'category', label: t('recurringUi.category'), type: 'select', options: EXPENSE_CATEGORIES.map((c) => ({ value: c.id, label: c.name, color: c.color })) },
     { key: 'dayOfMonth', label: t('recurringUi.dayOfMonth'), type: 'number', icon: 'calendar-outline', placeholder: '8' },
     { key: 'frequency', label: t('recurringUi.frequency'), type: 'select', options: [
       { value: 'weekly', label: t('recurringUi.freqWeekly') },
@@ -139,20 +209,39 @@ export default function RecurringScreen() {
       Alert.alert(t('recurringScreen.errTitle'), t('recurringUi.errAllFields'));
       return;
     }
+    const cleaned = newRec.amount.trim().replace(/['’\u00A0\u202F ]/g, '').replace(',', '.');
+    const amt = /^\d+(\.\d{1,2})?$/.test(cleaned) ? parseFloat(cleaned) : NaN;
+    if (!Number.isFinite(amt) || amt <= 0) {
+      Alert.alert(t('recurringScreen.errTitle'), t('recurringUi.errAllFields'));
+      return;
+    }
     addRecurringExpense({
       id: `rec_${Date.now()}`,
       title: newRec.title,
-      amount: parseFloat(newRec.amount),
+      amount: amt,
       category: newRec.category,
-      frequency: 'monthly',
-      dayOfMonth: parseInt(newRec.dayOfMonth) || 1,
+      frequency: newRec.frequency as any,
+      dayOfMonth: Math.max(1, Math.min(31, parseInt(newRec.dayOfMonth) || 1)),
       color: getCategoryColor(newRec.category),
       active: true,
       createdAt: Date.now(),
     });
-    setNewRec({ title: '', amount: '', category: 'abonnements', dayOfMonth: '1' });
+    setNewRec({ title: '', amount: '', category: 'abonnements', dayOfMonth: '1', frequency: 'monthly' });
     setShowAddModal(false);
   };
+
+  // Récap du mois : engagé encore dû / déjà payé (mensualisé)
+  const dueThisMonth = useMemo(() => {
+    const perMonth: Record<string, number> = { weekly: 4.333, monthly: 1, quarterly: 1 / 3, semiannual: 1 / 6, yearly: 1 / 12 };
+    return recurringExpenses
+      .filter((r) => r.active && (r as any).lastPaidMonth !== monthKey)
+      .reduce((s, r) => s + (Number(r.amount) || 0) * (perMonth[String((r as any).frequency || 'monthly')] ?? 1), 0);
+  }, [recurringExpenses, monthKey]);
+  const paidThisMonth = useMemo(() =>
+    recurringExpenses
+      .filter((r) => (r as any).lastPaidMonth === monthKey)
+      .reduce((s, r) => s + (Number(r.amount) || 0), 0),
+  [recurringExpenses, monthKey]);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -197,6 +286,19 @@ export default function RecurringScreen() {
           </LinearGradient>
         </Animated.View>
 
+        {/* v4.0 — Récap du mois : dû / payé */}
+        <View style={styles.monthRow}>
+          <View style={styles.monthCell}>
+            <Text style={styles.monthCellLabel}>{t('recurringV2.dueThisMonth')}</Text>
+            <Text style={[styles.monthCellAmt, { color: theme.warning }]}>{CUR} {formatNumber(dueThisMonth)}</Text>
+          </View>
+          <View style={styles.monthCellDivider} />
+          <View style={styles.monthCell}>
+            <Text style={styles.monthCellLabel}>{t('recurringV2.paidThisMonth')}</Text>
+            <Text style={[styles.monthCellAmt, { color: theme.success }]}>{CUR} {formatNumber(paidThisMonth)}</Text>
+          </View>
+        </View>
+
         {recurringExpenses.length === 0 ? (
           <EmptyState
             icon="refresh-outline"
@@ -228,7 +330,12 @@ export default function RecurringScreen() {
                         <Text style={styles.recTitle}>{rec.title}</Text>
                         <Text style={styles.recPriorityEmoji}>{priority.emoji}</Text>
                       </View>
-                      <Text style={styles.recDate}>{t('recurringScreen.dayOfMonthLine', { day: rec.dayOfMonth })}</Text>
+                      <Text style={styles.recDate}>
+                        {t('recurringV2.nextDue', { date: nextDueOf(rec).toLocaleDateString(dateLocale, { day: 'numeric', month: 'short' }) })}
+                        {String((rec as any).frequency || 'monthly') !== 'monthly' && rec.active
+                          ? ` · ${t('recurringV2.monthlyEq', { currency: CUR, amount: formatNumber((Number(rec.amount) || 0) * (({ weekly: 4.333, quarterly: 1 / 3, semiannual: 1 / 6, yearly: 1 / 12 } as any)[String((rec as any).frequency)] || 0)) })}`
+                          : ''}
+                      </Text>
                     </View>
                     <View style={styles.recRight}>
                       <Text style={styles.recAmount}>{CUR} {formatNumber(rec.amount)}</Text>
@@ -253,6 +360,27 @@ export default function RecurringScreen() {
                         </Text>
                         <Text style={styles.recYearly}>{t('recurringScreen.yearlyPerAmount', { currency: CUR, amount: formatNumber(rec.amount * 12) })}</Text>
                       </View>
+                    </View>
+                  )}
+
+                  {/* v4.0 — statut & paiement du mois */}
+                  {rec.active && (
+                    <View style={styles.payRow}>
+                      <View style={[styles.payChip, { backgroundColor: isPaidThisMonth(rec) ? `${theme.success}1C` : `${theme.warning}1C` }]}>
+                        <Ionicons name={isPaidThisMonth(rec) ? 'checkmark-circle' : 'time'} size={13} color={isPaidThisMonth(rec) ? theme.success : theme.warning} />
+                        <Text style={[styles.payChipTxt, { color: isPaidThisMonth(rec) ? theme.success : theme.warning }]}>
+                          {isPaidThisMonth(rec) ? t('recurringV2.statusPaid') : t('recurringV2.statusDue')}
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        style={[styles.payBtn, isPaidThisMonth(rec) && styles.payBtnUndo]}
+                        onPress={() => (isPaidThisMonth(rec) ? undoPaid(rec) : markPaid(rec))}
+                        accessibilityRole="button"
+                      >
+                        <Text style={[styles.payBtnTxt, isPaidThisMonth(rec) && { color: theme.textSecondary }]}>
+                          {isPaidThisMonth(rec) ? t('recurringV2.undoPaid') : t('recurringV2.markPaid')}
+                        </Text>
+                      </TouchableOpacity>
                     </View>
                   )}
 
@@ -331,6 +459,30 @@ export default function RecurringScreen() {
               </View>
             </View>
 
+            <Text style={styles.inputLabel}>{t('recurringUi.category')}</Text>
+            <TouchableOpacity style={styles.catSelect} onPress={() => setShowCatPicker(true)}>
+              <View style={[styles.catSelectIcon, { backgroundColor: `${getCategoryColor(newRec.category)}1C` }]}>
+                <Ionicons name={(EXPENSE_CATEGORIES.find((c) => c.id === newRec.category)?.icon || 'pricetag') as any} size={16} color={getCategoryColor(newRec.category)} />
+              </View>
+              <Text style={styles.catSelectTxt}>{getCategoryName(newRec.category)}</Text>
+              <Ionicons name="chevron-down" size={16} color={theme.textTertiary} />
+            </TouchableOpacity>
+
+            <Text style={styles.inputLabel}>{t('recurringUi.frequency')}</Text>
+            <View style={styles.freqRow}>
+              {(['weekly', 'monthly', 'quarterly', 'semiannual', 'yearly'] as const).map((f) => (
+                <TouchableOpacity
+                  key={f}
+                  style={[styles.freqChip, newRec.frequency === f && styles.freqChipOn]}
+                  onPress={() => setNewRec((p) => ({ ...p, frequency: f }))}
+                >
+                  <Text style={[styles.freqChipTxt, newRec.frequency === f && { color: '#07111F' }]}>
+                    {t(`recurringUi.freq${f.charAt(0).toUpperCase()}${f.slice(1)}`)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
             <Button title={t('recurringScreen.addBtn')} onPress={handleAdd} fullWidth size="lg" style={{ marginTop: Spacing.lg }} />
               </ScrollView>
             </View>
@@ -339,6 +491,12 @@ export default function RecurringScreen() {
       </Modal>
 
       {/* CRUD: actions sheet + edit modal */}
+      <CategoryGroupPicker
+        visible={showCatPicker}
+        onClose={() => setShowCatPicker(false)}
+        onSelect={(id) => { setNewRec((p) => ({ ...p, category: id })); setShowCatPicker(false); }}
+        groups={RECURRING_CATEGORY_GROUPS}
+      />
       <EntityActionsSheet
         ctx={actionsCtx}
         onClose={() => setActionsCtx(null)}
@@ -377,6 +535,39 @@ const makeStyles = (Colors: ThemePalette) => StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md },
   backButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   title: { color: Colors.text, fontSize: FontSizes.xl, fontWeight: FontWeights.bold },
+  // v4.0 — récap mensuel + paiement + sélecteurs
+  monthRow: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.card,
+    borderWidth: 1, borderColor: Colors.cardBorder, borderRadius: BorderRadius.xl,
+    paddingVertical: Spacing.md, marginBottom: Spacing.md,
+  },
+  monthCell: { flex: 1, alignItems: 'center' },
+  monthCellDivider: { width: 1, height: 34, backgroundColor: Colors.cardBorder },
+  monthCellLabel: { color: Colors.textTertiary, fontSize: 10, fontWeight: FontWeights.black, letterSpacing: 0.8, textTransform: 'uppercase' },
+  monthCellAmt: { fontSize: FontSizes.lg, fontWeight: FontWeights.black, marginTop: 2 },
+  payRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: Spacing.sm },
+  payChip: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
+  payChipTxt: { fontSize: 11, fontWeight: FontWeights.bold },
+  payBtn: {
+    borderRadius: 999, backgroundColor: Colors.primary, paddingHorizontal: 14,
+    paddingVertical: 8, minHeight: 32, justifyContent: 'center',
+  },
+  payBtnUndo: { backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder },
+  payBtnTxt: { color: '#07111F', fontSize: 12, fontWeight: FontWeights.bold },
+  catSelect: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
+    backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.cardBorder,
+    borderRadius: BorderRadius.lg, paddingHorizontal: Spacing.md, paddingVertical: 11, minHeight: 48,
+  },
+  catSelectIcon: { width: 30, height: 30, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  catSelectTxt: { flex: 1, color: Colors.text, fontSize: FontSizes.md, fontWeight: FontWeights.semibold },
+  freqRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  freqChip: {
+    borderRadius: 999, borderWidth: 1, borderColor: Colors.cardBorder,
+    backgroundColor: Colors.card, paddingHorizontal: 12, paddingVertical: 8, minHeight: 34,
+  },
+  freqChipOn: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  freqChipTxt: { color: Colors.textSecondary, fontSize: 12, fontWeight: FontWeights.bold },
   addButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   scroll: { flex: 1 },
   content: { padding: Spacing.lg },

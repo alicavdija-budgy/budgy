@@ -161,11 +161,14 @@ export default function QuickAddScreen() {
         addTransaction({
           id,
           title: result.merchant || t('quickAdd.defaultExpense'),
-          amount: -(result.amount || 0),
+          // Convention UNIQUE v4.0 : une dépense est toujours POSITIVE
+          // (identique au formulaire manuel) — sinon elle augmentait le
+          // disponible et créditait les budgets au lieu de les consommer.
+          amount: Math.abs(result.amount || 0),
           date: now,
           category: result.category || 'other',
           type: 'expense',
-          source: source === 'siri' ? 'voice' : source === 'google_assistant' ? 'voice' : 'manual',
+          source: source === 'siri' ? 'siri' : 'manual',
         } as any);
       }
       try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}

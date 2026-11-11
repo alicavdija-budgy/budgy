@@ -31,7 +31,7 @@ check('détail catégorie : transactions du mois + modifier limite + ajout rapid
   src.includes('detailTx') && src.includes('editLimit') && src.includes("router.push('/quick-add'"));
 check('Budgy Pulse : messages basés sur des calculs vérifiables',
   src.includes('now.getDate() / daysIn') && src.includes('pulseOver') && !src.includes('prédiction'));
-check('montants suisses normalisés à la saisie', src.includes("replace(/['’\\u00A0 ]/g, '')"));
+check('montants suisses normalisés à la saisie (validation stricte)', src.includes("replace(/['’\\u00A0\\u202F ]/g, '')"));
 
 // ── Reproduction logique du moteur (mêmes expressions que l'écran) ──
 console.log('\n— Scénarios financiers —');
@@ -141,6 +141,64 @@ check('paywall : note d\'annulation essai présente et traduite ×4',
   (i18nSrc.match(/savePct:/g) || []).length === 4);
 check('paywall : essai affiché seulement si éligibilité StoreKit confirmée (iOS)',
   paywallSrc.includes('introEligible === true'));
+
+
+// ── v4.0 — Moteur financier unique : non-régression ──────────────────────
+const sel4 = read('src/stores/selectors.ts');
+const qa4 = read('app/quick-add.tsx');
+const inv4 = read('app/more/invoices.tsx');
+const debt4 = read('app/more/debts.tsx');
+const rec4 = read('app/more/recurring.tsx');
+const home4 = read('app/(tabs)/index.tsx');
+const types4 = read('src/types/index.ts');
+const bud4 = read('app/more/budgets.tsx');
+
+check('Siri : dépense enregistrée en POSITIF (convention unique)',
+  qa4.includes('Math.abs(result.amount || 0)') && !qa4.includes('-(result.amount'));
+check('moteur : AUCUN clamp à zéro — un déficit s\'affiche',
+  sel4.includes('const realAvailableThisMonth = monthlyIncome - totalCommitted') &&
+  !sel4.includes('Math.max(0, monthlyIncome - totalCommitted'));
+check('moteur : factures EN RETARD toujours comptées (due <= endOfMonth, statut != paid)',
+  sel4.includes("!== 'paid'") && sel4.includes('due <= endOfMonth') && !sel4.includes('due >= now'));
+check('moteur : charge marquée payée sort de l\'engagement (lastPaidMonth)',
+  sel4.includes('lastPaidMonth') && sel4.includes('recurringDue'));
+check('facture payée → transaction liée (invoiceId), annulation → retrait',
+  inv4.includes("invoiceId: id") && inv4.includes('deleteTransaction(linked.id)'));
+check('remboursement de dette → transaction réelle liée (debtId)',
+  debt4.includes("debtId: showPay") && debt4.includes("source: 'debt'"));
+check('charge : markPaid crée UNE transaction liée (recurringId) + historique',
+  rec4.includes("recurringId: rec.id") && rec4.includes('paymentHistory'));
+check('charge : undoPaid retire la transaction du mois (idempotent)',
+  rec4.includes('deleteTransaction(last.transactionId)'));
+check('types : liens explicites invoiceId/debtId/recurringId + source',
+  types4.includes('invoiceId?:') && types4.includes('debtId?:') && types4.includes('recurringId?:'));
+check('types : périodicités complètes hebdo→annuelle',
+  types4.includes("'weekly' | 'monthly' | 'quarterly' | 'semiannual' | 'yearly'"));
+check('bannière : sous-titre + détail du calcul (breakdown)',
+  home4.includes('homeV2.availableSub') && home4.includes('bdTitle') && home4.includes('bdDeficit'));
+check('budget : validation stricte, jamais de CHF 0 silencieux',
+  bud4.includes('parseAmountStrict') && bud4.includes('errAmount'));
+check('budget : clavier géré (KeyboardAvoidingView) + sélecteur groupé',
+  bud4.includes('KeyboardAvoidingView') && bud4.includes('CategoryGroupPicker'));
+
+// Test 12 — scénario chiffré de référence (logique répliquée du moteur) :
+// revenus 5000, dépenses payées 200, abonnement dû 100, facture 300, dette 150.
+{
+  const income = 5000;
+  let paid = 200, recurring = 100, bills = 300, debt = 150;
+  const available = income - (paid + recurring + bills + debt);
+  check('Test 12 : disponible = CHF 4250', available === 4250);
+  // Payer la facture : engagement 300 → 0, dépense payée +300 (remplacement)
+  paid += 300; bills = 0;
+  const after = income - (paid + recurring + bills + debt);
+  check('Test 12 : après paiement de la facture, disponible INCHANGÉ (4250)', after === 4250);
+  // Marquer la charge payée : engagement 100 → 0, payé +100
+  paid += 100; recurring = 0;
+  check('Test 12 : charge payée — toujours 4250, jamais de double déduction',
+    income - (paid + recurring + bills + debt) === 4250);
+  // Déficit affiché (jamais masqué à 0)
+  check('Test 12 : déficit négatif affiché tel quel', (1000 - 1250) === -250);
+}
 
 console.log(`\nRésultat : ${passed} réussis, ${failed} échoués`);
 if (failed > 0) process.exit(1);

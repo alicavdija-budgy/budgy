@@ -45,6 +45,14 @@ export interface Transaction {
   createdAt: number;
   updatedAt: number;
   synced: boolean;
+  /** v4.0 — convention : montant POSITIF = dépense, négatif = remboursement. */
+  type?: 'expense' | 'income';
+  /** Provenance de l'écriture (rapprochement & anti-doublon). */
+  source?: 'manual' | 'siri' | 'qr' | 'recurring' | 'invoice' | 'debt';
+  /** Liens explicites : une même obligation n'est jamais comptée deux fois. */
+  invoiceId?: string;
+  debtId?: string;
+  recurringId?: string;
 }
 
 export interface ProExpense extends Transaction {
@@ -85,6 +93,25 @@ export interface Budget {
   limit: number;
   color: string;
   createdAt: number;
+  /** v4.0 — nom personnalisé facultatif (sinon libellé de la catégorie). */
+  name?: string;
+  /** v4.0 — avertissements 80 % / 100 % (activés par défaut). */
+  alertsEnabled?: boolean;
+}
+
+/** v4.0 — catégorie personnelle créée par l'utilisateur. */
+export interface CustomCategory {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
+  createdAt: number;
+}
+
+export interface RecurringPayment {
+  date: string; // YYYY-MM-DD
+  amount: number;
+  transactionId?: string;
 }
 
 export interface RecurringExpense {
@@ -92,11 +119,17 @@ export interface RecurringExpense {
   title: string;
   amount: number;
   category: string;
-  frequency: 'monthly' | 'yearly';
+  frequency: 'weekly' | 'monthly' | 'quarterly' | 'semiannual' | 'yearly';
   dayOfMonth: number;
   color: string;
   active: boolean;
   createdAt: number;
+  /** v4.0 — fin facultative de l'engagement (YYYY-MM-DD). */
+  endDate?: string;
+  /** v4.0 — dernier mois marqué payé (YYYY-MM) : sort l'occurrence de l'engagement. */
+  lastPaidMonth?: string;
+  /** v4.0 — historique des paiements (rapprochés aux transactions). */
+  paymentHistory?: RecurringPayment[];
 }
 
 export interface Contract {

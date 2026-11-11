@@ -96,6 +96,9 @@ export default function InvoicesScreen() {
   const addInvoice = useStore((s) => s.addInvoice);
   const updateInvoice = useStore((s) => s.updateInvoice);
   const deleteInvoiceAction = useStore((s) => s.deleteInvoice);
+  const transactions = useStore((s) => s.transactions);
+  const addTransaction = useStore((s) => s.addTransaction);
+  const deleteTransaction = useStore((s) => s.deleteTransaction);
 
   const invoices = useMemo(() => storeInvoices.map(mapStoreInvoice), [storeInvoices]);
 
@@ -156,6 +159,28 @@ export default function InvoicesScreen() {
       status: becomesPaid ? 'paid' : 'pending',
       paidAt: becomesPaid ? Date.now() : undefined,
     });
+    // v4.0 — RAPPROCHEMENT : une facture payée EST un paiement réel.
+    // On enregistre UNE transaction liée (invoiceId) si aucune n'existe ;
+    // repasser en « à payer » retire cette même transaction (idempotent).
+    const linked = transactions.find((tx) => (tx as any).invoiceId === id);
+    if (becomesPaid && !linked) {
+      const nowTs = Date.now();
+      addTransaction({
+        id: `inv_${id}`,
+        title: inv.title,
+        amount: Math.abs(Number(inv.amount) || 0),
+        date: new Date().toISOString().slice(0, 10),
+        category: inv.category || 'autre',
+        createdAt: nowTs,
+        updatedAt: nowTs,
+        synced: false,
+        type: 'expense',
+        source: 'invoice',
+        invoiceId: id,
+      });
+    } else if (!becomesPaid && linked) {
+      deleteTransaction(linked.id);
+    }
     // Phase 4 — hygiène des rappels OS : une facture payée ne doit plus
     // rappeler son échéance ; repasser en « à payer » reprogramme J-90/30/7/1.
     if (becomesPaid) {

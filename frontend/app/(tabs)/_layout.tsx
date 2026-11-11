@@ -43,11 +43,13 @@ export default function TabLayout() {
       <Tabs
         screenOptions={{
           headerShown: false,
-          // iOS : véritable verre système (UIVisualEffectView via expo-blur) —
-          // le contenu diffuse derrière la barre, adaptation auto clair/sombre.
-          // (Le rendu Liquid Glass natif complet d'iOS 26+ exige les onglets
-          // natifs compilés avec Xcode 26 ; ce matériau système est l'option
-          // vérifiée et stable pour cette build.) Android : barre opaque thémée.
+          // iOS : barre FLOTTANTE « liquid glass » — verre système natif
+          // (UIVisualEffectView via expo-blur), coins entièrement arrondis,
+          // détachée des bords, le contenu diffuse derrière. NB : les vrais
+          // onglets natifs iOS 26 (expo-router/unstable-native-tabs) existent
+          // en SDK 54 mais la barre système ne peut PAS héberger le bouton
+          // central Budgy AI personnalisé — compromis documenté : on garde
+          // l'identité Budgy avec le matériau verre natif.
           ...(Platform.OS === 'ios'
             ? {
                 tabBarBackground: () => (
@@ -55,36 +57,43 @@ export default function TabLayout() {
                     tint={String(theme.background).toLowerCase().startsWith('#0')
                       ? 'systemChromeMaterialDark'
                       : 'systemChromeMaterialLight'}
-                    intensity={85}
+                    intensity={90}
                     style={[StyleSheet.absoluteFill, {
-                      borderTopLeftRadius: BorderRadius.xl,
-                      borderTopRightRadius: BorderRadius.xl,
+                      borderRadius: 30,
                       overflow: 'hidden',
                     }]}
                   />
                 ),
               }
             : {}),
-          tabBarStyle: {
-            backgroundColor: Platform.OS === 'ios' ? 'transparent' : theme.tabBarBackground,
-            borderTopColor: Platform.OS === 'ios' ? 'rgba(52,211,153,0.22)' : theme.tabBarBorder,
-            borderTopWidth: StyleSheet.hairlineWidth,
-            // v3.8.0 — Modern iOS-style rounded top corners for premium feel.
-            // On Android, radius still applies but shadow is replaced by elevation.
-            borderTopLeftRadius: Platform.OS === 'ios' ? BorderRadius.xl : 0,
-            borderTopRightRadius: Platform.OS === 'ios' ? BorderRadius.xl : 0,
-            height: 70 + insets.bottom,
-            paddingBottom: insets.bottom,
-            paddingTop: 8,
-            ...(Platform.OS === 'ios'
-              ? {
-                  shadowColor: theme.premiumShadow,
-                  shadowOpacity: theme.premiumShadowOpacity * 1.1,
-                  shadowOffset: { width: 0, height: -3 },
-                  shadowRadius: 16,
-                }
-              : { elevation: 14 }),
-          },
+          tabBarStyle: Platform.OS === 'ios'
+            ? {
+                position: 'absolute' as const,
+                left: 14,
+                right: 14,
+                bottom: Math.max(insets.bottom, 10) + 4,
+                height: 66,
+                borderRadius: 30,
+                borderTopWidth: 0,
+                borderWidth: 1,
+                borderColor: 'rgba(52,211,153,0.28)',
+                backgroundColor: 'transparent',
+                paddingBottom: 8,
+                paddingTop: 8,
+                shadowColor: theme.premiumShadow,
+                shadowOpacity: theme.premiumShadowOpacity * 1.2,
+                shadowOffset: { width: 0, height: 8 },
+                shadowRadius: 22,
+              }
+            : {
+                backgroundColor: theme.tabBarBackground,
+                borderTopColor: theme.tabBarBorder,
+                borderTopWidth: StyleSheet.hairlineWidth,
+                height: 70 + insets.bottom,
+                paddingBottom: insets.bottom,
+                paddingTop: 8,
+                elevation: 14,
+              },
           tabBarActiveTintColor: theme.tabBarActive,
           tabBarInactiveTintColor: theme.tabBarInactive,
           tabBarLabelStyle: {

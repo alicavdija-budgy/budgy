@@ -11,6 +11,8 @@ import {
   StyleSheet,
   RefreshControl,
   Dimensions,
+  Modal,
+  TouchableOpacity,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -92,6 +94,7 @@ export default function HomeScreen() {
 
   // ── Confidentialité : masquer les montants sensibles (persisté) ──
   const [hideAmounts, setHideAmounts] = useState(false);
+  const [showBreakdown, setShowBreakdown] = useState(false);
   useEffect(() => {
     AsyncStorage.getItem('budgy.hideAmounts')
       .then((v) => { if (v === '1') setHideAmounts(true); })
@@ -351,10 +354,21 @@ export default function HomeScreen() {
                 <AnimatedNumber
                   value={m.convert(available)}
                   duration={1400}
-                  style={styles.heroAmount}
+                  style={[styles.heroAmount, available < 0 && { color: '#FCA5A5' }] as any}
                 />
               )}
             </View>
+            {/* v4.0 — explication + accès au détail du calcul */}
+            <TouchableOpacity
+              onPress={() => setShowBreakdown(true)}
+              style={styles.heroSubRow}
+              accessibilityRole="button"
+              accessibilityLabel={t('homeV2.availableSub')}
+              hitSlop={{ top: 6, bottom: 6 }}
+            >
+              <Text style={styles.heroSubTxt}>{t('homeV2.availableSub')}</Text>
+              <Ionicons name="information-circle-outline" size={13} color="rgba(255,255,255,0.75)" />
+            </TouchableOpacity>
 
             {/* progress bar */}
             <View style={styles.heroProgressBg}>
@@ -576,6 +590,39 @@ export default function HomeScreen() {
 
       {/* Dictée vocale directe depuis l'accueil (réutilise le moteur existant) */}
       <VoiceInputModal visible={voiceOpen} onClose={() => setVoiceOpen(false)} />
+
+      {/* v4.0 — Détail transparent du calcul du Montant disponible */}
+      <Modal visible={showBreakdown} transparent animationType="fade" onRequestClose={() => setShowBreakdown(false)}>
+        <TouchableOpacity style={styles.bdOverlay} activeOpacity={1} onPress={() => setShowBreakdown(false)}>
+          <TouchableOpacity activeOpacity={1} style={styles.bdCard} onPress={() => {}}>
+            <Text style={styles.bdTitle}>{t('homeV2.bdTitle')}</Text>
+            <Text style={styles.bdSub}>{snapshot.monthLabel}</Text>
+            {([
+              { label: t('homeV2.bdIncome'), value: monthlyIncome, sign: +1 },
+              { label: t('homeV2.bdPaid'), value: snapshot.paidExpenses, sign: -1 },
+              { label: t('homeV2.bdRecurring'), value: monthlyRecurring, sign: -1 },
+              { label: t('homeV2.bdBills'), value: upcomingBills, sign: -1 },
+              { label: t('homeV2.bdDebts'), value: (snapshot as any).debtPayments || 0, sign: -1 },
+            ] as const).map((row) => (
+              <View key={row.label} style={styles.bdRow}>
+                <Text style={styles.bdRowLabel}>{row.label}</Text>
+                <Text style={[styles.bdRowVal, row.sign < 0 && row.value > 0 && { color: '#FCA5A5' }]}>
+                  {row.sign < 0 && row.value !== 0 ? '− ' : ''}{mask(m.format(Math.abs(row.value)))}
+                </Text>
+              </View>
+            ))}
+            <View style={styles.bdDivider} />
+            <View style={styles.bdRow}>
+              <Text style={[styles.bdRowLabel, { fontWeight: '900', color: C.text }]}>{t('home.available')}</Text>
+              <Text style={[styles.bdRowVal, { fontWeight: '900', color: available < 0 ? '#F87171' : '#34D399' }]}>
+                {available < 0 ? '− ' : ''}{mask(m.format(Math.abs(available)))}
+              </Text>
+            </View>
+            {available < 0 && <Text style={styles.bdDeficit}>{t('homeV2.bdDeficit')}</Text>}
+            <Text style={styles.bdNote}>{t('homeV2.bdNote')}</Text>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -654,6 +701,23 @@ const makeStyles = (C: any) =>
       color: '#FFF', fontSize: 52, fontWeight: FontWeights.black,
       letterSpacing: -2, lineHeight: 58,
     },
+
+    // v4.0 — sous-titre & détail du calcul
+    heroSubRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+    heroSubTxt: { color: 'rgba(255,255,255,0.78)', fontSize: FontSizes.xs, fontWeight: FontWeights.semibold },
+    bdOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.72)', justifyContent: 'center', padding: Spacing.xl },
+    bdCard: {
+      backgroundColor: C.backgroundSecondary, borderWidth: 1, borderColor: C.cardBorder,
+      borderRadius: BorderRadius.xxl, padding: Spacing.xl,
+    },
+    bdTitle: { color: C.text, fontSize: FontSizes.lg, fontWeight: FontWeights.black },
+    bdSub: { color: C.textTertiary, fontSize: FontSizes.xs, marginBottom: Spacing.md, textTransform: 'capitalize' },
+    bdRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 7 },
+    bdRowLabel: { color: C.textSecondary, fontSize: FontSizes.sm },
+    bdRowVal: { color: C.text, fontSize: FontSizes.sm, fontWeight: FontWeights.bold, fontVariant: ['tabular-nums'] },
+    bdDivider: { height: 1, backgroundColor: C.cardBorder, marginVertical: 8 },
+    bdDeficit: { color: '#F87171', fontSize: FontSizes.xs, marginTop: 6, fontWeight: FontWeights.semibold },
+    bdNote: { color: C.textTertiary, fontSize: 11, marginTop: Spacing.md, lineHeight: 15 },
 
     heroProgressBg: {
       height: 8, backgroundColor: 'rgba(255,255,255,0.22)', borderRadius: 999,

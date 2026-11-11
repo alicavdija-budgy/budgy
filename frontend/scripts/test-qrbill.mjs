@@ -156,3 +156,36 @@ check('aucun message technique brut affiché (e?.message supprimé)', !scanner.i
 
 console.log(`\nRésultat : ${passed} réussis, ${failed} échoués`);
 if (failed > 0) process.exit(1);
+
+// ── v4.0 — Cas de référence « Nexum » (facture de démonstration fournie par
+// l'utilisateur, ENVIRONNEMENT DE TEST UNIQUEMENT — jamais intégrée à l'app).
+// IBAN PostFinance CH58 0900 0000 6525 0122 4, SCOR RF75 4110 1211,
+// CHF 523.50, créancier « Company », débiteur James Johnson (Lugano).
+console.log('\n— Facture de démonstration Nexum (test isolé) —');
+const NEXUM_IBAN = 'CH5809000000652501224';
+const NEXUM_REF = 'RF7541101211';
+const nexum = S(['SPC','0200','1',NEXUM_IBAN,
+  'S','Company','Via Industria','1','6900','Lugano','CH',
+  '','','','','','','',
+  '523.50','CHF',
+  'S','James Johnson','Via Carlo Cattaneo','','6900','Lugano','CH',
+  'SCOR',NEXUM_REF,'','EPD','']);
+try {
+  const nb = parseSwissQrBill(nexum);
+  check('Nexum : montant CHF 523.50 extrait', nb.amount === 523.5 && nb.currency === 'CHF');
+  check('Nexum : bénéficiaire « Company »', nb.creditor?.name === 'Company');
+  check('Nexum : IBAN CH58 0900… extrait', nb.iban === NEXUM_IBAN);
+  check('Nexum : référence SCOR RF75 4110 1211 valide (mod97)', nb.refType === 'SCOR' && nb.reference === NEXUM_REF && mod97Valid(NEXUM_REF));
+  check('Nexum : débiteur James Johnson (Lugano)', (nb.debtor?.name || '') === 'James Johnson' && `${nb.debtor?.addressLine1 || ''} ${nb.debtor?.addressLine2 || ''}`.includes('Lugano'));
+  check('Nexum : aucune date inventée par le parseur', !('dueDate' in nb) || nb.dueDate == null);
+} catch (e) {
+  check('Nexum : parse sans erreur', false, e?.code || e?.message);
+}
+// Preuve anti-codage en dur : aucune donnée Nexum dans le code applicatif
+import { readFileSync as rfs } from 'node:fs';
+const appSources = ['../src/services/qrBill.ts','../app/scanner-modal.tsx','../src/data/swiss-data.ts']
+  .map((f) => rfs(new URL(f, import.meta.url), 'utf8')).join('\n');
+check('Nexum : AUCUNE donnée de démo codée en dur dans l\'app', !appSources.includes('6525 0122') && !appSources.includes('652501224') && !appSources.toLowerCase().includes('nexum') && !appSources.includes('RF7541101211'));
+
+console.log(`\nRésultat final: ${passed} réussis, ${failed} échoués`);
+if (failed > 0) process.exit(1);

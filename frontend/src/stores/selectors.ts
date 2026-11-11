@@ -22,8 +22,9 @@ export interface FinancialSnapshot {
   recurringExpenses: number;
   upcomingBills: number;
   subscriptions: number;            // sous-ensemble de recurringExpenses
-  totalCommitted: number;           // paid + recurring + upcoming
-  realAvailableThisMonth: number;   // monthlyIncome - totalCommitted
+  debtPayments: number;             // mensualités de dettes encore dues ce mois
+  totalCommitted: number;           // paid + recurring + upcoming + debts
+  realAvailableThisMonth: number;   // monthlyIncome - totalCommitted (peut être négatif)
   // Métadonnées utiles aux modules IA / pédagogiques
   monthLabel: string;               // localised month + year (via toLocaleDateString)
   txCountThisMonth: number;
@@ -100,16 +101,23 @@ export function getMonthlyFinancialSnapshot(input: {
     return sum + toMonthlyAmount(Number(i.amount) || 0, i.frequency as any);
   }, 0);
 
-  // 2) Dépenses déjà payées ce mois (transactions)
+  const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
+
+  // 2) Dépenses déjà payées ce mois (transactions ; négatif = remboursement).
+  //    Les transactions de type 'income' ne sont jamais des dépenses.
   const thisMonthTx = (input.transactions || []).filter((t) => {
     const d = parseDate(t.date);
     return d && d.getFullYear() === year && d.getMonth() === month;
   });
-  const paidExpenses = thisMonthTx.reduce((s, t) => s + (Number(t.amount) || 0), 0);
+  const expenseTx = thisMonthTx.filter((t) => (t as any).type !== 'income');
+  const paidExpenses = expenseTx.reduce((s, t) => s + (Number(t.amount) || 0), 0);
 
-  // 3) Charges récurrentes actives — mensualisées
+  // 3) Charges récurrentes actives — mensualisées. Une charge MARQUÉE PAYÉE ce
+  //    mois (lastPaidMonth) sort de l'engagement : son paiement réel est déjà
+  //    dans paidExpenses (remplacement, jamais double déduction).
   const activeRecurring = (input.recurringExpenses || []).filter((r) => r.active !== false);
-  const recurringExpenses = activeRecurring.reduce(
+  const recurringDue = activeRecurring.filter((r) => (r as any).lastPaidMonth !== monthKey);
+  const recurringExpenses = recurringDue.reduce(
     (s, r) => s + toMonthlyAmount(Number(r.amount) || 0, r.frequency as any),
     0,
   );
@@ -118,24 +126,29 @@ export function getMonthlyFinancialSnapshot(input: {
     .filter((r) => SUBSCRIPTION_CATEGORIES.has((r.category || '').toLowerCase()))
     .reduce((s, r) => s + toMonthlyAmount(Number(r.amount) || 0, r.frequency as any), 0);
 
-  // 4) Factures pending dont l'échéance tombe dans ce mois (et pas déjà payées)
+  // 4) Factures impayées : échéance jusqu'à la fin du mois COURANT, y compris
+  //    les factures EN RETARD des mois précédents (elles restent dues tant
+  //    qu'elles ne sont pas payées). Statut 'paid' exclu — son paiement réel
+  //    vit dans paidExpenses (remplacement de l'engagement).
   const upcomingBills = (input.invoices || [])
-    .filter((inv) => (inv.status || '').toLowerCase() === 'pending')
+    .filter((inv) => (inv.status || '').toLowerCase() !== 'paid')
     .filter((inv) => {
       const due = parseDate((inv as any).dueDate);
-      return due && due >= now && due <= endOfMonth;
+      if (!due) return true; // facture sans échéance = due
+      return due <= endOfMonth;
     })
     .reduce((s, inv) => s + (Number(inv.amount) || 0), 0);
 
   // 4b) Mensualités de dettes en cours (capital restant > 0) — intégrées à la
-  // trésorerie engagée. Anti double comptage : si l'utilisateur a DÉJÀ saisi
-  // manuellement un remboursement ce mois (catégorie dettes), ce montant est
-  // déduit de l'engagement restant (jamais en dessous de 0).
+  // trésorerie engagée. Anti double comptage : les remboursements DÉJÀ payés ce
+  // mois (transaction liée debtId ou catégorie dettes) réduisent l'engagement
+  // restant (jamais en dessous de 0).
   const debtCommitted = (input.debts || [])
     .filter((d) => (Number(d.total) || 0) - (Number(d.paid) || 0) > 0)
     .reduce((s, d) => s + (Number(d.monthlyPayment) || 0), 0);
-  const debtCatPaid = thisMonthTx
+  const debtCatPaid = expenseTx
     .filter((t) => {
+      if ((t as any).debtId) return true;
       const c = (t.category || '').toLowerCase();
       return c === 'dettes' || c === 'debt' || c === 'debts';
     })
@@ -143,7 +156,8 @@ export function getMonthlyFinancialSnapshot(input: {
   const debtPayments = Math.max(0, debtCommitted - debtCatPaid);
 
   const totalCommitted = paidExpenses + recurringExpenses + upcomingBills + debtPayments;
-  const realAvailableThisMonth = Math.max(0, monthlyIncome - totalCommitted);
+  // JAMAIS de clamp à zéro : un déficit doit s'afficher comme déficit.
+  const realAvailableThisMonth = monthlyIncome - totalCommitted;
 
   const monthLabel = now.toLocaleDateString(input.locale || 'fr-CH', { month: 'long', year: 'numeric' });
 
@@ -153,6 +167,7 @@ export function getMonthlyFinancialSnapshot(input: {
     recurringExpenses,
     upcomingBills,
     subscriptions,
+    debtPayments,
     totalCommitted,
     realAvailableThisMonth,
     monthLabel,

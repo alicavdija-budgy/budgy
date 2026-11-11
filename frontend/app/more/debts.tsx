@@ -37,7 +37,7 @@ export default function DebtsScreen() {
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { preferences, debts, addDebt, deleteDebt, updateDebt } = useStore();
+  const { preferences, debts, addDebt, deleteDebt, updateDebt, addTransaction } = useStore();
   const CUR = preferences.currency;
 
   const [showAdd, setShowAdd] = useState(false);
@@ -148,6 +148,23 @@ export default function DebtsScreen() {
     if (!debt) return;
     const newPaid = Math.min(debt.total, debt.paid + amt);
     updateDebt(showPay, { paid: newPaid });
+    // v4.0 — un remboursement est un PAIEMENT RÉEL : transaction liée (debtId),
+    // visible dans les dépenses et déduite une seule fois du disponible
+    // (le moteur retranche les paiements liés de la mensualité engagée).
+    const nowTs = Date.now();
+    addTransaction({
+      id: `debtpay_${showPay}_${nowTs}`,
+      title: `${debt.title} — ${t('debts.payTitle')}`,
+      amount: Math.min(amt, Math.max(0, debt.total - debt.paid)),
+      date: new Date().toISOString().slice(0, 10),
+      category: 'dettes',
+      createdAt: nowTs,
+      updatedAt: nowTs,
+      synced: false,
+      type: 'expense',
+      source: 'debt',
+      debtId: showPay,
+    });
     setPayAmount('');
     setShowPay(null);
   };

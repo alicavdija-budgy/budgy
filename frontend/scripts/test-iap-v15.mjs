@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * BUDGY v3.9.0 Build 82 — react-native-iap v15 pre-build contract.
+ * BUDGY 4.0.0 Build 87 — react-native-iap v15 pre-build contract.
  * Static/pure tests only: native StoreKit is validated on TestFlight.
  */
 
@@ -38,7 +38,7 @@ const premiumExecutable = premiumSrc
   .replace(/\/\*[\s\S]*?\*\//g, '')
   .replace(/\/\/.*$/gm, '');
 
-console.log('\n[test-iap-v15] Build 82 contract suite\n');
+console.log('\n[test-iap-v15] Budgy 4.0.0 / iOS build 87 contract suite\n');
 
 ok('uses v15 fetchProducts()', () => {
   assert.match(iapSrc, /RNIap\.fetchProducts\s*\(/);
@@ -195,12 +195,12 @@ ok('paywall has no hardcoded subscription CHF prices', () => {
   assert.doesNotMatch(paywallSrc, /CHF\s*39\.90/);
 });
 
-ok('app version is 3.9.1', () => {
-  assert.equal(appJson.expo.version, '3.9.1');
+ok('app version is 4.0.0', () => {
+  assert.equal(appJson.expo.version, '4.0.0');
 });
 
-ok('iOS buildNumber is 85 (TestFlight Smart 4.0)', () => {
-  assert.equal(appJson.expo.ios.buildNumber, '85');
+ok('iOS buildNumber is 87 (TestFlight Smart 4.0)', () => {
+  assert.equal(appJson.expo.ios.buildNumber, '87');
 });
 
 ok('Android versionCode is 82', () => {

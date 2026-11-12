@@ -115,7 +115,19 @@ jobs:
           eas --version
           eas whoami
 
+      # TEMPORARY RECOVERY MODE — App Store Connect outage on 12 Nov 2026.
+      # Branch budgy-smart-4.0 ONLY: ios / testflight / submit=true retries
+      # EXISTING build 4.0.0 (90). NO EAS BUILD is executed in this mode.
+      # Remove this override after the successful submission.
+      - name: Retry existing build 90 Apple submission (NO NEW BUILD)
+        if: ${{ github.event.inputs.platform == 'ios' && github.event.inputs.profile == 'testflight' && github.event.inputs.submit == 'true' }}
+        run: |
+          echo "Resubmitting only the failed Apple upload for EXISTING Budgy 4.0.0 (90)."
+          echo "No new iOS compilation, no new build number, no --latest."
+          eas submit:retry 7fe3c265-119c-4188-87f4-4831cdbfbee9 --platform ios --non-interactive
+
       - name: EAS build
+        if: ${{ !(github.event.inputs.platform == 'ios' && github.event.inputs.profile == 'testflight' && github.event.inputs.submit == 'true') }}
         id: build
         run: |
           PLATFORM="${{ github.event.inputs.platform || 'ios' }}"
@@ -157,7 +169,7 @@ jobs:
           fi
 
       - name: EAS submit (optional — binaire exact de ce run)
-        if: ${{ github.event.inputs.submit == 'true' }}
+        if: ${{ github.event.inputs.submit == 'true' && !(github.event.inputs.platform == 'ios' && github.event.inputs.profile == 'testflight' && github.event.inputs.submit == 'true') }}
         run: |
           PLATFORM="${{ github.event.inputs.platform || 'ios' }}"
           PROFILE="${{ github.event.inputs.profile || 'testflight' }}"

@@ -415,15 +415,16 @@ export default function BudgetsScreen() {
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
-      </Modal>
 
-      <CategoryGroupPicker
-        visible={showCatPicker}
-        onClose={() => setShowCatPicker(false)}
-        onSelect={(id) => { setNewCat(id); setShowCatPicker(false); }}
-        groups={BUDGET_CATEGORY_GROUPS}
-        excludeIds={budgets.map((b) => b.category)}
-      />
+        {/* Étape 2 — sélection de catégorie : calque DANS le même Modal natif (fix P0 iOS) */}
+        <CategoryGroupPicker
+          visible={showCatPicker}
+          onClose={() => setShowCatPicker(false)}
+          onSelect={(id) => { setNewCat(id); setShowCatPicker(false); }}
+          groups={BUDGET_CATEGORY_GROUPS}
+          excludeIds={budgets.map((b) => b.category)}
+        />
+      </Modal>
 
       <EntityEditModal
         visible={!!editing}

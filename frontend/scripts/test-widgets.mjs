@@ -98,6 +98,7 @@ let bridgeSrc = bridge
   .replace(/\(id: string\)/g, '(id)')
   .replace(/ as PendingExpense\[\]/g, '')
   .replace(/ as Storage/g, '')
+  .replace(/\(useStore as any\)/g, '(useStore)')
   .replace(/: any/g, '')
   .replace(/: string/g, '')
   .replace(/: boolean/g, '')

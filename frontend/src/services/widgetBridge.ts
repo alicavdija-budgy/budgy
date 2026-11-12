@@ -82,9 +82,22 @@ export async function refreshWidgetSnapshot(): Promise<void> {
       AsyncStorage.getItem(WIDGET_PREF_KEYS.siriAmounts),
     ]);
     const s = useStore.getState();
+    // DÉMARRAGE À FROID (Siri) — distinction OBLIGATOIRE entre :
+    //  a) store pas encore hydraté (lancement) : NE RIEN TOUCHER — surtout
+    //     pas la file des dépenses dictées ni la route demandée par Siri ;
+    //  b) session réellement absente (hydraté, pas d'utilisateur) : on retire
+    //     uniquement les CHIFFRES (snapshot). La file Siri reste : elle est
+    //     filtrée par scope et ne sera consommée que par le bon compte.
+    // La purge TOTALE (file comprise) n'a lieu que sur action explicite :
+    //     déconnexion / suppression des données / changement de compte
+    //     → clearWidgetData().
+    const hydrated = (() => {
+      try { return (useStore as any).persist?.hasHydrated?.() !== false; } catch { return true; }
+    })();
+    if (!hydrated) return;
     if (!s.user) {
-      // Pas de session : aucun chiffre partagé (fail-safe confidentialité).
-      clearWidgetDataSync();
+      storage.remove(SNAPSHOT_KEY);
+      reloadWidgets();
       return;
     }
     const snap = getMonthlyFinancialSnapshot({

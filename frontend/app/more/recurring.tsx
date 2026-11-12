@@ -521,15 +521,17 @@ export default function RecurringScreen() {
             </View>
           </TouchableWithoutFeedback>
         </KeyboardAvoidingView>
+
+        {/* Étape 2 — sélection de catégorie : calque DANS le même Modal natif (fix P0 iOS) */}
+        <CategoryGroupPicker
+          visible={showCatPicker}
+          onClose={() => setShowCatPicker(false)}
+          onSelect={(id) => { setNewRec((p) => ({ ...p, category: id })); setShowCatPicker(false); }}
+          groups={RECURRING_CATEGORY_GROUPS}
+        />
       </Modal>
 
       {/* CRUD: actions sheet + edit modal */}
-      <CategoryGroupPicker
-        visible={showCatPicker}
-        onClose={() => setShowCatPicker(false)}
-        onSelect={(id) => { setNewRec((p) => ({ ...p, category: id })); setShowCatPicker(false); }}
-        groups={RECURRING_CATEGORY_GROUPS}
-      />
       <EntityActionsSheet
         ctx={actionsCtx}
         onClose={() => setActionsCtx(null)}

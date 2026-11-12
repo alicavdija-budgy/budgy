@@ -189,7 +189,16 @@ export default function QuickAddScreen() {
       testID="quick-add-screen"
     >
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
+        <TouchableOpacity
+          onPress={async () => {
+            // Annulation EXPLICITE : la commande Siri en attente est retirée
+            // de la file (elle ne sera jamais enregistrée silencieusement
+            // plus tard) — Siri n'a jamais annoncé d'enregistrement.
+            if (pendingId) { try { await resolvePendingExpense(pendingId); } catch {} }
+            router.back();
+          }}
+          style={styles.iconBtn}
+        >
           <Ionicons name="close" size={26} color={theme.text} />
         </TouchableOpacity>
         <Text style={styles.title}>{t('quickAdd.smartTitle')}</Text>

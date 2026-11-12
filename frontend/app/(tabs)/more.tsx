@@ -1,578 +1,277 @@
 /**
- * BUDGY v3.9.0 — More screen (fintech premium, clean hierarchy).
+ * BUDGY 4.0 — Écran Plus (refonte éditoriale suisse premium).
  *
- * Design mandate (this iteration):
- *   • NO more Pro-tools grid on this page — those live on the dedicated /pro screen
- *   • Strong, single Budgy Pro hero card (large, elegant, one CTA → /pro)
- *   • Section lists for "My finances", "Documents & sharing", "Account & security",
- *     "Help & info" — same visual language, minimal noise
- *   • Icons: unified Ionicons only; no rainbow palette. Each row uses ONE accent tone.
- *   • Compact profile at the top with clear FREE / PRO badge
- *   • No hardcoded price / trial — StoreKit remains the sole source of truth
+ * Présentation UNIQUEMENT : routes, droits FREE/PRO, statut StoreKit et
+ * données de session inchangés. 5 sections, lignes texte + chevron (sans
+ * icônes ni sous-titres), carte Budgy Pro en relief, titres extrudés avec
+ * trait vert. Navigation globale (barre flottante) conservée.
  */
-
 import React, { useMemo } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import Animated, { FadeInDown } from 'react-native-reanimated';
-import Constants from 'expo-constants';
-import { BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
-import { useTheme } from '../../src/hooks/useTheme';
 import { useStore } from '../../src/stores/useStore';
 import { usePremiumStore } from '../../src/stores/usePremiumStore';
 import { useTranslation } from '../../src/hooks/useTranslation';
 import PressScale from '../../src/components/PressScale';
-import BentoPlus from '../../src/components/BentoPlus';
-import { useAlertsStore } from '../../src/stores/useAlertsStore';
-import {
-  FEATURE_CATEGORIES,
-  type BudgyFeature,
-} from '../../src/config/features';
+import { FEATURE_BY_ID } from '../../src/config/features';
 
-// Slim finance list — Savings surfaces at top (soft entry point)
-export const SAVINGS_ROUTE: BudgyFeature = {
-  id: 'savings',
-  route: '/(tabs)/savings',
-  tier: 'free',
-  titleKey: 'moreV2.savings',
-  subtitleKey: 'moreV2.savingsSub',
-  icon: 'flag',
-  accent: 'success',
-  group: 'finance',
-} as any;
+// Palette éditoriale (design de référence — identique clair/sombre)
+const P = {
+  bg: '#0A0F1C',
+  text: '#F3F5F9',
+  sub: '#8B95A7',
+  chevron: '#5E6A80',
+  green: '#34D399',
+  gold: '#F5C46B',
+  goldBorder: '#8A6A2B',
+  sepDark: '#05080F',
+  sepLight: '#1C2740',
+};
+
+// 5 sections — ordre EXACT exigé. Chaque id existe dans FEATURE_BY_ID
+// (routes réelles + tier FREE/PRO respectés).
+const SECTIONS: { key: string; rows: { id: string; label: string; badge?: string }[] }[] = [
+  { key: 'finances', rows: [
+    { id: 'budgets', label: 'budgets' },
+    { id: 'incomes', label: 'incomes' },
+    { id: 'recurring', label: 'recurring' },
+    { id: 'invoices', label: 'invoices' },
+    { id: 'debts', label: 'debts' },
+    { id: 'calendar', label: 'calendar' },
+  ]},
+  { key: 'documents', rows: [
+    { id: 'receipts', label: 'receipts' },
+    { id: 'documents', label: 'binder' },
+    { id: 'export-pdf', label: 'exportPdf' },
+  ]},
+  { key: 'intelligence', rows: [
+    { id: 'twin', label: 'twin', badge: 'BETA' },
+    { id: 'budgy-score', label: 'score' },
+  ]},
+  { key: 'suisse', rows: [
+    { id: 'lamal', label: 'lamal' },
+    { id: 'tax', label: 'tax' },
+  ]},
+  { key: 'account', rows: [
+    { id: 'subscription', label: 'subscription' },
+    { id: 'security', label: 'security' },
+    { id: 'settings', label: 'prefs' },
+    { id: 'notifications', label: 'alerts' },
+  ]},
+];
+
+/** Titre de section extrudé (3 couches d'ombre) + trait vert lumineux. */
+function SectionTitle({ children }: { children: string }) {
+  return (
+    <View style={st.secHead}>
+      <View>
+        <Text style={[st.secTitle, st.depth3]}>{children}</Text>
+        <Text style={[st.secTitle, st.depth2]}>{children}</Text>
+        <Text style={[st.secTitle, st.depth1]}>{children}</Text>
+        <Text style={st.secTitle}>{children}</Text>
+      </View>
+      <View style={st.greenBarWrap}>
+        <View style={st.greenBar} />
+        <View style={st.greenBarShadow} />
+      </View>
+    </View>
+  );
+}
 
 export default function MoreScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const C = useTheme();
-  const { user } = useStore();
-  const legacyUnread = useStore((s) => s.notifications.filter((n) => !n.read).length);
-  const alertsUnread = useAlertsStore((s) => s.alerts.filter((a) => !a.read).length);
-  const unread = legacyUnread + alertsUnread;
-  // Source canonique des droits Pro (couvre l'accès provisoire StoreKit)
+  const { t } = useTranslation();
+  const user = useStore((s) => s.user);
+  // Statut Pro : source canonique StoreKit/backend — JAMAIS codé en dur.
   const isPro = usePremiumStore((s) => s.hasPremiumAccess());
   const isTrial = usePremiumStore(
     (s) => s.trialEndsAt !== null && s.trialEndsAt > Date.now() && !s.plan
   );
   const trialEndsAt = usePremiumStore((s) => s.trialEndsAt);
-  const { t } = useTranslation();
+  const trialDays = isTrial && trialEndsAt
+    ? Math.max(0, Math.ceil((trialEndsAt - Date.now()) / (24 * 3600 * 1000)))
+    : 0;
 
-  const styles = useMemo(() => makeStyles(C), [C]);
+  const firstName = (user?.name || '').split(' ')[0] || '';
+  const initials = (user?.name || 'B')
+    .split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
 
-  const getInitials = (name: string) =>
-    name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
-
-  return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* ── A. En-tête bento : salutation, titre, alertes, avatar ── */}
-        <Animated.View entering={FadeInDown.duration(300)}>
-          <View style={styles.bentoHeader}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.bentoGreeting} numberOfLines={1}>
-                {t('plusV2.greeting', { name: (user?.name || '').split(' ')[0] || t('more.title') })}
-              </Text>
-              <Text style={styles.bentoTitle}>{t('more.title')}</Text>
-            </View>
-            <PressScale
-              haptic="selection"
-              onPress={() => router.push('/more/notifications' as any)}
-              style={styles.bellBtn}
-              accessibilityLabel="Budgy Alerts"
-            >
-              <Ionicons name="notifications-outline" size={18} color={C.text} />
-              {unread > 0 && <View style={styles.bellDot} />}
-            </PressScale>
-            <PressScale
-              haptic="selection"
-              onPress={() => router.push('/more/settings' as any)}
-              accessibilityLabel={t('plusV2.prefs')}
-            >
-              <LinearGradient colors={C.gradientPrimary as [string, string]} style={styles.avatar}>
-                <Text style={styles.avatarText}>{getInitials(user?.name || 'User')}</Text>
-                {isPro && (
-                  <View style={styles.avatarProDot}>
-                    <Ionicons name="diamond" size={8} color="#FFF" />
-                  </View>
-                )}
-              </LinearGradient>
-            </PressScale>
-          </View>
-        </Animated.View>
-
-        {/* Trial banner */}
-        {isTrial && trialEndsAt && (
-          <View style={styles.trialBanner}>
-            <Ionicons name="time" size={16} color={C.success} />
-            <Text style={styles.trialText}>
-              {t('moreV2.trialActive', {
-                n: Math.max(
-                  0,
-                  Math.ceil((trialEndsAt - Date.now()) / (24 * 3600 * 1000))
-                ),
-              })}
-            </Text>
-            <TouchableOpacity onPress={() => router.push('/pro' as any)}>
-              <Text style={styles.trialCta}>{t('more.subscribe')}</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* ── B→I. Tableau de bord bento (données réelles) ───────── */}
-        <BentoPlus />
-
-        {/* ── J. Hub — 5 rubriques premium (Budgy Smart 4.0) ─────── */}
-        <SectionTitle title={t('moreHub.sections')} C={C} />
-        <View style={styles.menuCard}>
-          {FEATURE_CATEGORIES.map((cat, i) => (
-            <TouchableOpacity
-              key={cat.id}
-              activeOpacity={0.7}
-              onPress={() => router.push(`/more/category/${cat.id}` as any)}
-              style={[
-                styles.menuItem,
-                i < FEATURE_CATEGORIES.length - 1 && styles.menuItemBorder,
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel={t(cat.titleKey)}
-            >
-              <View style={styles.menuItemInner}>
-                <View style={styles.menuIcon}>
-                  <Ionicons name={cat.icon} size={17} color={C.textSecondary} />
-                </View>
-                <View style={styles.menuContent}>
-                  <Text style={styles.menuTitle} numberOfLines={1}>
-                    {t(cat.titleKey)}
-                  </Text>
-                  <Text style={styles.menuSubtitle} numberOfLines={1}>
-                    {t(cat.subtitleKey)}
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={16} color={C.textTertiary} />
-              </View>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* Footer */}
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>
-            Budgy v{Constants.expoConfig?.version ?? '3.9.0'}
-          </Text>
-          <Text style={styles.footerSub}>{t('more.dataPrivate')}</Text>
-        </View>
-
-        <View style={{ height: 100 }} />
-      </ScrollView>
-    </View>
-  );
-}
-
-// ── Sub-components ───────────────────────────────────────────────────────
-
-function SectionTitle({ title, C }: { title: string; C: any }) {
-  return (
-    <Text
-      style={{
-        color: C.textSecondary,
-        fontSize: 12,
-        fontWeight: FontWeights.black,
-        marginTop: Spacing.lg,
-        marginBottom: Spacing.sm,
-        marginLeft: 4,
-        textTransform: 'uppercase',
-        letterSpacing: 1,
-      }}
-    >
-      {title}
-    </Text>
-  );
-}
-
-export function MenuList({
-  items,
-  isPro,
-  C,
-  t,
-  router,
-  styles,
-}: {
-  items: BudgyFeature[];
-  isPro: boolean;
-  C: any;
-  t: (k: string, p?: any) => string;
-  router: ReturnType<typeof useRouter>;
-  styles: any;
-}) {
-  if (items.length === 0) return null;
-  const goTo = (f: BudgyFeature) => {
-    // Special: "subscription" always → /pro (never straight to paywall)
+  const open = (id: string) => {
+    const f = FEATURE_BY_ID[id];
+    if (!f) return;
     if (f.id === 'subscription') return router.push('/pro' as any);
-    if (f.tier === 'pro' && !isPro) {
-      router.push('/pro' as any);
-      return;
-    }
+    // Garde FREE/PRO existante : fonctionnalité Pro verrouillée → /pro.
+    if (f.tier === 'pro' && !isPro) return router.push('/pro' as any);
     router.push(f.route as any);
   };
-  return (
-    <View style={styles.menuCard}>
-      {items.map((f, i) => {
-        const locked = f.tier === 'pro' && !isPro;
-        const subtitle = f.subtitleKey ? t(f.subtitleKey) : undefined;
-        return (
-          <TouchableOpacity
-            key={f.id}
-            activeOpacity={0.7}
-            onPress={() => goTo(f)}
-            style={[
-              styles.menuItem,
-              i < items.length - 1 && styles.menuItemBorder,
-            ]}
-            accessibilityRole="button"
-            accessibilityLabel={t(f.titleKey)}
+
+  const proSub = isPro
+    ? (isTrial ? t('plusV3.proTrial', { n: trialDays }) : t('plusV3.proSub'))
+    : t('plusV3.proDiscoverSub');
+
+  return useMemo(() => (
+    <View style={[st.container, { paddingTop: insets.top + 8 }]}>
+      <ScrollView
+        contentContainerStyle={{ paddingBottom: insets.bottom + 130 }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* En-tête éditorial */}
+        <View style={st.header}>
+          <View style={{ flex: 1 }}>
+            <Text style={st.greeting} numberOfLines={1}>
+              {t('plusV2.greeting', { name: firstName || t('more.title') })}
+            </Text>
+            <Text style={st.title}>{t('more.title')}</Text>
+          </View>
+          <PressScale
+            haptic="selection"
+            onPress={() => router.push('/more/settings' as any)}
+            accessibilityLabel={t('plusV3.prefs')}
           >
-            <View style={styles.menuItemInner}>
-              <View style={styles.menuIcon}>
-                <Ionicons name={f.icon} size={17} color={C.textSecondary} />
-              </View>
-              <View style={styles.menuContent}>
-                <View style={styles.menuTitleRow}>
-                  <Text style={styles.menuTitle} numberOfLines={1}>
-                    {t(f.titleKey)}
-                  </Text>
-                  {locked && (
-                    <View style={styles.lockChip}>
-                      <Ionicons name="lock-closed" size={9} color={C.textTertiary} />
-                    </View>
-                  )}
-                  {!locked && f.badge && (
-                    <View style={{
-                      backgroundColor: `${C.secondary}22`,
-                      borderRadius: 5,
-                      paddingHorizontal: 5,
-                      paddingVertical: 2,
-                      marginLeft: 2,
-                    }}>
-                      <Text style={{ color: C.secondary, fontSize: 8.5, fontWeight: '800', letterSpacing: 0.5 }}>{f.badge}</Text>
-                    </View>
-                  )}
-                  {!locked && f.tier === 'pro' && (
-                    <View style={styles.proChipDiscrete}>
-                      <Text style={styles.proChipText}>PRO</Text>
-                    </View>
-                  )}
-                </View>
-                {subtitle && (
-                  <Text style={styles.menuSubtitle} numberOfLines={1}>
-                    {subtitle}
-                  </Text>
+            <View style={st.avatar}>
+              <Text style={st.avatarTxt}>{initials}</Text>
+            </View>
+          </PressScale>
+        </View>
+
+        {/* Carte Budgy Pro — relief 3D, statut réel StoreKit */}
+        <PressScale haptic="light" onPress={() => router.push('/pro' as any)} style={st.proShadow}>
+          <LinearGradient
+            colors={['#2B2214', '#161A24']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={st.proCard}
+          >
+            <View style={st.proHighlight} />
+            <View style={{ flex: 1 }}>
+              <View style={st.proTitleRow}>
+                <Text style={st.proTitle}>
+                  {isPro ? t('plusV3.proTitle') : t('plusV3.proDiscover')}
+                </Text>
+                {isPro && (
+                  <View style={st.proBadge}>
+                    <Text style={st.proBadgeTxt}>{t('plusV3.proActive')}</Text>
+                  </View>
                 )}
               </View>
-              <Ionicons name="chevron-forward" size={16} color={C.textTertiary} />
+              <Text style={st.proSub}>{proSub}</Text>
             </View>
-          </TouchableOpacity>
-        );
-      })}
+            <Ionicons name="chevron-forward" size={20} color={P.gold} />
+          </LinearGradient>
+        </PressScale>
+
+        {/* 5 sections — lignes texte + chevron, gravure fine */}
+        {SECTIONS.map((sec) => (
+          <View key={sec.key} style={st.section}>
+            <SectionTitle>{t(`plusV3.${sec.key}`)}</SectionTitle>
+            {sec.rows.map((row, i) => (
+              <View key={row.id}>
+                <PressScale
+                  haptic="selection"
+                  onPress={() => open(row.id)}
+                  contentStyle={st.row}
+                  accessibilityRole="button"
+                  accessibilityLabel={t(`plusV3.${row.label}`)}
+                  testID={`plus-row-${row.id}`}
+                >
+                  <Text style={st.rowTxt}>{t(`plusV3.${row.label}`)}</Text>
+                  <View style={st.rowRight}>
+                    {row.badge ? (
+                      <View style={st.beta}><Text style={st.betaTxt}>{row.badge}</Text></View>
+                    ) : null}
+                    <Ionicons name="chevron-forward" size={17} color={P.chevron} />
+                  </View>
+                </PressScale>
+                {i < sec.rows.length - 1 && (
+                  <View>
+                    <View style={st.sepDark} />
+                    <View style={st.sepLight} />
+                  </View>
+                )}
+              </View>
+            ))}
+          </View>
+        ))}
+      </ScrollView>
     </View>
-  );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ), [insets.top, insets.bottom, isPro, isTrial, trialDays, firstName, initials, t]);
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────
-export const makeStyles = (C: any) =>
-  StyleSheet.create({
-    container: { flex: 1, backgroundColor: C.background },
-    // ── Bento header ──
-    bentoHeader: {
-      flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
-      marginBottom: Spacing.md,
-    },
-    bentoGreeting: { color: C.textTertiary, fontSize: FontSizes.xs, fontWeight: FontWeights.semibold },
-    bentoTitle: { color: C.text, fontSize: 26, fontWeight: FontWeights.black, letterSpacing: -0.6 },
-    bellBtn: {
-      width: 40, height: 40, borderRadius: 20,
-      backgroundColor: C.card, borderWidth: 1, borderColor: C.cardBorder,
-      alignItems: 'center', justifyContent: 'center',
-    },
-    bellDot: {
-      position: 'absolute', top: 9, right: 10,
-      width: 8, height: 8, borderRadius: 4, backgroundColor: C.error,
-      borderWidth: 1.5, borderColor: C.card,
-    },
-    avatarProDot: {
-      position: 'absolute', bottom: -2, right: -2,
-      width: 16, height: 16, borderRadius: 8, backgroundColor: '#B45309',
-      alignItems: 'center', justifyContent: 'center',
-      borderWidth: 1.5, borderColor: C.background,
-    },
-    content: {
-      padding: Spacing.lg,
-      maxWidth: 760,
-      alignSelf: 'stretch',
-      width: '100%',
-    },
-
-    // Profile
-    profileCard: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      backgroundColor: C.card,
-      borderWidth: 1,
-      borderColor: C.cardBorder,
-      borderRadius: 16,
-      padding: 14,
-      marginBottom: Spacing.lg,
-    },
-    avatar: {
-      width: 46,
-      height: 46,
-      borderRadius: 23,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginRight: 12,
-    },
-    avatarText: {
-      color: '#FFF',
-      fontSize: 15,
-      fontWeight: FontWeights.black,
-    },
-    profileInfo: { flex: 1 },
-    profileName: {
-      color: C.text,
-      fontSize: 15,
-      fontWeight: FontWeights.bold,
-      letterSpacing: -0.2,
-    },
-    profileEmail: {
-      color: C.textSecondary,
-      fontSize: 12,
-      marginTop: 2,
-    },
-    proBadgeElegant: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 4,
-      paddingVertical: 5,
-      paddingHorizontal: 9,
-      borderRadius: 999,
-      backgroundColor: '#0F766E',
-    },
-    proBadgeElegantText: {
-      color: '#FFF',
-      fontSize: 10,
-      fontWeight: FontWeights.black,
-      letterSpacing: 1,
-    },
-    freeTag: {
-      backgroundColor: C.cardHover,
-      paddingVertical: 4,
-      paddingHorizontal: 10,
-      borderRadius: 999,
-      borderWidth: 1,
-      borderColor: C.cardBorder,
-    },
-    freeTagText: {
-      color: C.textSecondary,
-      fontSize: 10,
-      fontWeight: FontWeights.bold,
-      letterSpacing: 0.3,
-    },
-
-    // Hero
-    proHero: {
-      borderRadius: 22,
-      padding: 20,
-      overflow: 'hidden',
-      minHeight: 158,
-    },
-    heroBlobA: {
-      position: 'absolute',
-      right: -28,
-      top: -28,
-      width: 120,
-      height: 120,
-      borderRadius: 60,
-      backgroundColor: 'rgba(255,255,255,0.08)',
-    },
-    heroBlobB: {
-      position: 'absolute',
-      right: 40,
-      bottom: -30,
-      width: 70,
-      height: 70,
-      borderRadius: 35,
-      backgroundColor: 'rgba(255,255,255,0.06)',
-    },
-    proHeroTop: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-      marginBottom: 8,
-    },
-    proHeroIconWrap: {
-      width: 32,
-      height: 32,
-      borderRadius: 10,
-      backgroundColor: 'rgba(255,255,255,0.2)',
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    proHeroBrand: {
-      color: '#FFFFFF',
-      fontSize: 13,
-      fontWeight: FontWeights.black,
-      letterSpacing: 1.2,
-    },
-    proHeroStatusChip: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 5,
-      marginLeft: 'auto',
-      backgroundColor: 'rgba(0,0,0,0.28)',
-      paddingVertical: 3,
-      paddingHorizontal: 7,
-      borderRadius: 999,
-    },
-    proHeroStatusDot: {
-      width: 6, height: 6, borderRadius: 3, backgroundColor: '#34D399',
-    },
-    proHeroStatusText: {
-      color: '#FFFFFF',
-      fontSize: 9.5,
-      fontWeight: FontWeights.black,
-      letterSpacing: 0.5,
-    },
-    proHeroTitle: {
-      color: '#FFFFFF',
-      fontSize: 21,
-      fontWeight: FontWeights.black,
-      letterSpacing: -0.5,
-      lineHeight: 25,
-      marginTop: 4,
-      maxWidth: 280,
-    },
-    proHeroDetails: {
-      color: 'rgba(255,255,255,0.85)',
-      fontSize: 13,
-      fontWeight: FontWeights.medium,
-      marginTop: 6,
-      lineHeight: 17,
-    },
-    proHeroCtaRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-      marginTop: 14,
-    },
-    proHeroCta: {
-      color: '#FFFFFF',
-      fontSize: 14,
-      fontWeight: FontWeights.black,
-      letterSpacing: -0.1,
-    },
-
-    // Trial
-    trialBanner: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Spacing.sm,
-      padding: Spacing.md,
-      marginBottom: Spacing.md,
-      borderRadius: BorderRadius.lg,
-      backgroundColor: 'rgba(52,211,153,0.1)',
-      borderWidth: 1,
-      borderColor: 'rgba(52,211,153,0.25)',
-    },
-    trialText: { flex: 1, color: C.text, fontSize: 13, fontWeight: '600' },
-    trialCta: { color: '#34D399', fontSize: 13, fontWeight: '800' },
-
-    // Menu lists — monochrome icons, minimal chrome
-    menuCard: {
-      backgroundColor: C.card,
-      borderWidth: 1,
-      borderColor: C.cardBorder,
-      borderRadius: 16,
-      overflow: 'hidden',
-    },
-    menuItem: {},
-    menuItemBorder: {
-      borderBottomWidth: 1,
-      borderBottomColor: C.cardBorder,
-    },
-    menuItemInner: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingVertical: 12,
-      paddingHorizontal: 14,
-      gap: 12,
-    },
-    menuIcon: {
-      width: 30,
-      height: 30,
-      borderRadius: 9,
-      backgroundColor: C.cardHover,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    menuContent: { flex: 1 },
-    menuTitleRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-    },
-    menuTitle: {
-      color: C.text,
-      fontSize: 14,
-      fontWeight: FontWeights.semibold,
-      letterSpacing: -0.15,
-      flexShrink: 1,
-    },
-    menuSubtitle: {
-      color: C.textSecondary,
-      fontSize: 11,
-      marginTop: 1,
-    },
-
-    lockChip: {
-      width: 18,
-      height: 18,
-      borderRadius: 5,
-      backgroundColor: C.cardHover,
-      borderWidth: 1,
-      borderColor: C.cardBorder,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    proChipDiscrete: {
-      paddingVertical: 1,
-      paddingHorizontal: 6,
-      borderRadius: 4,
-      backgroundColor: 'rgba(15,118,110,0.15)',
-    },
-    proChipText: {
-      color: '#14B8A6',
-      fontSize: 9,
-      fontWeight: FontWeights.black,
-      letterSpacing: 0.5,
-    },
-
-    footer: {
-      alignItems: 'center',
-      paddingVertical: Spacing.lg,
-    },
-    footerText: {
-      color: C.textTertiary,
-      fontSize: 12,
-      fontWeight: FontWeights.semibold,
-    },
-    footerSub: {
-      color: C.textMuted,
-      fontSize: 11,
-      marginTop: 4,
-    },
-  });
+const st = StyleSheet.create({
+  container: { flex: 1, backgroundColor: P.bg },
+  // En-tête
+  header: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 20, paddingTop: 8, paddingBottom: 18, gap: 12,
+  },
+  greeting: { color: P.sub, fontSize: 13, fontWeight: '500', marginBottom: 2 },
+  title: { color: P.text, fontSize: 34, fontWeight: '700', letterSpacing: -0.6 },
+  avatar: {
+    width: 44, height: 44, borderRadius: 22, backgroundColor: P.green,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  avatarTxt: { color: '#07111F', fontSize: 16, fontWeight: '800' },
+  // Carte Budgy Pro
+  proShadow: {
+    marginHorizontal: 20, borderRadius: 18,
+    shadowColor: '#000', shadowOpacity: 0.75, shadowRadius: 16,
+    shadowOffset: { width: 0, height: 10 }, elevation: 12,
+    backgroundColor: '#0E0B05',
+  },
+  proCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    borderRadius: 18, borderWidth: 1, borderColor: P.goldBorder,
+    paddingVertical: 22, paddingHorizontal: 20, overflow: 'hidden',
+  },
+  proHighlight: {
+    position: 'absolute', top: 0, left: 14, right: 14, height: 1,
+    backgroundColor: 'rgba(245,196,107,0.18)',
+  },
+  proTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  proTitle: { color: P.gold, fontSize: 20, fontWeight: '700' },
+  proBadge: {
+    borderWidth: StyleSheet.hairlineWidth, borderColor: P.gold,
+    borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2,
+    backgroundColor: 'rgba(245,196,107,0.10)',
+  },
+  proBadgeTxt: { color: P.gold, fontSize: 10, fontWeight: '800', letterSpacing: 1 },
+  proSub: { color: P.sub, fontSize: 13, fontWeight: '500', marginTop: 5 },
+  // Sections
+  section: { marginTop: 28, paddingHorizontal: 20 },
+  secHead: { marginBottom: 10 },
+  secTitle: { color: '#EDF1F7', fontSize: 22, fontWeight: '600', letterSpacing: 0.2 },
+  depth1: { position: 'absolute', top: 1, left: 0, color: '#1B2A45' },
+  depth2: { position: 'absolute', top: 2, left: 0, color: '#15213A' },
+  depth3: {
+    position: 'absolute', top: 3, left: 0, color: '#0F182C',
+    textShadowColor: 'rgba(0,0,0,0.6)', textShadowRadius: 4,
+    textShadowOffset: { width: 0, height: 2 },
+  },
+  greenBarWrap: { marginTop: 7 },
+  greenBar: {
+    width: 44, height: 2, borderRadius: 1, backgroundColor: P.green,
+    shadowColor: P.green, shadowOpacity: 0.55, shadowRadius: 5,
+    shadowOffset: { width: 0, height: 0 }, elevation: 2,
+  },
+  greenBarShadow: { width: 44, height: 1, backgroundColor: 'rgba(0,0,0,0.5)', marginTop: 1, borderRadius: 1 },
+  // Lignes
+  row: {
+    minHeight: 48, flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between', paddingVertical: 2,
+  },
+  rowTxt: { color: P.text, fontSize: 16, fontWeight: '500' },
+  rowRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  sepDark: { height: 1, backgroundColor: P.sepDark },
+  sepLight: { height: 1, backgroundColor: P.sepLight, opacity: 0.45 },
+  beta: {
+    borderWidth: StyleSheet.hairlineWidth, borderColor: P.green,
+    borderRadius: 5, paddingHorizontal: 5, paddingVertical: 1,
+    backgroundColor: 'rgba(52,211,153,0.08)',
+  },
+  betaTxt: { color: P.green, fontSize: 9, fontWeight: '800', letterSpacing: 1 },
+});

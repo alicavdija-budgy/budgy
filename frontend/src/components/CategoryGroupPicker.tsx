@@ -6,7 +6,7 @@
  */
 import React, { useMemo, useState } from 'react';
 import {
-  View, Text, Modal, TextInput, TouchableOpacity, ScrollView,
+  View, Text, TextInput, TouchableOpacity, ScrollView,
   StyleSheet, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -99,9 +99,19 @@ export function CategoryGroupPicker({ visible, onClose, onSelect, groups, exclud
     </TouchableOpacity>
   );
 
+  // ARCHITECTURE (fix P0 iOS) : ce sélecteur n'est PAS un Modal natif.
+  // Il se rend en calque absolu DANS le Modal parent (formulaire) : une seule
+  // présentation native iOS, deux vues internes — plus aucun blocage lié à
+  // l'empilement de deux fenêtres UIKit concurrentes.
+  if (!visible) return null;
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <View style={styles.overlayRoot}>
+      <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose} accessibilityLabel="close-category-picker" />
+      <KeyboardAvoidingView
+        style={styles.kav}
+        pointerEvents="box-none"
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
         <View style={[styles.sheet, { paddingBottom: insets.bottom + 12 }]}>
           <View style={styles.header}>
             <Text style={styles.title}>{t('catPicker.title')}</Text>
@@ -172,12 +182,19 @@ export function CategoryGroupPicker({ visible, onClose, onSelect, groups, exclud
           </ScrollView>
         </View>
       </KeyboardAvoidingView>
-    </Modal>
+    </View>
   );
 }
 
 const makeStyles = (C: ThemePalette) => StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'flex-end' },
+  overlayRoot: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    justifyContent: 'flex-end',
+    zIndex: 1000,
+    elevation: 24,
+  },
+  kav: { flex: 1, justifyContent: 'flex-end' },
   sheet: {
     backgroundColor: C.backgroundSecondary,
     borderTopLeftRadius: BorderRadius.xxl, borderTopRightRadius: BorderRadius.xxl,

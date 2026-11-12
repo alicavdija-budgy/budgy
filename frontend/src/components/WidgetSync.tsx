@@ -52,6 +52,9 @@ export default function WidgetSync() {
         );
         return true;
       }
+      // File vide : libère la présentation (prochaine commande annulée/traitée
+      // peut être présentée à nouveau, aucun blocage de pushedPid obsolète).
+      pushedPid.current = null;
       if (route && ROUTES[route]) {
         router.push(ROUTES[route] as any);
         return true;

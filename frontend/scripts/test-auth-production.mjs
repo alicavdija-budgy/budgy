@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Budgy Build 80 — production authentication contract.
+ * Budgy 4.0.0 build 90+ — production authentication contract.
  * Static checks only. SMTP delivery must still be verified end-to-end on
  * TestFlight against the production self-hosted Supabase stack.
  */
@@ -28,7 +28,7 @@ const ok = (name, fn) => {
   catch (e) { failed++; console.error(`  ✗ ${name}\n    ${e?.stack || e}`); }
 };
 
-console.log('\n[test-auth-production] Build 80 auth contract\n');
+console.log('\n[test-auth-production] Budgy 4.0.0 / iOS 90+ auth contract\n');
 
 ok('Supabase client requires public URL + anon key', () => {
   assert.match(supabaseSrc, /EXPO_PUBLIC_SUPABASE_URL/);
@@ -85,8 +85,10 @@ ok('configuration failure is not presented as bad credentials', () => {
   assert.match(authErrorsSrc, /AUTH_SERVICE_UNAVAILABLE/);
 });
 
-ok('Build identity is active (iOS 83 / Android 82)', () => {
-  assert.equal(app.expo.ios.buildNumber, '85');
+ok('Build identity is Budgy 4.0.0 (iOS 90+ / Android 82)', () => {
+  assert.equal(app.expo.version, '4.0.0');
+  assert.match(String(app.expo.ios.buildNumber), /^\d+$/);
+  assert.ok(Number(app.expo.ios.buildNumber) >= 90);
   assert.equal(app.expo.android.versionCode, 82);
 });
 

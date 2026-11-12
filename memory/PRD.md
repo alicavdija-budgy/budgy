@@ -314,3 +314,8 @@ test
 - iOS : barre FLOTTANTE verre systeme (coins 30pt, halo emeraude), Budgy AI central conserve. Native tabs iOS26 (SDK54) dispo mais SANS bouton central custom -> non migre, compromis documente.
 - QR Nexum : test isole 49/49 (SCOR RF75 4110 1211 mod97, CHF 523.50, Company, James Johnson) + test anti-hardcode (aucune donnee demo dans l'app).
 - Build 88 (87 consomme). Tests : test-budgets 64/64, 9 suites vertes, tsc/eslint/i18n/audit verts. E2E navigateur : banniere+detail, budget 600 (erreur validation + picker groupe), charge LAMal 385 payee/annulable. RESTE iPhone : Siri voix, camera QR, barre flottante, StoreKit sandbox (TestFlight 88).
+
+## Session Integration ChatGPT (commit 031a8427)
+- Budgy AI coach -> gpt-6-sol ; analyse tickets/emails/voix/conseiller -> gpt-5.4-mini (multimodal). Modeles via env LLM_MODEL_CHAT / LLM_MODEL_FAST.
+- llm_client.py : cle sk-emergent -> proxy Emergent (emergentintegrations) ; autres cles -> LiteLLM direct (prod Coolify inchangee). emergentintegrations dans requirements.txt.
+- Tests reels : texte gpt-6-sol OK, JSON gpt-5.4-mini OK, vision OK (image rouge reconnue). test-budgets 67/67. Endpoint /api/coach/chat protege par JWT Supabase (inchange).

@@ -319,3 +319,9 @@ test
 - Budgy AI coach -> gpt-6-sol ; analyse tickets/emails/voix/conseiller -> gpt-5.4-mini (multimodal). Modeles via env LLM_MODEL_CHAT / LLM_MODEL_FAST.
 - llm_client.py : cle sk-emergent -> proxy Emergent (emergentintegrations) ; autres cles -> LiteLLM direct (prod Coolify inchangee). emergentintegrations dans requirements.txt.
 - Tests reels : texte gpt-6-sol OK, JSON gpt-5.4-mini OK, vision OK (image rouge reconnue). test-budgets 67/67. Endpoint /api/coach/chat protege par JWT Supabase (inchange).
+
+## Session Audit final avant TestFlight (commit e7d1aaac40ab1e21549accd52e8f3280050b6067)
+- Moteur : recurringExpenses = EXIGIBLE reel du mois (annuelle 1200 -> 1200 son mois, 0 ailleurs) ; recurringMonthlyAvg = moyenne stats ; hebdo = 4 occurrences payables individuellement (statut partiel, undo par occurrence, migration lastPaidMonth) ; dettes nettees PAR debtId (repli categorie seulement si 1 dette) ; revenus ponctuels type 'income' dans les ressources (oneOffIncome).
+- Rapprochements CONFIRMES par l'utilisateur : facture payee <-> depense existante (lier/creer, dissociation propre) ; import QR <-> charge active (Invoice.recurringId, obligation comptee 1 fois).
+- test-engine.mjs : transpile et EXECUTE le vrai getMonthlyFinancialSnapshot — 23/23 scenarios chiffres (4250 stable, deficit -250, retard sept. du en nov., 2 dettes isolees, navigation mois, migration). Plus de tests uniquement textuels pour le moteur.
+- Hash reel des commits : fiabilisation = 69be222b3f51 (le '20069be2' annonce etait le short-hash mal lu), audit final = e7d1aaac40ab. Build 88 conserve. RESTE iPhone : Siri voix, camera QR Nexum, barre flottante, StoreKit.

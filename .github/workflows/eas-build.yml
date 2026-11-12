@@ -99,6 +99,9 @@ jobs:
           npm run test:cloud-auth
           npm run test:ai-optimizer
           npm run test:iap-v15
+          echo "── Budgy Smart 4.0 stability / real financial engine ──"
+          node scripts/test-stability.mjs
+          node scripts/test-engine.mjs
           echo "── Expo config resolution ──"
           npx expo config --type public >/tmp/budgy-expo-config.json
           echo "✅ Pre-build quality gate PASS"

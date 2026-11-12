@@ -142,11 +142,27 @@ class LlmChat:
         self._history: List[Dict[str, Any]] = []
         if self.system_message:
             self._history.append({"role": "system", "content": self.system_message})
+        # Routage Emergent : une clé universelle `sk-emergent-…` passe par le
+        # proxy Emergent (emergentintegrations) — modèles ChatGPT sans clé
+        # OpenAI. Toute autre clé garde le chemin LiteLLM (prod self-host).
+        self._emergent = None
+        if self.api_key.startswith("sk-emergent"):
+            try:
+                from emergentintegrations.llm.chat import LlmChat as _EmergentChat
+                self._emergent = _EmergentChat(
+                    api_key=self.api_key,
+                    session_id=self.session_id or "default",
+                    system_message=self.system_message or "You are a helpful assistant.",
+                )
+            except Exception as exc:  # pragma: no cover — lib absente en self-host
+                log.warning("[llm] emergentintegrations indisponible (%s) — fallback LiteLLM", exc)
 
     # Fluent setters (compat with emergent API)
     def with_model(self, provider: str, model: str) -> "LlmChat":
         self.provider = (provider or self.provider).lower()
         self.model = model or self.model
+        if self._emergent is not None:
+            self._emergent.with_model(self.provider, self.model)
         return self
 
     def with_max_tokens(self, max_tokens: int) -> "LlmChat":
@@ -155,6 +171,27 @@ class LlmChat:
 
     async def send_message(self, msg: UserMessage) -> str:
         """Send a message and return the assistant's text reply."""
+        # Chemin Emergent (clé universelle) — conversion des types locaux
+        if self._emergent is not None:
+            from emergentintegrations.llm.chat import (
+                ImageContent as _EImage,
+                UserMessage as _EUser,
+            )
+            if msg.file_contents:
+                files = [
+                    _EImage(image_base64=fc.image_base64)
+                    for fc in msg.file_contents
+                    if getattr(fc, "image_base64", "")
+                ]
+                e_msg = _EUser(text=msg.text, file_contents=files)
+            else:
+                e_msg = _EUser(text=msg.text)
+            text = await self._emergent.send_message(e_msg)
+            text = text if isinstance(text, str) else str(text)
+            self._history.append({"role": "user", "content": msg.to_openai_content()})
+            self._history.append({"role": "assistant", "content": text})
+            return text
+
         api_key = _resolve_api_key(self.provider, self.api_key)
         if not api_key:
             raise RuntimeError(

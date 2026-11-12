@@ -64,6 +64,13 @@ EMERGENT_LLM_KEY = (
     or ""
 )
 
+# v4.0 — Modèles ChatGPT (OpenAI) :
+#   - LLM_MODEL_CHAT : coach Budgy AI (raisonnement) — défaut gpt-6-sol
+#   - LLM_MODEL_FAST : analyse tickets/emails/voix (rapide, multimodal) — gpt-5.4-mini
+# Surclassables par env en production.
+LLM_MODEL_CHAT = os.getenv("LLM_MODEL_CHAT", "gpt-6-sol")
+LLM_MODEL_FAST = os.getenv("LLM_MODEL_FAST", "gpt-5.4-mini")
+
 # Comma-separated list of allowed origins, e.g.
 # "https://budgy.ch,https://www.budgy.ch,https://api.budgy.ch,budgy://,capacitor://localhost"
 _DEFAULT_ORIGINS = (
@@ -297,7 +304,7 @@ async def coach_chat(
                 session_id=namespaced_session,
                 system_message=system_msg,
             )
-            chat.with_model("openai", "gpt-4o-mini")
+            chat.with_model("openai", LLM_MODEL_CHAT)
             chat_sessions[namespaced_session] = chat
 
         chat = chat_sessions[namespaced_session]
@@ -829,7 +836,7 @@ async def scanner_ocr(
             session_id=session_id,
             system_message=OCR_SYSTEM_PROMPT,
         )
-        chat.with_model("openai", "gpt-4o-mini")
+        chat.with_model("openai", LLM_MODEL_FAST)
 
         image_content = ImageContent(image_base64=img_b64)
         user_msg = UserMessage(
@@ -979,7 +986,7 @@ async def email_parse(
             session_id=session_id,
             system_message=EMAIL_PARSE_PROMPT,
         )
-        chat.with_model("openai", "gpt-4o-mini")
+        chat.with_model("openai", LLM_MODEL_FAST)
 
         body = (
             f"Sujet: {req.subject or '-'}\n"
@@ -1510,7 +1517,7 @@ RÈGLES :
     try:
         session_id = f"optimizer_{uuid.uuid4().hex[:8]}"
         chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=session_id, system_message="Tu es un conseiller financier suisse qui ne répond qu'en JSON strict.") \
-            .with_model("openai", "gpt-4o-mini")
+            .with_model("openai", LLM_MODEL_FAST)
         response = await chat.send_message(UserMessage(text=prompt))
 
         # Extract JSON loosely
@@ -1690,7 +1697,7 @@ async def voice_parse(
                     f"recurring: bool, date: 'YYYY-MM-DD' (default to {today_iso} unless explicitly stated)"
                     "}. The merchant and category VALUES may stay in the user language. No other text outside JSON."
                 ),
-            ).with_model("openai", "gpt-4o-mini")
+            ).with_model("openai", LLM_MODEL_FAST)
             r = await chat.send_message(UserMessage(text=f"Phrase: {text}"))
             content = r if isinstance(r, str) else getattr(r, "content", "")
             # Extract JSON

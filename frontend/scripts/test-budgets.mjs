@@ -200,5 +200,19 @@ check('budget : clavier géré (KeyboardAvoidingView) + sélecteur groupé',
   check('Test 12 : déficit négatif affiché tel quel', (1000 - 1250) === -250);
 }
 
+
+// ── v4.0 — Intégration ChatGPT (OpenAI) via clé universelle ───────────────
+const srv = readFileSync(resolve(root, '../backend/server.py'), 'utf8');
+const llmc = readFileSync(resolve(root, '../backend/llm_client.py'), 'utf8');
+check('ChatGPT : coach Budgy AI sur LLM_MODEL_CHAT (gpt-6-sol)',
+  srv.includes('LLM_MODEL_CHAT = os.getenv("LLM_MODEL_CHAT", "gpt-6-sol")') &&
+  srv.includes('chat.with_model("openai", LLM_MODEL_CHAT)'));
+check('ChatGPT : analyse tickets/emails/voix sur LLM_MODEL_FAST (gpt-5.4-mini)',
+  srv.includes('LLM_MODEL_FAST = os.getenv("LLM_MODEL_FAST", "gpt-5.4-mini")') &&
+  !srv.includes('"gpt-4o-mini")'));
+check('ChatGPT : routage clé universelle sk-emergent dans llm_client',
+  llmc.includes('startsWith') === false && llmc.includes('startswith("sk-emergent")') &&
+  llmc.includes('emergentintegrations.llm.chat'));
+
 console.log(`\nRésultat : ${passed} réussis, ${failed} échoués`);
 if (failed > 0) process.exit(1);

@@ -124,7 +124,7 @@ jobs:
         run: |
           echo "Resubmitting only the failed Apple upload for EXISTING Budgy 4.0.0 (90)."
           echo "No new iOS compilation, no new build number, no --latest."
-          eas submit:retry 7fe3c265-119c-4188-87f4-4831cdbfbee9 --platform ios --non-interactive
+          eas submit:retry 7fe3c265-119c-4188-87f4-4831cdbfbee9 --non-interactive
 
       - name: EAS build
         if: ${{ !(github.event.inputs.platform == 'ios' && github.event.inputs.profile == 'testflight' && github.event.inputs.submit == 'true') }}

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * BUDGY v3.9.0 Build 82 — react-native-iap v15 pre-build contract.
+ * BUDGY 4.0.0 Build 90+ — react-native-iap v15 pre-build contract.
  * Static/pure tests only: native StoreKit is validated on TestFlight.
  */
 
@@ -38,7 +38,7 @@ const premiumExecutable = premiumSrc
   .replace(/\/\*[\s\S]*?\*\//g, '')
   .replace(/\/\/.*$/gm, '');
 
-console.log('\n[test-iap-v15] Build 82 contract suite\n');
+console.log('\n[test-iap-v15] Budgy 4.0.0 / iOS build 90+ contract suite\n');
 
 ok('uses v15 fetchProducts()', () => {
   assert.match(iapSrc, /RNIap\.fetchProducts\s*\(/);
@@ -195,12 +195,45 @@ ok('paywall has no hardcoded subscription CHF prices', () => {
   assert.doesNotMatch(paywallSrc, /CHF\s*39\.90/);
 });
 
-ok('app version is 3.9.1', () => {
-  assert.equal(appJson.expo.version, '3.9.1');
+ok('app version is 4.0.0', () => {
+  assert.equal(appJson.expo.version, '4.0.0');
 });
 
-ok('iOS buildNumber is 85 (TestFlight Smart 4.0)', () => {
-  assert.equal(appJson.expo.ios.buildNumber, '85');
+ok('iOS buildNumber is at least 90 (89 already uploaded to Apple)', () => {
+  const n = String(appJson.expo.ios.buildNumber);
+  assert.match(n, /^\d+$/, 'iOS buildNumber must be a positive integer');
+  assert.ok(Number(n) >= 90, 'iOS buildNumber must be >= 90; got ' + n);
+});
+
+// Apple ITMS-90896 regression guard: the Swift AppIntents extension
+// must contain its own @main ExtensionKit entry point.
+ok('Siri extension has Swift @main (ITMS-90896)', () => {
+  const entry = fs.readFileSync(
+    path.join(__dirname, '..', 'targets', 'intents', 'BudgyIntentsExtension.swift'),
+    'utf8',
+  );
+  assert.match(entry, /@main\s+struct\s+BudgyIntentsExtension\s*:\s*AppIntentsExtension\s*\{/);
+});
+
+ok('Siri extension native configuration remains valid', () => {
+  const config = fs.readFileSync(
+    path.join(__dirname, '..', 'targets', 'intents', 'expo-target.config.js'),
+    'utf8',
+  );
+  const plist = fs.readFileSync(
+    path.join(__dirname, '..', 'targets', 'intents', 'Info.plist'),
+    'utf8',
+  );
+  assert.match(config, /type:\s*['"]app-intent['"]/);
+  assert.match(plist, /com\.apple\.appintents-extension/);
+});
+
+ok('WidgetKit bundle still has Swift @main', () => {
+  const widget = fs.readFileSync(
+    path.join(__dirname, '..', 'targets', 'widgets', 'BudgyWidget.swift'),
+    'utf8',
+  );
+  assert.match(widget, /@main\s+struct\s+BudgyWidgetBundle\s*:\s*WidgetBundle\s*\{/);
 });
 
 ok('Android versionCode is 82', () => {

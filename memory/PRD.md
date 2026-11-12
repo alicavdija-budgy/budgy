@@ -325,3 +325,12 @@ test
 - Rapprochements CONFIRMES par l'utilisateur : facture payee <-> depense existante (lier/creer, dissociation propre) ; import QR <-> charge active (Invoice.recurringId, obligation comptee 1 fois).
 - test-engine.mjs : transpile et EXECUTE le vrai getMonthlyFinancialSnapshot — 23/23 scenarios chiffres (4250 stable, deficit -250, retard sept. du en nov., 2 dettes isolees, navigation mois, migration). Plus de tests uniquement textuels pour le moteur.
 - Hash reel des commits : fiabilisation = 69be222b3f51 (le '20069be2' annonce etait le short-hash mal lu), audit final = e7d1aaac40ab. Build 88 conserve. RESTE iPhone : Siri voix, camera QR Nexum, barre flottante, StoreKit.
+
+## Session STABILISATION PREMIUM (commits 2f8ecfce + 3ddd918e)
+- P0 categories : CategoryGroupPicker n'est plus un Modal natif — calque absolu rendu DANS le Modal du formulaire (budgets.tsx, recurring.tsx) ; une seule fenetre native, deux vues internes. Cause racine du blocage iPhone = deux Modals UIKit empiles.
+- P0 Siri : refreshWidgetSnapshot attend persist.hasHydrated() ; sans session il ne retire QUE le snapshot (plus jamais la file pendingExpenses ni la route — cause racine de la commande perdue au cold start). Purge totale uniquement via clearWidgetData (logout/changement de compte). pushedPid libere quand la file se vide ; annulation quick-add retire la commande. Dialogue Swift = 'confirmez... dans Budgy' (jamais 'c'est fait') → le 'c'est fait' de la video venait d'un ancien binaire : BUILD 89 requis sur iPhone.
+- Protections Apple recrees localement (les commits distants 485328f0/b283e1f6/218ca545/f5cd2bfa/c4d776e5/11de6a26 n'existaient pas dans le pod) : BudgyIntentsExtension.swift (@main AppIntentsExtension, anti ITMS-90896), buildNumber 88→89, test-alerts verifie 4.0.0/build>=89.
+- P1 menu Plus : refonte editoriale (#0A0F1C, carte Budgy Pro or relief, 5 sections exactes, 17 lignes texte+chevron via FEATURE_BY_ID, titres extrudes+trait vert, i18n plusV3 x4, a11y) ; /more/category/[id] → redirect. Gardes FREE/PRO et statut StoreKit intacts.
+- Montants exacts : formatNumber/formatMoney/useMoney auto-decimales (17,90 jamais 18).
+- scripts/test-stability.mjs : 43 garde-fous. testing_agent iteration_22 : tous parcours PASS apres fixes.
+- RESTE iPhone physique (build 89) : commande Siri vocale reelle, rendu natif du picker mono-modal, barre flottante, StoreKit.

@@ -99,6 +99,7 @@ export default function InvoicesScreen() {
   const transactions = useStore((s) => s.transactions);
   const addTransaction = useStore((s) => s.addTransaction);
   const deleteTransaction = useStore((s) => s.deleteTransaction);
+  const updateTransaction = useStore((s) => s.updateTransaction);
 
   const invoices = useMemo(() => storeInvoices.map(mapStoreInvoice), [storeInvoices]);
 
@@ -160,26 +161,54 @@ export default function InvoicesScreen() {
       paidAt: becomesPaid ? Date.now() : undefined,
     });
     // v4.0 — RAPPROCHEMENT : une facture payée EST un paiement réel.
-    // On enregistre UNE transaction liée (invoiceId) si aucune n'existe ;
-    // repasser en « à payer » retire cette même transaction (idempotent).
+    // Si une dépense NON LIÉE du même montant existe déjà ce mois, on PROPOSE
+    // de la rapprocher (jamais automatique) au lieu de déduire deux fois.
     const linked = transactions.find((tx) => (tx as any).invoiceId === id);
     if (becomesPaid && !linked) {
-      const nowTs = Date.now();
-      addTransaction({
-        id: `inv_${id}`,
-        title: inv.title,
-        amount: Math.abs(Number(inv.amount) || 0),
-        date: new Date().toISOString().slice(0, 10),
-        category: inv.category || 'autre',
-        createdAt: nowTs,
-        updatedAt: nowTs,
-        synced: false,
-        type: 'expense',
-        source: 'invoice',
-        invoiceId: id,
+      const nowD2 = new Date();
+      const candidate = transactions.find((tx) => {
+        if ((tx as any).invoiceId || (tx as any).type === 'income') return false;
+        if ((tx as any).source && (tx as any).source !== 'manual') return false;
+        if (Math.abs((Number(tx.amount) || 0) - (Number(inv.amount) || 0)) > 0.01) return false;
+        const d = new Date(tx.date);
+        return d.getFullYear() === nowD2.getFullYear() && d.getMonth() === nowD2.getMonth();
       });
+      const createTx = () => {
+        const nowTs = Date.now();
+        addTransaction({
+          id: `inv_${id}`,
+          title: inv.title,
+          amount: Math.abs(Number(inv.amount) || 0),
+          date: new Date().toISOString().slice(0, 10),
+          category: inv.category || 'autre',
+          createdAt: nowTs,
+          updatedAt: nowTs,
+          synced: false,
+          type: 'expense',
+          source: 'invoice',
+          invoiceId: id,
+        });
+      };
+      if (candidate) {
+        Alert.alert(
+          t('invoiceReconcile.title'),
+          t('invoiceReconcile.body', { title: candidate.title, amount: String(inv.amount) }),
+          [
+            {
+              text: t('invoiceReconcile.link'),
+              onPress: () => updateTransaction(candidate.id, { invoiceId: id, source: 'invoice' } as any),
+            },
+            { text: t('invoiceReconcile.newTx'), onPress: createTx },
+          ],
+        );
+      } else {
+        createTx();
+      }
     } else if (!becomesPaid && linked) {
-      deleteTransaction(linked.id);
+      // Dissocier : si la transaction venait d'un rapprochement manuel, on la
+      // délie ; si elle a été créée par la facture, on la retire.
+      if (linked.id === `inv_${id}`) deleteTransaction(linked.id);
+      else updateTransaction(linked.id, { invoiceId: undefined, source: 'manual' } as any);
     }
     // Phase 4 — hygiène des rappels OS : une facture payée ne doit plus
     // rappeler son échéance ; repasser en « à payer » reprogramme J-90/30/7/1.

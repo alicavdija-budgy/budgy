@@ -70,18 +70,43 @@ export default function RecurringScreen() {
     return new Date(d.getFullYear(), d.getMonth(), Math.min(day, lastDay));
   };
 
-  const isPaidThisMonth = (rec: any) => rec.lastPaidMonth === monthKey;
+  const isPaidThisMonth = (rec: any) => paidAmountOf(rec) >= dueAmountOf(rec) && dueAmountOf(rec) > 0;
 
-  /** Marquer payée : crée UNE transaction liée (recurringId) et sort la charge
-   *  de l'engagement du mois — remplacement, jamais double déduction. */
+  /** Montant exigible ce mois (occurrences réelles — même règle que le moteur). */
+  const dueAmountOf = (rec: any): number => {
+    const amt = Number(rec.amount) || 0;
+    const freq = String(rec.frequency || 'monthly');
+    if (freq === 'weekly') return amt * 4;
+    if (freq === 'monthly') return amt;
+    const step = FREQ_MONTHS[freq] ?? 1;
+    const anchor = new Date(rec.createdAt || Date.now());
+    const diff = (nowD.getFullYear() - anchor.getFullYear()) * 12 + (nowD.getMonth() - anchor.getMonth());
+    return diff >= 0 && diff % step === 0 ? amt : 0;
+  };
+
+  /** Déjà payé ce mois (historique ; héritage lastPaidMonth = tout payé). */
+  const paidAmountOf = (rec: any): number => {
+    const hist = ((rec.paymentHistory as any[]) || [])
+      .filter((h) => typeof h?.date === 'string' && h.date.startsWith(monthKey))
+      .reduce((s, h) => s + Math.max(0, Number(h.amount) || 0), 0);
+    if (hist > 0) return hist;
+    return rec.lastPaidMonth === monthKey ? dueAmountOf(rec) : 0;
+  };
+
+  /** Payer UNE occurrence : hebdo = 4 paiements possibles dans le mois.
+   *  Chaque paiement crée UNE transaction liée — remplacement, pas d'ajout. */
   const markPaid = (rec: any) => {
-    if (isPaidThisMonth(rec)) return;
-    const txId = `recpay_${rec.id}_${monthKey}`;
+    const due = dueAmountOf(rec);
+    const already = paidAmountOf(rec);
+    if (due <= 0 || already >= due) return;
+    const occAmount = Math.min(Number(rec.amount) || 0, due - already);
+    const n = (((rec.paymentHistory as any[]) || []).filter((h) => String(h?.date || '').startsWith(monthKey)).length) + 1;
+    const txId = `recpay_${rec.id}_${monthKey}_${n}`;
     const nowTs = Date.now();
     addTransaction({
       id: txId,
       title: rec.title,
-      amount: Math.abs(Number(rec.amount) || 0),
+      amount: occAmount,
       date: new Date().toISOString().slice(0, 10),
       category: rec.category,
       createdAt: nowTs,
@@ -91,26 +116,31 @@ export default function RecurringScreen() {
       source: 'recurring',
       recurringId: rec.id,
     } as any);
+    const fullyPaid = already + occAmount >= due;
     updateRecurringExpense(rec.id, {
-      lastPaidMonth: monthKey,
+      lastPaidMonth: fullyPaid ? monthKey : undefined,
       paymentHistory: [
         ...((rec.paymentHistory as any[]) || []),
-        { date: new Date().toISOString().slice(0, 10), amount: Number(rec.amount) || 0, transactionId: txId },
+        { date: new Date().toISOString().slice(0, 10), amount: occAmount, transactionId: txId },
       ],
     } as any);
   };
 
-  /** Annuler le paiement du mois : retire la transaction liée (idempotent). */
+  /** Annuler le DERNIER paiement du mois (occurrence par occurrence). */
   const undoPaid = (rec: any) => {
-    if (!isPaidThisMonth(rec)) return;
     const hist = ((rec.paymentHistory as any[]) || []);
-    const last = hist[hist.length - 1];
-    if (last?.transactionId && transactions.some((tx) => tx.id === last.transactionId)) {
-      deleteTransaction(last.transactionId);
+    const monthIdx = hist.map((h, i) => ({ h, i })).filter((x) => String(x.h?.date || '').startsWith(monthKey));
+    if (monthIdx.length === 0) {
+      if (rec.lastPaidMonth === monthKey) updateRecurringExpense(rec.id, { lastPaidMonth: undefined } as any);
+      return;
+    }
+    const last = monthIdx[monthIdx.length - 1];
+    if (last.h?.transactionId && transactions.some((tx) => tx.id === last.h.transactionId)) {
+      deleteTransaction(last.h.transactionId);
     }
     updateRecurringExpense(rec.id, {
       lastPaidMonth: undefined,
-      paymentHistory: hist.slice(0, -1),
+      paymentHistory: hist.filter((_, i) => i !== last.i),
     } as any);
   };
 
@@ -230,17 +260,16 @@ export default function RecurringScreen() {
     setShowAddModal(false);
   };
 
-  // Récap du mois : engagé encore dû / déjà payé (mensualisé)
-  const dueThisMonth = useMemo(() => {
-    const perMonth: Record<string, number> = { weekly: 4.333, monthly: 1, quarterly: 1 / 3, semiannual: 1 / 6, yearly: 1 / 12 };
-    return recurringExpenses
-      .filter((r) => r.active && (r as any).lastPaidMonth !== monthKey)
-      .reduce((s, r) => s + (Number(r.amount) || 0) * (perMonth[String((r as any).frequency || 'monthly')] ?? 1), 0);
-  }, [recurringExpenses, monthKey]);
-  const paidThisMonth = useMemo(() =>
+  // Récap du mois : EXIGIBLE restant / déjà payé (occurrences réelles)
+  const dueThisMonth = useMemo(() =>
     recurringExpenses
-      .filter((r) => (r as any).lastPaidMonth === monthKey)
-      .reduce((s, r) => s + (Number(r.amount) || 0), 0),
+      .filter((r) => r.active)
+      .reduce((s, r) => s + Math.max(0, dueAmountOf(r) - paidAmountOf(r)), 0),
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  [recurringExpenses, monthKey]);
+  const paidThisMonth = useMemo(() =>
+    recurringExpenses.reduce((s, r) => s + paidAmountOf(r), 0),
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   [recurringExpenses, monthKey]);
 
   return (
@@ -363,13 +392,17 @@ export default function RecurringScreen() {
                     </View>
                   )}
 
-                  {/* v4.0 — statut & paiement du mois */}
-                  {rec.active && (
+                  {/* v4.0 — statut & paiement par OCCURRENCE (hebdo = 4 paiements) */}
+                  {rec.active && dueAmountOf(rec) > 0 && (
                     <View style={styles.payRow}>
                       <View style={[styles.payChip, { backgroundColor: isPaidThisMonth(rec) ? `${theme.success}1C` : `${theme.warning}1C` }]}>
                         <Ionicons name={isPaidThisMonth(rec) ? 'checkmark-circle' : 'time'} size={13} color={isPaidThisMonth(rec) ? theme.success : theme.warning} />
                         <Text style={[styles.payChipTxt, { color: isPaidThisMonth(rec) ? theme.success : theme.warning }]}>
-                          {isPaidThisMonth(rec) ? t('recurringV2.statusPaid') : t('recurringV2.statusDue')}
+                          {isPaidThisMonth(rec)
+                            ? t('recurringV2.statusPaid')
+                            : paidAmountOf(rec) > 0
+                              ? t('recurringV2.statusPartial', { paid: formatNumber(paidAmountOf(rec)), due: formatNumber(dueAmountOf(rec)) })
+                              : t('recurringV2.statusDue')}
                         </Text>
                       </View>
                       <TouchableOpacity

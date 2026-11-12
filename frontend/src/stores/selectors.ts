@@ -17,9 +17,11 @@
 import type { Transaction, Income, RecurringExpense, Invoice, Contract, Budget, SavingsGoal, Debt } from '../types';
 
 export interface FinancialSnapshot {
-  monthlyIncome: number;
+  monthlyIncome: number;            // ressources du mois (récurrents + ponctuels reçus)
+  oneOffIncome: number;             // revenus ponctuels reçus ce mois
   paidExpenses: number;
-  recurringExpenses: number;
+  recurringExpenses: number;        // EXIGIBLE restant ce mois (occurrences réelles)
+  recurringMonthlyAvg: number;      // moyenne mensuelle budgétaire (stats uniquement)
   upcomingBills: number;
   subscriptions: number;            // sous-ensemble de recurringExpenses
   debtPayments: number;             // mensualités de dettes encore dues ce mois
@@ -103,28 +105,83 @@ export function getMonthlyFinancialSnapshot(input: {
 
   const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
 
-  // 2) Dépenses déjà payées ce mois (transactions ; négatif = remboursement).
-  //    Les transactions de type 'income' ne sont jamais des dépenses.
+  // 2) Transactions du mois. Convention : dépense POSITIVE ; type 'income' =
+  //    revenu PONCTUEL reçu (intégré aux ressources, jamais aux dépenses).
   const thisMonthTx = (input.transactions || []).filter((t) => {
     const d = parseDate(t.date);
     return d && d.getFullYear() === year && d.getMonth() === month;
   });
   const expenseTx = thisMonthTx.filter((t) => (t as any).type !== 'income');
   const paidExpenses = expenseTx.reduce((s, t) => s + (Number(t.amount) || 0), 0);
+  // Revenus ponctuels réellement reçus ce mois (saisis comme transactions).
+  const oneOffIncome = thisMonthTx
+    .filter((t) => (t as any).type === 'income')
+    .reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
 
-  // 3) Charges récurrentes actives — mensualisées. Une charge MARQUÉE PAYÉE ce
-  //    mois (lastPaidMonth) sort de l'engagement : son paiement réel est déjà
-  //    dans paidExpenses (remplacement, jamais double déduction).
+  // 3) Charges récurrentes — DEUX notions distinctes :
+  //    A. recurringMonthlyAvg : moyenne mensuelle BUDGÉTAIRE (stats/comparaisons).
+  //    B. recurringExpenses  : montant RÉELLEMENT EXIGIBLE ce mois, net des
+  //       paiements déjà effectués (occurrence par occurrence, jamais une
+  //       moyenne). Une assurance annuelle de 1200 pèse 1200 sur son mois
+  //       d'échéance et 0 les autres mois — jamais 100 déduits chaque mois.
   const activeRecurring = (input.recurringExpenses || []).filter((r) => r.active !== false);
-  const recurringDue = activeRecurring.filter((r) => (r as any).lastPaidMonth !== monthKey);
-  const recurringExpenses = recurringDue.reduce(
-    (s, r) => s + toMonthlyAmount(Number(r.amount) || 0, r.frequency as any),
+  const PER_MONTH: Record<string, number> = { weekly: 52 / 12, monthly: 1, quarterly: 1 / 3, semiannual: 1 / 6, yearly: 1 / 12 };
+  const STEP_MONTHS: Record<string, number> = { monthly: 1, quarterly: 3, semiannual: 6, yearly: 12 };
+
+  const recurringMonthlyAvg = activeRecurring.reduce(
+    (s, r) => s + (Number(r.amount) || 0) * (PER_MONTH[String(r.frequency || 'monthly')] ?? 1),
     0,
   );
-  // Sous-ensemble = abonnements / télécoms
+
+  /** Montant exigible ce mois pour une charge (occurrences réelles). */
+  const dueAmountThisMonth = (r: RecurringExpense): number => {
+    const amt = Number(r.amount) || 0;
+    const freq = String(r.frequency || 'monthly');
+    if (freq === 'weekly') return amt * 4; // 4 occurrences standard par mois
+    if (freq === 'monthly') return amt;
+    const step = STEP_MONTHS[freq] ?? 1;
+    const anchor = new Date((r as any).createdAt || Date.now());
+    const diff = (year - anchor.getFullYear()) * 12 + (month - anchor.getMonth());
+    return diff >= 0 && diff % step === 0 ? amt : 0;
+  };
+
+  /** Déjà payé ce mois pour cette charge : transactions LIÉES (recurringId),
+   *  sinon historique de paiements, sinon héritage lastPaidMonth (= payé en
+   *  totalité — migration douce des anciennes données). */
+  const paidForCharge = (r: RecurringExpense): number => {
+    const linked = expenseTx
+      .filter((t) => (t as any).recurringId === r.id)
+      .reduce((s, t) => s + Math.max(0, Number(t.amount) || 0), 0);
+    if (linked > 0) return linked;
+    const hist = ((r as any).paymentHistory as any[]) || [];
+    const histPaid = hist
+      .filter((h) => typeof h?.date === 'string' && h.date.startsWith(monthKey))
+      .reduce((s, h) => s + Math.max(0, Number(h.amount) || 0), 0);
+    if (histPaid > 0) return histPaid;
+    return (r as any).lastPaidMonth === monthKey ? dueAmountThisMonth(r) : 0;
+  };
+
+  // Rapprochement facture↔charge : si une facture de ce mois est LIÉE à la
+  // charge (recurringId posé après confirmation de l'utilisateur), l'obligation
+  // est représentée par la facture — la charge ne compte pas une 2e fois.
+  const invoicesArr = input.invoices || [];
+  const chargeHasLinkedInvoice = (r: RecurringExpense): boolean =>
+    invoicesArr.some((inv) => {
+      if ((inv as any).recurringId !== r.id) return false;
+      const d = parseDate((inv as any).dueDate) || parseDate((inv as any).createdAt as any);
+      return !d || (d.getFullYear() === year && d.getMonth() === month) || (inv.status || '') !== 'paid';
+    });
+
+  const recurringExpenses = activeRecurring.reduce((s, r) => {
+    if (chargeHasLinkedInvoice(r)) return s;
+    return s + Math.max(0, dueAmountThisMonth(r) - paidForCharge(r));
+  }, 0);
+
+  // Sous-ensemble = abonnements / télécoms (exigible restant)
   const subscriptions = activeRecurring
     .filter((r) => SUBSCRIPTION_CATEGORIES.has((r.category || '').toLowerCase()))
-    .reduce((s, r) => s + toMonthlyAmount(Number(r.amount) || 0, r.frequency as any), 0);
+    .filter((r) => !chargeHasLinkedInvoice(r))
+    .reduce((s, r) => s + Math.max(0, dueAmountThisMonth(r) - paidForCharge(r)), 0);
 
   // 4) Factures impayées : échéance jusqu'à la fin du mois COURANT, y compris
   //    les factures EN RETARD des mois précédents (elles restent dues tant
@@ -139,32 +196,42 @@ export function getMonthlyFinancialSnapshot(input: {
     })
     .reduce((s, inv) => s + (Number(inv.amount) || 0), 0);
 
-  // 4b) Mensualités de dettes en cours (capital restant > 0) — intégrées à la
-  // trésorerie engagée. Anti double comptage : les remboursements DÉJÀ payés ce
-  // mois (transaction liée debtId ou catégorie dettes) réduisent l'engagement
-  // restant (jamais en dessous de 0).
-  const debtCommitted = (input.debts || [])
-    .filter((d) => (Number(d.total) || 0) - (Number(d.paid) || 0) > 0)
-    .reduce((s, d) => s + (Number(d.monthlyPayment) || 0), 0);
-  const debtCatPaid = expenseTx
+  // 4b) Dettes — PAR IDENTIFIANT : chaque mensualité est calculée dette par
+  // dette ; un paiement lié (debtId) ne règle JAMAIS une autre dette.
+  // Le repli par catégorie « dettes » n'est appliqué que s'il n'existe
+  // qu'UNE seule dette active (aucune ambiguïté possible).
+  const activeDebts = (input.debts || [])
+    .filter((d) => (Number(d.total) || 0) - (Number(d.paid) || 0) > 0);
+  const paidForDebt = (debtId: string): number => expenseTx
+    .filter((t) => (t as any).debtId === debtId)
+    .reduce((s, t) => s + Math.max(0, Number(t.amount) || 0), 0);
+  const unlinkedDebtCatPaid = expenseTx
     .filter((t) => {
-      if ((t as any).debtId) return true;
+      if ((t as any).debtId) return false;
       const c = (t.category || '').toLowerCase();
       return c === 'dettes' || c === 'debt' || c === 'debts';
     })
     .reduce((s, t) => s + Math.max(0, Number(t.amount) || 0), 0);
-  const debtPayments = Math.max(0, debtCommitted - debtCatPaid);
+  const debtPayments = activeDebts.reduce((s, d, idx) => {
+    let paidD = paidForDebt(d.id);
+    if (activeDebts.length === 1 && idx === 0) paidD += unlinkedDebtCatPaid;
+    return s + Math.max(0, (Number(d.monthlyPayment) || 0) - paidD);
+  }, 0);
 
+  // Ressources du mois = revenus récurrents prévus + revenus PONCTUELS reçus.
+  const totalIncome = monthlyIncome + oneOffIncome;
   const totalCommitted = paidExpenses + recurringExpenses + upcomingBills + debtPayments;
   // JAMAIS de clamp à zéro : un déficit doit s'afficher comme déficit.
-  const realAvailableThisMonth = monthlyIncome - totalCommitted;
+  const realAvailableThisMonth = totalIncome - totalCommitted;
 
   const monthLabel = now.toLocaleDateString(input.locale || 'fr-CH', { month: 'long', year: 'numeric' });
 
   return {
-    monthlyIncome,
+    monthlyIncome: totalIncome,
+    oneOffIncome,
     paidExpenses,
     recurringExpenses,
+    recurringMonthlyAvg,
     upcomingBills,
     subscriptions,
     debtPayments,

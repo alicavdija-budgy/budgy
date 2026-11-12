@@ -240,6 +240,9 @@ export interface Invoice {
   source: 'manual' | 'email' | 'scan';
   createdAt: number;
   paidAt?: number;
+  /** v4.0 — rapprochement CONFIRMÉ avec une charge récurrente : l'obligation
+   *  n'est alors comptée qu'une fois (la facture représente l'échéance). */
+  recurringId?: string;
 }
 
 export interface SyncQueueItem {

@@ -65,7 +65,7 @@ export default function ScannerModal() {
       ? (params.forceType as ReceiptType)
       : null;
   const { t, lang } = useTranslation();
-  const { addTransaction, addReceipt, addInvoice } = useStore();
+  const { addTransaction, addReceipt, addInvoice, recurringExpenses } = useStore();
 
   const [permission, requestPermission] = useCameraPermissions();
   const [stage, setStage] = useState<Stage>('camera');
@@ -161,8 +161,9 @@ export default function ScannerModal() {
       return;
     }
     const now = new Date();
-    addInvoice({
-      id: `inv_qr_${now.getTime()}`,
+    const invId = `inv_qr_${now.getTime()}`;
+    const buildInvoice = (recurringId?: string) => ({
+      id: invId,
       title: qrBill.creditor.name.slice(0, 80),
       issuer: qrBill.creditor.name.slice(0, 80),
       amount: Math.round(amt * 100) / 100,
@@ -172,13 +173,36 @@ export default function ScannerModal() {
       iban: qrBill.iban,
       reference: qrBill.reference || undefined,
       category: qrCategory,
-      status: 'pending',
-      source: 'scan',
+      status: 'pending' as const,
+      source: 'scan' as const,
       createdAt: now.getTime(),
-    } as any);
-    try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
-    router.back();
-  }, [qrBill, qrAmount, qrDueDate, qrCategory, addInvoice, router, t]);
+      ...(recurringId ? { recurringId } : {}),
+    });
+    const finish = () => {
+      try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
+      router.back();
+    };
+    // v4.0 — RAPPROCHEMENT facture ↔ charge récurrente : si une charge active
+    // du même montant existe (ex. prime LAMal), on PROPOSE de lier la facture
+    // à la charge (jamais automatique) — l'obligation ne compte alors qu'une
+    // seule fois dans le disponible.
+    const candidate = recurringExpenses.find(
+      (r) => r.active && Math.abs((Number(r.amount) || 0) - amt) <= 0.01,
+    );
+    if (candidate) {
+      Alert.alert(
+        t('invoiceReconcile.recTitle'),
+        t('invoiceReconcile.recBody', { title: candidate.title, amount: String(amt) }),
+        [
+          { text: t('invoiceReconcile.recLink'), onPress: () => { addInvoice(buildInvoice(candidate.id) as any); finish(); } },
+          { text: t('invoiceReconcile.recSeparate'), onPress: () => { addInvoice(buildInvoice() as any); finish(); } },
+        ],
+      );
+      return;
+    }
+    addInvoice(buildInvoice() as any);
+    finish();
+  }, [qrBill, qrAmount, qrDueDate, qrCategory, addInvoice, recurringExpenses, router, t]);
 
   // Form state for edit stage
   const [title, setTitle] = useState('');

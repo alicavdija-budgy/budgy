@@ -126,8 +126,8 @@ check('listener SIGNED_OUT global dans _layout (purge session expirée/révoqué
   layoutSrc.includes("onAuthStateChange") && layoutSrc.includes("'SIGNED_OUT'") === false
     ? layoutSrc.includes('SIGNED_OUT')
     : layoutSrc.includes('SIGNED_OUT'));
-check('dettes : mensualité engagée réduite par les remboursements saisis (anti double comptage)',
-  selSrc.includes('debtCommitted - debtCatPaid') && selSrc.includes("c === 'dettes'"));
+check('dettes : engagement calculé PAR DETTE, paiements liés par debtId',
+  read('src/stores/selectors.ts').includes('paidForDebt') && read('src/stores/selectors.ts').includes('activeDebts.length === 1'));
 check('aucune route morte /more/contracts',
   !read('app/scanner-modal.tsx').includes("/more/contracts") &&
   !read('app/more/email-import.tsx').includes("/more/contracts"));
@@ -156,20 +156,20 @@ const bud4 = read('app/more/budgets.tsx');
 check('Siri : dépense enregistrée en POSITIF (convention unique)',
   qa4.includes('Math.abs(result.amount || 0)') && !qa4.includes('-(result.amount'));
 check('moteur : AUCUN clamp à zéro — un déficit s\'affiche',
-  sel4.includes('const realAvailableThisMonth = monthlyIncome - totalCommitted') &&
-  !sel4.includes('Math.max(0, monthlyIncome - totalCommitted'));
+  sel4.includes('const realAvailableThisMonth = totalIncome - totalCommitted') &&
+  !sel4.includes('Math.max(0, totalIncome - totalCommitted'));
 check('moteur : factures EN RETARD toujours comptées (due <= endOfMonth, statut != paid)',
   sel4.includes("!== 'paid'") && sel4.includes('due <= endOfMonth') && !sel4.includes('due >= now'));
-check('moteur : charge marquée payée sort de l\'engagement (lastPaidMonth)',
-  sel4.includes('lastPaidMonth') && sel4.includes('recurringDue'));
+check('moteur : exigible réel par occurrence (dueAmountThisMonth/paidForCharge)',
+  sel4.includes('dueAmountThisMonth') && sel4.includes('paidForCharge') && sel4.includes('recurringMonthlyAvg'));
 check('facture payée → transaction liée (invoiceId), annulation → retrait',
   inv4.includes("invoiceId: id") && inv4.includes('deleteTransaction(linked.id)'));
 check('remboursement de dette → transaction réelle liée (debtId)',
   debt4.includes("debtId: showPay") && debt4.includes("source: 'debt'"));
 check('charge : markPaid crée UNE transaction liée (recurringId) + historique',
   rec4.includes("recurringId: rec.id") && rec4.includes('paymentHistory'));
-check('charge : undoPaid retire la transaction du mois (idempotent)',
-  rec4.includes('deleteTransaction(last.transactionId)'));
+check('charge : undoPaid retire la DERNIÈRE occurrence payée du mois',
+  rec4.includes('deleteTransaction(last.h.transactionId)'));
 check('types : liens explicites invoiceId/debtId/recurringId + source',
   types4.includes('invoiceId?:') && types4.includes('debtId?:') && types4.includes('recurringId?:'));
 check('types : périodicités complètes hebdo→annuelle',

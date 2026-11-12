@@ -2609,10 +2609,14 @@ export const TRANSLATIONS = {
     it: { title: 'Spesa già registrata?', body: 'Una spesa «{{title}}» di CHF {{amount}} esiste già questo mese. Abbinarla a questa fattura invece di creare una seconda spesa?', link: 'Abbina la spesa esistente', newTx: 'Crea una nuova spesa', recTitle: 'Onere ricorrente rilevato', recBody: 'L\'onere «{{title}}» (CHF {{amount}}) esiste già. Collegare questa fattura all\'onere per contare l\'obbligo una sola volta?', recLink: 'Collega all\'onere', recSeparate: 'Tieni separato' },
   },
   recurringV2: {
-    fr: { dueThisMonth: 'À payer ce mois', paidThisMonth: 'Payé ce mois', nextDue: 'Prochaine échéance : {{date}}', monthlyEq: 'Équiv. {{currency}} {{amount}}/mois', statusPaid: 'Payée ce mois', statusPartial: '{{paid}} / {{due}} payé', statusDue: 'À payer', markPaid: 'Marquer payée', undoPaid: 'Annuler le paiement' },
-    en: { dueThisMonth: 'Due this month', paidThisMonth: 'Paid this month', nextDue: 'Next due: {{date}}', monthlyEq: 'Equiv. {{currency}} {{amount}}/mo', statusPaid: 'Paid this month', statusPartial: '{{paid}} / {{due}} paid', statusDue: 'To pay', markPaid: 'Mark as paid', undoPaid: 'Undo payment' },
-    de: { dueThisMonth: 'Diesen Monat fällig', paidThisMonth: 'Diesen Monat bezahlt', nextDue: 'Nächste Fälligkeit: {{date}}', monthlyEq: 'Entspr. {{currency}} {{amount}}/Mt.', statusPaid: 'Diesen Monat bezahlt', statusPartial: '{{paid}} / {{due}} bezahlt', statusDue: 'Zu zahlen', markPaid: 'Als bezahlt markieren', undoPaid: 'Zahlung rückgängig' },
-    it: { dueThisMonth: 'Da pagare questo mese', paidThisMonth: 'Pagato questo mese', nextDue: 'Prossima scadenza: {{date}}', monthlyEq: 'Equiv. {{currency}} {{amount}}/mese', statusPaid: 'Pagata questo mese', statusPartial: '{{paid}} / {{due}} pagato', statusDue: 'Da pagare', markPaid: 'Segna come pagata', undoPaid: 'Annulla pagamento' },
+    fr: {       subAmount: '{{currency}} {{amount}}/mois · Jour {{day}}',
+dueThisMonth: 'À payer ce mois', paidThisMonth: 'Payé ce mois', nextDue: 'Prochaine échéance : {{date}}', monthlyEq: 'Équiv. {{currency}} {{amount}}/mois', statusPaid: 'Payée ce mois', statusPartial: '{{paid}} / {{due}} payé', statusDue: 'À payer', markPaid: 'Marquer payée', undoPaid: 'Annuler le paiement' },
+    en: {       subAmount: '{{currency}} {{amount}}/month · Day {{day}}',
+dueThisMonth: 'Due this month', paidThisMonth: 'Paid this month', nextDue: 'Next due: {{date}}', monthlyEq: 'Equiv. {{currency}} {{amount}}/mo', statusPaid: 'Paid this month', statusPartial: '{{paid}} / {{due}} paid', statusDue: 'To pay', markPaid: 'Mark as paid', undoPaid: 'Undo payment' },
+    de: {       subAmount: '{{currency}} {{amount}}/Monat · Tag {{day}}',
+dueThisMonth: 'Diesen Monat fällig', paidThisMonth: 'Diesen Monat bezahlt', nextDue: 'Nächste Fälligkeit: {{date}}', monthlyEq: 'Entspr. {{currency}} {{amount}}/Mt.', statusPaid: 'Diesen Monat bezahlt', statusPartial: '{{paid}} / {{due}} bezahlt', statusDue: 'Zu zahlen', markPaid: 'Als bezahlt markieren', undoPaid: 'Zahlung rückgängig' },
+    it: {       subAmount: '{{currency}} {{amount}}/mese · Giorno {{day}}',
+dueThisMonth: 'Da pagare questo mese', paidThisMonth: 'Pagato questo mese', nextDue: 'Prossima scadenza: {{date}}', monthlyEq: 'Equiv. {{currency}} {{amount}}/mese', statusPaid: 'Pagata questo mese', statusPartial: '{{paid}} / {{due}} pagato', statusDue: 'Da pagare', markPaid: 'Segna come pagata', undoPaid: 'Annulla pagamento' },
   },
   budgetsV2: {
     fr: {

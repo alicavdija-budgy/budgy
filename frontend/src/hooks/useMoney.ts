@@ -19,7 +19,9 @@ export function useMoney() {
   const code: Currency = ['CHF', 'EUR', 'USD'].includes(currency) ? currency : 'CHF';
 
   const format = useCallback(
-    (amount: number = 0, decimals: number = 0) => formatMoney(amount, code, { decimals }),
+    // decimals omis → automatique : les centimes réels sont AFFICHÉS
+    // (17.90 ne devient jamais « 18 »), les entiers restent sans décimales.
+    (amount: number = 0, decimals?: number) => formatMoney(amount, code, { decimals }),
     [code]
   );
 

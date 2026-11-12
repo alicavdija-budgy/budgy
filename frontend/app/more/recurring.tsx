@@ -44,7 +44,7 @@ export default function RecurringScreen() {
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { preferences, recurringExpenses, incomes, addRecurringExpense, updateRecurringExpense, toggleRecurringExpense, deleteRecurringExpense, addTransaction, deleteTransaction, transactions } = useStore();
+  const { preferences, recurringExpenses, incomes, addRecurringExpense, updateRecurringExpense, toggleRecurringExpense, deleteRecurringExpense, addTransaction, deleteTransaction, transactions , customCategories } = useStore();
 
   // ── v4.0 — paiements & échéances ──────────────────────────────────────────
   const nowD = new Date();
@@ -68,6 +68,21 @@ export default function RecurringScreen() {
     }
     const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
     return new Date(d.getFullYear(), d.getMonth(), Math.min(day, lastDay));
+  };
+
+  // Catégories : taxonomie officielle + catégories PERSONNELLES + i18n
+  const catColorOf = (id: string) =>
+    customCategories.find((c) => c.id === id)?.color || getCategoryColor(id);
+  const catIconOf = (id: string) =>
+    customCategories.find((c) => c.id === id)?.icon
+    || EXPENSE_CATEGORIES.find((c) => c.id === id)?.icon || 'pricetag';
+  const catLabelOf = (id: string) => {
+    const custom = customCategories.find((c) => c.id === id);
+    if (custom) return custom.name;
+    const key = `categoryLabels.${id}`;
+    const tr = t(key);
+    if (tr && tr !== key) return tr;
+    return EXPENSE_CATEGORIES.find((c) => c.id === id)?.name || id;
   };
 
   const isPaidThisMonth = (rec: any) => paidAmountOf(rec) >= dueAmountOf(rec) && dueAmountOf(rec) > 0;
@@ -189,7 +204,7 @@ export default function RecurringScreen() {
       category: values.category || editingRec.category,
       dayOfMonth: day,
       frequency: (values.frequency || (editingRec as any).frequency || 'monthly') as any,
-      color: getCategoryColor(values.category || editingRec.category),
+      color: catColorOf(values.category || editingRec.category),
       active: typeof values.active === 'boolean' ? values.active : editingRec.active,
     });
     setEditingRecId(null);
@@ -252,7 +267,7 @@ export default function RecurringScreen() {
       category: newRec.category,
       frequency: newRec.frequency as any,
       dayOfMonth: Math.max(1, Math.min(31, parseInt(newRec.dayOfMonth) || 1)),
-      color: getCategoryColor(newRec.category),
+      color: catColorOf(newRec.category),
       active: true,
       createdAt: Date.now(),
     });
@@ -279,7 +294,7 @@ export default function RecurringScreen() {
           <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
         <Text style={styles.title}>{t('recurringScreen.title')}</Text>
-        <TouchableOpacity style={styles.addButton} onPress={() => setShowAddModal(true)}>
+        <TouchableOpacity style={styles.addButton} onPress={() => setShowAddModal(true)} testID="add-recurring">
           <Ionicons name="add" size={24} color={theme.text} />
         </TouchableOpacity>
       </View>
@@ -347,13 +362,13 @@ export default function RecurringScreen() {
                   onLongPress={() => setActionsCtx({
                     id: rec.id,
                     title: rec.title,
-                    subtitle: `${CUR} ${formatNumber(rec.amount)}/mois · Jour ${rec.dayOfMonth}`,
-                    accent: getCategoryColor(rec.category),
+                    subtitle: t('recurringV2.subAmount', { currency: CUR, amount: formatNumber(rec.amount), day: rec.dayOfMonth }),
+                    accent: catColorOf(rec.category),
                   })}
                 >
                 <Card style={[styles.recCard, !rec.active && styles.recCardInactive]}>
                   <View style={styles.recTopRow}>
-                    <BrandLogo merchant={rec.title} size="md" fallbackColor={getCategoryColor(rec.category)} />
+                    <BrandLogo merchant={rec.title} size="md" fallbackColor={catColorOf(rec.category)} />
                     <View style={styles.recInfo}>
                       <View style={styles.recTitleRow}>
                         <Text style={styles.recTitle}>{rec.title}</Text>
@@ -423,7 +438,7 @@ export default function RecurringScreen() {
                       id: rec.id,
                       title: rec.title,
                       subtitle: `${CUR} ${formatNumber(rec.amount)}/mois`,
-                      accent: getCategoryColor(rec.category),
+                      accent: catColorOf(rec.category),
                     })}
                   >
                     <Ionicons name="ellipsis-horizontal" size={16} color={theme.textTertiary} />
@@ -438,7 +453,7 @@ export default function RecurringScreen() {
         <View style={{ height: 40 }} />
       </ScrollView>
 
-      <Modal visible={showAddModal} animationType="slide" transparent onRequestClose={() => setShowAddModal(false)}>
+      <Modal visible={showAddModal} animationType="slide" transparent onRequestClose={() => { if (showCatPicker) { setShowCatPicker(false); return; } setShowAddModal(false); setNewRec({ title: '', amount: '', category: 'abonnements', dayOfMonth: '1', frequency: 'monthly' }); }}>
         <KeyboardAvoidingView
           style={styles.modalOverlay}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -448,7 +463,7 @@ export default function RecurringScreen() {
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>{t('recurringScreen.newSubscription')}</Text>
-                <TouchableOpacity onPress={() => { Keyboard.dismiss(); setShowAddModal(false); }}>
+                <TouchableOpacity onPress={() => { Keyboard.dismiss(); setShowAddModal(false); setShowCatPicker(false); setNewRec({ title: '', amount: '', category: 'abonnements', dayOfMonth: '1', frequency: 'monthly' }); }}>
                   <Ionicons name="close" size={24} color={theme.text} />
                 </TouchableOpacity>
               </View>
@@ -465,6 +480,7 @@ export default function RecurringScreen() {
               onChangeText={(t) => setNewRec((p) => ({ ...p, title: t }))}
               placeholder="Netflix"
               placeholderTextColor={theme.textTertiary}
+              testID="recurring-title-input"
             />
 
             <View style={styles.inputRow}>
@@ -477,6 +493,7 @@ export default function RecurringScreen() {
                   placeholder="17.90"
                   placeholderTextColor={theme.textTertiary}
                   keyboardType="decimal-pad"
+                  testID="recurring-amount-input"
                 />
               </View>
               <View style={{ flex: 1 }}>
@@ -493,11 +510,11 @@ export default function RecurringScreen() {
             </View>
 
             <Text style={styles.inputLabel}>{t('recurringUi.category')}</Text>
-            <TouchableOpacity style={styles.catSelect} onPress={() => setShowCatPicker(true)}>
-              <View style={[styles.catSelectIcon, { backgroundColor: `${getCategoryColor(newRec.category)}1C` }]}>
-                <Ionicons name={(EXPENSE_CATEGORIES.find((c) => c.id === newRec.category)?.icon || 'pricetag') as any} size={16} color={getCategoryColor(newRec.category)} />
+            <TouchableOpacity style={styles.catSelect} onPress={() => setShowCatPicker(true)} testID="recurring-category-select">
+              <View style={[styles.catSelectIcon, { backgroundColor: `${catColorOf(newRec.category)}1C` }]}>
+                <Ionicons name={catIconOf(newRec.category) as any} size={16} color={catColorOf(newRec.category)} />
               </View>
-              <Text style={styles.catSelectTxt}>{getCategoryName(newRec.category)}</Text>
+              <Text style={styles.catSelectTxt}>{catLabelOf(newRec.category)}</Text>
               <Ionicons name="chevron-down" size={16} color={theme.textTertiary} />
             </TouchableOpacity>
 

@@ -5,11 +5,14 @@
 
 import { CANTONS, INSURERS, PILLAR_3A_LIMITS, type CantonCode } from '../data/swiss-data';
 
-// Format number Swiss style
-export const formatNumber = (n: number = 0, decimals: number = 0): string => {
+// Format number Swiss style — par défaut AUTO : les centimes réels sont
+// affichés (17.90 ne devient jamais « 18 »), les entiers restent sans
+// décimales. Un appel explicite (decimals=0|1|2) garde son comportement.
+export const formatNumber = (n: number = 0, decimals?: number): string => {
+  const d = decimals ?? (Math.abs(Math.round(Number(n) * 100) % 100) !== 0 ? 2 : 0);
   return Number(n).toLocaleString('fr-CH', {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
+    minimumFractionDigits: d,
+    maximumFractionDigits: d,
   });
 };
 

@@ -68,9 +68,9 @@ function SectionTitle({ children }: { children: string }) {
   return (
     <View style={st.secHead}>
       <View>
-        <Text style={[st.secTitle, st.depth3]}>{children}</Text>
-        <Text style={[st.secTitle, st.depth2]}>{children}</Text>
-        <Text style={[st.secTitle, st.depth1]}>{children}</Text>
+        <Text style={[st.secTitle, st.depth3]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" aria-hidden>{children}</Text>
+        <Text style={[st.secTitle, st.depth2]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" aria-hidden>{children}</Text>
+        <Text style={[st.secTitle, st.depth1]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" aria-hidden>{children}</Text>
         <Text style={st.secTitle}>{children}</Text>
       </View>
       <View style={st.greenBarWrap}>

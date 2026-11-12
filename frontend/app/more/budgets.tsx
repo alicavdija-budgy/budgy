@@ -339,19 +339,19 @@ export default function BudgetsScreen() {
       </Modal>
 
       {/* ── Ajouter un budget — formulaire premium (clavier géré, validation stricte) ── */}
-      <Modal visible={showAdd} transparent animationType="slide" onRequestClose={() => setShowAdd(false)}>
+      <Modal visible={showAdd} transparent animationType="slide" onRequestClose={() => { if (showCatPicker) { setShowCatPicker(false); return; } setShowAdd(false); }}>
         <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
             <View style={styles.sheetHeader}>
               <Text style={styles.sheetTitle}>{t('budgetsV2.addTitle')}</Text>
-              <TouchableOpacity onPress={() => { setShowAdd(false); resetAddForm(); }} hitSlop={10}>
+              <TouchableOpacity onPress={() => { setShowAdd(false); resetAddForm(); }} hitSlop={10} testID="budget-form-close">
                 <Ionicons name="close" size={22} color={theme.textSecondary} />
               </TouchableOpacity>
             </View>
             <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} style={{ flexGrow: 0 }}>
               {/* 1. Catégorie */}
               <Text style={styles.formLabel}>{t('budgetsForm.category')}</Text>
-              <TouchableOpacity style={styles.catSelect} onPress={() => setShowCatPicker(true)}>
+              <TouchableOpacity style={styles.catSelect} onPress={() => setShowCatPicker(true)} testID="budget-category-select">
                 {newCat ? (
                   <>
                     <View style={[styles.catSelectIcon, { backgroundColor: `${catColorOf(newCat)}1C` }]}>

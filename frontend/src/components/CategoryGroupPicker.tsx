@@ -90,7 +90,7 @@ export function CategoryGroupPicker({ visible, onClose, onSelect, groups, exclud
   };
 
   const Row = ({ id, name, icon, color }: { id: string; name: string; icon: string; color: string }) => (
-    <TouchableOpacity style={styles.row} onPress={() => onSelect(id)} accessibilityRole="button" accessibilityLabel={name}>
+    <TouchableOpacity style={styles.row} onPress={() => onSelect(id)} accessibilityRole="button" accessibilityLabel={name} testID={`category-option-${id}`}>
       <View style={[styles.rowIcon, { backgroundColor: `${color}1C` }]}>
         <Ionicons name={icon as any} size={17} color={color} />
       </View>
@@ -103,9 +103,14 @@ export function CategoryGroupPicker({ visible, onClose, onSelect, groups, exclud
   // Il se rend en calque absolu DANS le Modal parent (formulaire) : une seule
   // présentation native iOS, deux vues internes — plus aucun blocage lié à
   // l'empilement de deux fenêtres UIKit concurrentes.
+  // Réouverture propre : recherche et création réinitialisées à la fermeture.
+  React.useEffect(() => {
+    if (!visible) { setQuery(''); setCreating(false); setNewName(''); }
+  }, [visible]);
+
   if (!visible) return null;
   return (
-    <View style={styles.overlayRoot}>
+    <View style={styles.overlayRoot} testID="category-picker">
       <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose} accessibilityLabel="close-category-picker" />
       <KeyboardAvoidingView
         style={styles.kav}
@@ -115,7 +120,7 @@ export function CategoryGroupPicker({ visible, onClose, onSelect, groups, exclud
         <View style={[styles.sheet, { paddingBottom: insets.bottom + 12 }]}>
           <View style={styles.header}>
             <Text style={styles.title}>{t('catPicker.title')}</Text>
-            <TouchableOpacity onPress={onClose} hitSlop={10}>
+            <TouchableOpacity onPress={onClose} hitSlop={10} testID="category-picker-close">
               <Ionicons name="close" size={22} color={theme.textSecondary} />
             </TouchableOpacity>
           </View>
@@ -129,6 +134,7 @@ export function CategoryGroupPicker({ visible, onClose, onSelect, groups, exclud
               value={query}
               onChangeText={setQuery}
               returnKeyType="search"
+              testID="category-picker-search"
             />
             {query.length > 0 && (
               <TouchableOpacity onPress={() => setQuery('')} hitSlop={8}>
@@ -167,13 +173,14 @@ export function CategoryGroupPicker({ visible, onClose, onSelect, groups, exclud
                   autoFocus
                   returnKeyType="done"
                   onSubmitEditing={createCustom}
+                  testID="category-picker-new-name"
                 />
-                <TouchableOpacity style={styles.createBtn} onPress={createCustom}>
+                <TouchableOpacity style={styles.createBtn} onPress={createCustom} testID="category-picker-create-confirm">
                   <Ionicons name="checkmark" size={18} color="#07111F" />
                 </TouchableOpacity>
               </View>
             ) : (
-              <TouchableOpacity style={styles.addCustom} onPress={() => setCreating(true)}>
+              <TouchableOpacity style={styles.addCustom} onPress={() => setCreating(true)} testID="category-picker-create">
                 <Ionicons name="add-circle-outline" size={18} color={theme.primary} />
                 <Text style={styles.addCustomTxt}>{t('catPicker.createCustom')}</Text>
               </TouchableOpacity>

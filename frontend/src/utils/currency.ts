@@ -54,9 +54,13 @@ export function formatMoney(
   currency: Currency = 'CHF',
   options: { decimals?: number; compact?: boolean; symbolFirst?: boolean } = {}
 ): string {
-  const { decimals = 0, compact = false, symbolFirst = false } = options;
+  const { compact = false, symbolFirst = false } = options;
   const converted = convertFromCHF(amount, currency);
   const symbol = CURRENCY_SYMBOL[currency];
+  // Exactitude financière : si le montant a des centimes, on les AFFICHE
+  // (17.90 ne devient jamais « 18 ») ; sinon entier, style suisse.
+  const hasCents = Math.abs(Math.round(converted * 100) % 100) !== 0;
+  const decimals = options.decimals ?? (hasCents ? 2 : 0);
 
   let formatted: string;
   if (compact && Math.abs(converted) >= 1000) {

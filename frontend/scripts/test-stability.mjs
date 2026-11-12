@@ -47,7 +47,7 @@ const ext = existsSync('targets/intents/BudgyIntentsExtension.swift') ? read('ta
 ok('@main struct BudgyIntentsExtension: AppIntentsExtension', ext.includes('@main') && ext.includes('BudgyIntentsExtension: AppIntentsExtension'));
 const appJson = JSON.parse(read('app.json'));
 ok('Version marketing 4.0.0', appJson.expo.version === '4.0.0');
-ok('Build iOS ≥ 89 (jamais réutiliser un numéro consommé)', parseInt(appJson.expo.ios.buildNumber, 10) >= 89);
+ok('Build iOS ≥ 90 (89 déjà envoyé à Apple)', parseInt(appJson.expo.ios.buildNumber, 10) >= 90);
 const dialog = read('targets/intents/BudgyIntents.swift');
 ok('Siri demande CONFIRMATION (jamais « c’est fait » avant enregistrement)', dialog.includes('confirmez') && !dialog.toLowerCase().includes("c'est fait"));
 

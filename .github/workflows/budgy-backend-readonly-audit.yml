@@ -27,6 +27,26 @@ jobs:
           if(d.status!=='ok')throw Error('Unexpected health status');
           console.log('PASS: public API responds; reported app version:',String(d.version||'unknown'));
           NODE
+      - name: Inspect public OpenAPI OCR contract without uploading documents
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 15 \
+            "https://api.budgy.ch/openapi.json" -o /tmp/budgy-openapi.json
+          node - <<'NODE'
+          const api=require('/tmp/budgy-openapi.json');
+          const path=api.paths?.['/api/scanner/ocr']?.post;
+          const s=api.components?.schemas || {};
+          const req=s.OCRRequest?.properties||{};
+          const res=s.OCRResponse?.properties||{};
+          console.log('Production OCR route:',!!path);
+          console.log('OCR requires authenticated endpoint:',Array.isArray(path?.security)&&path.security.length>0?'OpenAPI security declared':'JWT enforced in server code / not declared in OpenAPI');
+          console.log('OCR response classification field:',!!res.document_type);
+          console.log('OCR response Swiss QR field:',!!res.swiss_qr_content);
+          console.log('OCR request PDF MIME field:',!!req.mime_type);
+          if(!path || !res.document_type || !res.swiss_qr_content) {
+            console.log('WARNING: production OCR API does not expose the recent document classification contract.');
+          }
+          NODE
       - name: Check non-secret AI provider readiness flags
         run: |
           set -euo pipefail

@@ -1,0 +1,52 @@
+name: Budgy document import - code validation (NO iOS build)
+
+# This job has no Expo credentials, no EAS invocation and no deployment steps.
+# It performs read-only code validation after edits to the document import flow.
+on:
+  push:
+    branches:
+      - budgy-smart-4.0
+    paths:
+      - 'frontend/app/more/email-import.tsx'
+      - 'frontend/app/more/add-contract.tsx'
+      - 'frontend/app/scanner-modal.tsx'
+      - '.github/workflows/doc-import-qa.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: TypeScript, translations, document routing regressions
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+        shell: bash
+    env:
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: yarn
+          cache-dependency-path: frontend/yarn.lock
+      - name: Install dependencies without modifying lockfile
+        run: |
+          corepack enable
+          yarn install --frozen-lockfile --non-interactive
+      - name: TypeScript type checking
+        run: npx tsc --noEmit
+      - name: Translation key parity and no untranslated UI strings
+        run: |
+          npm run check:i18n
+          npm run audit:i18n
+      - name: Document import and contract regression
+        run: |
+          node scripts/test-import.mjs
+          node scripts/test-contracts.mjs
+          node scripts/test-qrbill.mjs
+          node scripts/test-task3.mjs
+          node scripts/test-task5.mjs

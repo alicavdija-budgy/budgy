@@ -27,6 +27,8 @@ import re
 import base64
 import math
 import qr_decode
+from release_identity import APP_VERSION, deployed_git_sha
+from config_readiness import readiness_report
 
 # Load .env BEFORE importing modules that read os.getenv at import time
 load_dotenv()
@@ -52,7 +54,6 @@ log = logging.getLogger("budgy")
 # ─────────────────────────────────────────────────────────────
 # Env / Config
 # ─────────────────────────────────────────────────────────────
-APP_VERSION = os.getenv("APP_VERSION", "3.9.0")
 APP_ENV = os.getenv("APP_ENV", "production")  # production | staging | dev
 
 # LLM key kept for backwards-compat with code paths that still check it.
@@ -136,7 +137,7 @@ app.add_middleware(
     max_age=3600,
 )
 
-log.info("[startup] Budgy API v%s env=%s", APP_VERSION, APP_ENV)
+log.info("[startup] Budgy API v%s commit=%s env=%s", APP_VERSION, deployed_git_sha(), APP_ENV)
 log.info("[startup] CORS origins: %s", ALLOWED_ORIGINS)
 log.info("[startup] CORS regex: %s", _CORS_REGEX)
 
@@ -156,13 +157,14 @@ async def health_root():
         "status": "ok",
         "service": "budgy-api",
         "version": APP_VERSION,
+        "commit_sha": deployed_git_sha(),
         "env": APP_ENV,
     }
 
 
 @app.get("/api/health")
 async def health_check():
-    return {"status": "ok", "version": APP_VERSION, "app": "Budgy", "env": APP_ENV}
+    return {"status": "ok", "version": APP_VERSION, "commit_sha": deployed_git_sha(), "app": "Budgy", "env": APP_ENV}
 
 
 @app.get("/api/config/status")
@@ -206,6 +208,16 @@ async def config_status():
         ),
         "cors_origins_count": len(ALLOWED_ORIGINS),
     }
+
+
+@app.get("/api/config/readiness")
+async def config_readiness(user: AuthenticatedUser = Depends(require_user)):
+    """Authenticated operator aid: presence only; no env values or credentials.
+
+    Any valid Supabase user JWT can access this endpoint. Restrict to an
+    operator-only auth claim in a future change if an admin role is available.
+    """
+    return readiness_report()
 
 
 # ──────────────────────────────────────────────────

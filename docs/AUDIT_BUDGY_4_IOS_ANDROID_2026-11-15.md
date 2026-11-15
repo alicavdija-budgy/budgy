@@ -9,6 +9,18 @@ Aucune suppression de compte ni de transaction ; aucune requête d'écriture sur
 
 Limites : base Supabase de production **auto-hébergée**, panneau Coolify, comptes Apple/Google Billing, clés du serveur et appareils réels NON vérifiés par cet audit. Les tests statiques et bundles JS ne prouvent pas le fonctionnement natif d'une caméra, de Siri, du Google Billing ni la synchronisation de données réelles.
 
+## Verdict de la campagne d'audit automatique
+
+**PASS — 15 novembre 2026, 22:08 UTC** : [GitHub Actions, audit iOS et Android (exécution 43767387936)](https://github.com/alicavdija-budgy/budgy/actions/runs/43767387936).
+
+- TypeScript, parité et audit des traductions FR/EN/DE/IT : PASS.
+- 22 suites de régression documentaires, finances, budget, cloud, IAP, Siri, alertes, LAMal, widgets : PASS (tests de code, pas de téléphone).
+- Résolution native Expo (identifiants iOS/Android), contrôle du blocage des achats Android : PASS.
+- **Export JavaScript iOS Hermes : PASS** (~9,66 MiB) ; **Android Hermes : PASS** (~9,64 MiB). Aucun build EAS exécuté.
+- Python : compilation syntaxique et 6 tests unitaires offline sur les types d'images OCR : PASS.
+
+Ce PASS n'efface pas les obstacles P0 du backend actuellement déployé ni l'absence de validation Google Play Billing.
+
 ## État vérifié
 
 | Périmètre | Constat | Gravité |

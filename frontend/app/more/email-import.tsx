@@ -248,7 +248,12 @@ export default function ImportInvoiceScreen() {
 
   // ── Action handlers ──
   const handleScanner = () => {
-    router.push('/scanner-modal');
+    // Keep the document type selected at entry. The scanner must not default
+    // to a shopping receipt when opened from Factures or Contrats.
+    router.push({
+      pathname: '/scanner-modal',
+      params: { forceType: mode === 'contract' ? 'contract' : 'invoice' },
+    });
   };
 
   const handlePdfPicker = async () => {

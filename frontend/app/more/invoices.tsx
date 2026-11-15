@@ -27,6 +27,7 @@ import {
   cancelDeadlineRemindersForEntity,
 } from '../../src/services/notifications';
 import { EntityActionsSheet, type EntityActionsContext } from '../../src/components/EntityActionsSheet';
+import { findInvoiceDuplicate } from '../../src/lib/invoiceDocs';
 import { deleteEntityWithCloud } from '../../src/services/cloudDelete';
 import { EntityEditModal, type EditField } from '../../src/components/EntityEditModal';
 // TÂCHE 5 — consultation des QR-factures : original, QR conservé, export
@@ -301,6 +302,15 @@ export default function InvoicesScreen() {
   const [completingId, setCompletingId] = useState<string | null>(null);
   const [completeAmt, setCompleteAmt] = useState('');
   const [recoveringDoc, setRecoveringDoc] = useState(false);
+  const completingBusy = useRef(false);
+  // P0 — devise RÉELLE du QR (CHF ou EUR) relue depuis le payload conservé et
+  // AFFICHÉE avant confirmation — jamais de conversion implicite.
+  const completingCurrency = useMemo(() => {
+    const d = documents.find((x) => x.id === completingId);
+    const p = (d as any)?.spcPayload as string | undefined;
+    if (p) { try { return parseSwissQrBill(p).currency; } catch {} }
+    return 'CHF';
+  }, [documents, completingId]);
 
   const invDocOf = (inv: any) => documents.find((d) => d.id === inv.documentId);
   /** Ouvre l'ORIGINAL (jamais un QR reconstitué) : local → sinon récupération
@@ -350,36 +360,77 @@ export default function InvoicesScreen() {
     [documents, storeInvoices],
   );
   const completeInvoice = () => {
+    if (completingBusy.current) return; // idempotence : double appui = UNE seule facture
     const d = documents.find((x) => x.id === completingId);
     if (!d) return;
+    // Idempotence : une facture DÉJÀ liée à ce document → aucune re-création,
+    // on retire simplement le statut « à compléter ».
+    const linked = storeInvoices.find((i: any) => i.documentId === d.id);
+    if (linked) {
+      updateDocument(d.id, { tags: (d.tags || []).filter((x) => x !== 'toComplete') } as any);
+      setCompletingId(null);
+      setCompleteAmt('');
+      Alert.alert(t('invoiceDocs.dupTitle'), t('invoiceDocs.alreadyLinked', { title: linked.title || '' }));
+      return;
+    }
     const amt = normalizeChfAmount(completeAmt);
     if (amt === null || amt <= 0) { Alert.alert(t('invoiceDocs.invalidAmount')); return; }
+    // P0 — le payload SPC est RELU à la complétion : devise réelle (CHF ou
+    // EUR) appliquée telle quelle — JAMAIS de conversion implicite EUR→CHF.
     let iban: string | undefined; let reference: string | undefined; let issuer = d.title;
+    let currency: 'CHF' | 'EUR' = 'CHF';
     const payload = (d as any).spcPayload as string | undefined;
     if (payload) {
-      try { const b = parseSwissQrBill(payload); iban = b.iban; reference = b.reference || undefined; issuer = b.creditor.name.slice(0, 80) || d.title; } catch {}
+      try {
+        const b = parseSwissQrBill(payload);
+        iban = b.iban;
+        reference = b.reference || undefined;
+        issuer = b.creditor.name.slice(0, 80) || d.title;
+        currency = b.currency;
+      } catch {}
     }
-    // L'obligation financière n'entre dans le moteur QUE maintenant,
-    // montant confirmé par l'utilisateur (jamais de CHF 0 implicite).
-    addInvoice({
-      id: `inv_${Date.now()}`,
-      title: d.title,
-      issuer,
-      amount: Math.round(amt * 100) / 100,
-      currency: 'CHF',
-      iban,
-      reference,
-      category: 'autre',
-      status: 'pending',
-      source: 'scan',
-      createdAt: Date.now(),
-      documentId: d.id,
-      qrPayload: payload,
-    } as any);
-    updateDocument(d.id, { tags: (d.tags || []).filter((x) => x !== 'toComplete') } as any);
-    setCompletingId(null);
-    setCompleteAmt('');
-    Alert.alert(t('invoiceDocs.completedTitle'), t('invoiceDocs.completedBody'));
+    const create = () => {
+      if (completingBusy.current) return;
+      completingBusy.current = true;
+      // L'obligation financière n'entre dans le moteur QUE maintenant,
+      // montant confirmé par l'utilisateur (jamais de CHF 0 implicite).
+      addInvoice({
+        id: `inv_${Date.now()}`,
+        title: d.title,
+        issuer,
+        amount: Math.round(amt * 100) / 100,
+        currency,
+        iban,
+        reference,
+        category: 'autre',
+        status: 'pending',
+        source: 'scan',
+        createdAt: Date.now(),
+        documentId: d.id,
+        qrPayload: payload,
+      } as any);
+      // Le statut « à compléter » n'est retiré qu'APRÈS l'enregistrement.
+      updateDocument(d.id, { tags: (d.tags || []).filter((x) => x !== 'toComplete') } as any);
+      setCompletingId(null);
+      setCompleteAmt('');
+      Alert.alert(t('invoiceDocs.completedTitle'), t('invoiceDocs.completedBody'));
+      setTimeout(() => { completingBusy.current = false; }, 600);
+    };
+    // P0 — recherche de doublon AVANT la création (référence QRR/SCOR, sinon
+    // IBAN + créancier + montant — jamais le montant seul).
+    const dup = findInvoiceDuplicate(storeInvoices as any, { reference, iban, issuer, amount: amt });
+    if (dup) {
+      Alert.alert(
+        t('invoiceDocs.dupTitle'),
+        t('invoiceDocs.dupBody', { title: (dup as any).title || (dup as any).issuer || '', amount: `${currency} ${amt.toFixed(2)}` }),
+        [
+          { text: t('common.cancel'), style: 'cancel' },
+          { text: t('invoiceDocs.dupConfirm'), style: 'destructive', onPress: create },
+        ],
+      );
+      return;
+    }
+    create();
   };
 
   const getStatusColor = (s: string) => s === 'paid' ? theme.success : s === 'overdue' ? theme.error : theme.warning;
@@ -680,10 +731,13 @@ export default function InvoicesScreen() {
           <View style={{ backgroundColor: theme.card, borderRadius: 18, padding: 20 }}>
             <Text style={{ color: theme.text, fontWeight: '800', fontSize: 16 }}>{t('invoiceDocs.completeTitle')}</Text>
             <Text style={{ color: theme.textSecondary, fontSize: 13, marginTop: 4 }}>{t('invoiceDocs.completeBody')}</Text>
+            <Text style={{ color: theme.primary, fontSize: 13, fontWeight: '800', marginTop: 8 }} testID="complete-currency">
+              {t('invoiceDocs.completeCurrency', { currency: completingCurrency })}
+            </Text>
             <TextInput
               value={completeAmt}
               onChangeText={setCompleteAmt}
-              placeholder="CHF 0.00"
+              placeholder={`${completingCurrency} 0.00`}
               placeholderTextColor={theme.textTertiary}
               keyboardType="decimal-pad"
               style={{ marginTop: 12, borderWidth: 1, borderColor: theme.cardBorder, borderRadius: 12, padding: 12, color: theme.text, fontSize: 18, fontWeight: '700' }}

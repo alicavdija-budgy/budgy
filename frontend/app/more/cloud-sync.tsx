@@ -72,6 +72,47 @@ export default function CloudSyncScreen() {
     store.debts.length + store.investments.length + store.receipts.length +
     store.invoices.length + store.documents.length + store.groups.length + store.groupExpenses.length;
 
+  // P1 — Données locales INVITÉES ('' = enregistrées sans compte) : elles
+  // restent isolées et ne sont importées QUE dans le compte actuellement
+  // connecté, après confirmation EXPLICITE — jamais automatiquement, jamais
+  // fusionnées avec les données d'un autre compte identifié. L'annulation ne
+  // supprime rien.
+  const guestEntry = (store as any).accountVault?.[''] || null;
+  const guestList = useMemo(() => {
+    if (!guestEntry) return '';
+    const parts: string[] = [];
+    const types: [string, string][] = [
+      ['documents', 't_documents'], ['invoices', 't_invoices'], ['contracts', 't_contracts'],
+      ['receipts', 't_receipts'], ['transactions', 't_transactions'],
+    ];
+    for (const [key, labelKey] of types) {
+      const n = (guestEntry[key] || []).length;
+      if (n > 0) parts.push(`${n} ${t(`guestImport.${labelKey}`)}`);
+    }
+    return parts.join(', ');
+  }, [guestEntry, t]);
+  const doImportGuest = () => {
+    Alert.alert(
+      t('guestImport.confirmTitle'),
+      t('guestImport.confirmBody', { list: guestList }),
+      [
+        { text: t('common.cancel'), style: 'cancel' }, // annulation SANS perte
+        {
+          text: t('guestImport.confirmBtn'),
+          onPress: () => {
+            try {
+              store.importGuestData();
+              console.log('[guestImport] import explicite effectué'); // jamais de données financières en clair
+              Alert.alert(t('guestImport.doneTitle'), t('guestImport.doneBody'));
+            } catch {
+              Alert.alert(t('cloudSyncUi.errorGeneric'));
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const doPush = async () => {
     setWorking('push'); setError(null);
     const r = await pushAllToCloud();
@@ -202,6 +243,19 @@ export default function CloudSyncScreen() {
           <Text style={styles.helpTitle}>{t('cloudSyncUi.helpAutoTitle')}</Text>
           <Text style={styles.helpText}>{t('cloudSyncUi.helpAutoBody')}</Text>
         </Card>
+
+        {/* P1 — import EXPLICITE des données invitées dans CE compte */}
+        {cloudReady && !!guestList && (
+          <Card style={[styles.helpCard, { marginTop: Spacing.md, borderColor: theme.warning, borderWidth: 1 }]}>
+            <Text style={styles.helpTitle}>{t('guestImport.cardTitle')}</Text>
+            <Text style={styles.helpText}>{t('guestImport.cardBody', { list: guestList })}</Text>
+            <Button
+              title={t('guestImport.importBtn')}
+              onPress={doImportGuest}
+              style={{ marginTop: Spacing.md }}
+            />
+          </Card>
+        )}
 
         <Card style={[styles.helpCard, { marginTop: Spacing.md }]}>
           <Text style={styles.helpTitle}>{t('cloudSyncUi.helpManualTitle')}</Text>

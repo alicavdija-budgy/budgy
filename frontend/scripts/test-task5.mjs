@@ -88,5 +88,73 @@ S('doublon → confirmation (facture connue affichée), jamais silencieux', imp.
 S('normalisation CHF conservée (aucun parseFloat sur montant QR)', scan.includes('normalizeChfAmount(qrAmount)') && !scan.includes('parseFloat(qrAmount'));
 S('synchro : documentId/qrPayload… via architecture Tâche 3 (hash contenu)', smSrc.includes("'pdfUri'") && types.includes('qrPayload?: string'));
 
+console.log('\n═ CORRECTIFS FINAUX P0 — synchronisation des liens QR ═');
+const cs = read('src/services/cloudSync.ts');
+const mig = readFileSync(join(root, '..', 'docs/MIGRATION_TASK3_storage_prive.sql'), 'utf8');
+S('migration additive : invoices.document_id + qr_payload', mig.includes('ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS document_id text') && mig.includes('ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS qr_payload text'));
+S('migration additive : documents.spc_payload', mig.includes('ALTER TABLE public.documents ADD COLUMN IF NOT EXISTS spc_payload text'));
+S('TABLE_FIELDS invoices transmet document_id + qr_payload', /invoices:\s*\[[^\]]*'document_id'[^\]]*'qr_payload'[^\]]*\]/.test(cs));
+S('TABLE_FIELDS documents transmet spc_payload', /documents:\s*\[[^\]]*'spc_payload'[^\]]*\]/.test(cs));
+S('aucun binaire en colonne (pas de base64/file_uri dans TABLE_FIELDS)', !/TABLE_FIELDS[^;]*'(image_base64|pdf_base64|file_uri|pdf_uri|pages)'/s.test(cs));
+S('repli legacy SANS les nouveaux champs (compatible ancien schéma)', !/TABLE_FIELDS_LEGACY[\s\S]{0,900}qr_payload/.test(cs) && !/TABLE_FIELDS_LEGACY[\s\S]{0,900}spc_payload/.test(cs));
+S('sonde schéma sur les colonnes Tâche 5 (migration partielle → reste en L:)', cs.includes("invoices: 'qr_payload'") && cs.includes("documents: 'spc_payload'"));
+{
+  // [UNIT] Les 3 champs participent au hash de contenu → mutation détectée,
+  // envoi après migration via le mécanisme L:/dirty.
+  const base = { id: 'i1', title: 'Assura', amount: 10 };
+  U('qrPayload modifie le hash (dirty → push)', sm.hashItem(base) !== sm.hashItem({ ...base, qrPayload: 'SPC…' }));
+  U('documentId modifie le hash (dirty → push)', sm.hashItem(base) !== sm.hashItem({ ...base, documentId: 'doc1' }));
+  U('spcPayload modifie le hash (dirty → push)', sm.hashItem({ id: 'd1' }) !== sm.hashItem({ id: 'd1', spcPayload: 'SPC…' }));
+  // [UNIT] Projection legacy : les champs Tâche 5 sont RETIRÉS du payload
+  // pré-migration mais CONSERVÉS en local ; la confirmation partielle 'L:'
+  // reste détectable (isConfirmedHash) → renvoi après migration.
+  const snakeRow = { id: 'i1', user_id: 'u', title: 'Assura', amount: 10, document_id: 'doc1', qr_payload: 'SPC…', created_at: 1 };
+  const legacyFields = ['id', 'user_id', 'title', 'amount', 'created_at'];
+  const proj = sm.pickProjection(legacyFields, snakeRow);
+  U('projection legacy exclut document_id/qr_payload (ancien schéma)', !('document_id' in proj) && !('qr_payload' in proj));
+  const lh = sm.legacyHashOf(snakeRow, legacyFields);
+  U('confirmation partielle L: reconnue (pas une confirmation pleine)', lh.startsWith('L:') && sm.isConfirmedHash(lh, sm.hashItem(snakeRow), lh) && !sm.isConfirmedHash(lh, sm.hashItem(snakeRow), null));
+  // [UNIT] Pull depuis un 2e client : la facture cloud (documentId/qrPayload)
+  // et le document (spcPayload) arrivent intacts sur un état local vide.
+  const pulled = sm.mergeCollectionsV2([], [{ id: 'i1', title: 'Assura', amount: 10, documentId: 'doc1', qrPayload: 'SPC…' }], { dirtyIds: new Set(), tombstoneIds: new Set() });
+  const got = pulled.merged.find((x) => x.id === 'i1');
+  U('2e client : documentId + qrPayload restaurés au pull', !!got && got.documentId === 'doc1' && got.qrPayload === 'SPC…');
+  const pulledDoc = sm.mergeCollectionsV2([], [{ id: 'd1', title: 'Assura', spcPayload: 'SPC…' }], { dirtyIds: new Set(), tombstoneIds: new Set() });
+  const gd = pulledDoc.merged.find((x) => x.id === 'd1');
+  U('2e client : spcPayload du document restauré au pull', !!gd && gd.spcPayload === 'SPC…');
+}
+
+console.log('\n═ CORRECTIFS FINAUX P0 — scanner : confirmation des doublons ═');
+S('doublon re-vérifié À L\'ENREGISTREMENT (logique centralisée)', scan.includes('findInvoiceDuplicate(invoices as any') && scan.includes('const proceed = ()'));
+S('titre de la facture existante affiché + 3 choix (voir/annuler/importer)', scan.includes("t('invoiceDocs.dupView')") && scan.includes("t('common.cancel')") && scan.includes("t('invoiceDocs.dupConfirm'), style: 'destructive', onPress: proceed"));
+S('aucune création sans confirmation (return avant addInvoice)', /if \(dup\) \{[\s\S]*?return;\s*\}\s*proceed\(\);/.test(scan));
+S('rapprochement charge récurrente PRÉSERVÉ (dans proceed)', /const proceed = \(\) => \{[\s\S]*?recurringExpenses\.find/.test(scan));
+
+console.log('\n═ CORRECTIFS FINAUX P0 — complétion : devise réelle + idempotence ═');
+S('devise relue du payload SPC (CHF ou EUR, jamais convertie)', inv.includes('currency = b.currency') && !inv.includes("currency: 'CHF',\n      iban"));
+S('devise AFFICHÉE avant confirmation', inv.includes("t('invoiceDocs.completeCurrency', { currency: completingCurrency })"));
+S('facture déjà liée au document → aucune re-création', inv.includes('storeInvoices.find((i: any) => i.documentId === d.id)') && inv.includes("t('invoiceDocs.alreadyLinked'"));
+S('doublon recherché AVANT la création (jamais montant seul)', inv.includes('findInvoiceDuplicate(storeInvoices as any, { reference, iban, issuer, amount: amt })'));
+S('double appui → UNE seule facture (verrou completingBusy)', inv.includes('if (completingBusy.current) return;') && inv.includes('completingBusy.current = true;'));
+S('toComplete retiré APRÈS enregistrement confirmé', /completingBusy\.current = true;[\s\S]*?addInvoice\(\{[\s\S]*?\} as any\);[\s\S]*?filter\(\(x\) => x !== 'toComplete'\)/.test(inv));
+
+console.log('\n═ CORRECTIF FINAL P1 — import des données invitées accessible ═');
+const cloudSrc = read('app/more/cloud-sync.tsx');
+S('carte visible quand des données invitées existent', cloudSrc.includes("accountVault?.['']") && cloudSrc.includes("t('guestImport.cardTitle')"));
+S('contenu listé avant import (quantités par type)', cloudSrc.includes('guestList') && cloudSrc.includes("t('guestImport.cardBody', { list: guestList })"));
+S('confirmation explicite + annulation sans perte', cloudSrc.includes("t('guestImport.confirmTitle')") && cloudSrc.includes("style: 'cancel' }, // annulation SANS perte"));
+S('import uniquement via action explicite importGuestData()', cloudSrc.includes('store.importGuestData()'));
+S('journal technique sans données financières', cloudSrc.includes("console.log('[guestImport] import explicite effectué')"));
+{
+  // [UNIT] importGuestData ne touche JAMAIS le vault d'un autre compte
+  // identifié : seul l'espace anonyme '' est déplacé vers le compte courant.
+  const vault = { '': { documents: [{ id: 'g1', title: 'Invité' }], syncedHashes: {} }, userX: { documents: [{ id: 'x1', title: 'De X' }], syncedHashes: {} } };
+  const moved = { ...vault, userB: vault[''] };
+  delete moved[''];
+  const r = sm.applyAccountRestore({ syncAccountId: 'userB', accountVault: moved, syncedHashes: {}, documents: [], contracts: [], invoices: [], receipts: [], transactions: [] }, 'userB');
+  U('import invité → données dans le compte courant uniquement', !!r && (r.documents || []).some((d) => d.id === 'g1') && !(r.documents || []).some((d) => d.id === 'x1'));
+  U('le vault du compte X reste intact (jamais fusionné)', !!r.accountVault && !!r.accountVault.userX && r.accountVault.userX.documents[0].id === 'x1');
+}
+
 console.log(`\nRésultat : ${unit} unitaires exécutés + ${stat} statiques = ${unit + stat} réussis, ${fail} échoués`);
 process.exit(fail ? 1 : 0);

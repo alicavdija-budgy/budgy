@@ -42,8 +42,11 @@ const EXT_PROBE_COL: Record<string, string> = {
   transactions: 'invoice_id',
   contracts: 'document_id',
   receipts: 'transaction_id',
-  invoices: 'paid_at',
-  documents: 'document_type',
+  // TÂCHE 5 — sonde sur les colonnes les PLUS récentes : une migration
+  // partielle (sans qr_payload/spc_payload) reste en repli legacy 'L:' au
+  // lieu d'être faussement considérée comme étendue.
+  invoices: 'qr_payload',
+  documents: 'spc_payload',
 };
 
 function storeHydrated(): boolean {
@@ -154,12 +157,15 @@ const TABLE_FIELDS: Record<string, string[]> = {
   debts:              ['id', 'user_id', 'title', 'color', 'total', 'paid', 'interest_rate', 'monthly_payment', 'created_at'],
   investments:        ['id', 'user_id', 'symbol', 'shares', 'avg_cost', 'current_price', 'name', 'type', 'created_at'],
   receipts:           ['id', 'user_id', 'merchant', 'amount', 'date', 'category', 'image_uri', 'currency', 'type', 'note', 'transaction_id', 'document_id', 'created_at'],
-  invoices:           ['id', 'user_id', 'title', 'issuer', 'amount', 'currency', 'due_date', 'invoice_date', 'iban', 'reference', 'category', 'status', 'source', 'paid_at', 'recurring_id', 'created_at'],
+  // TÂCHE 5 — document_id (lien vers le document conservé) et qr_payload
+  // (payload SPC BRUT, texte) sont synchronisés APRÈS migration : la relation
+  // facture ↔ document ↔ QR est restaurée sur un deuxième appareil.
+  invoices:           ['id', 'user_id', 'title', 'issuer', 'amount', 'currency', 'due_date', 'invoice_date', 'iban', 'reference', 'category', 'status', 'source', 'paid_at', 'recurring_id', 'document_id', 'qr_payload', 'created_at'],
   // TÂCHE 3 (audit §4) — SEULES les métadonnées PORTABLES et la référence
   // Storage (remote_path) sont synchronisées. Les chemins locaux file://
   // (file_uri, pdf_uri), les pages base64 et les binaires ne vont JAMAIS
   // en colonnes : ils restent locaux ou vont dans Supabase Storage.
-  documents:          ['id', 'user_id', 'title', 'category', 'document_type', 'mime_type', 'tags', 'note', 'remote_path', 'file_size', 'imported_at', 'expires_at', 'created_at', 'updated_at'],
+  documents:          ['id', 'user_id', 'title', 'category', 'document_type', 'mime_type', 'tags', 'note', 'remote_path', 'file_size', 'imported_at', 'expires_at', 'spc_payload', 'created_at', 'updated_at'],
   expense_groups:     ['id', 'user_id', 'name', 'members', 'created_at'],
   group_expenses:     ['id', 'user_id', 'group_id', 'title', 'amount', 'paid_by', 'split', 'date', 'created_at'],
 };

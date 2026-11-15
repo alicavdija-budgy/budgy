@@ -26,6 +26,9 @@ ALTER TABLE public.documents ADD COLUMN IF NOT EXISTS file_size bigint;
 ALTER TABLE public.documents ADD COLUMN IF NOT EXISTS imported_at bigint;
 ALTER TABLE public.documents ADD COLUMN IF NOT EXISTS expires_at text;
 ALTER TABLE public.documents ADD COLUMN IF NOT EXISTS updated_at bigint;
+-- TÂCHE 5 — payload SPC BRUT de la QR-facture (texte ≤ ~1000 car., norme SIX).
+-- JAMAIS de PDF/image/base64 en colonne : les binaires vont dans Storage.
+ALTER TABLE public.documents ADD COLUMN IF NOT EXISTS spc_payload text;
 
 -- Anciennes données au type incertain → « À classer » (JAMAIS converties
 -- automatiquement en facture/ticket ; classification manuelle dans l'app).
@@ -39,6 +42,9 @@ ALTER TABLE public.contracts ADD COLUMN IF NOT EXISTS notice_period text;
 -- invoices : champs jusqu'ici perdus à la synchro.
 ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS paid_at bigint;
 ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS recurring_id text;
+-- TÂCHE 5 — lien facture ↔ document conservé + payload SPC brut (texte).
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS document_id text;
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS qr_payload text;
 
 -- receipts (tickets) : type, devise, note, liens transaction/document.
 ALTER TABLE public.receipts ADD COLUMN IF NOT EXISTS currency text;

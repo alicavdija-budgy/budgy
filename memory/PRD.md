@@ -410,3 +410,11 @@ test
 - Consultation: Ouvrir original (ensureLocalCopy → cloud vérifié → erreur claire), Partager (uri résolue), QR affiché depuis payload (react-native-qrcode-svg), étiquettes « Document original » ≠ « QR Code conservé ».
 - Tests: test-task5 38/38 (11 unit exécutés + 27 statiques), test-task3 117/117 (maj sécurité), toutes suites vertes. E2E navigateur écran Factures: NON TESTÉ (gating onboarding/auth/paywall en contexte automation, pas de credentials de test — fichier volontairement expurgé).
 - EN ATTENTE: validation utilisateur avant TÂCHE 4.
+
+## CORRECTIFS FINAUX TÂCHE 5 (branche task5-qr-factures)
+- P0 synchro: invoices.document_id + qr_payload et documents.spc_payload ajoutés à la migration additive ET à TABLE_FIELDS (legacy inchangé → repli L: pré-migration, sonde schéma déplacée sur qr_payload/spc_payload pour détecter une migration partielle) ; les 3 champs participent au hash → renvoi après migration ; pull 2e client restaure documentId/qrPayload/spcPayload (unit tests réels mergeCollectionsV2/pickProjection/legacyHashOf).
+- P0 scanner: doublon re-vérifié À L ENREGISTREMENT via invoiceDocs.findInvoiceDuplicate (jamais montant seul) → « Voir la facture / Annuler / Importer quand même » ; rapprochement charge récurrente préservé dans proceed().
+- P0 complétion: devise RÉELLE relue du payload SPC (CHF/EUR, affichée avant confirmation, jamais convertie), facture déjà liée → aucune re-création, doublon recherché avant création, verrou anti double-appui, toComplete retiré APRÈS enregistrement.
+- P1: carte « Données locales invitées » dans Réglages > Cloud (visible si vault[] non vide et connecté) : contenu listé, confirmation explicite, annulation sans perte, importGuestData() uniquement ; vault des autres comptes jamais touché (unit test).
+- Tests: test-task5 69/69 (20 unit exécutés + 49 statiques), toutes suites vertes (task3 117, qrbill 49, import 38, contracts 39, budgets 67, engine 23, stability 46 build 91, cloud-delete 21, alerts 56, widgets 44), tsc/eslint/i18n ×4 (+70 clés).
+- NON TESTÉ: Supabase réel post-migration (migration interdite en prod), E2E navigateur Factures (gating onboarding/auth/paywall), iPhone natif.

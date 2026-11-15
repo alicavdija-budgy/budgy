@@ -49,6 +49,7 @@ import { AppErrorModal, buildErrorFromResult, type ErrorPayload } from '../src/c
 import { mergeOcrWithFallback } from '../src/lib/ocrFallback';
 import * as Haptics from 'expo-haptics';
 import { isSwissQrBill, parseSwissQrBill, findDuplicateInvoice, QrBillError, type SwissQrBill } from '../src/services/qrBill';
+import { findInvoiceDuplicate } from '../src/lib/invoiceDocs';
 
 const BACKEND_URL =
   process.env.EXPO_PUBLIC_BACKEND_URL || 'https://api.budgy.ch';
@@ -237,27 +238,55 @@ export default function ScannerModal() {
       try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
       router.back();
     };
-    // v4.0 — RAPPROCHEMENT facture ↔ charge récurrente : si une charge active
-    // du même montant existe (ex. prime LAMal), on PROPOSE de lier la facture
-    // à la charge (jamais automatique) — l'obligation ne compte alors qu'une
-    // seule fois dans le disponible.
-    const candidate = recurringExpenses.find(
-      (r) => r.active && Math.abs((Number(r.amount) || 0) - amt) <= 0.01,
-    );
-    if (candidate) {
+    const proceed = () => {
+      // v4.0 — RAPPROCHEMENT facture ↔ charge récurrente : si une charge active
+      // du même montant existe (ex. prime LAMal), on PROPOSE de lier la facture
+      // à la charge (jamais automatique) — l'obligation ne compte alors qu'une
+      // seule fois dans le disponible.
+      const candidate = recurringExpenses.find(
+        (r) => r.active && Math.abs((Number(r.amount) || 0) - amt) <= 0.01,
+      );
+      if (candidate) {
+        Alert.alert(
+          t('invoiceReconcile.recTitle'),
+          t('invoiceReconcile.recBody', { title: candidate.title, amount: String(amt) }),
+          [
+            { text: t('invoiceReconcile.recLink'), onPress: () => { addInvoice(buildInvoice(candidate.id) as any); finish(); } },
+            { text: t('invoiceReconcile.recSeparate'), onPress: () => { addInvoice(buildInvoice() as any); finish(); } },
+          ],
+        );
+        return;
+      }
+      addInvoice(buildInvoice() as any);
+      finish();
+    };
+    // P0 — DOUBLON re-vérifié AU MOMENT DE L'ENREGISTREMENT (pas seulement au
+    // scan), via la logique CENTRALISÉE invoiceDocs.ts : référence QRR/SCOR,
+    // sinon IBAN + créancier + montant — JAMAIS le montant seul. AUCUNE
+    // seconde obligation sans confirmation explicite de l'utilisateur.
+    const dup = findInvoiceDuplicate(invoices as any, {
+      reference: qrBill.reference || undefined,
+      iban: qrBill.iban,
+      issuer: qrBill.creditor.name,
+      amount: amt,
+    });
+    if (dup) {
       Alert.alert(
-        t('invoiceReconcile.recTitle'),
-        t('invoiceReconcile.recBody', { title: candidate.title, amount: String(amt) }),
+        t('invoiceDocs.dupTitle'),
+        t('invoiceDocs.dupBody', { title: dup.title || dup.issuer || '', amount: `${qrBill.currency} ${amt.toFixed(2)}` }),
         [
-          { text: t('invoiceReconcile.recLink'), onPress: () => { addInvoice(buildInvoice(candidate.id) as any); finish(); } },
-          { text: t('invoiceReconcile.recSeparate'), onPress: () => { addInvoice(buildInvoice() as any); finish(); } },
+          {
+            text: t('invoiceDocs.dupView'),
+            onPress: () => { router.back(); setTimeout(() => { try { router.push('/more/invoices' as any); } catch {} }, 350); },
+          },
+          { text: t('common.cancel'), style: 'cancel' },
+          { text: t('invoiceDocs.dupConfirm'), style: 'destructive', onPress: proceed },
         ],
       );
       return;
     }
-    addInvoice(buildInvoice() as any);
-    finish();
-  }, [qrBill, qrRaw, qrAmount, qrDueDate, qrCategory, addInvoice, addDocument, recurringExpenses, router, t]);
+    proceed();
+  }, [qrBill, qrRaw, qrAmount, qrDueDate, qrCategory, addInvoice, addDocument, recurringExpenses, invoices, router, t]);
 
   // Form state for edit stage
   const [title, setTitle] = useState('');

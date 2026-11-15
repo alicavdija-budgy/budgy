@@ -340,6 +340,62 @@ console.log('\n═ DERNIER CORRECTIF FINANCIER — devises dans les revenus, cha
   U('revenu CHF 200 « courses » exclu du budget + EUR exclu → 125 dépensés, 375 restants', bud.totalSpent === 125 && bud.totalLimit - bud.totalSpent === 375);
 }
 
+console.log('\n═ CLÔTURE FINANCIÈRE — paiement des factures en devise (exécution réelle) ═');
+{
+  const now = new Date(2026, 5, 15);
+  const base = { incomes: [{ id: 'i', amount: 5000, type: 'recurring', frequency: 'monthly' }], transactions: [], recurringExpenses: [], invoices: [], debts: [], now };
+  // 1) Facture CHF 100 : impayée puis payée → disponible IDENTIQUE (4900)
+  const chfUnpaid = sel.getMonthlyFinancialSnapshot({ ...base, invoices: [
+    { id: 'a', title: 'A', amount: 100, currency: 'CHF', status: 'pending' },
+  ] });
+  const chfPaid = sel.getMonthlyFinancialSnapshot({ ...base,
+    invoices: [{ id: 'a', title: 'A', amount: 100, currency: 'CHF', status: 'paid' }],
+    transactions: [{ id: 'inv_a', title: 'A', amount: 100, date: '2026-06-12', category: 'autre', type: 'expense', invoiceId: 'a' }],
+  });
+  U('facture CHF 100 : disponible identique avant (4900) et après paiement (4900)', chfUnpaid.realAvailableThisMonth === 4900 && chfPaid.realAvailableThisMonth === 4900);
+  // 2) Facture EUR 100 / CHF 95.20 VÉRIFIÉS : disponible cohérent avant/après
+  const vInv = { id: 'e', title: 'Hôtel', amount: 100, currency: 'EUR', chfAmount: 95.2, fxRate: 0.952, fxDate: '2026-06-10', fxSource: 'BNS' };
+  const eurUnpaid = sel.getMonthlyFinancialSnapshot({ ...base, invoices: [{ ...vInv, status: 'pending' }] });
+  const eurPaid = sel.getMonthlyFinancialSnapshot({ ...base,
+    invoices: [{ ...vInv, status: 'paid' }],
+    transactions: [{ id: 'inv_e', title: 'Hôtel', amount: 100, date: '2026-06-12', category: 'autre', type: 'expense', invoiceId: 'e', currency: 'EUR' }],
+  });
+  U('EUR 100 / CHF 95.20 vérifiés : 4904.80 avant ET après paiement (plus de remontée artificielle)', eurUnpaid.realAvailableThisMonth === 5000 - 95.2 && eurPaid.realAvailableThisMonth === 5000 - 95.2);
+  U('montant CHF vérifié compté UNE seule fois (obligation remplacée par paiement)', eurPaid.upcomingBills === 0 && eurPaid.paidExpenses === 95.2 && !eurPaid.availableIsPartial);
+  // 3) Facture EUR payée SANS conversion vérifiée : rien d'inventé, PARTIEL explicite
+  const eurPaidNoRate = sel.getMonthlyFinancialSnapshot({ ...base,
+    invoices: [{ id: 'e', title: 'Hôtel', amount: 100, currency: 'EUR', status: 'paid' }],
+    transactions: [{ id: 'inv_e', title: 'Hôtel', amount: 100, date: '2026-06-12', category: 'autre', type: 'expense', invoiceId: 'e', currency: 'EUR' }],
+  });
+  U('EUR payée sans taux : jamais 100 CHF (paiement présenté à part, disponible PARTIEL)', eurPaidNoRate.paidExpenses === 0 && eurPaidNoRate.foreignPaid[0]?.total === 100 && eurPaidNoRate.availableIsPartial === true);
+  // 4) Facture EUR VÉRIFIÉE liée à une charge CHF : payée → charge remplacée,
+  //    paiement compté à 95.20, UNE seule fois
+  const linkPaid = sel.getMonthlyFinancialSnapshot({ ...base,
+    recurringExpenses: [{ id: 'rc1', title: 'Prime', amount: 100, frequency: 'monthly', active: true, createdAt: new Date(2026, 0, 1).getTime() }],
+    invoices: [{ ...vInv, status: 'paid', recurringId: 'rc1' }],
+    transactions: [{ id: 'inv_e', title: 'Prime', amount: 100, date: '2026-06-12', category: 'assurances', type: 'expense', invoiceId: 'e', currency: 'EUR' }],
+  });
+  U('EUR vérifiée liée à une charge CHF payée : 95.20 compté une fois, charge non doublée', linkPaid.recurringExpenses === 0 && linkPaid.paidExpenses === 95.2 && linkPaid.totalCommitted === 95.2);
+  // 5) ANNULATION du paiement (payée → à payer, transaction retirée)
+  const cancelled = sel.getMonthlyFinancialSnapshot({ ...base, invoices: [{ ...vInv, status: 'pending' }] });
+  U('annulation : obligation restaurée (95.20), aucun résidu de paiement', cancelled.upcomingBills === 95.2 && cancelled.paidExpenses === 0 && cancelled.realAvailableThisMonth === 5000 - 95.2);
+  // 6) Synchronisation simulée avant/après paiement : devise + conversion
+  //    survivent à l'aller-retour (champs portables, dirty gagne)
+  const paidInv = { ...vInv, status: 'paid' };
+  const rt = sm.mergeCollectionsV2([paidInv], [{ ...vInv, status: 'pending' }], { dirtyIds: new Set(['e']), tombstoneIds: new Set() });
+  const back = rt.merged.find((x) => x.id === 'e');
+  U('sync simulée : statut payé local conservé + chfAmount/fxRate/fxDate/fxSource intacts', back.status === 'paid' && back.chfAmount === 95.2 && back.fxRate === 0.952 && back.fxSource === 'BNS' && back.currency === 'EUR');
+  const rt2 = sm.mergeCollectionsV2([], [paidInv], { dirtyIds: new Set(), tombstoneIds: new Set() });
+  U('redémarrage/2e appareil : facture payée restaurée au pull avec sa conversion', rt2.merged[0].status === 'paid' && rt2.merged[0].chfAmount === 95.2);
+  // 7) Paiement déjà lié à une transaction existante (rapprochement) : une
+  //    seule déduction (le lien transforme la dépense en paiement de facture)
+  const reconciled = sel.getMonthlyFinancialSnapshot({ ...base,
+    invoices: [{ id: 'a', title: 'A', amount: 100, currency: 'CHF', status: 'paid' }],
+    transactions: [{ id: 'tx9', title: 'Paiement e-banking', amount: 100, date: '2026-06-11', category: 'autre', type: 'expense', invoiceId: 'a', source: 'invoice' }],
+  });
+  U('rapprochement avec transaction existante : une SEULE déduction de 100', reconciled.paidExpenses === 100 && reconciled.upcomingBills === 0 && reconciled.totalCommitted === 100);
+}
+
 console.log(`\nRésultat : ${unit} unitaires exécutés + ${stat} statiques = ${unit + stat} réussis, ${fail} échoués`);
 console.log('NON TESTÉ (iPhone physique + build natif requis) : exécution réelle des');
 console.log('App Intents par Siri, App Group sur appareil, démarrage à froid par Siri,');

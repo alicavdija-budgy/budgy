@@ -375,7 +375,7 @@ export default function HomeScreen() {
             {snapshot.availableIsPartial && (
               <Text style={[styles.heroSubTxt, { marginTop: 4, color: '#FDE68A' }]}>
                 {t('home.foreignPartial', {
-                  list: [...snapshot.foreignBills, ...snapshot.foreignIncome].map((f) => `${f.count} × ${f.currency} ${f.total.toFixed(2)}`).join(', '),
+                  list: [...snapshot.foreignBills, ...snapshot.foreignIncome, ...snapshot.foreignPaid].map((f) => `${f.count} × ${f.currency} ${f.total.toFixed(2)}`).join(', '),
                 })}
               </Text>
             )}
@@ -632,7 +632,7 @@ export default function HomeScreen() {
             {snapshot.availableIsPartial && (
               <Text style={[styles.bdDeficit, { color: '#D97706' }]}>
                 {t('home.foreignPartial', {
-                  list: [...snapshot.foreignBills, ...snapshot.foreignIncome].map((f) => `${f.count} × ${f.currency} ${f.total.toFixed(2)}`).join(', '),
+                  list: [...snapshot.foreignBills, ...snapshot.foreignIncome, ...snapshot.foreignPaid].map((f) => `${f.count} × ${f.currency} ${f.total.toFixed(2)}`).join(', '),
                 })}
               </Text>
             )}

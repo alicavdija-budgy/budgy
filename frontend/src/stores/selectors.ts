@@ -37,6 +37,8 @@ export interface FinancialSnapshot {
   foreignBills: { currency: string; total: number; count: number }[];
   /** Revenus ponctuels en devise étrangère (jamais ajoutés 1:1 aux CHF). */
   foreignIncome: { currency: string; total: number; count: number }[];
+  /** Paiements en devise étrangère SANS montant CHF vérifié (à part). */
+  foreignPaid: { currency: string; total: number; count: number }[];
   /** true = le disponible CHF n'intègre pas encore ces obligations. */
   availableIsPartial: boolean;
   /** Factures exigibles d'ici la fin du mois (toutes devises). */
@@ -130,9 +132,6 @@ export function getMonthlyFinancialSnapshot(input: {
     const c = String((t as any).currency || 'CHF').toUpperCase();
     return c !== 'CHF';
   };
-  const paidExpenses = expenseTx
-    .filter((t) => !isForeignTx(t))
-    .reduce((s, t) => s + (Number(t.amount) || 0), 0);
   // Revenus ponctuels réellement reçus ce mois (saisis comme transactions).
   // P0 — un revenu de 100 EUR n'ajoute JAMAIS 100 CHF au disponible : sans
   // conversion vérifiée, il est présenté SÉPARÉMENT (foreignIncome) et le
@@ -168,6 +167,34 @@ export function getMonthlyFinancialSnapshot(input: {
     }
     return null;
   };
+
+  // P0 — PAIEMENTS : la transition « obligation → paiement » ne fait JAMAIS
+  // remonter le disponible artificiellement.
+  //  • Paiement CHF → compté tel quel.
+  //  • Paiement en devise étrangère LIÉ à une facture avec conversion
+  //    VÉRIFIÉE → compté au montant CHF vérifié, UNE seule fois (l'obligation
+  //    a quitté les factures à payer, le paiement la remplace).
+  //  • Paiement étranger SANS montant CHF vérifié → aucune conversion
+  //    inventée : présenté à part (foreignPaid) et disponible marqué PARTIEL.
+  const invoiceById = new Map((input.invoices || []).map((i) => [i.id, i]));
+  const foreignPaidMap = new Map<string, { total: number; count: number }>();
+  let paidExpenses = 0;
+  for (const t of expenseTx) {
+    const amtT = Number(t.amount) || 0;
+    if (!isForeignTx(t)) { paidExpenses += amtT; continue; }
+    const inv = (t as any).invoiceId ? invoiceById.get((t as any).invoiceId) : undefined;
+    const chf = inv ? chfValueOf(inv) : null;
+    if (chf !== null) { paidExpenses += chf; continue; } // CHF vérifié, une fois
+    const cur = String((t as any).currency).toUpperCase();
+    const e = foreignPaidMap.get(cur) || { total: 0, count: 0 };
+    e.total += Math.abs(amtT);
+    e.count += 1;
+    foreignPaidMap.set(cur, e);
+  }
+  paidExpenses = Math.round(paidExpenses * 100) / 100;
+  const foreignPaid = Array.from(foreignPaidMap.entries())
+    .map(([currency, v]) => ({ currency, total: Math.round(v.total * 100) / 100, count: v.count }))
+    .sort((a, b) => a.currency.localeCompare(b.currency));
 
   // 3) Charges récurrentes — DEUX notions distinctes :
   //    A. recurringMonthlyAvg : moyenne mensuelle BUDGÉTAIRE (stats/comparaisons).
@@ -273,7 +300,7 @@ export function getMonthlyFinancialSnapshot(input: {
   const foreignBills = Array.from(foreignMap.entries())
     .map(([currency, v]) => ({ currency, total: Math.round(v.total * 100) / 100, count: v.count }))
     .sort((a, b) => a.currency.localeCompare(b.currency));
-  const availableIsPartial = foreignBills.length > 0 || foreignIncome.length > 0;
+  const availableIsPartial = foreignBills.length > 0 || foreignIncome.length > 0 || foreignPaid.length > 0;
   // TÂCHE 4 (Siri) — périmètre EXPLICITE : factures exigibles d'ici la fin du
   // mois (CHF + devises), dont celles déjà en retard (dates réellement
   // analysées, jamais une comparaison de chaînes).
@@ -330,6 +357,7 @@ export function getMonthlyFinancialSnapshot(input: {
     recurringCount: activeRecurring.length,
     foreignBills,
     foreignIncome,
+    foreignPaid,
     availableIsPartial,
     dueBillsCount,
     overdueBillsCount,

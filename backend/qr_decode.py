@@ -10,6 +10,23 @@ Aucun montant n'est jamais inventé (jamais de 0 CHF par défaut).
 import base64 as _b64
 
 
+def detect_image_mime(header: bytes, hint: str = "image/jpeg", *, rendered_pdf: bool = False) -> str:
+    """MIME for vision APIs derived from REAL file signatures.
+
+    The iPhone may supply HEIC/photo picker metadata, but the image is
+    normalized before upload. PDFs are rendered as PNG, not JPEG.
+    Never send a fake JPEG type for PNG bytes to a multimodal provider.
+    """
+    if rendered_pdf or header.startswith(b"\\x89PNG\\r\\n\\x1a\\n"):
+        return "image/png"
+    if header.startswith(b"\\xff\\xd8"):
+        return "image/jpeg"
+    if header.startswith(b"RIFF") and b"WEBP" in header[:16]:
+        return "image/webp"
+    normalized = (hint or "").lower().split(";")[0].strip()
+    return normalized if normalized in ("image/png", "image/jpeg", "image/webp") else "image/jpeg"
+
+
 def pdf_first_pages_to_png_b64(pdf_bytes: bytes, max_pages: int = 2) -> list:
     """Rend les premières pages d'un PDF en PNG base64 (zoom 3x ≈ 220 dpi)."""
     import pymupdf  # PyMuPDF

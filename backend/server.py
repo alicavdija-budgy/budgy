@@ -889,19 +889,11 @@ async def scanner_ocr(
         )
         chat.with_model("openai", LLM_MODEL_FAST)
 
-        # ImageContent defaults to JPEG. But a PDF is rendered as PNG above;
-        # tagging PNG bytes as JPEG can make vision providers reject the input.
-        # Detect the actual bytes instead of trusting a picker MIME hint.
-        if is_pdf or head.startswith(b"\\x89PNG\\r\\n\\x1a\\n"):
-            image_mime = "image/png"
-        elif head.startswith(b"\\xff\\xd8"):
-            image_mime = "image/jpeg"
-        elif head.startswith(b"RIFF") and b"WEBP" in head[:16]:
-            image_mime = "image/webp"
-        else:
-            image_mime = (req.mime_type or "image/jpeg").lower()
-            if image_mime not in ("image/jpeg", "image/png", "image/webp"):
-                image_mime = "image/jpeg"
+        # QR-first: the PDF bytes were converted to PNG; the MIME tag sent
+        # to the vision API must match these ACTUAL bytes.
+        image_mime = qr_decode.detect_image_mime(
+            head, req.mime_type, rendered_pdf=is_pdf
+        )
         image_content = ImageContent(image_base64=img_b64, mime=image_mime)
         user_msg = UserMessage(
             text="Voici un ticket/facture. Extrais les données au format JSON strict.",

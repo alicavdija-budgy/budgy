@@ -70,10 +70,59 @@ console.log('\n═══ §D Optimisations Supabase (SQL préparé, NON exécut�
   S('doc : campagne 2 comptes (budgets, factures, QR, documents, RLS)', doc.includes('## 4 bis') && doc.includes('test-a@budgy-preprod.ch'));
 }
 
+console.log('\n═══ §E Isolation NATIVE — config Expo RÉSOLUE (exécution réelle) ═══');
+{
+  const { execSync } = await import('node:child_process');
+  const resolve = (env) => JSON.parse(execSync('npx expo config --json', { cwd: root, env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'ignore'] }).toString());
+  const d = resolve({});
+  const p = resolve({ APP_VARIANT: 'preprod' });
+  U('défaut : config STRICTEMENT inchangée (Budgy, com.budgy.ch.budgy, budgy)', d.name === 'Budgy' && d.ios.bundleIdentifier === 'com.budgy.ch.budgy' && d.scheme === 'budgy' && d.android.package === 'com.budgy.ch.budgy');
+  U('défaut : App Group production + associatedDomains budgy.ch conservés', d.ios.entitlements['com.apple.security.application-groups'][0] === 'group.com.budgy.ch.budgy' && JSON.stringify(d.ios.associatedDomains).includes('budgy.ch'));
+  U('preprod : nom « Budgy Test » + scheme distinct budgy-preprod', p.name === 'Budgy Test' && p.scheme === 'budgy-preprod');
+  U('DEUX bundle identifiers DISTINCTS (installables côte à côte)', p.ios.bundleIdentifier === 'com.budgy.ch.budgy.preprod' && p.ios.bundleIdentifier !== d.ios.bundleIdentifier);
+  U('DEUX App Groups DISTINCTS (aucun mélange de stockage partagé)', p.ios.entitlements['com.apple.security.application-groups'][0] === 'group.com.budgy.ch.budgy.preprod');
+  U('package Android DISTINCT (sandbox locale séparée)', p.android.package === 'com.budgy.ch.budgy.preprod');
+  U('preprod : AUCUNE association aux domaines de production (iOS + Android)', p.ios.associatedDomains === undefined && p.android.intentFilters === undefined);
+  U('build 91 CONSERVÉ dans les deux variantes', d.ios.buildNumber === '91' && p.ios.buildNumber === '91');
+  U('variante exposée au runtime (extra.appVariant)', p.extra.appVariant === 'preprod' && d.extra.appVariant === undefined);
+  U('OTA sans mélange : runtimeVersion fingerprint + canaux distincts', d.runtimeVersion?.policy === 'fingerprint' && eas.build.preprod.channel === 'preprod' && eas.build.preview.channel === 'preview');
+}
+
+console.log('\n═══ §F Extensions natives + App Group dynamique (statique) ═══');
+{
+  const ti = readFileSync(join(root, 'targets/intents/expo-target.config.js'), 'utf8');
+  const tw = readFileSync(join(root, 'targets/widgets/expo-target.config.js'), 'utf8');
+  const si = readFileSync(join(root, 'targets/intents/BudgyShared.swift'), 'utf8');
+  const sw = readFileSync(join(root, 'targets/widgets/BudgyShared.swift'), 'utf8');
+  const wb = readFileSync(join(root, 'src/services/widgetBridge.ts'), 'utf8');
+  S('cible App Intents : App Group piloté par APP_VARIANT', ti.includes("process.env.APP_VARIANT === 'preprod'") && ti.includes('group.com.budgy.ch.budgy.preprod'));
+  S('cible WidgetKit : App Group piloté par APP_VARIANT', tw.includes("process.env.APP_VARIANT === 'preprod'") && tw.includes('group.com.budgy.ch.budgy.preprod'));
+  S('Swift intents : App Group déduit du bundle id (.preprod)', si.includes('bundleId.contains(".preprod")') && si.includes('group.com.budgy.ch.budgy.preprod'));
+  S('Swift widgets : App Group déduit du bundle id (.preprod)', sw.includes('bundleId.contains(".preprod")'));
+  S('widgetBridge.ts (côté app) : App Group distinct en préprod', wb.includes("EXPO_PUBLIC_APP_VARIANT === 'preprod'") && wb.includes('group.com.budgy.ch.budgy.preprod'));
+}
+
+console.log('\n═══ §G Achats natifs StoreKit désactivés en préprod (statique) ═══');
+{
+  const iapSrc = readFileSync(join(root, 'src/services/iap.ts'), 'utf8');
+  const hook = readFileSync(join(root, 'src/hooks/useIAP.ts'), 'utf8');
+  S('variante détectée au runtime (IS_PREPROD_VARIANT)', iapSrc.includes("IS_PREPROD_VARIANT = process.env.EXPO_PUBLIC_APP_VARIANT === 'preprod'"));
+  S('isIapAvailable → false (aucune offre achetable affichée)', iapSrc.includes('if (IS_PREPROD_VARIANT) return false;'));
+  S('initIap → refus explicite AVANT tout initConnection StoreKit', iapSrc.indexOf('if (IS_PREPROD_VARIANT) {') < iapSrc.indexOf('RNIap.initConnection()'));
+  S('requestSubscription → requestPurchase explicitement interdit', iapSrc.includes("e.code = 'preprod_disabled';"));
+  S('raison lisible et traduite dans l\'UI (version de test)', hook.includes("r === 'preprod_disabled' ? t('errors.backendDisabled') : r"));
+  S('production intacte : product IDs / StoreKit inchangés hors variante', iapSrc.includes("monthly: 'budgy.pro.monthly'") || iapSrc.includes('IAP_PRODUCT_IDS'));
+  S('eas.json : APP_VARIANT + EXPO_PUBLIC_APP_VARIANT dans le profil preprod', eas.build.preprod.env.APP_VARIANT === 'preprod' && eas.build.preprod.env.EXPO_PUBLIC_APP_VARIANT === 'preprod');
+  S('clé publique : emplacement sb_publishable_ (jamais de secret commité)', eas.build.preprod.env.EXPO_PUBLIC_SUPABASE_ANON_KEY.includes('sb_publishable') && eas.build.preprod.env.EXPO_PUBLIC_SUPABASE_ANON_KEY.includes('COLLER'));
+}
+
 console.log('\n═══ [NT] NON TESTABLE ICI (build réel / iPhone / Supabase) ═══');
 [
   'exécution de SUPABASE_OPTIMIZATIONS.sql sur budgy-preprod (votre feu vert)',
-  'collage de la clé anon preprod dans eas.json puis build preprod',
+  'collage de la clé publique sb_publishable_ preprod dans eas.json puis build preprod',
+  'compilation Swift réelle des extensions (App Group dynamique) — premier build',
+  'installation côte à côte Budgy + Budgy Test sur le même iPhone',
+  'paywall en préprod : message « version de test », aucun achat possible',
   'campagne iPhone §4 bis : 2 comptes, budgets, QR, PDF, RLS croisée',
   'preuve réseau : aucune requête sortante vers api.budgy.ch / supabase.budgy.ch',
 ].forEach((t) => console.log(`  ⏸  [NT] ${t}`));

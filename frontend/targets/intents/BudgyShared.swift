@@ -7,7 +7,15 @@ import Foundation
 ///   identifiant unique et n'est retirée par l'app qu'après enregistrement
 ///   réellement confirmé dans le store Budgy (aucune perte, aucun doublon).
 enum BudgyShared {
-    static let appGroup = "group.com.budgy.ch.budgy"
+    /// Isolation préprod : l'App Group est déduit du bundle identifier de la
+    /// cible (com.budgy.ch.budgy.preprod.* en préprod) — l'extension de test
+    /// ne lit JAMAIS le conteneur partagé du Budgy de production.
+    static let appGroup: String = {
+        let bundleId = Bundle.main.bundleIdentifier ?? ""
+        return bundleId.contains(".preprod")
+            ? "group.com.budgy.ch.budgy.preprod"
+            : "group.com.budgy.ch.budgy"
+    }()
     static let snapshotKey = "budgy.widget.snapshot"
     static let pendingKey = "budgy.widget.pendingExpenses"
     static let routeKey = "budgy.widget.pendingRoute"

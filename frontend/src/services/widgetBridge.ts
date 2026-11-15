@@ -18,7 +18,11 @@ import { useStore } from '../stores/useStore';
 import { useAlertsStore } from '../stores/useAlertsStore';
 import { getMonthlyFinancialSnapshot, computeBudgetConsumption, parseDate } from '../stores/selectors';
 
-const APP_GROUP = 'group.com.budgy.ch.budgy';
+// Isolation préprod : App Group distinct — le build de test n'écrit JAMAIS
+// dans le conteneur partagé du Budgy de production (et réciproquement).
+const APP_GROUP = process.env.EXPO_PUBLIC_APP_VARIANT === 'preprod'
+  ? 'group.com.budgy.ch.budgy.preprod'
+  : 'group.com.budgy.ch.budgy';
 const SNAPSHOT_KEY = 'budgy.widget.snapshot';
 const PENDING_KEY = 'budgy.widget.pendingExpenses';
 const ROUTE_KEY = 'budgy.widget.pendingRoute';

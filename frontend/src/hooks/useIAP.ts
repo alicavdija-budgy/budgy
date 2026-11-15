@@ -179,10 +179,17 @@ export function useIAP() {
   const grantProvisional = usePremiumStore((s) => s.grantProvisionalPro);
   const cancelPro = usePremiumStore((s) => s.cancel);
 
+  // PRÉPROD — raison lisible : « Fonctionnalité non disponible dans la
+  // version de test » (traduite) au lieu du code technique preprod_disabled.
+  const iapReasonText = useCallback(() => {
+    const r = getIapUnavailableReason();
+    return r === 'preprod_disabled' ? t('errors.backendDisabled') : r;
+  }, [t]);
+
   const [state, setState] = useState<UseIapState>({
     ready: false,
     available: isIapAvailable(),
-    reason: getIapUnavailableReason(),
+    reason: iapReasonText(),
     phase: 'loading',
     products: [],
     monthly: null,
@@ -211,7 +218,7 @@ export function useIAP() {
         phase: 'idle',
         ready: false,
         available: false,
-        reason: getIapUnavailableReason() || t('iapErrors.unavailable'),
+        reason: iapReasonText() || t('iapErrors.unavailable'),
         diagnosticCode: getIapDiagnostics().code,
       }));
       return;
@@ -231,7 +238,7 @@ export function useIAP() {
       error: null,
       diagnosticCode: getIapDiagnostics().code,
     }));
-  }, [setPhase, t]);
+  }, [setPhase, t, iapReasonText]);
 
   useEffect(() => {
     reload();
@@ -247,7 +254,7 @@ export function useIAP() {
       if (!isIapAvailable()) {
         return {
           success: false,
-          error: getIapUnavailableReason() || t('iapErrors.unavailable'),
+          error: iapReasonText() || t('iapErrors.unavailable'),
         };
       }
 
@@ -432,7 +439,7 @@ export function useIAP() {
         return { success: false, error: message };
       }
     },
-    [setPhase, state.products, confirmPro, cancelPro, grantProvisional, authError, t]
+    [setPhase, state.products, confirmPro, cancelPro, grantProvisional, authError, t, iapReasonText]
   );
 
   // ── Restore ─────────────────────────────────────────────────────────────
@@ -440,7 +447,7 @@ export function useIAP() {
     if (!isIapAvailable()) {
       return {
         success: false,
-        error: getIapUnavailableReason() || t('iapErrors.unavailable'),
+        error: iapReasonText() || t('iapErrors.unavailable'),
       };
     }
     setPhase('restoring', { error: null, notConfigured: false });
@@ -500,7 +507,7 @@ export function useIAP() {
       setPhase('idle', { error: message });
       return { success: false, error: message };
     }
-  }, [setPhase, confirmPro, cancelPro, authError, t]);
+  }, [setPhase, confirmPro, cancelPro, authError, t, iapReasonText]);
 
   // ── Silent sync ─────────────────────────────────────────────────────────
   const syncFromBackend = useCallback(async (): Promise<void> => {

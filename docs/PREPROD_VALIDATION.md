@@ -81,8 +81,30 @@ Le projet `budgy-preprod` existe déjà (§0). Reste :
      `api.budgy.ch`. Remplacer par l'URL du backend de test le jour où il
      existera réellement ;
    - `EXPO_PUBLIC_SUPABASE_ANON_KEY` : **une action restante** — coller la
-     clé `anon public` de budgy-preprod (Studio → Settings → API). Elle est
-     PUBLIQUE par conception ; ne JAMAIS mettre la `service_role`.
+     clé PUBLIQUE de budgy-preprod (Studio → Settings → API ; privilégier la
+     clé `sb_publishable_…`, compatible client Supabase). Elle est publique
+     par conception ; ne JAMAIS mettre une clé secrète ni la `service_role`,
+     et ne jamais committer de secret.
+   ISOLATION NATIVE (faite — `app.config.js`, config dynamique officielle
+   Expo, activée par `APP_VARIANT=preprod` du profil EAS) :
+   - nom **« Budgy Test »**, scheme `budgy-preprod` ;
+   - bundle iOS **`com.budgy.ch.budgy.preprod`** et package Android
+     distincts → installable À CÔTÉ de Budgy, sandbox de stockage local
+     totalement séparée (aucun mélange AsyncStorage/SecureStore) ;
+   - App Group distinct **`group.com.budgy.ch.budgy.preprod`** appliqué à
+     l'app, à la cible WidgetKit et à l'extension App Intents (configs
+     cibles dynamiques + Swift déduit le groupe du bundle id) : les widgets
+     et Siri de test ne lisent jamais les données du Budgy installé ;
+   - AUCUNE association aux domaines budgy.ch (associatedDomains iOS et
+     intentFilters Android retirés en préprod) ;
+   - OTA : canal `preprod` + runtimeVersion « fingerprint » (config native
+     différente → empreinte différente) : aucune mise à jour croisée ;
+   - achats StoreKit **désactivés** dans la variante de test : aucune
+     initialisation, aucune offre, aucun requestPurchase, aucune
+     restauration réelle — message traduit « Fonction désactivée dans cette
+     version de test » ; prix et abonnements de production intacts ;
+   - les profils development/preview/production/testflight restent
+     STRICTEMENT identiques (vérifié sur la config RÉSOLUE, build 91).
    DURCISSEMENT CODE (fait) : les 2 derniers replis codés en dur vers
    `api.budgy.ch` (`src/services/iap.ts`, `app/scanner-modal.tsx`) passent
    désormais par l'accesseur central `getApiBaseUrl()` ; et `safeFetch`

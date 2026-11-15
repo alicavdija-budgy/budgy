@@ -49,9 +49,11 @@
         "buildType": "apk"
       },
       "env": {
+        "APP_VARIANT": "preprod",
+        "EXPO_PUBLIC_APP_VARIANT": "preprod",
         "EXPO_PUBLIC_BACKEND_URL": "https://backend-preprod.invalid",
         "EXPO_PUBLIC_SUPABASE_URL": "https://kodnbllysingkwispyfx.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "COLLER_ICI_ANON_PUBLIC_KEY_DE_BUDGY_PREPROD"
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "COLLER_ICI_CLE_PUBLIQUE_sb_publishable_DE_BUDGY_PREPROD"
       }
     },
     "production": {

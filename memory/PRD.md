@@ -480,3 +480,12 @@ test
 - docs/SUPABASE_OPTIMIZATIONS.sql (préparé, NON exécuté, idempotent) : 15 index user_id + politiques réécrites (select auth.uid()) (initplan advisor) + tombstones + validations lecture seule.
 - PREPROD_VALIDATION.md : §0 état migré, §1.4 profil réel + 1 action restante (coller anon key), §4 URLs réelles, §4bis campagne iPhone 2 comptes (budgets, factures+QR, documents, synchro, RLS, backend désactivé).
 - Tests : scripts/test-preprod.mjs 26/26 ; régressions budgets-sync 41/41, task3 117/117, task5 69/69, engine 23/23 ; tsc OK ; app OK.
+
+## P0 ISOLATION NATIVE PRÉPROD (app.config.js + StoreKit)
+- app.config.js (config dynamique officielle, SDK 54) : APP_VARIANT=preprod → nom « Budgy Test », scheme budgy-preprod, bundle iOS com.budgy.ch.budgy.preprod, package Android .preprod, App Group group.com.budgy.ch.budgy.preprod, associatedDomains + intentFilters supprimés, extra.appVariant. Sans APP_VARIANT : config app.json STRICTEMENT inchangée (vérifié sur config RÉSOLUE via npx expo config — build 91 des deux côtés).
+- Extensions : targets/{intents,widgets}/expo-target.config.js App Group piloté par APP_VARIANT ; BudgyShared.swift (×2) déduit le groupe du bundle id (.preprod) — compilation Swift NON testable ici.
+- widgetBridge.ts : APP_GROUP dynamique via EXPO_PUBLIC_APP_VARIANT.
+- IAP préprod : IS_PREPROD_VARIANT dans iap.ts → isIapAvailable=false, getIapUnavailableReason='preprod_disabled', initIap refuse avant initConnection, requestSubscription jette preprod_disabled ; useIAP.iapReasonText → message traduit errors.backendDisabled. Production inchangée (variante absente).
+- eas.json preprod : + APP_VARIANT, EXPO_PUBLIC_APP_VARIANT ; placeholder clé publique sb_publishable_ (à coller par l'utilisateur, jamais de secret commité).
+- OTA : runtimeVersion fingerprint + canal preprod → aucune MAJ croisée. Stockage local : sandbox séparée par bundle id distinct.
+- Tests : test-preprod.mjs 49/49 (dont 10 UNIT sur la config Expo RÉSOLUE réelle) ; budgets-sync 41/41, widgets 44/44, task4 94/94 ; tsc + lint OK ; app OK.

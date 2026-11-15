@@ -23,6 +23,12 @@
 
 import { Platform } from 'react-native';
 
+// PRÉPROD — variante de test (EAS profil `preprod`, EXPO_PUBLIC_APP_VARIANT) :
+// StoreKit totalement désactivé — aucune initialisation, aucune offre
+// achetable, aucun requestPurchase, aucune validation/restauration réelle.
+// La production (variante absente) est STRICTEMENT inchangée.
+export const IS_PREPROD_VARIANT = process.env.EXPO_PUBLIC_APP_VARIANT === 'preprod';
+
 async function resolveAuthSession(forceRefresh = false): Promise<any | null> {
   try {
     const { supabase, isSupabaseConfigured } = await import('../lib/supabase');
@@ -155,11 +161,16 @@ function setDiagnostics(patch: Partial<IapDiagnostics>) {
 }
 
 export function isIapAvailable(): boolean {
+  // PRÉPROD — variante de test : StoreKit totalement désactivé (aucune
+  // initialisation, aucune offre, aucun achat, aucune restauration réelle).
+  // Les prix et abonnements de PRODUCTION ne sont pas touchés.
+  if (IS_PREPROD_VARIANT) return false;
   loadIap();
   return !!RNIap && Platform.OS !== 'web';
 }
 
 export function getIapUnavailableReason(): string | null {
+  if (IS_PREPROD_VARIANT) return 'preprod_disabled';
   loadIap();
   return RNIapError;
 }
@@ -244,6 +255,11 @@ function removeListeners() {
 }
 
 export async function initIap(): Promise<boolean> {
+  // PRÉPROD — jamais d'initConnection StoreKit dans la variante de test.
+  if (IS_PREPROD_VARIANT) {
+    setDiagnostics({ code: 'STOREKIT_UNAVAILABLE', isIapAvailable: false, initConnected: false, returnedProductIds: [], errorCode: 'preprod_disabled', errorMessage: 'IAP disabled in the preprod test variant' });
+    return false;
+  }
   loadIap();
   if (!isIapAvailable()) {
     setDiagnostics({ code: 'STOREKIT_UNAVAILABLE', isIapAvailable: false, initConnected: false, returnedProductIds: [], errorCode: 'not_available', errorMessage: RNIapError || 'IAP native module not available' });
@@ -374,6 +390,12 @@ export async function fetchSubscriptions(): Promise<IapProduct[]> {
 }
 
 export async function requestSubscription(productId: string, opts: { androidOfferToken?: string | null } = {}): Promise<IapPurchaseReceipt | null> {
+  // PRÉPROD — requestPurchase explicitement interdit dans la variante de test.
+  if (IS_PREPROD_VARIANT) {
+    const e: any = new Error('preprod_disabled');
+    e.code = 'preprod_disabled';
+    throw e;
+  }
   if (!isIapAvailable()) throw new Error(getIapUnavailableReason() || 'IAP unavailable');
   if (typeof RNIap?.requestPurchase !== 'function') throw new Error('IAP module is missing requestPurchase on this build');
   const userId = await getIapAuthenticatedUserId();

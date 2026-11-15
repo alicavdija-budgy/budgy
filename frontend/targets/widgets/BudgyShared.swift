@@ -9,7 +9,15 @@ import Foundation
 ///   et n'a pas activé le masquage (budgy.hideAmounts), et uniquement sur
 ///   l'écran verrouillé si `lockAmounts` est explicitement vrai.
 enum BudgyShared {
-    static let appGroup = "group.com.budgy.ch.budgy"
+    /// Isolation préprod : l'App Group est déduit du bundle identifier de la
+    /// cible (com.budgy.ch.budgy.preprod.* en préprod) — le widget de test
+    /// ne lit JAMAIS le conteneur partagé du Budgy de production.
+    static let appGroup: String = {
+        let bundleId = Bundle.main.bundleIdentifier ?? ""
+        return bundleId.contains(".preprod")
+            ? "group.com.budgy.ch.budgy.preprod"
+            : "group.com.budgy.ch.budgy"
+    }()
     static let snapshotKey = "budgy.widget.snapshot"
 
     static var defaults: UserDefaults? { UserDefaults(suiteName: appGroup) }

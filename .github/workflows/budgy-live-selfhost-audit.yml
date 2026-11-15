@@ -1,0 +1,56 @@
+name: Budgy LIVE existing infrastructure - read only audit
+
+# PRODUCTION-SAFE: only HTTP GET to existing infrastructure;
+# no authorization tokens, no POST, no SQL, no deployment, no billing.
+on:
+  push:
+    branches: [budgy-smart-4.0]
+    paths:
+      - '.github/workflows/budgy-live-selfhost-audit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compare-live-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Health checks for existing Budgy API and self-hosted Supabase
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --retry 1 --max-time 15 https://api.budgy.ch/api/health -o /tmp/health.json
+          curl -fsS --retry 1 --max-time 15 https://api.budgy.ch/openapi.json -o /tmp/openapi.json
+          curl -fsS --retry 1 --max-time 15 https://api.budgy.ch/api/config/status -o /tmp/config.json
+          # Supabase health is public, do not authenticate or inspect customer data
+          code=$(curl -L -sS --max-time 15 -o /tmp/supabase-health.json -w '%{http_code}' https://supabase.budgy.ch/auth/v1/health || true)
+          echo "Self-hosted Supabase Auth /health HTTP status: ${code}"
+      - name: Compare deployed API contract and report version separately
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs=require('node:fs');
+          const health=JSON.parse(fs.readFileSync('/tmp/health.json','utf8'));
+          const spec=JSON.parse(fs.readFileSync('/tmp/openapi.json','utf8'));
+          const cfg=JSON.parse(fs.readFileSync('/tmp/config.json','utf8'));
+          const r=spec.components?.schemas?.OCRResponse?.properties||{};
+          const q=spec.components?.schemas?.OCRRequest?.properties||{};
+          const ocr=spec.paths?.['/api/scanner/ocr']?.post;
+          const checks={
+            liveHealth:health.status==='ok',
+            hasOcrEndpoint:!!ocr,
+            hasDocumentType:!!r.document_type,
+            hasSwissQrContent:!!r.swiss_qr_content,
+            hasNeedsConfirmation:!!r.needs_user_confirmation,
+            requestSupportsPdf:!!q.mime_type,
+            openAiConfigured:cfg.openai==='configured'
+          };
+          console.log('Deployed APP_VERSION (env metadata, not a code fingerprint):',String(health.version||'unknown'));
+          console.log('Deployed service APP_ENV:',String(health.env||'unknown'));
+          for(const [k,v] of Object.entries(checks))console.log((v?'PASS':'FAIL')+': '+k);
+          const missing=Object.entries(checks).filter(([_,v])=>!v).map(([k])=>k);
+          console.log('Compatibility gaps:',missing.length?missing.join(', '):'none detected');
+          if(!checks.liveHealth||!checks.hasOcrEndpoint)process.exitCode=1;
+          NODE

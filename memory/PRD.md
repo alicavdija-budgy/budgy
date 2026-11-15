@@ -334,3 +334,9 @@ test
 - Montants exacts : formatNumber/formatMoney/useMoney auto-decimales (17,90 jamais 18).
 - scripts/test-stability.mjs : 43 garde-fous. testing_agent iteration_22 : tous parcours PASS apres fixes.
 - RESTE iPhone physique (build 89) : commande Siri vocale reelle, rendu natif du picker mono-modal, barre flottante, StoreKit.
+
+## TÂCHE 1 (mission imports/documents/Siri) — commit a52fbd87
+- Backend : qr_decode.py (PDF→PNG PyMuPDF + decode Swiss QR OpenCV, QR-first avant OCR vision, swiss_qr_content brut \r\n preserve) ; montant OCR <=0 → None ; deps PyMuPDF/opencv-headless/qrcode.
+- Frontend : email-import via apiFetchJson (JWT) + 401/403 explicites ; swiss_qr_content → parseSwissQrBill ; persistAsInvoice bloque echec/0 CHF, champ montant obligatoire (import-amount-input) ; carte erreur OCR ; src/utils/amount.ts normalizeChfAmount (normalisation unique, budgets bascule dessus) ; i18n importErrors x4.
+- Tests : test-import.mjs 31/31 (module execute), python QR/PDF decode exact, qrbill 49/49, budgets 67/67, engine 23/23, stability 43/43.
+- ORDRE DES TÂCHES RESTANTES (validation utilisateur entre chaque) : 2 (contrats+pièce jointe+ShareIntentRouter), 3 (documentType strict + stockage privé users/{uid}/... + cloudSync mappings), 5 (conservation fichier facture + détail + doublons), 4 (Siri fiabilité confirmation/sync), 6 (observabilité+tests, transversale).

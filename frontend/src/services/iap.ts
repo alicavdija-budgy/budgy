@@ -161,6 +161,11 @@ function setDiagnostics(patch: Partial<IapDiagnostics>) {
 }
 
 export function isIapAvailable(): boolean {
+  // Android P0: the backend currently verifies Apple App Store transactions
+  // only. Disable Google purchases until Play Billing verification and
+  // entitlement restoration are implemented server-side. Never charge a
+  // customer for an entitlement that cannot be verified.
+  if (Platform.OS === 'android') return false;
   // PRÉPROD — variante de test : StoreKit totalement désactivé (aucune
   // initialisation, aucune offre, aucun achat, aucune restauration réelle).
   // Les prix et abonnements de PRODUCTION ne sont pas touchés.
@@ -170,6 +175,7 @@ export function isIapAvailable(): boolean {
 }
 
 export function getIapUnavailableReason(): string | null {
+  if (Platform.OS === 'android') return 'android_billing_not_configured';
   if (IS_PREPROD_VARIANT) return 'preprod_disabled';
   loadIap();
   return RNIapError;
@@ -390,6 +396,11 @@ export async function fetchSubscriptions(): Promise<IapProduct[]> {
 }
 
 export async function requestSubscription(productId: string, opts: { androidOfferToken?: string | null } = {}): Promise<IapPurchaseReceipt | null> {
+  if (Platform.OS === 'android') {
+    const e: any = new Error('android_billing_not_configured');
+    e.code = 'android_billing_not_configured';
+    throw e;
+  }
   // PRÉPROD — requestPurchase explicitement interdit dans la variante de test.
   if (IS_PREPROD_VARIANT) {
     const e: any = new Error('preprod_disabled');

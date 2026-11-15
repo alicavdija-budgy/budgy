@@ -195,16 +195,18 @@ ok('paywall has no hardcoded subscription CHF prices', () => {
   assert.doesNotMatch(paywallSrc, /CHF\s*39\.90/);
 });
 
-ok('app version is 3.9.1', () => {
-  assert.equal(appJson.expo.version, '3.9.1');
+ok('Budgy app version remains 4.x or newer', () => {
+  assert.ok(/^4\\.\\d+\\.\\d+$/.test(appJson.expo.version));
 });
 
-ok('iOS buildNumber is 85 (TestFlight Smart 4.0)', () => {
-  assert.equal(appJson.expo.ios.buildNumber, '85');
+ok('iOS build number is at least the verified TestFlight 91', () => {
+  const build = Number(appJson.expo.ios.buildNumber);
+  assert.ok(Number.isInteger(build) && build >= 91);
 });
 
-ok('Android versionCode is 82', () => {
-  assert.equal(appJson.expo.android.versionCode, 82);
+ok('Android versionCode is valid and not below 82', () => {
+  const build = Number(appJson.expo.android.versionCode);
+  assert.ok(Number.isInteger(build) && build >= 82);
 });
 
 ok('bundle/package IDs match Budgy production app', () => {

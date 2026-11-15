@@ -88,6 +88,9 @@ export default function ImportInvoiceScreen() {
   // TÂCHE 1 — montant OBLIGATOIRE saisi/corrigé par l'utilisateur quand
   // l'extraction ne fournit pas un montant exploitable. Jamais 0 par défaut.
   const [manualAmount, setManualAmount] = useState('');
+  // TÂCHE 2 (audit) — saisie MANUELLE d'un contrat quand l'OCR échoue
+  const [showManualCt, setShowManualCt] = useState(false);
+  const [manualCt, setManualCt] = useState({ title: '', issuer: '', amount: '', expiry: '' });
 
   // ── Backend calls ──
   const parseEmailText = async (content: string, subject = '') => {
@@ -334,64 +337,56 @@ export default function ImportInvoiceScreen() {
   };
 
   /** Save as Contract (Mon Classeur) */
-  const persistAsContract = async () => {
-    if (!result) return;
-    if (extractionFailed) {
-      Alert.alert(t('importErrors.extractFailedTitle'), t('importErrors.extractFailedBody'));
-      return;
-    }
+  /** Noyau commun : enregistre fichier original (vault) + document lié +
+   *  contrat. Utilisé par l'OCR ET par la saisie manuelle (OCR indisponible).
+   *  JAMAIS de date/montant/renouvellement inventés. */
+  const saveContractRecord = async (
+    meta: { title: string; issuer?: string; category: string; amount: number | null; expirationDate?: string; startDate?: string },
+    originalUri?: string,
+    mime?: string,
+  ) => {
     const now = Date.now();
-    const ctId = `ct_${now}`;
-    // 1) CONSERVER LE FICHIER ORIGINAL (copie durable hors cache iOS)
     let documentId: string | undefined;
-    if (result._originalUri) {
+    if (originalUri) {
       try {
         const docId = `doc_${now}`;
-        const vaultUri = await saveToVault(result._originalUri, docId, result._mime);
+        const vaultUri = await saveToVault(originalUri, docId, mime);
         if (!(await vaultFileExists(vaultUri))) throw new VaultError('SAVE_FAILED');
-        const isPdf = (result._mime || '').includes('pdf') || vaultUri.toLowerCase().endsWith('.pdf');
+        const isPdf = (mime || '').includes('pdf') || vaultUri.toLowerCase().endsWith('.pdf');
         addDocument({
           id: docId,
-          title: result.title || result.issuer || t('emailImport.defaultContractTitle'),
+          title: meta.title,
           category: 'contracts',
-          imageBase64: isPdf ? '' : (result._originalUri.startsWith('data:') ? result._originalUri : ''),
+          imageBase64: isPdf ? '' : (originalUri.startsWith('data:') ? originalUri : ''),
           pdfUri: isPdf ? vaultUri : undefined,
-          pages: undefined,
+          fileUri: isPdf ? undefined : vaultUri,
+          mimeType: mime,
           tags: ['contract', 'import'],
           note: t('emailImport.importedByAiNote'),
           createdAt: now,
           updatedAt: now,
         } as any);
-        if (!isPdf) {
-          // champ additif fileUri : URI durable de l'image originale
-          updateDocument(docId, { fileUri: vaultUri } as any);
-        }
         documentId = docId;
       } catch (e: any) {
         const code = e instanceof VaultError ? e.code : 'SAVE_FAILED';
         Alert.alert(t('contractsV2.fileErrorTitle'), t(`contractsV2.${code}`));
-        return; // JAMAIS de succès si la pièce jointe n'a pas pu être conservée
+        return false; // JAMAIS de succès si la pièce jointe n'a pas pu être conservée
       }
     }
-    // 2) MÉTADONNÉES : rien d'inventé. Pas d'échéance fictive à un an,
-    //    pas d'autoRenew supposé, pas de montant 0 présenté comme réel.
-    const extractedAmount = normalizeChfAmount(result.amount) ?? normalizeChfAmount(result.total_amount);
-    const extractedStart = result.contract_start || undefined; // uniquement si réellement extrait
-    const contract: Contract = {
-      id: ctId,
-      title: result.title || result.merchant || result.issuer || t('emailImport.defaultContractTitle'),
-      issuer: result.issuer || result.merchant || undefined,
-      amount: extractedAmount ?? 0, // 0 = non renseigné (modifiable), jamais une obligation chiffrée
-      expirationDate: '', // non renseignée — JAMAIS inventée
-      startDate: extractedStart,
+    addContract({
+      id: `ct_${now}`,
+      title: meta.title,
+      issuer: meta.issuer || undefined,
+      amount: meta.amount ?? 0, // 0 = non renseigné (modifiable), jamais une obligation chiffrée
+      expirationDate: meta.expirationDate || '',
+      startDate: meta.startDate,
       urgent: false,
-      autoRenew: undefined, // inconnu — jamais supposé
-      category: result.category || 'assurance',
+      autoRenew: undefined,
+      category: meta.category,
       createdAt: now,
       notes: t('emailImport.importedByAiNote'),
       documentId,
-    };
-    addContract(contract);
+    });
     Alert.alert(
       t('emailImport.contractSavedTitle'),
       documentId ? t('contractsV2.savedWithFile') : t('contractsV2.savedNoFile'),
@@ -401,6 +396,29 @@ export default function ImportInvoiceScreen() {
       ],
     );
     setResult(null);
+    setShowManualCt(false);
+    setManualCt({ title: '', issuer: '', amount: '', expiry: '' });
+    return true;
+  };
+
+  const persistAsContract = async () => {
+    if (!result) return;
+    if (extractionFailed) {
+      // OCR indisponible → parcours MANUEL (le fichier original est conservé)
+      setShowManualCt(true);
+      return;
+    }
+    await saveContractRecord(
+      {
+        title: result.title || result.merchant || result.issuer || t('emailImport.defaultContractTitle'),
+        issuer: result.issuer || result.merchant || undefined,
+        category: result.category || 'assurance',
+        amount: normalizeChfAmount(result.amount) ?? normalizeChfAmount(result.total_amount),
+        startDate: result.contract_start || undefined, // uniquement si réellement extrait
+      },
+      result._originalUri,
+      result._mime,
+    );
   };
 
   const saveInvoice = () => {
@@ -582,6 +600,50 @@ export default function ImportInvoiceScreen() {
               </TouchableOpacity>
             </View>
             <Text style={styles.tipsText}>{t('importErrors.extractFailedBody')}</Text>
+            {!showManualCt ? (
+              <TouchableOpacity
+                style={[styles.saveBtnAlt, { marginTop: 12 }]}
+                onPress={() => setShowManualCt(true)}
+                testID="contract-manual-entry"
+              >
+                <Ionicons name="create-outline" size={18} color={theme.text} />
+                <Text style={styles.saveBtnAltTxt}>{t('contractsV2.manualEntry')}</Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={{ marginTop: 12, gap: 8 }}>
+                <Text style={styles.rowLabel}>{t('contractsV2.manualTitle')}</Text>
+                <TextInput style={styles.amountInput} value={manualCt.title} onChangeText={(v) => setManualCt((m) => ({ ...m, title: v }))} placeholder={t('contractsV2.manualName')} placeholderTextColor={theme.textTertiary} testID="manual-ct-title" />
+                <TextInput style={styles.amountInput} value={manualCt.issuer} onChangeText={(v) => setManualCt((m) => ({ ...m, issuer: v }))} placeholder={t('contractsV2.manualIssuer')} placeholderTextColor={theme.textTertiary} />
+                <TextInput style={styles.amountInput} value={manualCt.amount} onChangeText={(v) => setManualCt((m) => ({ ...m, amount: v }))} placeholder={t('contractsV2.manualAmount')} placeholderTextColor={theme.textTertiary} keyboardType="decimal-pad" />
+                {manualCt.amount.length > 0 && normalizeChfAmount(manualCt.amount) === null && (
+                  <Text style={{ color: '#EF4444', fontSize: 12 }}>{t('importErrors.amountInvalid')}</Text>
+                )}
+                <TextInput style={styles.amountInput} value={manualCt.expiry} onChangeText={(v) => setManualCt((m) => ({ ...m, expiry: v }))} placeholder={t('contractsV2.manualExpiry')} placeholderTextColor={theme.textTertiary} />
+                <TouchableOpacity
+                  style={styles.saveBtnAlt}
+                  testID="manual-ct-save"
+                  onPress={async () => {
+                    if (!manualCt.title.trim()) { Alert.alert(t('contractsV2.manualNeedTitle')); return; }
+                    if (manualCt.amount.trim() && normalizeChfAmount(manualCt.amount) === null) { Alert.alert(t('importErrors.amountInvalid')); return; }
+                    if (manualCt.expiry.trim() && !/^\d{4}-\d{2}-\d{2}$/.test(manualCt.expiry.trim())) { Alert.alert(t('contractsV2.manualExpiry')); return; }
+                    await saveContractRecord(
+                      {
+                        title: manualCt.title.trim(),
+                        issuer: manualCt.issuer.trim() || undefined,
+                        category: 'assurance',
+                        amount: manualCt.amount.trim() ? normalizeChfAmount(manualCt.amount) : null,
+                        expirationDate: manualCt.expiry.trim() || undefined,
+                      },
+                      result._originalUri,
+                      result._mime,
+                    );
+                  }}
+                >
+                  <Ionicons name="save-outline" size={18} color={theme.text} />
+                  <Text style={styles.saveBtnAltTxt}>{t('contractsV2.manualSave')}</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         )}
 
@@ -681,6 +743,11 @@ function Row({ label, value, highlight }: { label: string; value: string; highli
 }
 
 const makeStyles = (Colors: ThemePalette) => StyleSheet.create({
+  saveBtnAlt: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: 'rgba(52,211,153,0.16)', borderRadius: BorderRadius.md, paddingVertical: 12,
+  },
+  saveBtnAltTxt: { color: Colors.text, fontWeight: '700', fontSize: FontSizes.md },
   amountInputWrap: { marginTop: Spacing.sm },
   amountInput: {
     marginTop: 6, borderWidth: 1, borderColor: 'rgba(148,163,184,0.35)', borderRadius: BorderRadius.md,

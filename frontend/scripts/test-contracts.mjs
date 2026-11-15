@@ -10,22 +10,22 @@ const read = (p) => readFileSync(p, 'utf8');
 
 console.log('— persistAsContract : plus AUCUNE donnée inventée —');
 const imp = read('app/more/email-import.tsx');
-const ct = imp.slice(imp.indexOf('const persistAsContract'), imp.indexOf('const saveInvoice'));
-ok('plus d’échéance fictive à un an', !ct.includes('oneYearLater') && ct.includes("expirationDate: ''"));
+const ct = imp.slice(imp.indexOf('const saveContractRecord'), imp.indexOf('const saveInvoice'));
+ok('plus d’échéance fictive à un an', !ct.includes('oneYearLater') && ct.includes("meta.expirationDate || ''"));
 ok('plus d’autoRenew supposé', !ct.includes('autoRenew: true') && ct.includes('autoRenew: undefined'));
 ok('startDate uniquement si réellement extrait (jamais la date du jour)', !ct.includes('toISOString') && ct.includes('result.contract_start || undefined'));
 ok('montant via normalisation unique (0 = non renseigné, pas « Number()||0 »)', ct.includes('normalizeChfAmount(result.amount)') && !ct.includes('Number(result.amount) ||'));
 ok('fichier original copié DURABLEMENT (vault) et vérifié après écriture', ct.includes('saveToVault') && ct.includes('vaultFileExists'));
-ok('échec de conservation ⇒ contrat NON enregistré (jamais de faux succès)', ct.includes("return; // JAMAIS de succès"));
+ok('échec de conservation ⇒ contrat NON enregistré (jamais de faux succès)', ct.includes('return false; // JAMAIS de succès'));
 ok('PersonalDocument lié (documentId) créé avec le contrat', ct.includes('addDocument') && ct.includes('documentId,'));
 ok('extraction échouée ⇒ blocage + saisie manuelle possible', ct.includes('extractionFailed'));
 
 console.log('— Coffre durable + limites explicites —');
 const vault = read('src/lib/fileVault.ts');
-ok('limite de taille EXPLICITE 15 Mo', vault.includes('15 * 1024 * 1024'));
+ok('limite de taille EXPLICITE (8 Mo, cohérente backend)', vault.includes('8 * 1024 * 1024'));
 ok('DOC/DOCX refusés (aucun moteur de conversion disponible)', vault.includes("'doc', 'docx'") && vault.includes('UNSUPPORTED_FORMAT'));
 ok('PDF/JPEG/PNG/HEIC/HEIF/WEBP pris en charge', vault.includes("'pdf', 'jpg', 'jpeg', 'png', 'heic', 'heif', 'webp'"));
-ok('copie hors cache iOS (documentDirectory/vault) + relecture vérifiée', vault.includes('documentDirectory') && vault.includes('getInfoAsync(dest)'));
+ok('copie hors cache iOS (documentDirectory/vault) + relecture vérifiée', vault.includes('documentDirectory') && vault.includes('getInfoAsync(dest'));
 ok('contrôle taille/format AVANT traitement dans les 3 pickers', (imp.match(/assertFileAcceptable\(/g) || []).length >= 4);
 
 console.log('— Section Contrats réelle (documents.tsx) —');
@@ -52,6 +52,22 @@ ok('champs ADDITIFS PersonalDocument (fileUri, mimeType) — aucune suppression'
 ok('migration SQL fournie SANS être appliquée', existsSync('../docs/MIGRATION_TASK2_contracts_document_id.sql'));
 const sync = read('src/services/cloudSync.ts');
 ok('mapping contracts inchangé (pas de colonne inconnue qui casserait la synchro)', !sync.includes("'document_id'"));
+
+console.log('— Audit complémentaire TÂCHE 2 —');
+ok('contrats affichés INDÉPENDAMMENT de documents[] (hors ternaire vide)', docs.includes('visibleContracts.length === 0 ?') && docs.includes('visibleContracts.map((c)'));
+ok('recherche sur titres ET émetteurs des contrats', docs.includes("(c.issuer || '').toLowerCase().includes(q)"));
+ok('pas de doublon visuel : PJ liées exclues de la grille', docs.includes('linkedDocIds.has(d.id)'));
+ok('bouton « Ouvrir le PDF » + lecteur natif (WebView) séparé du Partager', docs.includes('contract-open-pdf') && docs.includes('pdfViewerUri') && docs.includes('shareContractPdf'));
+ok('pièce jointe inaccessible → erreur claire (fileMissing)', docs.includes('fileMissingTitle'));
+ok('rattacher un fichier à un ANCIEN contrat sans PJ', docs.includes('attachFileToContract') && docs.includes('contract-attach-file'));
+const imp2 = read('app/more/email-import.tsx');
+ok('OCR indisponible → parcours de SAISIE MANUELLE (fichier conservé)', imp2.includes('contract-manual-entry') && imp2.includes('saveContractRecord') && imp2.includes('manual-ct-save'));
+ok('saisie manuelle : montant/échéance OPTIONNELS validés, rien d’inventé', imp2.includes("manualCt.amount.trim() ? normalizeChfAmount(manualCt.amount) : null"));
+const vault2 = read('src/lib/fileVault.ts');
+ok('intégrité : taille réelle vérifiée, fichier vide/tronqué rejeté + nettoyé', vault2.includes('copy_truncated') && vault2.includes('deleteAsync'));
+ok('noms de fichiers UNIQUES (horodatage + aléa)', vault2.includes('Math.random().toString(36)'));
+ok('web : URL temporaire CONVERTIE en data URL (jamais supposée durable)', vault2.includes('readAsDataURL'));
+ok('limite 8 Mo COHÉRENTE avec le backend (12 M base64)', vault2.includes('8 * 1024 * 1024'));
 
 console.log(`\nRésultat : ${passed} réussis, ${failed} échoués`);
 if (failed > 0) process.exit(1);

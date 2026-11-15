@@ -13,6 +13,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import * as DocumentPicker from 'expo-document-picker';
+import { WebView } from 'react-native-webview';
+import { saveToVault, assertFileAcceptable, vaultFileExists, VaultError } from '../../src/lib/fileVault';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Print from 'expo-print';
 import * as FileSystem from 'expo-file-system';
@@ -27,7 +30,7 @@ import { useStore } from '../../src/stores/useStore';
 import { Card, EmptyState, Button } from '../../src/components/ui';
 import ZoomableImage from '../../src/components/ZoomableImage';
 import CornerEditor from '../../src/components/CornerEditor';
-import type { DocumentCategory } from '../../src/types';
+import type { DocumentCategory, PersonalDocument } from '../../src/types';
 import { useTranslation } from '../../src/hooks/useTranslation';
 import { DATE_LOCALES } from '../../src/i18n/translations';
 
@@ -92,14 +95,23 @@ export default function DocumentsScreen() {
   const [retakeIndex, setRetakeIndex] = useState<number | null>(null);
   const cameraRef = useRef<CameraView | null>(null);
 
+  // Recherche contrats (titre + émetteur) — anciens contrats SANS documentId inclus
+  const visibleContracts = useMemo(() => contracts.filter((c) => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return c.title.toLowerCase().includes(q) || (c.issuer || '').toLowerCase().includes(q);
+  }), [contracts, search]);
+  // Les pièces jointes de contrats ne sont PAS doublées dans la grille
+  const linkedDocIds = useMemo(() => new Set(contracts.map((c) => c.documentId).filter(Boolean)), [contracts]);
   const filtered = useMemo(() => documents.filter((d) => {
+    if (linkedDocIds.has(d.id) && (filter === 'all' || filter === 'contracts')) return false;
     if (filter !== 'all' && d.category !== filter) return false;
     if (search.trim()) {
       const q = search.toLowerCase();
       if (!d.title.toLowerCase().includes(q) && !(d.tags || []).some((t) => t.toLowerCase().includes(q)) && !(d.note || '').toLowerCase().includes(q)) return false;
     }
     return true;
-  }), [documents, filter, search]);
+  }), [documents, filter, search, linkedDocIds]);
 
   const counts = useMemo(() => {
     const m: Record<string, number> = { all: documents.length };
@@ -113,6 +125,52 @@ export default function DocumentsScreen() {
   // seulement les documents de catégorie « contracts ») ──
   const selCt = contracts.find((c) => c.id === selectedContract) || null;
   const ctDoc = selCt?.documentId ? documents.find((d) => d.id === selCt.documentId) : undefined;
+  const [pdfViewerUri, setPdfViewerUri] = useState<string | null>(null);
+  const openContractPdf = async (uri?: string) => {
+    if (!(await vaultFileExists(uri))) {
+      Alert.alert(t('contractsV2.fileMissingTitle'), t('contractsV2.fileMissingBody'));
+      return;
+    }
+    if (Platform.OS === 'web') { try { window.open(uri!, '_blank'); } catch {} return; }
+    setPdfViewerUri(uri!);
+  };
+  const shareContractPdf = async (doc?: PersonalDocument) => {
+    if (!doc || !(await vaultFileExists(doc.pdfUri || doc.fileUri))) {
+      Alert.alert(t('contractsV2.fileMissingTitle'), t('contractsV2.fileMissingBody'));
+      return;
+    }
+    await sharePdf(doc as any);
+  };
+  /** Rattacher un fichier à un ANCIEN contrat sans pièce jointe. */
+  const attachFileToContract = async (contractId: string) => {
+    try {
+      const res = await DocumentPicker.getDocumentAsync({ type: ['application/pdf', 'image/*'], copyToCacheDirectory: true, multiple: false });
+      if (res.canceled) return;
+      const f = res.assets[0];
+      await assertFileAcceptable(f.uri, f.mimeType, f.name);
+      const docId = `doc_${Date.now()}`;
+      const vaultUri = await saveToVault(f.uri, docId, f.mimeType, f.name);
+      const isPdf = (f.mimeType || '').includes('pdf') || vaultUri.toLowerCase().endsWith('.pdf');
+      const now = Date.now();
+      addDocument({
+        id: docId,
+        title: f.name || t('contractsV2.sectionTitle'),
+        category: 'contracts',
+        imageBase64: '',
+        pdfUri: isPdf ? vaultUri : undefined,
+        fileUri: isPdf ? undefined : vaultUri,
+        mimeType: f.mimeType,
+        tags: ['contract'],
+        createdAt: now,
+        updatedAt: now,
+      } as any);
+      updateContract(contractId, { documentId: docId });
+      Alert.alert(t('common.success'), t('contractsV2.attached'));
+    } catch (e: any) {
+      const code = e instanceof VaultError ? e.code : 'SAVE_FAILED';
+      Alert.alert(t('contractsV2.fileErrorTitle'), t(`contractsV2.${code}`));
+    }
+  };
   const renameContract = (id: string, current: string) => {
     if (Platform.OS === 'web') return;
     Alert.prompt(
@@ -775,7 +833,35 @@ ${pageDataUrls.map((src, i) => `
           </TouchableOpacity>
         </View>
 
-        {filtered.length === 0 ? (
+        {/* TÂCHE 2 (audit) — VRAIE section Contrats : affichée depuis
+            contracts[] indépendamment de documents[], recherche incluse */}
+        {(filter === 'all' || filter === 'contracts') && visibleContracts.length > 0 && (
+            <View style={{ marginBottom: 14 }}>
+              <Text style={styles.sectionLabel}>{t('contractsV2.sectionTitle')} ({contracts.length})</Text>
+              {visibleContracts.map((c) => {
+                const linked = c.documentId ? documents.find((d) => d.id === c.documentId) : undefined;
+                return (
+                  <TouchableOpacity
+                    key={c.id}
+                    style={styles.ctRow}
+                    onPress={() => setSelectedContract(c.id)}
+                    testID={`contract-row-${c.id}`}
+                  >
+                    <View style={styles.ctIcon}><Text style={{ fontSize: 18 }}>📄</Text></View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.ctTitle} numberOfLines={1}>{c.title}</Text>
+                      <Text style={styles.ctSub} numberOfLines={1}>
+                        {(c.issuer ? `${c.issuer} · ` : '') + (c.expirationDate ? c.expirationDate : t('contractsV2.noExpiry'))}
+                        {linked ? ` · ${t('contractsV2.hasFile')}` : ''}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color={theme.textTertiary} />
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+        {filtered.length === 0 && visibleContracts.length === 0 ? (
           <View style={styles.emptyPremium}>
             <LinearGradient
               colors={[`${theme.primary}25`, `${theme.primary}05`]}
@@ -827,32 +913,6 @@ ${pageDataUrls.map((src, i) => `
           </View>
         ) : (
           <>
-          {(filter === 'all' || filter === 'contracts') && contracts.length > 0 && (
-            <View style={{ marginBottom: 14 }}>
-              <Text style={styles.sectionLabel}>{t('contractsV2.sectionTitle')} ({contracts.length})</Text>
-              {contracts.map((c) => {
-                const linked = c.documentId ? documents.find((d) => d.id === c.documentId) : undefined;
-                return (
-                  <TouchableOpacity
-                    key={c.id}
-                    style={styles.ctRow}
-                    onPress={() => setSelectedContract(c.id)}
-                    testID={`contract-row-${c.id}`}
-                  >
-                    <View style={styles.ctIcon}><Text style={{ fontSize: 18 }}>📄</Text></View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.ctTitle} numberOfLines={1}>{c.title}</Text>
-                      <Text style={styles.ctSub} numberOfLines={1}>
-                        {(c.issuer ? `${c.issuer} · ` : '') + (c.expirationDate ? c.expirationDate : t('contractsV2.noExpiry'))}
-                        {linked ? ` · ${t('contractsV2.hasFile')}` : ''}
-                      </Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={16} color={theme.textTertiary} />
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          )}
           {filtered.map((d) => {
             const cat = CATEGORIES.find((c) => c.id === d.category);
             const numPages = d.pages?.length || 1;
@@ -917,19 +977,40 @@ ${pageDataUrls.map((src, i) => `
                   <View style={styles.ctDetailRow}><Text style={styles.ctDetailLabel}>{t('contractsV2.autoRenew')}</Text><Text style={styles.ctDetailValue}>{selCt.autoRenew === undefined ? t('contractsV2.notSet') : (selCt.autoRenew ? t('common.yes') : t('common.no'))}</Text></View>
                 </View>
                 {ctDoc ? (
-                  <TouchableOpacity
-                    style={[styles.ctBtn, { backgroundColor: 'rgba(52,211,153,0.14)' }]}
-                    onPress={() => { setSelectedContract(null); setSelected(ctDoc.id); setMode('detail'); }}
-                    testID="contract-open-attachment"
-                  >
-                    <Ionicons name="attach" size={18} color={theme.primary} />
-                    <Text style={{ color: theme.primary, fontWeight: '700' }}>{t('contractsV2.openFile')}</Text>
-                  </TouchableOpacity>
+                  <>
+                    {ctDoc.pdfUri ? (
+                      <TouchableOpacity
+                        style={[styles.ctBtn, { backgroundColor: 'rgba(52,211,153,0.14)' }]}
+                        onPress={() => openContractPdf(ctDoc.pdfUri)}
+                        testID="contract-open-pdf"
+                      >
+                        <Ionicons name="document-text" size={18} color={theme.primary} />
+                        <Text style={{ color: theme.primary, fontWeight: '700' }}>{t('contractsV2.openPdf')}</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <TouchableOpacity
+                        style={[styles.ctBtn, { backgroundColor: 'rgba(52,211,153,0.14)' }]}
+                        onPress={() => { setSelectedContract(null); setSelected(ctDoc.id); setMode('detail'); }}
+                        testID="contract-open-attachment"
+                      >
+                        <Ionicons name="attach" size={18} color={theme.primary} />
+                        <Text style={{ color: theme.primary, fontWeight: '700' }}>{t('contractsV2.openFile')}</Text>
+                      </TouchableOpacity>
+                    )}
+                    <TouchableOpacity style={[styles.ctBtn, { backgroundColor: 'rgba(96,165,250,0.10)' }]} onPress={() => shareContractPdf(ctDoc)}>
+                      <Ionicons name="share-outline" size={18} color="#60A5FA" />
+                      <Text style={{ color: '#60A5FA', fontWeight: '700' }}>{t('contractsV2.share')}</Text>
+                    </TouchableOpacity>
+                  </>
                 ) : (
-                  <View style={[styles.ctBtn, { backgroundColor: 'rgba(148,163,184,0.10)' }]}>
-                    <Ionicons name="alert-circle-outline" size={18} color={theme.textTertiary} />
-                    <Text style={{ color: theme.textTertiary }}>{t('contractsV2.noFile')}</Text>
-                  </View>
+                  <TouchableOpacity
+                    style={[styles.ctBtn, { backgroundColor: 'rgba(245,196,107,0.12)' }]}
+                    onPress={() => attachFileToContract(selCt.id)}
+                    testID="contract-attach-file"
+                  >
+                    <Ionicons name="add-circle-outline" size={18} color="#F5C46B" />
+                    <Text style={{ color: '#F5C46B', fontWeight: '700' }}>{t('contractsV2.attachFile')}</Text>
+                  </TouchableOpacity>
                 )}
                 <TouchableOpacity style={[styles.ctBtn, { backgroundColor: 'rgba(96,165,250,0.12)' }]} onPress={() => renameContract(selCt.id, selCt.title)}>
                   <Ionicons name="pencil" size={18} color="#60A5FA" />
@@ -942,6 +1023,21 @@ ${pageDataUrls.map((src, i) => `
               </>
             )}
           </View>
+        </View>
+      </Modal>
+
+      {/* Lecteur PDF natif (WKWebView iOS) — Ouvrir ≠ Partager */}
+      <Modal visible={!!pdfViewerUri} animationType="slide" onRequestClose={() => setPdfViewerUri(null)}>
+        <View style={{ flex: 1, backgroundColor: theme.background, paddingTop: insets.top }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', padding: 12 }}>
+            <TouchableOpacity onPress={() => setPdfViewerUri(null)} hitSlop={10}>
+              <Ionicons name="close" size={24} color={theme.text} />
+            </TouchableOpacity>
+            <Text style={{ color: theme.text, fontSize: 16, fontWeight: '700', marginLeft: 10 }}>{t('contractsV2.openPdf')}</Text>
+          </View>
+          {pdfViewerUri && Platform.OS !== 'web' && (
+            <WebView source={{ uri: pdfViewerUri }} style={{ flex: 1 }} originWhitelist={['*']} allowFileAccess allowingReadAccessToURL={pdfViewerUri} />
+          )}
         </View>
       </Modal>
     </View>

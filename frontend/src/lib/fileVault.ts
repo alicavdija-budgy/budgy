@@ -12,7 +12,11 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
 
-export const MAX_FILE_BYTES = 15 * 1024 * 1024; // 15 MB — limite explicite
+// COHÉRENCE AVEC LE BACKEND : /api/scanner/ocr limite le base64 à 12 M de
+// caractères (≈ 9 Mo bruts). Limite frontale fixée à 8 Mo : 8 Mo bruts →
+// ~10,7 M caractères base64, TOUJOURS sous la limite serveur (jamais de 413
+// surprise après un « succès » apparent côté client).
+export const MAX_FILE_BYTES = 8 * 1024 * 1024; // 8 MB — limite explicite
 
 const SUPPORTED_EXT = ['pdf', 'jpg', 'jpeg', 'png', 'heic', 'heif', 'webp'];
 // DOC/DOCX : AUCUN moteur de conversion n'est disponible dans l'app —
@@ -64,17 +68,50 @@ export async function assertFileAcceptable(uri: string, mime?: string, name?: st
  * copie échoue — l'import ne doit alors JAMAIS être annoncé comme réussi.
  */
 export async function saveToVault(srcUri: string, id: string, mime?: string, name?: string): Promise<string> {
-  if (Platform.OS === 'web') return srcUri; // web : data URL déjà durable
+  if (Platform.OS === 'web') {
+    // Web : seule une data URL est durable. Une URL temporaire (blob:/file:)
+    // est CONVERTIE — jamais considérée durable telle quelle.
+    if (srcUri.startsWith('data:')) return srcUri;
+    try {
+      const blob = await (await fetch(srcUri)).blob();
+      if (!blob.size) throw new Error('empty');
+      return await new Promise<string>((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(String(r.result));
+        r.onerror = reject;
+        r.readAsDataURL(blob);
+      });
+    } catch {
+      throw new VaultError('SAVE_FAILED');
+    }
+  }
   const ext = extOf(name || srcUri, mime) || 'bin';
   const dir = `${FileSystem.documentDirectory}vault/`;
+  // Nom UNIQUE : id + horodatage + aléa (aucun écrasement possible)
+  const dest = `${dir}${id}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.${ext}`;
   try {
     await FileSystem.makeDirectoryAsync(dir, { intermediates: true }).catch(() => {});
-    const dest = `${dir}${id}.${ext}`;
+    let srcSize: number | undefined;
+    try {
+      const si = await FileSystem.getInfoAsync(srcUri, { size: true } as any);
+      srcSize = (si as any)?.size;
+    } catch { /* taille source indisponible */ }
     await FileSystem.copyAsync({ from: srcUri, to: dest });
-    const check = await FileSystem.getInfoAsync(dest);
-    if (!(check as any)?.exists) throw new Error('copy_not_found');
+    // INTÉGRITÉ : existence + taille réelle (> 0, égale à la source si connue)
+    const check = await FileSystem.getInfoAsync(dest, { size: true } as any);
+    const destSize = (check as any)?.size;
+    const okSize = typeof destSize === 'number' && destSize > 0 &&
+      (typeof srcSize !== 'number' || destSize === srcSize);
+    if (!(check as any)?.exists || !okSize) {
+      // sauvegarde interrompue/tronquée → on NETTOIE, aucun orphelin
+      await FileSystem.deleteAsync(dest, { idempotent: true }).catch(() => {});
+      throw new Error('copy_truncated');
+    }
     return dest;
-  } catch {
+  } catch (e) {
+    if (!(e instanceof VaultError)) {
+      await FileSystem.deleteAsync(dest, { idempotent: true }).catch(() => {});
+    }
     throw new VaultError('SAVE_FAILED');
   }
 }

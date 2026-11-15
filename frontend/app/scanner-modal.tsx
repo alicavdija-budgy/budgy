@@ -46,6 +46,7 @@ import { getApiLocale } from '../src/utils/apiLocale';
 import type { ReceiptType } from '../src/types';
 import { safeFetchJson, apiFetchJson } from '../src/lib/network';
 import { normalizeImageForUpload } from '../src/lib/imageUpload';
+import { saveToVault, vaultFileExists, assertFileAcceptable, VaultError } from '../src/lib/fileVault';
 import { AppErrorModal, buildErrorFromResult, type ErrorPayload } from '../src/components/AppErrorModal';
 import { mergeOcrWithFallback } from '../src/lib/ocrFallback';
 import * as Haptics from 'expo-haptics';
@@ -65,7 +66,7 @@ export default function ScannerModal() {
       ? (params.forceType as ReceiptType)
       : null;
   const { t, lang } = useTranslation();
-  const { addTransaction, addReceipt, addInvoice, addDocument, recurringExpenses } = useStore();
+  const { addTransaction, addReceipt, addInvoice, addDocument, queueUpload, recurringExpenses } = useStore();
 
   const [permission, requestPermission] = useCameraPermissions();
   const [stage, setStage] = useState<Stage>('camera');
@@ -483,7 +484,7 @@ export default function ScannerModal() {
     setStage('camera');
   };
 
-  const handleSave = (userConfirmedType = false) => {
+  const handleSave = async (userConfirmedType = false, userConfirmedDuplicate = false) => {
     const amt = normalizeChfAmount(amount) ?? 0;
     const destination = receiptType === 'contract' ? 'contract'
       : receiptType === 'invoice' ? 'invoice' : 'receipt';
@@ -512,6 +513,23 @@ export default function ScannerModal() {
     if (!title.trim()) {
       Alert.alert(t('scanner.missingTitleTitle'), t('scanner.missingTitleBody'));
       return;
+    }
+    if (receiptType === 'invoice' && !userConfirmedDuplicate) {
+      const duplicate = findInvoiceDuplicate(invoices as any, {
+        issuer: title.trim(), amount: amt,
+      });
+      if (duplicate) {
+        Alert.alert(t('invoiceDocs.dupTitle'),
+          t('invoiceDocs.dupBody', {
+            title: duplicate.title || duplicate.issuer || '',
+            amount: String(duplicate.amount || ''),
+          }),
+          [
+            { text: t('common.cancel'), style: 'cancel' },
+            { text: t('invoiceDocs.dupConfirm'), onPress: () => { void handleSave(true, true); } },
+          ]);
+        return;
+      }
     }
     setStage('saving');
     const now = new Date();
@@ -542,8 +560,41 @@ export default function ScannerModal() {
     }
 
     if (receiptType === 'invoice') {
+      // A camera photo lives in an expirable picker/cache directory. A
+      // durable vault copy and private upload queue MUST precede invoice
+      // creation, otherwise users see a successful import with a lost file.
+      let documentId: string | undefined;
+      if (photo?.uri && Platform.OS !== 'web') {
+        const docId = `doc_inv_${now.getTime()}`;
+        try {
+          await assertFileAcceptable(photo.uri, 'image/jpeg');
+          const vaultUri = await saveToVault(photo.uri, docId, 'image/jpeg');
+          if (!(await vaultFileExists(vaultUri))) throw new VaultError('SAVE_FAILED');
+          addDocument({
+            id: docId,
+            title: title.trim(),
+            category: 'other',
+            documentType: 'invoice',
+            imageBase64: '',
+            fileUri: vaultUri,
+            mimeType: 'image/jpeg',
+            importedAt: now.getTime(),
+            tags: ['invoice', 'scan'],
+            createdAt: now.getTime(),
+            updatedAt: now.getTime(),
+          } as any);
+          queueUpload(docId);
+          documentId = docId;
+        } catch (e) {
+          setStage('edit');
+          const code = e instanceof VaultError ? e.code : 'SAVE_FAILED';
+          Alert.alert(t('contractsV2.fileErrorTitle'), t(`contractsV2.${code}`));
+          return;
+        }
+      }
       addInvoice({
         id: `inv_${Date.now()}`,
+        documentId,
         title: title.trim(),
         issuer: title.trim(),
         amount: amt,

@@ -1,4 +1,6 @@
 /**
+ * @i18n-technical-file
+ * This helper only throws a developer-facing RangeError; never rendered in UI.
  * Store calendar dates as ISO YYYY-MM-DD in the DEVICE'S local calendar.
  *
  * Date.toISOString().slice(0,10) is UTC and can shift the day around

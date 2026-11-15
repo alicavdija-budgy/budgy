@@ -433,3 +433,9 @@ test
 - P0 synchro devises : transactions.currency + invoices.chf_amount/fx_rate/fx_date/fx_source dans migration + TABLE_FIELDS (legacy inchangé, sondes déplacées sur currency/fx_source) ; cohérence montant×taux≈CHF re-validée (sinon NON vérifié) ; pull legacy ne fait jamais revenir un paiement EUR en CHF (dirty gagne, testé) ; rapprochements comparent les DEVISES (facture↔transaction, QR↔charge récurrente CHF uniquement).
 - P1 dialogues Siri localisés FR/DE/IT/EN : BudgyL10n (18 clés ×4, langue = celle de l app via snapshot.lang, repli système) + Localizable.xcstrings (19 titres/paramètres en/de/it) ; mention « disponible partiel » dans GetBudget + secours GetMonthlyBudget ; périmètre factures ÉNONCÉ (« exigibles fin de mois »), retards comptés par DATE analysée, tri des échéances par date réelle.
 - Tests : test-task4 75/75 (33 unit exécutés + 42 statiques), toutes suites vertes, tsc/eslint/i18n. NON TESTÉ : compilation Swift (pas de toolchain dans le pod), App Intents sur iPhone physique.
+
+## DERNIER CORRECTIF FINANCIER (selectors.ts, branche task4-siri)
+- P0 revenus : revenu ponctuel non-CHF exclu de oneOffIncome (jamais +100 CHF pour 100 EUR), présenté séparément (foreignIncome) et disponible marqué partiel (note dashboard incluse).
+- P0 charges/dettes : paidForCharge/paidForDebt/unlinkedDebtCatPaid ignorent les transactions en devise étrangère (aucun règlement fictif CHF) ; rapprochements légitimes par identifiant en CHF préservés ; chargeHasLinkedInvoice ne remplace l obligation CHF que si la facture liée est COMPTÉE en CHF (sinon la charge reste due, pas de disparition d obligation).
+- P1 budgets : computeBudgetConsumption exclut type income (un revenu classé « courses » ne consomme pas l enveloppe) — même sélecteur pour écran + Siri.
+- Tests : test-task4 85/85 (43 unit exécutés dont les 9 scénarios exigés), toutes suites vertes, tsc/eslint/i18n. Compilation Swift et Siri natif : toujours NON TESTÉS (pas de toolchain/iPhone).

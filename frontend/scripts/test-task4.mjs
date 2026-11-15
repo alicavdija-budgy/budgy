@@ -278,6 +278,68 @@ console.log('\n═ CORRECTIFS FINAUX T4 — réponses Siri localisées FR/DE/IT/
   S('disponible PARTIEL énoncé par GetBudgetIntent ET en secours du budget mensuel', (read('targets/intents/BudgyIntents.swift').match(/partialSuffix/g) || []).length >= 3);
 }
 
+console.log('\n═ DERNIER CORRECTIF FINANCIER — devises dans les revenus, charges, dettes, budgets (exécution réelle) ═');
+{
+  const now = new Date(2026, 5, 15);
+  const base = { incomes: [{ id: 'i', amount: 5000, type: 'recurring', frequency: 'monthly' }], transactions: [], recurringExpenses: [], invoices: [], debts: [], now };
+  // 1) Revenu ponctuel 100 EUR → JAMAIS +100 CHF au disponible
+  const incEur = sel.getMonthlyFinancialSnapshot({ ...base, transactions: [
+    { id: 'r1', title: 'Remb. FR', amount: 100, date: '2026-06-10', category: 'autre', type: 'income', currency: 'EUR' },
+  ] });
+  U('revenu 100 EUR : disponible CHF inchangé (5000), présenté à part', incEur.realAvailableThisMonth === 5000 && incEur.oneOffIncome === 0 && incEur.foreignIncome.length === 1 && incEur.foreignIncome[0].total === 100);
+  U('revenu EUR → disponible signalé PARTIEL', incEur.availableIsPartial === true);
+  // 2) Revenu ponctuel CHF 100 → comportement inchangé
+  const incChf = sel.getMonthlyFinancialSnapshot({ ...base, transactions: [
+    { id: 'r1', title: 'Vente', amount: 100, date: '2026-06-10', category: 'autre', type: 'income' },
+  ] });
+  U('revenu CHF 100 : +100 au disponible (inchangé)', incChf.oneOffIncome === 100 && incChf.realAvailableThisMonth === 5100 && !incChf.availableIsPartial);
+  // 3) Charge CHF 100 + transaction LIÉE en EUR 100 → aucun règlement fictif
+  const charge = sel.getMonthlyFinancialSnapshot({ ...base,
+    recurringExpenses: [{ id: 'rc1', title: 'Assurance', amount: 100, frequency: 'monthly', active: true, createdAt: new Date(2026, 0, 1).getTime() }],
+    transactions: [{ id: 'p1', title: 'Paiement FR', amount: 100, date: '2026-06-10', category: 'assurances', recurringId: 'rc1', currency: 'EUR' }],
+  });
+  U('charge CHF 100 + paiement lié EUR 100 : la charge reste DUE (100)', charge.recurringExpenses === 100);
+  const chargeChf = sel.getMonthlyFinancialSnapshot({ ...base,
+    recurringExpenses: [{ id: 'rc1', title: 'Assurance', amount: 100, frequency: 'monthly', active: true, createdAt: new Date(2026, 0, 1).getTime() }],
+    transactions: [{ id: 'p1', title: 'Paiement', amount: 100, date: '2026-06-10', category: 'assurances', recurringId: 'rc1' }],
+  });
+  U('rapprochement LÉGITIME par identifiant (CHF) préservé : charge réglée', chargeChf.recurringExpenses === 0);
+  // 4) Dette CHF 200/mois + paiement EUR 50 → aucune réduction
+  const debt = sel.getMonthlyFinancialSnapshot({ ...base,
+    debts: [{ id: 'd1', title: 'Crédit', total: 5000, paid: 0, monthlyPayment: 200 }],
+    transactions: [{ id: 'p1', title: 'Paiement FR', amount: 50, date: '2026-06-10', category: 'dettes', debtId: 'd1', currency: 'EUR' }],
+  });
+  U('dette 200 CHF + paiement EUR 50 lié : mensualité reste 200', debt.debtPayments === 200);
+  const debtCat = sel.getMonthlyFinancialSnapshot({ ...base,
+    debts: [{ id: 'd1', title: 'Crédit', total: 5000, paid: 0, monthlyPayment: 200 }],
+    transactions: [{ id: 'p1', title: 'Paiement FR', amount: 50, date: '2026-06-10', category: 'dettes', currency: 'EUR' }],
+  });
+  U('repli catégorie « dettes » : paiement EUR non lié également exclu', debtCat.debtPayments === 200);
+  // 5) Facture EUR LIÉE à une charge CHF : la charge ne disparaît pas sans
+  //    contrepartie comptée (facture EUR exclue des totaux CHF)
+  const linkEur = sel.getMonthlyFinancialSnapshot({ ...base,
+    recurringExpenses: [{ id: 'rc1', title: 'Prime', amount: 100, frequency: 'monthly', active: true, createdAt: new Date(2026, 0, 1).getTime() }],
+    invoices: [{ id: 'inv1', title: 'Prime FR', amount: 100, currency: 'EUR', status: 'pending', recurringId: 'rc1' }],
+  });
+  U('facture EUR liée (sans taux) : obligation CHF de la charge CONSERVÉE', linkEur.recurringExpenses === 100 && linkEur.upcomingBills === 0 && linkEur.foreignBills[0].total === 100);
+  const linkChf = sel.getMonthlyFinancialSnapshot({ ...base,
+    recurringExpenses: [{ id: 'rc1', title: 'Prime', amount: 100, frequency: 'monthly', active: true, createdAt: new Date(2026, 0, 1).getTime() }],
+    invoices: [{ id: 'inv1', title: 'Prime', amount: 100, currency: 'CHF', status: 'pending', recurringId: 'rc1' }],
+  });
+  U('facture CHF liée : représente l\'obligation UNE seule fois (pas de double)', linkChf.recurringExpenses === 0 && linkChf.upcomingBills === 100 && linkChf.totalCommitted === 100);
+  // 6) Budgets : revenu classé « courses » ≠ dépense budgétaire ; EUR exclu
+  const bud = sel.computeBudgetConsumption(
+    [{ id: 'b1', category: 'courses', limit: 500 }],
+    [
+      { id: 't1', title: 'Migros', amount: 125, date: '2026-06-10', category: 'courses' },
+      { id: 't2', title: 'Vente vide-grenier', amount: 200, date: '2026-06-11', category: 'courses', type: 'income' },
+      { id: 't3', title: 'Carrefour FR', amount: 100, date: '2026-06-12', category: 'courses', currency: 'EUR' },
+    ],
+    2026, 5,
+  );
+  U('revenu CHF 200 « courses » exclu du budget + EUR exclu → 125 dépensés, 375 restants', bud.totalSpent === 125 && bud.totalLimit - bud.totalSpent === 375);
+}
+
 console.log(`\nRésultat : ${unit} unitaires exécutés + ${stat} statiques = ${unit + stat} réussis, ${fail} échoués`);
 console.log('NON TESTÉ (iPhone physique + build natif requis) : exécution réelle des');
 console.log('App Intents par Siri, App Group sur appareil, démarrage à froid par Siri,');

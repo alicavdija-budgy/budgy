@@ -35,6 +35,8 @@ export interface FinancialSnapshot {
    *  présentées séparément, JAMAIS additionnées aux totaux CHF (ni au taux
    *  1:1, ni à un taux inventé). */
   foreignBills: { currency: string; total: number; count: number }[];
+  /** Revenus ponctuels en devise étrangère (jamais ajoutés 1:1 aux CHF). */
+  foreignIncome: { currency: string; total: number; count: number }[];
   /** true = le disponible CHF n'intègre pas encore ces obligations. */
   availableIsPartial: boolean;
   /** Factures exigibles d'ici la fin du mois (toutes devises). */
@@ -132,9 +134,40 @@ export function getMonthlyFinancialSnapshot(input: {
     .filter((t) => !isForeignTx(t))
     .reduce((s, t) => s + (Number(t.amount) || 0), 0);
   // Revenus ponctuels réellement reçus ce mois (saisis comme transactions).
-  const oneOffIncome = thisMonthTx
-    .filter((t) => (t as any).type === 'income')
+  // P0 — un revenu de 100 EUR n'ajoute JAMAIS 100 CHF au disponible : sans
+  // conversion vérifiée, il est présenté SÉPARÉMENT (foreignIncome) et le
+  // disponible est marqué partiel.
+  const incomeTx = thisMonthTx.filter((t) => (t as any).type === 'income');
+  const oneOffIncome = incomeTx
+    .filter((t) => !isForeignTx(t))
     .reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
+  const foreignIncomeMap = new Map<string, { total: number; count: number }>();
+  for (const t of incomeTx) {
+    if (!isForeignTx(t)) continue;
+    const cur = String((t as any).currency).toUpperCase();
+    const e = foreignIncomeMap.get(cur) || { total: 0, count: 0 };
+    e.total += Math.abs(Number(t.amount) || 0);
+    e.count += 1;
+    foreignIncomeMap.set(cur, e);
+  }
+  const foreignIncome = Array.from(foreignIncomeMap.entries())
+    .map(([currency, v]) => ({ currency, total: Math.round(v.total * 100) / 100, count: v.count }))
+    .sort((a, b) => a.currency.localeCompare(b.currency));
+
+  // TÂCHE 4 — valeur CHF d'une facture : CHF (ou héritage sans devise) telle
+  // quelle ; devise étrangère UNIQUEMENT avec conversion vérifiée ET cohérente
+  // (chfAmount + fxRate + fxDate, montant × taux ≈ CHF) ; sinon null.
+  const chfValueOf = (inv: Invoice): number | null => {
+    const cur = String((inv as any).currency || 'CHF').toUpperCase();
+    if (cur === 'CHF') return Number(inv.amount) || 0;
+    const chf = Number((inv as any).chfAmount);
+    const rate = Number((inv as any).fxRate);
+    if (isFinite(chf) && chf > 0 && isFinite(rate) && rate > 0 && (inv as any).fxDate) {
+      const expected = (Number(inv.amount) || 0) * rate;
+      if (Math.abs(expected - chf) <= Math.max(0.05, expected * 0.01)) return chf;
+    }
+    return null;
+  };
 
   // 3) Charges récurrentes — DEUX notions distinctes :
   //    A. recurringMonthlyAvg : moyenne mensuelle BUDGÉTAIRE (stats/comparaisons).
@@ -167,8 +200,10 @@ export function getMonthlyFinancialSnapshot(input: {
    *  sinon historique de paiements, sinon héritage lastPaidMonth (= payé en
    *  totalité — migration douce des anciennes données). */
   const paidForCharge = (r: RecurringExpense): number => {
+    // P0 — une transaction EUR ne règle JAMAIS une charge CHF par simple
+    // égalité numérique : seuls les paiements CHF sont déduits.
     const linked = expenseTx
-      .filter((t) => (t as any).recurringId === r.id)
+      .filter((t) => (t as any).recurringId === r.id && !isForeignTx(t))
       .reduce((s, t) => s + Math.max(0, Number(t.amount) || 0), 0);
     if (linked > 0) return linked;
     const hist = ((r as any).paymentHistory as any[]) || [];
@@ -186,6 +221,10 @@ export function getMonthlyFinancialSnapshot(input: {
   const chargeHasLinkedInvoice = (r: RecurringExpense): boolean =>
     invoicesArr.some((inv) => {
       if ((inv as any).recurringId !== r.id) return false;
+      // P0 — la facture ne remplace l'obligation de la charge CHF QUE si
+      // elle-même est comptée en CHF (devise CHF ou conversion vérifiée) :
+      // sinon l'obligation CHF disparaîtrait sans contrepartie comptée.
+      if (chfValueOf(inv) === null) return false;
       const d = parseDate((inv as any).dueDate) || parseDate((inv as any).createdAt as any);
       return !d || (d.getFullYear() === year && d.getMonth() === month) || (inv.status || '') !== 'paid';
     });
@@ -213,19 +252,6 @@ export function getMonthlyFinancialSnapshot(input: {
   //  • Devise étrangère SANS taux vérifié → présentée séparément dans
   //    foreignBills, exclue des totaux CHF (aucun taux inventé), et le
   //    disponible est marqué PARTIEL (availableIsPartial).
-  const chfValueOf = (inv: Invoice): number | null => {
-    const cur = String((inv as any).currency || 'CHF').toUpperCase();
-    if (cur === 'CHF') return Number(inv.amount) || 0;
-    const chf = Number((inv as any).chfAmount);
-    const rate = Number((inv as any).fxRate);
-    if (isFinite(chf) && chf > 0 && isFinite(rate) && rate > 0 && (inv as any).fxDate) {
-      // COHÉRENCE obligatoire : montant original × taux ≈ montant CHF
-      // (tolérance 1 % + 5 ct d'arrondi). Incohérent = NON vérifié.
-      const expected = (Number(inv.amount) || 0) * rate;
-      if (Math.abs(expected - chf) <= Math.max(0.05, expected * 0.01)) return chf;
-    }
-    return null;
-  };
   const dueBills = (input.invoices || [])
     .filter((inv) => (inv.status || '').toLowerCase() !== 'paid')
     .filter((inv) => {
@@ -247,7 +273,7 @@ export function getMonthlyFinancialSnapshot(input: {
   const foreignBills = Array.from(foreignMap.entries())
     .map(([currency, v]) => ({ currency, total: Math.round(v.total * 100) / 100, count: v.count }))
     .sort((a, b) => a.currency.localeCompare(b.currency));
-  const availableIsPartial = foreignBills.length > 0;
+  const availableIsPartial = foreignBills.length > 0 || foreignIncome.length > 0;
   // TÂCHE 4 (Siri) — périmètre EXPLICITE : factures exigibles d'ici la fin du
   // mois (CHF + devises), dont celles déjà en retard (dates réellement
   // analysées, jamais une comparaison de chaînes).
@@ -265,11 +291,11 @@ export function getMonthlyFinancialSnapshot(input: {
   const activeDebts = (input.debts || [])
     .filter((d) => (Number(d.total) || 0) - (Number(d.paid) || 0) > 0);
   const paidForDebt = (debtId: string): number => expenseTx
-    .filter((t) => (t as any).debtId === debtId)
+    .filter((t) => (t as any).debtId === debtId && !isForeignTx(t))
     .reduce((s, t) => s + Math.max(0, Number(t.amount) || 0), 0);
   const unlinkedDebtCatPaid = expenseTx
     .filter((t) => {
-      if ((t as any).debtId) return false;
+      if ((t as any).debtId || isForeignTx(t)) return false;
       const c = (t.category || '').toLowerCase();
       return c === 'dettes' || c === 'debt' || c === 'debts';
     })
@@ -303,6 +329,7 @@ export function getMonthlyFinancialSnapshot(input: {
     txCountThisMonth: thisMonthTx.length,
     recurringCount: activeRecurring.length,
     foreignBills,
+    foreignIncome,
     availableIsPartial,
     dueBillsCount,
     overdueBillsCount,
@@ -329,6 +356,9 @@ export function computeBudgetConsumption(
   totalSpent: number;
 } {
   const monthTx = (transactions || []).filter((tx) => {
+    // P1 — un REVENU (type 'income') n'est JAMAIS une dépense budgétaire,
+    // même s'il porte la catégorie d'une enveloppe.
+    if ((tx as any).type === 'income') return false;
     const d = parseDate(tx.date);
     if (!d || d.getFullYear() !== year || d.getMonth() !== month) return false;
     const cur = String((tx as any).currency || 'CHF').toUpperCase();

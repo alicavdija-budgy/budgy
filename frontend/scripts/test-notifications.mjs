@@ -49,7 +49,10 @@ ok('cancelAllEntityReminders: nettoyage CIBLÉ (jamais cancelAll global)', () =>
 
 ok('facture marquée payée → rappels annulés ; repassée à payer → reprogrammés', () => {
   const inv = fs.readFileSync(path.join(root, 'app', 'more', 'invoices.tsx'), 'utf8');
-  const fn = inv.slice(inv.indexOf('const toggleStatus'), inv.indexOf('const toggleStatus') + 900);
+  const start = inv.indexOf('const toggleStatus');
+  const end = inv.indexOf('const deleteInvoice', start);
+  assert.ok(start >= 0 && end > start, 'Cannot locate complete invoice status handler');
+  const fn = inv.slice(start, end);
   assert.match(fn, /becomesPaid/);
   assert.match(fn, /cancelDeadlineRemindersForEntity\(id\)/);
   assert.match(fn, /scheduleDeadlineRemindersForEntity\(id/);

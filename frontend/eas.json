@@ -77,6 +77,8 @@
     },
     "testflight": {
       "extends": "production",
+      "node": "22.23.3",
+      "yarn": "1.22.22",
       "channel": "testflight",
       "ios": {
         "simulator": false,

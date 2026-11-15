@@ -359,3 +359,7 @@ test
 - persistAsContract: vault durable + documentId + rien d invente ; fileVault.ts (15Mo, formats, VaultError) ; documents.tsx section Contrats reelle + detail (PJ/renommer/supprimer, Not set) ; ShareIntentRouter transmet sharedUri/Mime/Name/Text, email-import consomme ; types additifs fileUri/mimeType ; SQL additive fournie NON appliquee ; test-contracts.mjs 27/27 ; E2E navigateur valide.
 - LIMITES: lien documentId non synchronise inter-appareils tant que la migration SQL n est pas appliquee (fichier binaire = TÂCHE 3) ; Alert.prompt renommage iOS only (web: non dispo) ; partage iOS reel = NON TESTE (iPhone requis).
 - EN ATTENTE: validation utilisateur pour TÂCHE 3.
+
+## TÂCHE 2 complément audit — commit ci-dessus
+- Contrats visibles meme documents[] vide + recherche titre/emetteur + dedoublonnage PJ ; saisie manuelle OCR-down (saveContractRecord commun) ; vault: integrite taille+nettoyage+noms uniques+web data URL ; Ouvrir PDF (WebView) separe de Partager + rattacher fichier ancien contrat + fileMissing ; limite 8 Mo coherente backend 12M b64 ; test-contracts 39/39 ; E2E navigateur valide.
+- EN ATTENTE: autorisation utilisateur pour TÂCHE 3.

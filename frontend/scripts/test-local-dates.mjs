@@ -63,6 +63,10 @@ assert.ok(scanner.includes("if (!qrHandled) setStage('edit');"),'QR review must 
 assert.ok(scanner.includes("setScannedCurrency(/^[A-Z]{3}$/.test(detectedCurrency)"),'Detected currency must not silently become CHF');
 assert.ok((scanner.match(/currency: scannedCurrency/g)||[]).length>=3,'Invoice, ticket and receipt must all preserve scanned currency');
 assert.ok(scanner.includes('scanner-currency-${currency}'),'User must be able to correct OCR currency');
+assert.ok(scanner.includes("await saveToVault(photo.uri, docId, 'image/jpeg')"),'Camera invoice photo must survive app restart');
+assert.ok(scanner.includes('queueUpload(docId);'),'Scanned invoice must queue a private cloud upload');
+assert.ok(scanner.includes('const duplicate = findInvoiceDuplicate(invoices as any'),'Scanned invoices must detect possible duplicates');
+assert.ok(scanner.includes('documentId,\n        title: title.trim()'),'Invoice must link to its stored original');
 
 console.log('PASS: real Swiss amount parser, two ledger forms, timezone-safe ISO, backend Swiss QR routing');
 

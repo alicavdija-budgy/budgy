@@ -813,8 +813,8 @@ async def scanner_ocr(
     user: AuthenticatedUser = Depends(require_user),
 ):
     """Extract structured data from a receipt image using vision LLM."""
-    if not EMERGENT_LLM_KEY:
-        return OCRResponse(success=False, error="LLM_NOT_CONFIGURED")
+    # NB : la vérification EMERGENT_LLM_KEY est faite APRÈS la tentative de
+    # décodage Swiss QR — le QR doit fonctionner même sans OCR externe.
 
     # v3.9.0 SECURITY: enforce max image size (~ 8 MB base64)
     if len(req.image_base64 or "") > 12_000_000:
@@ -873,6 +873,10 @@ async def scanner_ocr(
                 confidence=1.0,
             )
     log.info("[%s] step=qr_decode result=none → fallback OCR vision", corr_id)
+    # L'OCR vision externe n'est qu'un COMPLÉMENT : sans clé LLM, le décodage
+    # Swiss QR ci-dessus reste pleinement fonctionnel.
+    if not EMERGENT_LLM_KEY:
+        return OCRResponse(success=False, error="LLM_NOT_CONFIGURED")
     # OCR vision : pour un PDF on envoie le rendu PNG, jamais les octets PDF bruts
     img_b64 = page_images[0]
 

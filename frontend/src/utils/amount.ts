@@ -22,13 +22,15 @@ export function normalizeChfAmount(raw: string | number | null | undefined): num
   const dots = (s.match(/\./g) || []).length;
   const commas = (s.match(/,/g) || []).length;
   if (dots + commas > 1) {
-    // Deux séparateurs restants (ex. 1.234,50) : le DERNIER est décimal
+    // Deux séparateurs (ex. 1.234,50) : le DERNIER est décimal, les autres
+    // doivent former des GROUPES DE MILLIERS stricts (1 à 3 chiffres, puis
+    // groupes de 3). 1.2,34 ou 12.3,45 → AMBIGU, rejeté (jamais converti
+    // silencieusement).
     if (dots >= 1 && commas >= 1) {
-      const lastDot = s.lastIndexOf('.');
-      const lastComma = s.lastIndexOf(',');
-      const dec = Math.max(lastDot, lastComma);
-      const intPart = s.slice(0, dec).replace(/[.,]/g, '');
-      s = `${intPart}.${s.slice(dec + 1)}`;
+      const dec = Math.max(s.lastIndexOf('.'), s.lastIndexOf(','));
+      const intRaw = s.slice(0, dec);
+      if (!/^\d{1,3}([.,]\d{3})*$/.test(intRaw)) return null;
+      s = `${intRaw.replace(/[.,]/g, '')}.${s.slice(dec + 1)}`;
     } else {
       return null; // 1.234.567 sans décimale identifiable → ambigu
     }

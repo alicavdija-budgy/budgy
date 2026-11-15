@@ -30,6 +30,16 @@ ok('rejet 1.234.567 sans décimale', N('1.234.567') === null);
 ok('rejet zéro (jamais 0 CHF inventé)', N('0') === null && N(0) === null);
 ok('nombre déjà numérique 123.456 arrondi 2 déc.', N(123.456) === 123.46);
 ok('vide/null → null', N('') === null && N(null) === null && N(undefined) === null);
+ok('rejet 1.2,34 (groupe de milliers invalide)', N('1.2,34') === null);
+ok('rejet 12.3,45 (groupe de milliers invalide)', N('12.3,45') === null);
+ok('rejet 1.23,45 / 1234.5,67 (groupes non conformes)', N('1.23,45') === null && N('1234.5,67') === null);
+ok('12.345,67 (groupes valides) → 12345.67', N('12.345,67') === 12345.67);
+
+// ── scanner-modal : plus aucun parseFloat partiel
+console.log('— Scanner QR : normalisation unique —');
+const scan = readFileSync('app/scanner-modal.tsx', 'utf8');
+ok('handleQrSave utilise normalizeChfAmount', scan.includes('normalizeChfAmount(qrAmount)') && !scan.includes('parseFloat'));
+ok('reçus scannés : normalisation unique aussi', scan.includes('normalizeChfAmount(amount)'));
 
 // ── 2) email-import : auth JWT, blocage échec/0 CHF, pas de badge succès
 console.log('— Import e-mail/photo/PDF : auth + anti-0 CHF —');
@@ -57,6 +67,13 @@ ok('PDF détecté par magic bytes %PDF (pas envoyé comme JPEG)', srv.includes('
 ok('décodage du VRAI QR avant OCR vision', srv.includes('decode_swiss_qr_from_image_b64') && srv.includes('swiss_qr_content'));
 ok('montant OCR négatif/0 → None (saisie manuelle)', srv.includes('amt = None') && srv.includes('amt <= 0'));
 ok('endpoints protégés par require_user (JWT)', /scanner_ocr[\s\S]{0,200}require_user/.test(srv));
+{
+  // la vérification EMERGENT_LLM_KEY doit être APRÈS le décodage QR
+  const fn = srv.slice(srv.indexOf('async def scanner_ocr'), srv.indexOf('def ', srv.indexOf('async def scanner_ocr') + 30));
+  const qrIdx = fn.indexOf('decode_swiss_qr_from_image_b64');
+  const llmIdx = fn.indexOf('if not EMERGENT_LLM_KEY');
+  ok('décodage Swiss QR AVANT la vérification de la clé OCR externe', qrIdx !== -1 && llmIdx !== -1 && qrIdx < llmIdx);
+}
 ok('budgets réutilise la normalisation unique', readFileSync('app/more/budgets.tsx','utf8').includes('normalizeChfAmount'));
 
 console.log(`\nRésultat : ${passed} réussis, ${failed} échoués`);

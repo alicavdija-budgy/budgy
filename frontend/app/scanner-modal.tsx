@@ -13,6 +13,7 @@
  */
 
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
+import { normalizeChfAmount } from '../src/utils/amount';
 import {
   View,
   Text,
@@ -150,8 +151,10 @@ export default function ScannerModal() {
 
   const handleQrSave = useCallback(() => {
     if (!qrBill) return;
-    const amt = parseFloat(qrAmount.replace(',', '.'));
-    if (!Number.isFinite(amt) || amt <= 0) {
+    // Normalisation CHF UNIQUE : 1'234.50 / 1 234,50 exacts — jamais tronques
+    // en 1 CHF par une analyse partielle ; rejet strict des formats ambigus.
+    const amt = normalizeChfAmount(qrAmount);
+    if (amt === null) {
       Alert.alert(t('qrbill.amountRequired'));
       return;
     }
@@ -364,7 +367,7 @@ export default function ScannerModal() {
   };
 
   const handleSave = () => {
-    const amt = parseFloat(amount.replace(',', '.'));
+    const amt = normalizeChfAmount(amount) ?? 0;
     if (!amt || amt <= 0) {
       Alert.alert(t('scanner.invalidAmountTitle'), t('scanner.invalidAmountBody'));
       return;

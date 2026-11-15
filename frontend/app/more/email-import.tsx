@@ -26,6 +26,7 @@ import { apiFetchJson } from '../../src/lib/network';
 import { normalizeImageForUpload } from '../../src/lib/imageUpload';
 import { parseSwissQrBill } from '../../src/services/qrBill';
 import { normalizeChfAmount } from '../../src/utils/amount';
+import { findInvoiceDuplicate } from '../../src/lib/invoiceDocs';
 import * as ImagePicker from 'expo-image-picker';
 import { readAsBase64, readAsText } from '../../src/utils/fsCompat';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
@@ -59,7 +60,7 @@ export default function ImportInvoiceScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const params = useLocalSearchParams<{ mode?: string }>();
-  const { addInvoice, addContract, addDocument, updateDocument, addReceipt, addTransaction, updateReceipt, queueUpload } = useStore();
+  const { addInvoice, addContract, addDocument, updateDocument, addReceipt, addTransaction, updateReceipt, queueUpload, invoices } = useStore();
   // TÂCHE 2 — fichier transmis par le menu Partager iOS (ShareIntentRouter)
   const sharedParams = useLocalSearchParams<{ sharedUri?: string; sharedMime?: string; sharedName?: string; sharedText?: string }>();
   const sharedHandled = React.useRef(false);
@@ -328,7 +329,43 @@ export default function ImportInvoiceScreen() {
   const extractionFailed = !!result && (result.success === false || result._failedOcr);
 
   /** Save as Invoice (Factures section) */
-  const persistAsInvoice = () => {
+  /** TÂCHE 5 — conserve le document ORIGINAL (vault) + payload SPC brut,
+   *  lié à la facture ; détecte les doublons par signaux fiables ; montant
+   *  absent → « Montant à compléter » (JAMAIS de facture CHF 0). */
+  const saveInvoiceDocument = async (opts: { toComplete: boolean }): Promise<string | undefined> => {
+    if (!result) return undefined;
+    const now = Date.now();
+    const qrRaw: string | undefined = result._qrRaw ? String(result._qrRaw) : undefined;
+    const hasFile = !!result._originalUri;
+    if (!hasFile && !qrRaw) return undefined; // rien de durable à conserver
+    const docId = `doc_inv_${now}`;
+    let vaultUri: string | undefined;
+    if (hasFile) {
+      vaultUri = await saveToVault(result._originalUri, docId, result._mime);
+      if (!(await vaultFileExists(vaultUri))) throw new VaultError('SAVE_FAILED');
+    }
+    const isPdf = !!vaultUri && ((result._mime || '').includes('pdf') || vaultUri.toLowerCase().endsWith('.pdf'));
+    addDocument({
+      id: docId,
+      title: result.title || result.issuer || result.merchant || t('invoiceDocs.defaultTitle'),
+      category: 'other',
+      documentType: 'invoice',
+      imageBase64: '',
+      pdfUri: isPdf ? vaultUri : undefined,
+      fileUri: !isPdf ? vaultUri : undefined,
+      mimeType: hasFile ? result._mime : undefined,
+      spcPayload: qrRaw, // payload SPC BRUT — jamais présenté comme l'original
+      importedAt: now,
+      tags: opts.toComplete ? ['invoice', 'import', 'toComplete'] : ['invoice', 'import'],
+      note: t('emailImport.importedByAiNote'),
+      createdAt: now,
+      updatedAt: now,
+    } as any);
+    if (vaultUri) queueUpload(docId); // stockage privé (architecture Tâche 3)
+    return docId;
+  };
+
+  const persistAsInvoice = async () => {
     if (!result) return;
     // TÂCHE 1 — JAMAIS d'enregistrement si l'extraction a échoué
     if (extractionFailed) {
@@ -336,30 +373,84 @@ export default function ImportInvoiceScreen() {
       return;
     }
     const amount = resolvedAmount();
-    // JAMAIS de facture à 0 CHF : montant absent → saisie manuelle obligatoire
+    // TÂCHE 5 §6 — montant absent (légal en Swiss QR) : le DOCUMENT est
+    // conservé avec le statut « Montant à compléter » ; AUCUNE obligation
+    // financière n'est créée tant que le montant n'est pas confirmé.
     if (amount === null) {
-      Alert.alert(t('importErrors.amountMissingTitle'), t('importErrors.amountMissingBody'));
+      if (result._originalUri || result._qrRaw) {
+        Alert.alert(t('importErrors.amountMissingTitle'), t('invoiceDocs.noAmountBody'), [
+          { text: t('common.cancel'), style: 'cancel' },
+          {
+            text: t('invoiceDocs.keepNoAmount'),
+            onPress: async () => {
+              try {
+                await saveInvoiceDocument({ toComplete: true });
+                Alert.alert(t('invoiceDocs.savedNoAmountTitle'), t('invoiceDocs.savedNoAmountBody'));
+                setResult(null);
+              } catch (e: any) {
+                const code = e instanceof VaultError ? e.code : 'SAVE_FAILED';
+                Alert.alert(t('contractsV2.fileErrorTitle'), t(`contractsV2.${code}`));
+              }
+            },
+          },
+        ]);
+      } else {
+        Alert.alert(t('importErrors.amountMissingTitle'), t('importErrors.amountMissingBody'));
+      }
       return;
     }
-    const isPhoto = result._source === 'photo' || result._source === 'qr';
-    addInvoice({
-      id: `inv_${Date.now()}`,
-      title: result.title || result.merchant || t('emailImport.defaultInvoiceTitle'),
-      issuer: result.issuer || result.merchant || t('emailImport.defaultUnknownIssuer'),
+    const doPersist = async () => {
+      if (!result) return;
+      let documentId: string | undefined;
+      try {
+        documentId = await saveInvoiceDocument({ toComplete: false });
+      } catch (e: any) {
+        const code = e instanceof VaultError ? e.code : 'SAVE_FAILED';
+        Alert.alert(t('contractsV2.fileErrorTitle'), t(`contractsV2.${code}`));
+        return; // l'original n'a pas pu être conservé → pas de faux succès
+      }
+      const isPhoto = result._source === 'photo' || result._source === 'qr';
+      addInvoice({
+        id: `inv_${Date.now()}`,
+        title: result.title || result.merchant || t('emailImport.defaultInvoiceTitle'),
+        issuer: result.issuer || result.merchant || t('emailImport.defaultUnknownIssuer'),
+        amount,
+        currency: result.currency || 'CHF',
+        dueDate: result.due_date || undefined,
+        invoiceDate: result.invoice_date || result.date || undefined,
+        iban: result.iban || undefined,
+        reference: result.reference || undefined,
+        category: result.category || 'autre',
+        status: 'pending',
+        source: isPhoto ? 'scan' : 'email',
+        createdAt: Date.now(),
+        documentId,
+        qrPayload: result._qrRaw ? String(result._qrRaw) : undefined,
+      } as any);
+      Alert.alert(t('emailImport.invoiceSavedTitle'), t('emailImport.invoiceSavedBody'));
+      setResult(null);
+      setManualAmount('');
+    };
+    // TÂCHE 5 §7 — doublon probable : montrer la facture connue, demander
+    // confirmation — JAMAIS de 2e obligation financière silencieuse.
+    const dup = findInvoiceDuplicate(invoices, {
+      reference: result.reference,
+      iban: result.iban,
+      issuer: result.issuer || result.merchant,
       amount,
-      currency: result.currency || 'CHF',
-      dueDate: result.due_date || undefined,
-      invoiceDate: result.invoice_date || result.date || undefined,
-      iban: result.iban || undefined,
-      reference: result.reference || undefined,
-      category: result.category || 'autre',
-      status: 'pending',
-      source: isPhoto ? 'scan' : 'email',
-      createdAt: Date.now(),
     });
-    Alert.alert(t('emailImport.invoiceSavedTitle'), t('emailImport.invoiceSavedBody'));
-    setResult(null);
-    setManualAmount('');
+    if (dup) {
+      Alert.alert(
+        t('invoiceDocs.dupTitle'),
+        t('invoiceDocs.dupBody', { title: dup.title || '', amount: String(dup.amount ?? '') }),
+        [
+          { text: t('common.cancel'), style: 'cancel' },
+          { text: t('invoiceDocs.dupConfirm'), onPress: doPersist },
+        ],
+      );
+      return;
+    }
+    await doPersist();
   };
 
   /** Save as Contract (Mon Classeur) */

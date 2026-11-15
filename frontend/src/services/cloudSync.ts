@@ -17,8 +17,7 @@
 
 import { getSupabase, isSupabaseConfigured } from '../lib/supabase';
 import {
-  mergeCollectionsV2, diffDirty, hashItem, legacyHashOf, isConfirmedHash,
-  adoptAnonymousState, isDirtyForPush,
+  mergeCollectionsV2, diffDirty, hashItem, legacyHashOf, isConfirmedHash, isDirtyForPush,
 } from '../lib/syncMerge';
 
 // P0 — verrou : push et pull ne s'exécutent jamais en parallèle (ni entre
@@ -30,7 +29,15 @@ let syncBusy = false;
 // undefined = pas encore sondé ; true = migration appliquée (les
 // confirmations 'L:' redeviennent dirty et les métadonnées en attente
 // partent) ; false = ancien schéma (repli legacy, aucune boucle).
-const schemaExtended: Record<string, boolean | undefined> = {};
+// Re-vérification CONTRÔLÉE (préalable Tâche 5) : un résultat négatif n'est
+// pas définitif — nouvelle sonde après TTL, à la reconnexion réseau ou sur
+// synchro manuelle (resetSchemaProbes). Jamais de boucle : 1 sonde max par
+// cycle de push et par table.
+const schemaProbe: Record<string, { at: number; ext: boolean }> = {};
+const SCHEMA_PROBE_TTL_MS = 6 * 60 * 60 * 1000; // 6 h
+export function resetSchemaProbes(): void {
+  for (const k of Object.keys(schemaProbe)) delete schemaProbe[k];
+}
 const EXT_PROBE_COL: Record<string, string> = {
   transactions: 'invoice_id',
   contracts: 'document_id',
@@ -48,14 +55,10 @@ function prepareAccountState(userId: string): void {
   const st = useStore.getState();
   if (st.syncAccountId && st.syncAccountId !== userId) st.clearSyncMarkers();
   if (st.syncAccountId !== userId) st.setSyncAccountId(userId);
-  // P0 — restaurer l'espace isolé (compte + anonyme) AVANT de lire l'état.
+  // P0 — restaurer l'espace isolé du compte PROPRIÉTAIRE uniquement, AVANT
+  // de lire l'état. SÉCURITÉ : les données anonymes/invitées ('') ne sont
+  // JAMAIS adoptées automatiquement (import explicite via importGuestData).
   useStore.getState().restoreAccountVault(userId);
-  // P1 — identité résolue : tombstones/file anonymes ('' ) adoptés par ce compte.
-  const cur = useStore.getState();
-  const adopted = adoptAnonymousState(cur.tombstones, cur.pendingUploads as any[], userId);
-  if (adopted.changed) {
-    useStore.setState({ tombstones: adopted.tombstones, pendingUploads: adopted.pendingUploads });
-  }
 }
 import { useStore } from '../stores/useStore';
 import type {
@@ -243,7 +246,7 @@ export async function pushAllToCloud(): Promise<{
       const conflictCol = TABLE_CONFLICT[table] || 'id';
       await upsertTable(table, filtered, conflictCol);
       total += rows.length;
-      if (EXT_PROBE_COL[table]) schemaExtended[table] = true; // schéma étendu accepté
+      if (EXT_PROBE_COL[table]) schemaProbe[table] = { at: Date.now(), ext: true }; // schéma étendu accepté
       // P0 — marqué « synchronisé » UNIQUEMENT après confirmation effective
       // du serveur, et SEULEMENT pour les lignes réellement envoyées.
       const confirmed: Record<string, string> = {};
@@ -261,7 +264,7 @@ export async function pushAllToCloud(): Promise<{
           const filtered = rows.map((r) => pickAllowed(legacy, r));
           await upsertTable(table, filtered, TABLE_CONFLICT[table] || 'id');
           total += rows.length;
-          schemaExtended[table] = false; // ancien schéma confirmé
+          schemaProbe[table] = { at: Date.now(), ext: false }; // ancien schéma confirmé
           const confirmed: Record<string, string> = {};
           for (const r of rows) confirmed[String(r.id)] = legacyHashOf(r, legacy);
           confirmPushed(table, confirmed);
@@ -320,15 +323,17 @@ export async function pushAllToCloud(): Promise<{
     const stored = syncedHashes[table] || {};
     const legacy = TABLE_FIELDS_LEGACY[table];
     const hasLegacyMarkers = Object.values(stored).some((h) => typeof h === 'string' && h.startsWith('L:'));
-    // P0 — sonde fiable : des confirmations 'L:' existent et le schéma n'a
-    // pas encore été sondé cette session → on interroge une colonne étendue.
-    if (hasLegacyMarkers && EXT_PROBE_COL[table] && schemaExtended[table] === undefined) {
+    // Sonde fiable : confirmations 'L:' présentes ET (jamais sondé OU résultat
+    // négatif expiré/réinitialisé) → une seule requête légère par table/cycle.
+    const probe = schemaProbe[table];
+    const probeStale = !probe || (!probe.ext && Date.now() - probe.at > SCHEMA_PROBE_TTL_MS);
+    if (hasLegacyMarkers && EXT_PROBE_COL[table] && probeStale) {
       try {
         const { error: probeErr } = await sb.from(table).select(EXT_PROBE_COL[table]).limit(1);
-        schemaExtended[table] = !probeErr;
-      } catch { schemaExtended[table] = false; }
+        schemaProbe[table] = { at: Date.now(), ext: !probeErr };
+      } catch { schemaProbe[table] = { at: Date.now(), ext: false }; }
     }
-    const extAvailable = schemaExtended[table] === true;
+    const extAvailable = schemaProbe[table]?.ext === true;
     const dirtyItems: any[] = [];
     const fullHashesById: Record<string, string> = {};
     for (const it of items as any[]) {

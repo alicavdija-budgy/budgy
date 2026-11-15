@@ -400,3 +400,13 @@ test
 - P1 identités: adoptAnonymousState — tombstones/file "" conservés puis attribués au compte authentifié, jamais perdus ni envoyés sous identité vide.
 - Tests: test-task3 117/117 (67 unitaires exécutés dont scénarios A/B/C d intégration + 50 statiques), toutes suites vertes.
 - EN ATTENTE: validation utilisateur avant TÂCHE 5.
+
+## PRÉALABLES SÉCURITÉ + TÂCHE 5 (branche task5-qr-factures)
+- Préalable 1: AUCUNE attribution automatique des données anonymes ("") — applyAccountRestore ne restaure QUE vault[uid], queueForAccount strict, adoption uniquement via action EXPLICITE store.importGuestData() ; identité mémorisée dès session connue (autoSync) → logout avant 1re synchro stashe sous le BON compte.
+- Préalable 2: sonde schéma re-vérifiable — schemaProbe {at,ext} + TTL 6h, resetSchemaProbes() à la reconnexion réseau et sur forcePushNow ; L: envoyés dès schéma dispo ; pas de boucle.
+- Tâche 5: conservation SYSTÉMATIQUE — email-import saveInvoiceDocument (original en vault + spcPayload BRUT + documentType invoice + queueUpload + importedAt/mime), facture liée (documentId, qrPayload) ; scanner conserve le payload SPC (doc lié « QR Code conservé », jamais présenté comme original).
+- Sans montant (légal): document conservé tag toComplete, AUCUNE facture CHF 0 ; écran Factures: section « Montant à compléter » → saisie normalisée (normalizeChfAmount) → obligation créée SEULEMENT alors (IBAN/réf repris du payload, jamais inventés).
+- Doublons (src/lib/invoiceDocs.ts): référence structurée OU IBAN+créancier+montant — JAMAIS montant seul ; confirmation explicite avant 2e obligation.
+- Consultation: Ouvrir original (ensureLocalCopy → cloud vérifié → erreur claire), Partager (uri résolue), QR affiché depuis payload (react-native-qrcode-svg), étiquettes « Document original » ≠ « QR Code conservé ».
+- Tests: test-task5 38/38 (11 unit exécutés + 27 statiques), test-task3 117/117 (maj sécurité), toutes suites vertes. E2E navigateur écran Factures: NON TESTÉ (gating onboarding/auth/paywall en contexte automation, pas de credentials de test — fichier volontairement expurgé).
+- EN ATTENTE: validation utilisateur avant TÂCHE 4.

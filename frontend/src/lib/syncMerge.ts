@@ -139,7 +139,11 @@ export function buildLogoutStash(prev: any): Record<string, any> {
  */
 export function applyAccountRestore(state: any, uid: string): Record<string, any> | null {
   const vault = state.accountVault || {};
-  const sources = [vault[uid], uid ? vault[''] : undefined].filter(Boolean) as any[];
+  // SÉCURITÉ (préalable Tâche 5) : SEUL l'espace du compte propriétaire est
+  // restauré. Les données anonymes/invitées ('') restent isolées et ne sont
+  // JAMAIS attribuées automatiquement au premier compte connecté — import
+  // uniquement via l'action EXPLICITE importGuestData().
+  const sources = [vault[uid]].filter(Boolean) as any[];
   if (sources.length === 0) return null;
   const updates: any = {};
   for (const key of STASHED_COLLECTIONS) {
@@ -159,17 +163,18 @@ export function applyAccountRestore(state: any, uid: string): Record<string, any
   }
   updates.syncedHashes = mergedHashes;
   const rest = { ...vault };
-  delete rest[uid];
-  if (uid) delete rest[''];
+  delete rest[uid]; // l'espace anonyme '' est CONSERVÉ, jamais consommé ici
   updates.accountVault = rest;
   return updates;
 }
 
 /**
- * P1 — résolution d'identité : les tombstones et tâches d'envoi créés SANS
- * session (clé '') sont conservés durablement puis attribués au premier
- * compte authentifié de l'appareil — jamais perdus, jamais envoyés sous une
- * identité vide, jamais ignorés définitivement.
+ * SÉCURITÉ (préalable Tâche 5) — cette fonction n'est PLUS appelée
+ * automatiquement par la synchronisation : elle n'est exécutée que par
+ * l'action EXPLICITE et volontaire de l'utilisateur (importGuestData).
+ * Les traces anonymes ('') restent durables, isolées et récupérables tant
+ * que l'utilisateur n'a pas confirmé l'import — jamais perdues, jamais
+ * envoyées sous une identité vide, jamais attribuées en aveugle.
  */
 export function adoptAnonymousState(
   tombstones: Record<string, Record<string, number>> | undefined,
@@ -287,10 +292,10 @@ export function normalizeUploadQueue(raw: any[]): UploadEntry[] {
  * UNIQUEMENT si le document existe encore localement (appareil mono-compte
  * d'avant le correctif) — comportement documenté et déterministe.
  */
-export function queueForAccount(entries: UploadEntry[], uid: string, localDocIds: Set<string>): UploadEntry[] {
-  return (entries || []).filter((e) =>
-    e.accountId === uid || (e.accountId === '' && localDocIds.has(e.docId)),
-  );
+export function queueForAccount(entries: UploadEntry[], uid: string, _localDocIds: Set<string>): UploadEntry[] {
+  // STRICT : une entrée sans propriétaire ('') n'est JAMAIS envoyée sous une
+  // session — elle attend l'import explicite (importGuestData).
+  return (entries || []).filter((e) => e.accountId === uid);
 }
 
 // ─── Types documentaires (Factures / Contrats / Tickets) ─────

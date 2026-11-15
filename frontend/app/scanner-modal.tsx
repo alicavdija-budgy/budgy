@@ -66,7 +66,7 @@ export default function ScannerModal() {
       ? (params.forceType as ReceiptType)
       : null;
   const { t, lang } = useTranslation();
-  const { addTransaction, addReceipt, addInvoice, recurringExpenses } = useStore();
+  const { addTransaction, addReceipt, addInvoice, addDocument, recurringExpenses } = useStore();
 
   const [permission, requestPermission] = useCameraPermissions();
   const [stage, setStage] = useState<Stage>('camera');
@@ -80,6 +80,7 @@ export default function ScannerModal() {
   // --- QR-facture suisse (SIX) ---
   const invoices = useStore((s) => s.invoices);
   const [qrBill, setQrBill] = useState<SwissQrBill | null>(null);
+  const [qrRaw, setQrRaw] = useState(''); // TÂCHE 5 — payload SPC BRUT conservé
   const [qrDupTitle, setQrDupTitle] = useState<string | null>(null);
   const [qrAmount, setQrAmount] = useState('');
   const [qrCategory, setQrCategory] = useState('autres');
@@ -109,6 +110,7 @@ export default function ScannerModal() {
         const bill = parseSwissQrBill(data);
         try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
         setQrBill(bill);
+        setQrRaw(String(data || ''));
         setQrDupTitle(findDuplicateInvoice(bill, invoices as any)?.title ?? null);
         setQrAmount(bill.amount !== null ? bill.amount.toFixed(2) : '');
         setQrDueDate(''); // une QR-facture ne fournit pas d'échéance : rien n'est inventé
@@ -155,6 +157,34 @@ export default function ScannerModal() {
     // en 1 CHF par une analyse partielle ; rejet strict des formats ambigus.
     const amt = normalizeChfAmount(qrAmount);
     if (amt === null) {
+      // TÂCHE 5 §6 — Swiss QR légalement sans montant : conserver le QR avec
+      // le statut « Montant à compléter » — JAMAIS de facture CHF 0.
+      if (!qrAmount.trim() && qrRaw) {
+        Alert.alert(t('qrbill.amountRequired'), t('invoiceDocs.noAmountBody'), [
+          { text: t('common.cancel'), style: 'cancel' },
+          {
+            text: t('invoiceDocs.keepNoAmount'),
+            onPress: () => {
+              const now2 = Date.now();
+              addDocument({
+                id: `doc_inv_${now2}`,
+                title: qrBill.creditor.name.slice(0, 80),
+                category: 'other',
+                documentType: 'invoice',
+                imageBase64: '',
+                spcPayload: qrRaw,
+                importedAt: now2,
+                tags: ['invoice', 'qr', 'toComplete'],
+                createdAt: now2,
+                updatedAt: now2,
+              } as any);
+              Alert.alert(t('invoiceDocs.savedNoAmountTitle'), t('invoiceDocs.savedNoAmountBody'));
+              router.back();
+            },
+          },
+        ]);
+        return;
+      }
       Alert.alert(t('qrbill.amountRequired'));
       return;
     }
@@ -165,8 +195,30 @@ export default function ScannerModal() {
     }
     const now = new Date();
     const invId = `inv_qr_${now.getTime()}`;
+    // TÂCHE 5 — le payload SPC BRUT est conservé dans un document lié.
+    // Scan caméra = pas de fichier original → « QR Code conservé » (jamais
+    // présenté comme le document d'origine).
+    const docId = `doc_inv_${now.getTime()}`;
+    const persistQrDocument = (tags: string[]) => {
+      if (!qrRaw) return undefined;
+      addDocument({
+        id: docId,
+        title: qrBill.creditor.name.slice(0, 80),
+        category: 'other',
+        documentType: 'invoice',
+        imageBase64: '',
+        spcPayload: qrRaw,
+        importedAt: now.getTime(),
+        tags,
+        createdAt: now.getTime(),
+        updatedAt: now.getTime(),
+      } as any);
+      return docId;
+    };
     const buildInvoice = (recurringId?: string) => ({
       id: invId,
+      documentId: persistQrDocument(['invoice', 'qr']),
+      qrPayload: qrRaw || undefined,
       title: qrBill.creditor.name.slice(0, 80),
       issuer: qrBill.creditor.name.slice(0, 80),
       amount: Math.round(amt * 100) / 100,
@@ -205,7 +257,7 @@ export default function ScannerModal() {
     }
     addInvoice(buildInvoice() as any);
     finish();
-  }, [qrBill, qrAmount, qrDueDate, qrCategory, addInvoice, recurringExpenses, router, t]);
+  }, [qrBill, qrRaw, qrAmount, qrDueDate, qrCategory, addInvoice, addDocument, recurringExpenses, router, t]);
 
   // Form state for edit stage
   const [title, setTitle] = useState('');

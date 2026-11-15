@@ -20,7 +20,7 @@
 import { AppState } from 'react-native';
 import { useStore } from '../stores/useStore';
 import { getSupabase, isSupabaseConfigured } from './supabase';
-import { pushAllToCloud } from '../services/cloudSync';
+import { pushAllToCloud, resetSchemaProbes } from '../services/cloudSync';
 import { computeHashes } from './syncMerge';
 
 const TAG = '[auto-sync]';
@@ -94,11 +94,24 @@ export function startAutoSync() {
   // TÂCHE 3 (audit §5) — REPRISE au démarrage : file d'envoi + éléments
   // « dirty » traités après hydratation du store et présence d'une session.
   setTimeout(() => { attemptPush(); }, 4000);
+  // SÉCURITÉ — identité propriétaire mémorisée dès la session connue (même
+  // hors ligne) : un logout avant la 1re synchro stashe sous le BON compte.
+  setTimeout(async () => {
+    try {
+      const { getSupabase } = await import('./supabase');
+      const sb = getSupabase();
+      if (!sb) return;
+      const { data } = await sb.auth.getSession();
+      const uid = data.session?.user.id;
+      if (uid && !useStore.getState().syncAccountId) useStore.getState().setSyncAccountId(uid);
+    } catch {}
+  }, 1500);
   // Retour du réseau → reprise immédiate.
   let wasOnline = useStore.getState().isOnline;
   useStore.subscribe((st) => {
     if (st.isOnline && !wasOnline) {
       wasOnline = true;
+      resetSchemaProbes(); // reconnexion → re-vérification contrôlée du schéma
       attemptPush();
     } else if (!st.isOnline) {
       wasOnline = false;
@@ -129,6 +142,7 @@ export function startAutoSync() {
 
 /** Force un push immédiat — utile au logout. Ne throw pas. */
 export async function forcePushNow() {
+  resetSchemaProbes(); // synchro manuelle → re-vérification contrôlée du schéma
   if (scheduled) {
     clearTimeout(scheduled);
     scheduled = null;

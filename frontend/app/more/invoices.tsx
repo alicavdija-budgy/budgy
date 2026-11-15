@@ -6,7 +6,7 @@
 import React, { useState, useMemo, useRef } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  TextInput, Modal, Alert, Linking, Platform, KeyboardAvoidingView,
+  TextInput, Modal, Alert, Linking, Platform, KeyboardAvoidingView, Image, ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -29,6 +29,13 @@ import {
 import { EntityActionsSheet, type EntityActionsContext } from '../../src/components/EntityActionsSheet';
 import { deleteEntityWithCloud } from '../../src/services/cloudDelete';
 import { EntityEditModal, type EditField } from '../../src/components/EntityEditModal';
+// TÂCHE 5 — consultation des QR-factures : original, QR conservé, export
+import QRCode from 'react-native-qrcode-svg';
+import { WebView } from 'react-native-webview';
+import { ensureLocalCopy } from '../../src/services/documentStorage';
+import { safeShareFile } from '../../src/lib/safeShare';
+import { parseSwissQrBill } from '../../src/services/qrBill';
+import { normalizeChfAmount } from '../../src/utils/amount';
 import { useTranslation } from '../../src/hooks/useTranslation';
 
 const INVOICE_CATEGORY_KEYS = [
@@ -96,6 +103,8 @@ export default function InvoicesScreen() {
   const addInvoice = useStore((s) => s.addInvoice);
   const updateInvoice = useStore((s) => s.updateInvoice);
   const deleteInvoiceAction = useStore((s) => s.deleteInvoice);
+  const documents = useStore((s) => s.documents);
+  const updateDocument = useStore((s) => s.updateDocument);
   const transactions = useStore((s) => s.transactions);
   const addTransaction = useStore((s) => s.addTransaction);
   const deleteTransaction = useStore((s) => s.deleteTransaction);
@@ -286,6 +295,93 @@ export default function InvoicesScreen() {
     setEditingInvoiceId(null);
   };
 
+  // ── TÂCHE 5 — document original / QR conservé / montant à compléter ──
+  const [docView, setDocView] = useState<{ uri: string; isPdf: boolean } | null>(null);
+  const [qrView, setQrView] = useState<{ payload: string; hasOriginal: boolean } | null>(null);
+  const [completingId, setCompletingId] = useState<string | null>(null);
+  const [completeAmt, setCompleteAmt] = useState('');
+  const [recoveringDoc, setRecoveringDoc] = useState(false);
+
+  const invDocOf = (inv: any) => documents.find((d) => d.id === inv.documentId);
+  /** Ouvre l'ORIGINAL (jamais un QR reconstitué) : local → sinon récupération
+   *  cloud VÉRIFIÉE (Tâche 3) → sinon erreur explicite. */
+  const openOriginal = async (inv: any) => {
+    const d = invDocOf(inv);
+    if (!d || (!d.pdfUri && !d.fileUri && !(d as any).remotePath)) {
+      Alert.alert(t('invoiceDocs.noDocTitle'), (d as any)?.spcPayload ? t('invoiceDocs.qrOnlyBody') : t('invoiceDocs.noDocBody'));
+      return;
+    }
+    setRecoveringDoc(true);
+    try {
+      const res = await ensureLocalCopy(d.id);
+      if (!res) { Alert.alert(t('invoiceDocs.noDocTitle'), t('docSpaces.recoverFailed')); return; }
+      const isPdf = (d.mimeType || '').includes('pdf') || res.uri.toLowerCase().includes('.pdf');
+      if (Platform.OS === 'web') { try { window.open(res.uri, '_blank'); } catch {} return; }
+      setDocView({ uri: res.uri, isPdf });
+    } finally { setRecoveringDoc(false); }
+  };
+  const shareOriginal = async (inv: any) => {
+    const d = invDocOf(inv);
+    if (!d || (!d.pdfUri && !d.fileUri && !(d as any).remotePath)) {
+      Alert.alert(t('invoiceDocs.noDocTitle'), t('invoiceDocs.noDocBody'));
+      return;
+    }
+    setRecoveringDoc(true);
+    try {
+      const res = await ensureLocalCopy(d.id);
+      if (!res) { Alert.alert(t('invoiceDocs.noDocTitle'), t('docSpaces.recoverFailed')); return; }
+      const isPdf = (d.mimeType || '').includes('pdf') || res.uri.toLowerCase().includes('.pdf');
+      await safeShareFile(res.uri, { mimeType: d.mimeType || (isPdf ? 'application/pdf' : 'image/jpeg'), name: d.title || 'facture', dialogTitle: d.title } as any);
+    } finally { setRecoveringDoc(false); }
+  };
+  const showQr = (inv: any) => {
+    const d = invDocOf(inv);
+    const payload = inv.qrPayload || (d as any)?.spcPayload;
+    if (!payload) return;
+    setQrView({ payload: String(payload), hasOriginal: !!(d && (d.pdfUri || d.fileUri || (d as any).remotePath)) });
+  };
+
+  // §6 — « Montant à compléter » : documents facture conservés SANS obligation
+  const pendingAmountDocs = useMemo(
+    () => documents.filter((d) =>
+      (d as any).documentType === 'invoice' &&
+      (d.tags || []).includes('toComplete') &&
+      !storeInvoices.some((i: any) => i.documentId === d.id)),
+    [documents, storeInvoices],
+  );
+  const completeInvoice = () => {
+    const d = documents.find((x) => x.id === completingId);
+    if (!d) return;
+    const amt = normalizeChfAmount(completeAmt);
+    if (amt === null || amt <= 0) { Alert.alert(t('invoiceDocs.invalidAmount')); return; }
+    let iban: string | undefined; let reference: string | undefined; let issuer = d.title;
+    const payload = (d as any).spcPayload as string | undefined;
+    if (payload) {
+      try { const b = parseSwissQrBill(payload); iban = b.iban; reference = b.reference || undefined; issuer = b.creditor.name.slice(0, 80) || d.title; } catch {}
+    }
+    // L'obligation financière n'entre dans le moteur QUE maintenant,
+    // montant confirmé par l'utilisateur (jamais de CHF 0 implicite).
+    addInvoice({
+      id: `inv_${Date.now()}`,
+      title: d.title,
+      issuer,
+      amount: Math.round(amt * 100) / 100,
+      currency: 'CHF',
+      iban,
+      reference,
+      category: 'autre',
+      status: 'pending',
+      source: 'scan',
+      createdAt: Date.now(),
+      documentId: d.id,
+      qrPayload: payload,
+    } as any);
+    updateDocument(d.id, { tags: (d.tags || []).filter((x) => x !== 'toComplete') } as any);
+    setCompletingId(null);
+    setCompleteAmt('');
+    Alert.alert(t('invoiceDocs.completedTitle'), t('invoiceDocs.completedBody'));
+  };
+
   const getStatusColor = (s: string) => s === 'paid' ? theme.success : s === 'overdue' ? theme.error : theme.warning;
   const getStatusLabel = (s: string) => s === 'paid' ? t('invoices.statusPaid') : s === 'overdue' ? t('invoices.statusOverdue') : t('invoices.statusPending');
   const getCat = (id: string) => INVOICE_CATEGORIES.find(c => c.id === id) || INVOICE_CATEGORIES[9];
@@ -362,6 +458,26 @@ export default function InvoicesScreen() {
         </View>
 
         {/* Invoice List with swipeable actions */}
+        {pendingAmountDocs.length > 0 && (
+          <View style={{ marginBottom: Spacing.md }}>
+            {pendingAmountDocs.map((d) => (
+              <TouchableOpacity
+                key={d.id}
+                onPress={() => { setCompletingId(d.id); setCompleteAmt(''); }}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: theme.warning, backgroundColor: `${theme.warning}14`, marginBottom: 8 }}
+                testID={`complete-invoice-${d.id}`}
+              >
+                <Ionicons name="qr-code-outline" size={20} color={theme.warning} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: theme.text, fontWeight: '700' }} numberOfLines={1}>{d.title}</Text>
+                  <Text style={{ color: theme.warning, fontSize: 12, fontWeight: '600' }}>{t('invoiceDocs.toCompleteLabel')}</Text>
+                </View>
+                <Ionicons name="create-outline" size={18} color={theme.warning} />
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
         {filtered.length === 0 ? (
           <EmptyState icon="receipt-outline" title={t('invoices.emptyTitle')} subtitle={t('invoices.emptySub')} action={{ label: t('invoices.emptyAdd'), onPress: () => setShowAdd(true) }} />
         ) : (
@@ -477,6 +593,37 @@ export default function InvoicesScreen() {
                         </View>
                       </View>
 
+                      {/* TÂCHE 5 — original ≠ QR reconstitué, jamais confondus */}
+                      {((inv as any).documentId || (inv as any).qrPayload) && (
+                        <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                          {(() => {
+                            const d = invDocOf(inv);
+                            const hasFile = !!(d && (d.pdfUri || d.fileUri || (d as any).remotePath));
+                            return (
+                              <>
+                                {hasFile && (
+                                  <TouchableOpacity onPress={() => openOriginal(inv)} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 8, backgroundColor: `${theme.primary}15` }} testID={`inv-open-original-${inv.id}`}>
+                                    {recoveringDoc ? <ActivityIndicator size={12} color={theme.primary} /> : <Ionicons name="document-attach-outline" size={13} color={theme.primary} />}
+                                    <Text style={{ color: theme.primary, fontSize: 11, fontWeight: '700' }}>{t('invoiceDocs.originalDoc')}</Text>
+                                  </TouchableOpacity>
+                                )}
+                                {hasFile && (
+                                  <TouchableOpacity onPress={() => shareOriginal(inv)} style={{ paddingHorizontal: 8, paddingVertical: 5, borderRadius: 8, backgroundColor: `${theme.primary}15` }} testID={`inv-share-${inv.id}`}>
+                                    <Ionicons name="share-outline" size={13} color={theme.primary} />
+                                  </TouchableOpacity>
+                                )}
+                                {!!((inv as any).qrPayload || (d as any)?.spcPayload) && (
+                                  <TouchableOpacity onPress={() => showQr(inv)} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 8, backgroundColor: `${theme.textTertiary}20` }} testID={`inv-show-qr-${inv.id}`}>
+                                    <Ionicons name="qr-code-outline" size={13} color={theme.textSecondary} />
+                                    <Text style={{ color: theme.textSecondary, fontSize: 11, fontWeight: '700' }}>{hasFile ? t('invoiceDocs.showQr') : t('invoiceDocs.qrKept')}</Text>
+                                  </TouchableOpacity>
+                                )}
+                              </>
+                            );
+                          })()}
+                        </View>
+                      )}
+
                       {/* Swipe hint (only on pending/overdue) */}
                       {!isPaid && (
                         <View style={styles.swipeHint}>
@@ -495,6 +642,64 @@ export default function InvoicesScreen() {
 
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      {/* TÂCHE 5 — visionneuse de l'ORIGINAL (PDF/photo) */}
+      <Modal visible={!!docView} animationType="slide" onRequestClose={() => setDocView(null)}>
+        <View style={{ flex: 1, backgroundColor: theme.background }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, paddingTop: 54 }}>
+            <Text style={{ color: theme.text, fontWeight: '800', fontSize: 16 }}>{t('invoiceDocs.originalDoc')}</Text>
+            <TouchableOpacity onPress={() => setDocView(null)} testID="inv-doc-close"><Ionicons name="close" size={26} color={theme.text} /></TouchableOpacity>
+          </View>
+          {docView?.isPdf ? (
+            <WebView source={{ uri: docView.uri }} style={{ flex: 1 }} originWhitelist={['*']} allowFileAccess allowingReadAccessToURL={docView.uri} />
+          ) : docView ? (
+            <Image source={{ uri: docView.uri }} style={{ flex: 1 }} resizeMode="contain" />
+          ) : null}
+        </View>
+      </Modal>
+
+      {/* TÂCHE 5 — QR reconstitué depuis le payload SPC (JAMAIS « original ») */}
+      <Modal visible={!!qrView} transparent animationType="fade" onRequestClose={() => setQrView(null)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <View style={{ backgroundColor: '#fff', borderRadius: 20, padding: 20, alignItems: 'center', maxWidth: 340 }}>
+            {!!qrView && <QRCode value={qrView.payload} size={250} ecl="M" />}
+            <Text style={{ marginTop: 12, fontWeight: '800', color: '#111' }}>{t('invoiceDocs.qrKept')}</Text>
+            <Text style={{ marginTop: 4, fontSize: 12, color: '#555', textAlign: 'center' }}>
+              {qrView?.hasOriginal ? t('invoiceDocs.qrRebuiltNote') : t('invoiceDocs.qrOnlyBody')}
+            </Text>
+            <TouchableOpacity onPress={() => setQrView(null)} style={{ marginTop: 14, paddingHorizontal: 22, paddingVertical: 10, borderRadius: 12, backgroundColor: '#111' }} testID="inv-qr-close">
+              <Text style={{ color: '#fff', fontWeight: '700' }}>{t('common.close')}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* TÂCHE 5 §6 — compléter le montant (l'obligation naît ICI seulement) */}
+      <Modal visible={!!completingId} transparent animationType="fade" onRequestClose={() => setCompletingId(null)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', padding: 24 }}>
+          <View style={{ backgroundColor: theme.card, borderRadius: 18, padding: 20 }}>
+            <Text style={{ color: theme.text, fontWeight: '800', fontSize: 16 }}>{t('invoiceDocs.completeTitle')}</Text>
+            <Text style={{ color: theme.textSecondary, fontSize: 13, marginTop: 4 }}>{t('invoiceDocs.completeBody')}</Text>
+            <TextInput
+              value={completeAmt}
+              onChangeText={setCompleteAmt}
+              placeholder="CHF 0.00"
+              placeholderTextColor={theme.textTertiary}
+              keyboardType="decimal-pad"
+              style={{ marginTop: 12, borderWidth: 1, borderColor: theme.cardBorder, borderRadius: 12, padding: 12, color: theme.text, fontSize: 18, fontWeight: '700' }}
+              testID="complete-amount-input"
+            />
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
+              <TouchableOpacity onPress={() => setCompletingId(null)} style={{ flex: 1, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: theme.cardBorder, alignItems: 'center' }}>
+                <Text style={{ color: theme.textSecondary, fontWeight: '700' }}>{t('common.cancel')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={completeInvoice} style={{ flex: 1, padding: 12, borderRadius: 12, backgroundColor: theme.primary, alignItems: 'center' }} testID="complete-amount-save">
+                <Text style={{ color: '#06281e', fontWeight: '800' }}>{t('invoiceDocs.completeSave')}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
 
       {/* Add Invoice Modal */}
       <Modal visible={showAdd} animationType="slide" transparent onRequestClose={() => setShowAdd(false)}>

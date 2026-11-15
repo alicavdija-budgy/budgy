@@ -112,7 +112,9 @@ console.log('\n— §6 Isolation de la file d\'envoi par compte —');
   U('le compte B n\'envoie que ses pièces', forB.some((e) => e.docId === 'docB'));
   const forA = queueForAccount(q, 'userA', new Set(['docA', 'legacy_doc']));
   U('reprise sécurisée du compte d\'origine à sa reconnexion', forA.some((e) => e.docId === 'docA'));
-  U('entrée héritée adoptée seulement si le document existe localement', forA.some((e) => e.docId === 'legacy_doc') && !queueForAccount(q, 'userA', new Set(['docA'])).some((e) => e.docId === 'legacy_doc'));
+  // SÉCURITÉ (préalable Tâche 5) : une entrée sans propriétaire ('') n'est
+  // JAMAIS exécutée sous une session — import explicite uniquement.
+  U('entrée héritée sans compte JAMAIS envoyée automatiquement', !forA.some((e) => e.docId === 'legacy_doc'));
 }
 
 console.log('\n— P0 Repli legacy : ne confirmer QUE ce qui est envoyé —');
@@ -311,7 +313,7 @@ S('P0 — restauration + adoption AVANT lecture d\'état (push ET pull)', cloud.
 S('P0 — verrou anti-concurrence push/pull', cloud.includes('let syncBusy = false') && cloud.split('syncBusy = false').length >= 4);
 S('P0 — hydratation du store exigée avant synchro', cloud.split('storeHydrated()').length >= 3);
 S('P0 — changement de compte en cours d\'opération → abandon sans écrire', cloud.includes('Compte modifié pendant la synchronisation') && cloud.includes('syncAccountId !== userId) return;'));
-S('P0 — sonde fiable du schéma étendu (colonne testée, par table)', cloud.includes('EXT_PROBE_COL[table]').valueOf() && cloud.includes('schemaExtended[table] = !probeErr'));
+S('P0 — sonde fiable du schéma étendu (colonne testée, TTL re-vérifiable)', cloud.includes('EXT_PROBE_COL[table]') && cloud.includes('schemaProbe[table] = { at: Date.now(), ext: !probeErr }'));
 S('P0 — migration détectée → marqueurs L: redeviennent dirty (isDirtyForPush)', cloud.includes('isDirtyForPush(st, fullH,'));
 S('P0 — tâche d\'envoi conservée si le document est dans l\'espace isolé', dstore.includes('if (vaultIds.has(e.docId)) continue;'));
 S('P0 — retrait de file introuvable = explicite, consigné', dstore.includes('upload abandonné, document introuvable'));

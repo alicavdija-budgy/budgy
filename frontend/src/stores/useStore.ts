@@ -4,7 +4,7 @@
  */
 
 import { create } from 'zustand';
-import { buildLogoutStash, applyAccountRestore } from '../lib/syncMerge';
+import { buildLogoutStash, applyAccountRestore, adoptAnonymousState } from '../lib/syncMerge';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type {
@@ -149,6 +149,7 @@ interface AppState {
   clearSyncMarkers: () => void;
   setSyncAccountId: (uid: string | null) => void;
   addTombstone: (table: string, id: string) => void;
+  importGuestData: () => void;
   accountVault: Record<string, { savedAt: number; syncedHashes?: Record<string, Record<string, string>>; documents?: PersonalDocument[]; contracts?: Contract[]; invoices?: Invoice[]; receipts?: Receipt[]; transactions?: Transaction[] }>;
   restoreAccountVault: (uid: string) => void;
   queueUpload: (docId: string) => void;
@@ -508,6 +509,27 @@ export const useStore = create<AppState>()(
       // reconnecte (jamais fusionnés dans un autre compte).
       restoreAccountVault: (uid) =>
         set((s) => applyAccountRestore(s, uid) || {}),
+      // SÉCURITÉ — import des données invitées/anonymes ('') : UNIQUEMENT via
+      // cette action EXPLICITE de l'utilisateur, jamais automatiquement.
+      importGuestData: () =>
+        set((s) => {
+          const uid = s.syncAccountId;
+          if (!uid) return {};
+          const updates: any = {};
+          const vault = s.accountVault || {};
+          if (vault['']) {
+            const moved: any = { ...vault, [uid]: vault[''] };
+            delete moved[''];
+            const r = applyAccountRestore({ ...s, accountVault: moved }, uid);
+            Object.assign(updates, r || { accountVault: moved });
+          }
+          const adopted = adoptAnonymousState(s.tombstones, s.pendingUploads as any[], uid);
+          if (adopted.changed) {
+            updates.tombstones = adopted.tombstones;
+            updates.pendingUploads = adopted.pendingUploads;
+          }
+          return updates;
+        }),
       addTombstone: (table, id) =>
         set((s) => {
           const uid = s.syncAccountId || '';

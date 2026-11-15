@@ -244,6 +244,10 @@ export interface Invoice {
   /** v4.0 — rapprochement CONFIRMÉ avec une charge récurrente : l'obligation
    *  n'est alors comptée qu'une fois (la facture représente l'échéance). */
   recurringId?: string;
+  /** TÂCHE 5 — document d'origine conservé (PersonalDocument) */
+  documentId?: string;
+  /** TÂCHE 5 — payload SPC brut conservé (jamais présenté comme l'original) */
+  qrPayload?: string;
 }
 
 export interface SyncQueueItem {
@@ -284,7 +288,8 @@ export interface PersonalDocument {
   fileSize?: number;                // taille vérifiée (octets)
   remotePath?: string;              // chemin Storage privé (JAMAIS une URL signée)
   remoteUploadedAt?: number;        // confirmé par le serveur uniquement
-  uploadError?: string;             // ex: fichier local manquant (informatif, jamais silencieux)          // TÂCHE 2 : type MIME du fichier original
+  uploadError?: string;             // ex: fichier local manquant (informatif, jamais silencieux)
+  spcPayload?: string;              // TÂCHE 5 — payload SPC BRUT du Swiss QR (≠ document original)          // TÂCHE 2 : type MIME du fichier original
   tags: string[];
   note?: string;
   expiresAt?: string;          // YYYY-MM-DD optional expiration

@@ -35,6 +35,7 @@ import { useStore } from '../../src/stores/useStore';
 import type { Contract } from '../../src/types';
 import { Card, Button } from '../../src/components/ui';
 import { humanizeError } from '../../src/lib/errorSanitizer';
+import { saveToVault, assertFileAcceptable, vaultFileExists, VaultError } from '../../src/lib/fileVault';
 import { useTranslation } from '../../src/hooks/useTranslation';
 import { getApiLocale } from '../../src/utils/apiLocale';
 
@@ -46,7 +47,32 @@ export default function ImportInvoiceScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const params = useLocalSearchParams<{ mode?: string }>();
-  const { addInvoice, addContract } = useStore();
+  const { addInvoice, addContract, addDocument, updateDocument } = useStore();
+  // TÂCHE 2 — fichier transmis par le menu Partager iOS (ShareIntentRouter)
+  const sharedParams = useLocalSearchParams<{ sharedUri?: string; sharedMime?: string; sharedName?: string; sharedText?: string }>();
+  const sharedHandled = React.useRef(false);
+  React.useEffect(() => {
+    if (sharedHandled.current) return;
+    const su = typeof sharedParams.sharedUri === 'string' ? sharedParams.sharedUri : undefined;
+    const stx = typeof sharedParams.sharedText === 'string' ? sharedParams.sharedText : undefined;
+    if (!su && !stx) return;
+    sharedHandled.current = true;
+    (async () => {
+      try {
+        if (su) {
+          await assertFileAcceptable(su, sharedParams.sharedMime, sharedParams.sharedName);
+          await parseImageFile(su, sharedParams.sharedMime);
+        } else if (stx) {
+          await parseEmailText(stx, sharedParams.sharedName || 'partage');
+        }
+      } catch (e: any) {
+        if (e instanceof VaultError) { Alert.alert(t('contractsV2.fileErrorTitle'), t(`contractsV2.${e.code}`)); return; }
+        const h = humanizeError(e, { title: t('emailImport.importImpossibleTitle') });
+        Alert.alert(h.title, h.message);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sharedParams.sharedUri, sharedParams.sharedText]);
   const { t, lang } = useTranslation();
 
   const initialMode: 'invoice' | 'contract' | null = useMemo(() => {
@@ -95,7 +121,7 @@ export default function ImportInvoiceScreen() {
     }
   };
 
-  const parseImageFile = async (uriOrPath: string) => {
+  const parseImageFile = async (uriOrPath: string, mimeHint?: string) => {
     setBusy(true);
     setBusyLabel(t('emailImport.busyOcrAi'));
     setResult(null);
@@ -106,7 +132,7 @@ export default function ImportInvoiceScreen() {
         base64 = uriOrPath.split(',')[1] || '';
         const m = /^data:([^;]+);/.exec(uriOrPath);
         if (m) mime = m[1];
-      } else if (uriOrPath.toLowerCase().endsWith('.pdf') || uriOrPath.includes('application/pdf')) {
+      } else if (mimeHint === 'application/pdf' || uriOrPath.toLowerCase().endsWith('.pdf') || uriOrPath.includes('application/pdf')) {
         base64 = await readAsBase64(uriOrPath);
         mime = 'application/pdf';
         console.log('[email-import] PDF detected, sending raw bytes for OCR');
@@ -204,8 +230,10 @@ export default function ImportInvoiceScreen() {
       });
       if (res.canceled) return;
       const file = res.assets[0];
-      await parseImageFile(file.uri);
+      await assertFileAcceptable(file.uri, file.mimeType, file.name);
+      await parseImageFile(file.uri, file.mimeType);
     } catch (e: any) {
+      if (e instanceof VaultError) { Alert.alert(t('contractsV2.fileErrorTitle'), t(`contractsV2.${e.code}`)); return; }
       const h = humanizeError(e, { title: t('emailImport.pdfImpossibleTitle') });
       Alert.alert(h.title, h.message);
     }
@@ -224,9 +252,11 @@ export default function ImportInvoiceScreen() {
         const text = await readAsText(file.uri);
         await parseEmailText(text, file.name);
       } else {
-        await parseImageFile(file.uri);
+        await assertFileAcceptable(file.uri, file.mimeType, file.name);
+        await parseImageFile(file.uri, file.mimeType);
       }
     } catch (e: any) {
+      if (e instanceof VaultError) { Alert.alert(t('contractsV2.fileErrorTitle'), t(`contractsV2.${e.code}`)); return; }
       const h = humanizeError(e, { title: t('emailImport.importImpossibleTitle') });
       Alert.alert(h.title, h.message);
     }
@@ -246,8 +276,10 @@ export default function ImportInvoiceScreen() {
       });
       if (res.canceled) return;
       const a = res.assets[0];
-      await parseImageFile(a.uri);
+      await assertFileAcceptable(a.uri, a.mimeType ?? undefined, a.fileName ?? undefined);
+      await parseImageFile(a.uri, a.mimeType ?? undefined);
     } catch (e: any) {
+      if (e instanceof VaultError) { Alert.alert(t('contractsV2.fileErrorTitle'), t(`contractsV2.${e.code}`)); return; }
       const h = humanizeError(e, { title: t('emailImport.importImpossibleTitle') });
       Alert.alert(h.title, h.message);
     }
@@ -302,31 +334,70 @@ export default function ImportInvoiceScreen() {
   };
 
   /** Save as Contract (Mon Classeur) */
-  const persistAsContract = () => {
+  const persistAsContract = async () => {
     if (!result) return;
-    const today = new Date();
-    const oneYearLater = new Date(today.getTime());
-    oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
+    if (extractionFailed) {
+      Alert.alert(t('importErrors.extractFailedTitle'), t('importErrors.extractFailedBody'));
+      return;
+    }
+    const now = Date.now();
+    const ctId = `ct_${now}`;
+    // 1) CONSERVER LE FICHIER ORIGINAL (copie durable hors cache iOS)
+    let documentId: string | undefined;
+    if (result._originalUri) {
+      try {
+        const docId = `doc_${now}`;
+        const vaultUri = await saveToVault(result._originalUri, docId, result._mime);
+        if (!(await vaultFileExists(vaultUri))) throw new VaultError('SAVE_FAILED');
+        const isPdf = (result._mime || '').includes('pdf') || vaultUri.toLowerCase().endsWith('.pdf');
+        addDocument({
+          id: docId,
+          title: result.title || result.issuer || t('emailImport.defaultContractTitle'),
+          category: 'contracts',
+          imageBase64: isPdf ? '' : (result._originalUri.startsWith('data:') ? result._originalUri : ''),
+          pdfUri: isPdf ? vaultUri : undefined,
+          pages: undefined,
+          tags: ['contract', 'import'],
+          note: t('emailImport.importedByAiNote'),
+          createdAt: now,
+          updatedAt: now,
+        } as any);
+        if (!isPdf) {
+          // champ additif fileUri : URI durable de l'image originale
+          updateDocument(docId, { fileUri: vaultUri } as any);
+        }
+        documentId = docId;
+      } catch (e: any) {
+        const code = e instanceof VaultError ? e.code : 'SAVE_FAILED';
+        Alert.alert(t('contractsV2.fileErrorTitle'), t(`contractsV2.${code}`));
+        return; // JAMAIS de succès si la pièce jointe n'a pas pu être conservée
+      }
+    }
+    // 2) MÉTADONNÉES : rien d'inventé. Pas d'échéance fictive à un an,
+    //    pas d'autoRenew supposé, pas de montant 0 présenté comme réel.
+    const extractedAmount = normalizeChfAmount(result.amount) ?? normalizeChfAmount(result.total_amount);
+    const extractedStart = result.contract_start || undefined; // uniquement si réellement extrait
     const contract: Contract = {
-      id: `ct_${Date.now()}`,
+      id: ctId,
       title: result.title || result.merchant || result.issuer || t('emailImport.defaultContractTitle'),
       issuer: result.issuer || result.merchant || undefined,
-      amount: Number(result.amount) || Number(result.total_amount) || 0,
-      expirationDate: oneYearLater.toISOString().split('T')[0],
-      startDate: result.invoice_date || result.date || today.toISOString().split('T')[0],
+      amount: extractedAmount ?? 0, // 0 = non renseigné (modifiable), jamais une obligation chiffrée
+      expirationDate: '', // non renseignée — JAMAIS inventée
+      startDate: extractedStart,
       urgent: false,
-      autoRenew: true,
+      autoRenew: undefined, // inconnu — jamais supposé
       category: result.category || 'assurance',
-      createdAt: Date.now(),
+      createdAt: now,
       notes: t('emailImport.importedByAiNote'),
+      documentId,
     };
     addContract(contract);
     Alert.alert(
       t('emailImport.contractSavedTitle'),
-      t('emailImport.contractSavedBody'),
+      documentId ? t('contractsV2.savedWithFile') : t('contractsV2.savedNoFile'),
       [
         { text: t('emailImport.okBtn'), style: 'cancel' },
-        { text: t('emailImport.openBinderCta'), onPress: () => router.push('/more/documents' as any) },
+        { text: t('contractsV2.openContracts'), onPress: () => router.push('/more/documents?filter=contracts' as any) },
       ],
     );
     setResult(null);

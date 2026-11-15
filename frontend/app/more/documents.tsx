@@ -7,12 +7,12 @@
 import React, { useState, useMemo, useRef } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity, Image, TextInput,
-  Alert, Platform, ActivityIndicator, KeyboardAvoidingView, FlatList, Dimensions,
+  Alert, Platform, ActivityIndicator, KeyboardAvoidingView, FlatList, Dimensions, Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Print from 'expo-print';
 import * as FileSystem from 'expo-file-system';
@@ -63,10 +63,15 @@ export default function DocumentsScreen() {
   const locale = DATE_LOCALES[lang];
   const FILTERS = useMemo(() => FILTER_KEYS.map((f) => ({ id: f.id, label: t(`documents.${f.tKey}`), emoji: f.emoji })), [t]);
   const CATEGORIES = useMemo(() => CATEGORY_KEYS.map((c) => ({ id: c.id, label: t(`documents.${c.tKey}`), emoji: c.emoji, color: c.color })), [t]);
-  const { documents, addDocument, deleteDocument } = useStore();
+  const { documents, addDocument, deleteDocument, contracts, updateContract, deleteContract } = useStore();
+  // TÂCHE 2 — arrivée depuis l'import (« Voir mes contrats »)
+  const incoming = useLocalSearchParams<{ filter?: string }>();
   const [permission, requestPermission] = useCameraPermissions();
   const [mode, setMode] = useState<Mode>('list');
-  const [filter, setFilter] = useState<DocumentCategory | 'all'>('all');
+  const [filter, setFilter] = useState<DocumentCategory | 'all'>(
+    incoming.filter === 'contracts' ? 'contracts' : 'all'
+  );
+  const [selectedContract, setSelectedContract] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<string | null>(null);
 
@@ -104,6 +109,30 @@ export default function DocumentsScreen() {
   }, [documents]);
 
   const sel = documents.find((d) => d.id === selected);
+  // ── TÂCHE 2 — VRAIE section Contrats (collection contracts[], pas
+  // seulement les documents de catégorie « contracts ») ──
+  const selCt = contracts.find((c) => c.id === selectedContract) || null;
+  const ctDoc = selCt?.documentId ? documents.find((d) => d.id === selCt.documentId) : undefined;
+  const renameContract = (id: string, current: string) => {
+    if (Platform.OS === 'web') return;
+    Alert.prompt(
+      t('contractsV2.renameTitle'),
+      t('contractsV2.renameBody'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        { text: t('common.save'), onPress: (txt?: string) => { if (txt && txt.trim()) updateContract(id, { title: txt.trim() }); } },
+      ],
+      'plain-text',
+      current,
+    );
+  };
+  const removeContract = (id: string) => {
+    Alert.alert(t('contractsV2.deleteTitle'), t('contractsV2.deleteBody'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('common.delete'), style: 'destructive', onPress: () => { deleteContract(id); setSelectedContract(null); } },
+    ]);
+  };
+
 
   const startCapture = async () => {
     if (Platform.OS === 'web') {
@@ -672,12 +701,12 @@ ${pageDataUrls.map((src, i) => `
           {sel.pdfUri ? (
             <Button title={t('documents.openSharePdf')} onPress={() => sharePdf(sel)} fullWidth icon="share" size="lg" style={{ marginBottom: Spacing.lg }} />
           ) : null}
-          <Text style={styles.label}>{t('documents.pagesLabel', { n: (sel.pages || [sel.imageBase64]).length })}</Text>
+          <Text style={styles.label}>{t('documents.pagesLabel', { n: (sel.pages || [sel.imageBase64 || sel.fileUri].filter(Boolean)).length })}</Text>
           <View style={styles.zoomHint}>
             <Ionicons name="resize" size={12} color={theme.textTertiary} />
             <Text style={styles.zoomHintTxt}>{t('documents.zoomHint')}</Text>
           </View>
-          {(sel.pages || [sel.imageBase64]).map((p, i) => (
+          {(sel.pages || [sel.imageBase64 || (sel as any).fileUri].filter(Boolean)).map((p, i) => (
             <View key={i} style={styles.detailPageCard}>
               <View style={styles.detailPageNum}><Text style={styles.detailPageNumTxt}>{t('documents.pageLabel', { n: i + 1 })}</Text></View>
               <ZoomableImage
@@ -797,7 +826,34 @@ ${pageDataUrls.map((src, i) => `
             </View>
           </View>
         ) : (
-          filtered.map((d) => {
+          <>
+          {(filter === 'all' || filter === 'contracts') && contracts.length > 0 && (
+            <View style={{ marginBottom: 14 }}>
+              <Text style={styles.sectionLabel}>{t('contractsV2.sectionTitle')} ({contracts.length})</Text>
+              {contracts.map((c) => {
+                const linked = c.documentId ? documents.find((d) => d.id === c.documentId) : undefined;
+                return (
+                  <TouchableOpacity
+                    key={c.id}
+                    style={styles.ctRow}
+                    onPress={() => setSelectedContract(c.id)}
+                    testID={`contract-row-${c.id}`}
+                  >
+                    <View style={styles.ctIcon}><Text style={{ fontSize: 18 }}>📄</Text></View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.ctTitle} numberOfLines={1}>{c.title}</Text>
+                      <Text style={styles.ctSub} numberOfLines={1}>
+                        {(c.issuer ? `${c.issuer} · ` : '') + (c.expirationDate ? c.expirationDate : t('contractsV2.noExpiry'))}
+                        {linked ? ` · ${t('contractsV2.hasFile')}` : ''}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color={theme.textTertiary} />
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+          {filtered.map((d) => {
             const cat = CATEGORIES.find((c) => c.id === d.category);
             const numPages = d.pages?.length || 1;
             return (
@@ -824,7 +880,8 @@ ${pageDataUrls.map((src, i) => `
                 {d.pdfUri ? <Ionicons name="document-text" size={20} color={theme.primary} /> : <Ionicons name="image" size={20} color={theme.textTertiary} />}
               </TouchableOpacity>
             );
-          })
+          })}
+          </>
         )}
       </ScrollView>
 
@@ -834,11 +891,75 @@ ${pageDataUrls.map((src, i) => `
           <Ionicons name="scan" size={26} color="#0E1530" />
         </LinearGradient>
       </TouchableOpacity>
+
+      {/* TÂCHE 2 — détail d'un contrat : consulter / renommer / supprimer / pièce jointe */}
+      <Modal visible={!!selCt} transparent animationType="slide" onRequestClose={() => setSelectedContract(null)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: theme.background, borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 18, paddingBottom: insets.bottom + 18 }}>
+            {selCt && (
+              <>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                  <Text style={{ color: theme.text, fontSize: 18, fontWeight: '700', flex: 1 }} numberOfLines={1}>{selCt.title}</Text>
+                  <TouchableOpacity onPress={() => setSelectedContract(null)} hitSlop={10}>
+                    <Ionicons name="close" size={22} color={theme.textSecondary} />
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.ctDetailCard}>
+                  {!!selCt.issuer && (
+                    <View style={styles.ctDetailRow}><Text style={styles.ctDetailLabel}>{t('contractsV2.issuer')}</Text><Text style={styles.ctDetailValue}>{selCt.issuer}</Text></View>
+                  )}
+                  <View style={styles.ctDetailRow}><Text style={styles.ctDetailLabel}>{t('contractsV2.category')}</Text><Text style={styles.ctDetailValue}>{selCt.category}</Text></View>
+                  <View style={styles.ctDetailRow}><Text style={styles.ctDetailLabel}>{t('contractsV2.amount')}</Text><Text style={styles.ctDetailValue}>{selCt.amount > 0 ? `CHF ${selCt.amount}` : t('contractsV2.notSet')}</Text></View>
+                  <View style={styles.ctDetailRow}><Text style={styles.ctDetailLabel}>{t('contractsV2.expiry')}</Text><Text style={styles.ctDetailValue}>{selCt.expirationDate || t('contractsV2.notSet')}</Text></View>
+                  {!!selCt.startDate && (
+                    <View style={styles.ctDetailRow}><Text style={styles.ctDetailLabel}>{t('contractsV2.start')}</Text><Text style={styles.ctDetailValue}>{selCt.startDate}</Text></View>
+                  )}
+                  <View style={styles.ctDetailRow}><Text style={styles.ctDetailLabel}>{t('contractsV2.autoRenew')}</Text><Text style={styles.ctDetailValue}>{selCt.autoRenew === undefined ? t('contractsV2.notSet') : (selCt.autoRenew ? t('common.yes') : t('common.no'))}</Text></View>
+                </View>
+                {ctDoc ? (
+                  <TouchableOpacity
+                    style={[styles.ctBtn, { backgroundColor: 'rgba(52,211,153,0.14)' }]}
+                    onPress={() => { setSelectedContract(null); setSelected(ctDoc.id); setMode('detail'); }}
+                    testID="contract-open-attachment"
+                  >
+                    <Ionicons name="attach" size={18} color={theme.primary} />
+                    <Text style={{ color: theme.primary, fontWeight: '700' }}>{t('contractsV2.openFile')}</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <View style={[styles.ctBtn, { backgroundColor: 'rgba(148,163,184,0.10)' }]}>
+                    <Ionicons name="alert-circle-outline" size={18} color={theme.textTertiary} />
+                    <Text style={{ color: theme.textTertiary }}>{t('contractsV2.noFile')}</Text>
+                  </View>
+                )}
+                <TouchableOpacity style={[styles.ctBtn, { backgroundColor: 'rgba(96,165,250,0.12)' }]} onPress={() => renameContract(selCt.id, selCt.title)}>
+                  <Ionicons name="pencil" size={18} color="#60A5FA" />
+                  <Text style={{ color: '#60A5FA', fontWeight: '700' }}>{t('contractsV2.rename')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.ctBtn, { backgroundColor: 'rgba(239,68,68,0.12)' }]} onPress={() => removeContract(selCt.id)}>
+                  <Ionicons name="trash" size={18} color="#EF4444" />
+                  <Text style={{ color: '#EF4444', fontWeight: '700' }}>{t('contractsV2.delete')}</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const makeStyles = (Colors: ThemePalette) => StyleSheet.create({
+  // TÂCHE 2 — section Contrats
+  sectionLabel: { color: Colors.textSecondary, fontSize: 13, fontWeight: '700', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.6 },
+  ctRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: Colors.card, borderRadius: 14, padding: 12, marginBottom: 8 },
+  ctIcon: { width: 38, height: 38, borderRadius: 10, backgroundColor: 'rgba(167,139,250,0.15)', alignItems: 'center', justifyContent: 'center' },
+  ctTitle: { color: Colors.text, fontSize: 15, fontWeight: '600' },
+  ctSub: { color: Colors.textTertiary, fontSize: 12, marginTop: 2 },
+  ctDetailCard: { backgroundColor: Colors.card, borderRadius: 16, padding: 16, gap: 8 },
+  ctDetailRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 10 },
+  ctDetailLabel: { color: Colors.textTertiary, fontSize: 13 },
+  ctDetailValue: { color: Colors.text, fontSize: 14, fontWeight: '600', flexShrink: 1, textAlign: 'right' },
+  ctBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 12, paddingVertical: 12, marginTop: 8 },
   container: { flex: 1, backgroundColor: Colors.background },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md },
   iconBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },

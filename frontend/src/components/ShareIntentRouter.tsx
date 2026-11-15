@@ -13,7 +13,7 @@
  */
 import { useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
-import { useRouter, useSegments } from 'expo-router';
+import { useRouter } from 'expo-router';
 
 let useShareIntent: any = null;
 try {
@@ -31,7 +31,6 @@ export default function ShareIntentRouter() {
 
 function ShareIntentInner() {
   const router = useRouter();
-  const segments = useSegments();
   const lastHandled = useRef<string | null>(null);
 
   // The hook returns `{ hasShareIntent, shareIntent, resetShareIntent }`
@@ -52,13 +51,20 @@ function ShareIntentInner() {
     if (lastHandled.current === key) return;
     lastHandled.current = key;
 
-    // Already on the import screen → let it consume the intent itself
-    const onImport = (segments || []).join('/').includes('email-import');
-    if (onImport) return;
-
-    // Else, push the user to the import screen
+    // TÂCHE 2 — transmettre RÉELLEMENT le fichier partagé à l'écran
+    // d'import (avant : on ouvrait l'écran sans lui passer le fichier).
+    const first = (payload.files || [])[0];
+    const params: Record<string, string> = {};
+    if (first?.path) {
+      params.sharedUri = first.path.startsWith('file://') ? first.path : `file://${first.path}`;
+      if (first.mimeType) params.sharedMime = first.mimeType;
+      if (first.fileName) params.sharedName = first.fileName;
+    } else if (payload.text) {
+      params.sharedText = String(payload.text).slice(0, 20000);
+    }
     try {
-      router.push('/more/email-import' as any);
+      router.push({ pathname: '/more/email-import', params } as any);
+      intent.resetShareIntent?.();
     } catch (e) {
       console.warn('[ShareIntentRouter] navigation failed:', e);
     }

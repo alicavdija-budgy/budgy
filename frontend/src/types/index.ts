@@ -272,6 +272,8 @@ export interface PersonalDocument {
   pages?: string[];           // optional: all page images as data URLs (multi-page scan)
   pdfBase64?: string;         // optional: rendered PDF data URL (data:application/pdf;base64,...)
   pdfUri?: string;            // optional: local file URI for PDF
+  fileUri?: string;           // TÂCHE 2 : URI DURABLE (vault) du fichier original
+  mimeType?: string;          // TÂCHE 2 : type MIME du fichier original
   tags: string[];
   note?: string;
   expiresAt?: string;          // YYYY-MM-DD optional expiration

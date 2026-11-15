@@ -297,6 +297,9 @@ export default function ScannerModal() {
   const [note, setNote] = useState(t('scanner.addedViaScan'));
   const [receiptType, setReceiptType] = useState<ReceiptType>(lockedType || 'ticket');
   const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
+  // OCR classification is separate from the user's chosen destination.
+  // A disagreement must be confirmed before recording financial data.
+  const [detectedDocType, setDetectedDocType] = useState<'invoice' | 'receipt' | 'contract' | 'unknown'>('unknown');
   const [ocrError, setOcrError] = useState<string | null>(null);
 
   // Decide initial stage once we know permission status
@@ -335,6 +338,8 @@ export default function ScannerModal() {
   const runOcr = async (b64: string) => {
     setStage('ocr');
     setOcrError(null);
+    setDetectedDocType('unknown');
+    setOcrConfidence(null);
     const r = await apiFetchJson<any>(
       `/api/scanner/ocr`,
       {
@@ -361,8 +366,20 @@ export default function ScannerModal() {
           if (merged.merchant) setTitle(merged.merchant);
           if (merged.total_amount) setAmount(String(merged.total_amount));
           if (merged.category) setCategory(merged.category);
-          if (data.receipt_type && !lockedType) setReceiptType(data.receipt_type as ReceiptType);
-          setOcrConfidence(data.confidence || (merged.rescued ? 0.5 : null));
+          // Use the explicit document_type returned by OCR, not the default
+          // receipt_type='ticket' (which caused invoices to become receipts).
+          const detected = String(data.document_type || 'unknown').toLowerCase();
+          const docType = detected === 'invoice' || detected === 'contract' || detected === 'receipt'
+            ? detected : 'unknown';
+          setDetectedDocType(docType);
+          if (!lockedType) {
+            if (docType === 'invoice') setReceiptType('invoice');
+            else if (docType === 'contract') setReceiptType('contract');
+            else if (docType === 'receipt') {
+              setReceiptType(data.receipt_type === 'remboursement' ? 'remboursement' : 'ticket');
+            }
+          }
+          setOcrConfidence(typeof data.confidence === 'number' ? data.confidence : (merged.rescued ? 0.5 : null));
           if (data.items && data.items.length) {
             setNote(`Articles: ${data.items.slice(0, 3).join(', ')}`);
           }
@@ -370,8 +387,7 @@ export default function ScannerModal() {
           // user and offer to redirect to Mon Classeur instead of creating
           // a ticket-de-caisse entry. We never auto-classify a contract as
           // a receipt.
-          const docType = String(data.document_type || '').toLowerCase();
-          if (docType === 'contract') {
+          if (docType === 'contract' && lockedType !== 'contract') {
             Alert.alert(
               t('scanner.contractDetectedTitle'),
               t('scanner.contractDetectedBody'),
@@ -448,9 +464,29 @@ export default function ScannerModal() {
     setStage('camera');
   };
 
-  const handleSave = () => {
+  const handleSave = (userConfirmedType = false) => {
     const amt = normalizeChfAmount(amount) ?? 0;
-    if (!amt || amt <= 0) {
+    const destination = receiptType === 'contract' ? 'contract'
+      : receiptType === 'invoice' ? 'invoice' : 'receipt';
+    if (!userConfirmedType && detectedDocType !== 'unknown' &&
+        detectedDocType !== destination && (ocrConfidence ?? 0) >= 0.6) {
+      const proposedType: ReceiptType = detectedDocType === 'receipt' ? 'ticket' : detectedDocType;
+      const proposedLabel = detectedDocType === 'receipt' ? t('docSpaces.pickTicketOption')
+        : detectedDocType === 'contract' ? t('emailImport.pickContractOption')
+        : t('emailImport.pickInvoiceOption');
+      const chosenLabel = destination === 'receipt' ? t('docSpaces.pickTicketOption')
+        : destination === 'contract' ? t('emailImport.pickContractOption')
+        : t('emailImport.pickInvoiceOption');
+      Alert.alert(t('emailImport.docTypeConfirmTitle'), t('emailImport.docTypeConfirmBody'), [
+        { text: t('common.cancel'), style: 'cancel' },
+        { text: proposedLabel, onPress: () => setReceiptType(proposedType) },
+        { text: chosenLabel, onPress: () => handleSave(true) },
+      ]);
+      return;
+    }
+    // A contract may not specify any financial amount; let the contract
+    // verification form record an unknown amount without inventing CHF 0 due.
+    if (receiptType !== 'contract' && (!amt || amt <= 0)) {
       Alert.alert(t('scanner.invalidAmountTitle'), t('scanner.invalidAmountBody'));
       return;
     }
@@ -477,7 +513,7 @@ export default function ScannerModal() {
         params: {
           source: 'scan',
           title: title.trim(),
-          amount: String(amt),
+          amount: amt > 0 ? String(amt) : '',
           notes: note.trim(),
           photoUri: receiptData || '',
           category: category || 'abonnements',

@@ -52,7 +52,7 @@ jobs:
         run: |
           set -e
           for test in \
-            test-import test-contracts test-qrbill test-budgets-sync \
+            test-import test-contracts test-qrbill test-local-dates test-budgets-sync \
             test-budgets test-engine test-cloud-auth test-cloud-delete \
             test-task3 test-task4 test-task5 test-stability \
             test-premium test-pro-gating test-savings-tier \

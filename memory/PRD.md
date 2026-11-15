@@ -489,3 +489,9 @@ test
 - eas.json preprod : + APP_VARIANT, EXPO_PUBLIC_APP_VARIANT ; placeholder clé publique sb_publishable_ (à coller par l'utilisateur, jamais de secret commité).
 - OTA : runtimeVersion fingerprint + canal preprod → aucune MAJ croisée. Stockage local : sandbox séparée par bundle id distinct.
 - Tests : test-preprod.mjs 49/49 (dont 10 UNIT sur la config Expo RÉSOLUE réelle) ; budgets-sync 41/41, widgets 44/44, task4 94/94 ; tsc + lint OK ; app OK.
+
+## SYNCHRO GITHUB (fetch anonyme OK, push impossible sans jeton)
+- origin ajouté (https://github.com/alicavdija-budgy/budgy.git, dépôt lisible publiquement) ; fetch réel de origin/budgy-smart-4.0 (db3b10d7 : clé sb_publishable_ réelle + tests adaptés par ChatGPT).
+- Merge SANS force dans task4-siri → commit 61e84fcd ; budgy-smart-4.0 locale alignée (ff-only). Clé réelle conservée dans frontend/eas.json (sb_publishable_ confirmée), profil preprod/Budgy Test/Siri/widgets/StoreKit intacts (test-preprod 49/49, budgets-sync 41/41, config résolue revérifiée).
+- PUSH refusé : aucun identifiant GitHub dans le pod (fetch anonyme possible car dépôt public, écriture non) → la synchro vers GitHub passe par le bouton « Save to GitHub » de la plateforme.
+- Accès Expo toujours bloqué : compte technique Emergent sans accès @avdijaalic/budgy ; EXPO_TOKEN non fourni (carte passée) → AUCUNE compilation lancée.

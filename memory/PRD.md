@@ -340,3 +340,10 @@ test
 - Frontend : email-import via apiFetchJson (JWT) + 401/403 explicites ; swiss_qr_content → parseSwissQrBill ; persistAsInvoice bloque echec/0 CHF, champ montant obligatoire (import-amount-input) ; carte erreur OCR ; src/utils/amount.ts normalizeChfAmount (normalisation unique, budgets bascule dessus) ; i18n importErrors x4.
 - Tests : test-import.mjs 31/31 (module execute), python QR/PDF decode exact, qrbill 49/49, budgets 67/67, engine 23/23, stability 43/43.
 - ORDRE DES TÂCHES RESTANTES (validation utilisateur entre chaque) : 2 (contrats+pièce jointe+ShareIntentRouter), 3 (documentType strict + stockage privé users/{uid}/... + cloudSync mappings), 5 (conservation fichier facture + détail + doublons), 4 (Siri fiabilité confirmation/sync), 6 (observabilité+tests, transversale).
+
+## TÂCHE 1 complément audit — commit 974053a9
+- scanner-modal: handleQrSave + handleSave via normalizeChfAmount (plus aucun parseFloat).
+- amount.ts: groupes de milliers stricts quand 2 separateurs (1.2,34 / 12.3,45 rejetes ; 12.345,67 ok).
+- server.py: check EMERGENT_LLM_KEY deplace APRES decode Swiss QR (QR fonctionne sans OCR externe).
+- Divergence 73bda302 documentee: 9 commits distants recrees localement (2f8ecfce, verifie par stability 43/43). test-import 38/38.
+- EN ATTENTE: validation utilisateur pour TÂCHE 2.

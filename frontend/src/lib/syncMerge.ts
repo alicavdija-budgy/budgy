@@ -23,8 +23,19 @@ export type BudgyDocumentType = 'invoice' | 'contract' | 'expense_receipt' | 'un
 type Row = Record<string, any> & { id?: string };
 
 // ─── Hash stable de contenu ──────────────────────────────────
-// Champs volatils locaux ignorés (ne doivent pas déclencher de push).
-const VOLATILE_FIELDS = new Set(['synced']);
+// (P1 performances/intégrité) Champs LOCAUX ou BINAIRES ignorés : ils ne
+// sont jamais synchronisés en colonnes, ne doivent donc ni déclencher de
+// push, ni être recalculés (base64 volumineux) à chaque mutation du store.
+const VOLATILE_FIELDS = new Set([
+  'synced',          // marqueur local
+  'uploadError',     // état local d'envoi
+  'imageBase64',     // binaires → jamais en colonnes SQL
+  'pdfBase64',
+  'pages',
+  'fileUri',         // chemins locaux propres à l'appareil
+  'pdfUri',
+  'photoUri',
+]);
 
 export function stableStringify(obj: any): string {
   if (obj === null || typeof obj !== 'object') return JSON.stringify(obj);
@@ -55,6 +66,39 @@ export function diffDirty(items: Row[], syncedHashes: Record<string, string> | u
   const dirtyIds = new Set<string>();
   for (const id of Object.keys(hashes)) if (hashes[id] !== synced[id]) dirtyIds.add(id);
   return { dirtyIds, hashes };
+}
+
+// ─── Repli « legacy » avant migration (P0) ───────────────────
+// Quand seules les anciennes colonnes sont acceptées par le serveur, on ne
+// confirme QUE ce qui a réellement été envoyé : hash de la PROJECTION
+// legacy, préfixé 'L:'. Les champs étendus restent explicitement « en
+// attente de migration » et partiront après la migration additive, sans
+// boucle de push infinie (la projection inchangée n'est pas re-poussée).
+export function pickProjection(allowed: string[], row: Record<string, any>): Record<string, any> {
+  const out: Record<string, any> = {};
+  for (const f of allowed) if (row[f] !== undefined) out[f] = row[f];
+  return out;
+}
+
+export function legacyHashOf(snakeRow: Record<string, any>, legacyFields: string[]): string {
+  return 'L:' + hashItem(pickProjection(legacyFields, snakeRow));
+}
+
+/** Un élément est « propre » si sa version complète OU sa projection legacy a été confirmée. */
+export function isConfirmedHash(stored: string | undefined, fullHash: string, legacyHash?: string | null): boolean {
+  if (!stored) return false;
+  if (stored === fullHash) return true;
+  return !!legacyHash && stored === legacyHash;
+}
+
+// ─── Espace local isolé par compte (P0 — logout) ─────────────
+/**
+ * Documents dont les métadonnées ne sont PAS confirmées par le serveur :
+ * ils doivent être mis de côté (accountVault) au logout, jamais détruits.
+ */
+export function stashUnsyncedDocs<T extends Row>(documents: T[], confirmedHashes: Record<string, string> | undefined): T[] {
+  const { dirtyIds } = diffDirty(documents || [], confirmedHashes);
+  return (documents || []).filter((d) => d.id && dirtyIds.has(String(d.id)));
 }
 
 // ─── Tombstones (suppressions EXPLICITEMENT confirmées) ──────

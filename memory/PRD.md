@@ -384,3 +384,11 @@ test
 - §7: SQL revise (sync_tombstones + RLS, policies idempotentes DROP IF EXISTS, UPDATE avec WITH CHECK) — NON APPLIQUE.
 - Tests: test-task3 65/65 (34 unitaires REELLEMENT executes + 31 statiques), cloud-delete 21/21 (tombstone mocke), toutes suites vertes, E2E statuts cloud/echec. NON TESTE: 2 clients reels sur Storage (bucket non cree).
 - EN ATTENTE: validation utilisateur avant TÂCHE 5.
+
+## TÂCHE 3 — STABILISATION FINALE P0
+- P0 suppressions: tombstone sur TOUTES les suppressions locales (documents/contrats/factures/tickets/transactions via withTombstone), fichier original jamais purgé avant confirmation, échec tombstones visible (hors table absente pré-migration).
+- P0 legacy: confirmation limitée aux lignes envoyées ; repli legacy confirme la PROJECTION (L:hash) → champs étendus « en attente de migration » explicites (pendingMigration dans le résultat), zéro boucle, pull conserve les marqueurs L:.
+- P0 comptes: logout stashe les documents non synchronisés dans accountVault[uid] (espace isolé), restauration uniquement à la reconnexion du compte d origine (push+pull), file conservée si doc dans l espace isolé, retrait introuvable explicite.
+- P1: partage utilise l URI réellement récupérée (safeShareFile(uri)) ; queueUpload sur rattachement contrat + PDF caméra ; hash sans binaires (imageBase64/pages/pdfBase64/chemins locaux exclus) ; téléchargement contrôlé (statut 200 + taille attendue).
+- Tests: test-task3 91/91 (46 unitaires exécutés + 45 statiques), toutes suites vertes (budgets 67/67 après adaptation du garde-fou logout).
+- EN ATTENTE: validation utilisateur avant TÂCHE 5.

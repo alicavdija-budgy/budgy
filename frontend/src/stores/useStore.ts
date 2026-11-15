@@ -4,6 +4,7 @@
  */
 
 import { create } from 'zustand';
+import { stashUnsyncedDocs } from '../lib/syncMerge';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type {
@@ -148,6 +149,8 @@ interface AppState {
   clearSyncMarkers: () => void;
   setSyncAccountId: (uid: string | null) => void;
   addTombstone: (table: string, id: string) => void;
+  accountVault: Record<string, { documents: PersonalDocument[]; savedAt: number }>;
+  restoreAccountVault: (uid: string) => void;
   queueUpload: (docId: string) => void;
   dequeueUpload: (docId: string) => void;
 
@@ -203,6 +206,16 @@ const defaultPreferences: UserPreferences = {
   biometricEnabled: false,
 };
 
+// P0 — toute suppression locale est suivie durablement par un tombstone
+// associé au compte courant et au type d'objet (aucune suppression n'est
+// déduite d'une absence cloud ; les tombstones non envoyés restent en
+// attente dans le store persisté jusqu'à confirmation serveur).
+const withTombstone = (s: any, table: string, id: string) => {
+  const uid = s.syncAccountId || '';
+  const cur = (s.tombstones || {})[uid] || {};
+  return { ...(s.tombstones || {}), [uid]: { ...cur, [`${table}:${id}`]: Date.now() } };
+};
+
 export const useStore = create<AppState>()(
   persist(
     (set, get) => ({
@@ -229,6 +242,7 @@ export const useStore = create<AppState>()(
       syncedHashes: {},
       tombstones: {},
       syncAccountId: null,
+      accountVault: {},
       isOnline: true,
       isPro: false,
       documents: [],
@@ -265,6 +279,7 @@ export const useStore = create<AppState>()(
       
       deleteTransaction: (id) => set((state) => ({
         transactions: state.transactions.filter((t) => t.id !== id),
+        tombstones: withTombstone(state, 'transactions', id),
       })),
       
       // Pro expense actions
@@ -365,6 +380,7 @@ export const useStore = create<AppState>()(
       
       deleteContract: (id) => set((state) => ({
         contracts: state.contracts.filter((c) => c.id !== id),
+        tombstones: withTombstone(state, 'contracts', id),
       })),
       
       // Debt actions
@@ -422,6 +438,7 @@ export const useStore = create<AppState>()(
         receipts: [receipt, ...state.receipts],
       })),
       deleteReceipt: (id) => set((state) => ({
+        tombstones: withTombstone(state, 'receipts', id),
         receipts: state.receipts.filter((r) => r.id !== id),
       })),
       updateReceipt: (id, receipt) => set((state) => ({
@@ -436,6 +453,7 @@ export const useStore = create<AppState>()(
         invoices: state.invoices.map((i) => (i.id === id ? { ...i, ...invoice } : i)),
       })),
       deleteInvoice: (id) => set((state) => ({
+        tombstones: withTombstone(state, 'invoices', id),
         invoices: state.invoices.filter((i) => i.id !== id),
       })),
       markInvoicePaid: (id) => set((state) => ({
@@ -467,10 +485,14 @@ export const useStore = create<AppState>()(
         set((s) => ({
           documents: s.documents.map((d) => (d.id === id ? { ...d, ...doc, updatedAt: Date.now() } : d)),
         })),
+      // NB fichier original : le fichier du coffre local n'est PAS détruit
+      // ici — seule la fiche est retirée ; la purge physique n'intervient
+      // qu'après confirmation de la politique de suppression (jamais avant).
       deleteDocument: (id) =>
         set((s) => ({
           documents: s.documents.filter((d) => d.id !== id),
           pendingUploads: s.pendingUploads.filter((e: any) => (typeof e === 'string' ? e !== id : e.docId !== id)),
+          tombstones: withTombstone(s, 'documents', id),
         })),
 
       // TÂCHE 3 (audit) — suivi durable des mutations + tombstones + file
@@ -481,6 +503,22 @@ export const useStore = create<AppState>()(
         set((s) => ({ syncedHashes: { ...s.syncedHashes, [table]: hashes } })),
       clearSyncMarkers: () => set({ syncedHashes: {}, lastCloudPushAt: 0 }),
       setSyncAccountId: (uid) => set({ syncAccountId: uid }),
+      // P0 — reprise sécurisée : les documents non synchronisés mis de côté
+      // au logout sont restaurés UNIQUEMENT quand leur compte d'origine se
+      // reconnecte (jamais fusionnés dans un autre compte).
+      restoreAccountVault: (uid) =>
+        set((s) => {
+          const entry = s.accountVault[uid];
+          if (!entry || entry.documents.length === 0) {
+            if (!entry) return {};
+            const { [uid]: _drop, ...rest } = s.accountVault;
+            return { accountVault: rest };
+          }
+          const existing = new Set(s.documents.map((d) => d.id));
+          const restored = entry.documents.filter((d) => !existing.has(d.id));
+          const { [uid]: _gone, ...rest } = s.accountVault;
+          return { documents: [...restored, ...s.documents], accountVault: rest };
+        }),
       addTombstone: (table, id) =>
         set((s) => {
           const uid = s.syncAccountId || '';
@@ -566,6 +604,7 @@ export const useStore = create<AppState>()(
         syncedHashes: {},
         tombstones: {},
         syncAccountId: null,
+        accountVault: {},
         documents: [],
         groups: [],
         groupExpenses: [],
@@ -573,7 +612,17 @@ export const useStore = create<AppState>()(
         isPro: false,
       }),
       
-      logout: () => set({
+      logout: () => set((prev) => {
+        // P0 — JAMAIS détruire des documents non synchronisés : ils sont mis
+        // de côté dans un espace local durable isolé par compte (accountVault)
+        // et restaurés à la reconnexion de CE compte uniquement.
+        const uid = prev.syncAccountId || '';
+        const unsynced = uid ? stashUnsyncedDocs(prev.documents as any[], (prev.syncedHashes || {}).documents) : [];
+        const accountVault = uid && unsynced.length > 0
+          ? { ...prev.accountVault, [uid]: { documents: unsynced as PersonalDocument[], savedAt: Date.now() } }
+          : prev.accountVault;
+        return {
+        accountVault,
         user: null,
         isAuthenticated: false,
         isPro: false, // v3.9.0 Build 74: never leak Pro across accounts
@@ -605,6 +654,7 @@ export const useStore = create<AppState>()(
         groups: [],
         groupExpenses: [],
         groupSettlements: [],
+        };
       }),
     }),
     {

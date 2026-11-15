@@ -148,12 +148,24 @@ export async function processUploadQueue(): Promise<{ sent: number; left: number
     const uid = sess.session?.user.id;
     if (!uid) return { sent: 0, left: left() }; // jamais d'envoi hors session
     const st = useStore.getState();
+    const activeIds = new Set(st.documents.map((d) => d.id));
+    const vaultIds = new Set((st.accountVault[uid]?.documents || []).map((d) => d.id));
     const entries = queueForAccount(
       normalizeUploadQueue(st.pendingUploads as any[]),
       uid,
-      new Set(st.documents.map((d) => d.id)),
+      activeIds,
     );
     for (const e of entries) {
+      // P0 — document absent du store ACTIF mais présent dans l'espace isolé
+      // du compte (logout/relogin en cours) : la tâche d'envoi N'EST PAS
+      // supprimée, elle reprendra après restauration.
+      if (!activeIds.has(e.docId)) {
+        if (vaultIds.has(e.docId)) continue;
+        // introuvable partout → retrait EXPLICITE (consigné, pas silencieux)
+        console.warn('[documentStorage] upload abandonné, document introuvable:', e.docId);
+        useStore.getState().dequeueUpload(e.docId);
+        continue;
+      }
       if ((attemptCount[e.docId] || 0) >= MAX_ATTEMPTS_PER_SESSION) continue;
       attemptCount[e.docId] = (attemptCount[e.docId] || 0) + 1;
       const r = await uploadDocumentToCloud(e.docId);
@@ -218,10 +230,22 @@ export async function ensureLocalCopy(docId: string): Promise<{ uri: string; fro
     try { await FileSystem.makeDirectoryAsync(dir, { intermediates: true }); } catch {}
     const dest = `${dir}${docId}_cloud.${ext}`;
     const dl = await FileSystem.downloadAsync(signed, dest);
+    if (dl.status && dl.status !== 200) {
+      try { await FileSystem.deleteAsync(dl.uri, { idempotent: true }); } catch {}
+      return null; // réponse réseau invalide
+    }
     const info = await FileSystem.getInfoAsync(dl.uri, { size: true } as any);
-    if (!info.exists || !Number((info as any).size)) {
+    const gotSize = Number((info as any).size) || 0;
+    if (!info.exists || gotSize === 0) {
       try { await FileSystem.deleteAsync(dl.uri, { idempotent: true }); } catch {}
       return null; // téléchargement NON vérifié → pas annoncé récupéré
+    }
+    // (P1 intégrité) taille attendue connue → un fichier incomplet/corrompu
+    // est REFUSÉ et supprimé ; l'original local éventuel reste intouché.
+    const expected = Number((doc as any).fileSize) || 0;
+    if (expected > 0 && gotSize !== expected) {
+      try { await FileSystem.deleteAsync(dl.uri, { idempotent: true }); } catch {}
+      return null;
     }
     // Cache local durable pour la lecture hors ligne.
     useStore.getState().updateDocument(docId, (isPdf ? { pdfUri: dest } : { fileUri: dest }) as any);

@@ -19,7 +19,8 @@ const S = (name, cond) => { if (cond) { stat++; console.log(`  ✅ [STATIC] ${na
 const sm = await import(join(root, 'src/lib/syncMerge.ts'));
 const { mergeCollectionsV2, mergeItem, hashItem, computeHashes, diffDirty,
   docTypeOf, storagePathFor, sanitizeFileName, storageFolderFor,
-  normalizeUploadQueue, queueForAccount, tombstoneKey } = sm;
+  normalizeUploadQueue, queueForAccount, tombstoneKey,
+  legacyHashOf, isConfirmedHash, pickProjection, stashUnsyncedDocs } = sm;
 
 console.log('\n═══ TESTS UNITAIRES (exécution réelle) ═══');
 
@@ -113,6 +114,48 @@ console.log('\n— §6 Isolation de la file d\'envoi par compte —');
   U('entrée héritée adoptée seulement si le document existe localement', forA.some((e) => e.docId === 'legacy_doc') && !queueForAccount(q, 'userA', new Set(['docA'])).some((e) => e.docId === 'legacy_doc'));
 }
 
+console.log('\n— P0 Repli legacy : ne confirmer QUE ce qui est envoyé —');
+{
+  // ANCIEN SCHÉMA SIMULÉ : seules les colonnes legacy sont acceptées.
+  const legacyFields = ['id', 'user_id', 'title', 'category', 'created_at'];
+  const row = { id: 'd1', user_id: 'u1', title: 'Contrat', category: 'contracts', document_type: 'contract', remote_path: 'users/u1/contracts/d1/file.pdf', created_at: 1 };
+  const item = { id: 'd1', title: 'Contrat', category: 'contracts', documentType: 'contract', remotePath: 'users/u1/contracts/d1/file.pdf', createdAt: 1 };
+  const lH = legacyHashOf(row, legacyFields);
+  U('la projection legacy ignore les champs étendus', !JSON.stringify(pickProjection(legacyFields, row)).includes('remote_path'));
+  U('confirmation legacy ≠ confirmation complète', lH !== hashItem(item) && lH.startsWith('L:'));
+  // Rien de nouveau côté legacy → PAS de re-push en boucle avant migration…
+  U('pas de boucle infinie avant migration (projection inchangée = propre)', isConfirmedHash(lH, hashItem(item), legacyHashOf(row, legacyFields)));
+  // …mais un champ LEGACY modifié redevient dirty…
+  const row2 = { ...row, title: 'Contrat renommé' };
+  U('champ legacy modifié → re-poussé', !isConfirmedHash(lH, hashItem({ ...item, title: 'Contrat renommé' }), legacyHashOf(row2, legacyFields)));
+  // …et après MIGRATION (upsert complet accepté), la confirmation complète
+  // remplace le marqueur : plus rien en attente.
+  U('après migration : confirmation complète efface l\'attente', isConfirmedHash(hashItem(item), hashItem(item), null));
+  U('un marqueur legacy n\'est JAMAIS égal à un hash complet (succès partiel explicite)', !isConfirmedHash(hashItem(item), lH, null) || hashItem(item) !== lH);
+}
+
+console.log('\n— P0 Logout : documents non synchronisés préservés —');
+{
+  const docs = [
+    { id: 'synced', title: 'Déjà confirmé' },
+    { id: 'unsynced', title: 'Jamais confirmé', fileUri: 'file:///vault/u.pdf' },
+  ];
+  const confirmed = { synced: hashItem(docs[0]) };
+  const stash = stashUnsyncedDocs(docs, confirmed);
+  U('seuls les documents NON confirmés sont mis de côté', stash.length === 1 && stash[0].id === 'unsynced');
+  U('un document confirmé n\'est pas dupliqué dans l\'espace isolé', !stash.some((d) => d.id === 'synced'));
+  U('aucun document stashé si tout est confirmé', stashUnsyncedDocs([docs[0]], confirmed).length === 0);
+}
+
+console.log('\n— P1 Performance : binaires exclus du hash —');
+{
+  const a = { id: 'd', title: 'Doc', imageBase64: 'A'.repeat(10000), pages: ['B'.repeat(10000)], fileUri: 'file:///1.pdf', uploadError: undefined };
+  const b = { id: 'd', title: 'Doc', imageBase64: 'C'.repeat(50000), pages: ['D'], fileUri: 'file:///2.pdf', uploadError: 'too-large' };
+  U('base64/pages/chemins locaux ne déclenchent PAS de push (jamais en colonnes)', hashItem(a) === hashItem(b));
+  U('un champ SYNCHRONISÉ modifié déclenche toujours', hashItem({ ...a, title: 'X' }) !== hashItem(a));
+  U('remotePath (référence cloud) reste suivi', hashItem({ id: 'd', remotePath: 'p1' }) !== hashItem({ id: 'd', remotePath: 'p2' }));
+}
+
 console.log('\n— Relations et types (non-régression) —');
 {
   const m = mergeItem({ id: 'c1', documentId: 'doc_1', fileUri: 'file:///v/c1.pdf' }, { id: 'c1', documentId: null });
@@ -140,10 +183,16 @@ console.log('\n═══ CONTRÔLES STATIQUES ═══');
 console.log('\n— §1/§2 câblage synchro —');
 S('pull utilise mergeCollectionsV2 (dirty + tombstones)', cloud.includes('mergeCollectionsV2') && cloud.includes('tombstoneIds: tombIdsFor(table)'));
 S('plus AUCUNE inférence de suppression par lastCloudPushAt', !cloud.includes('lastPushAt') || !cloud.includes('mergeCollections((local'));
-S('push DELTA par hash (diffDirty) + confirmation serveur avant marquage', cloud.includes('diffDirty(items as any[]') && cloud.includes('if (confirmHashes) useStore.getState().setSyncedHashes'));
-S('le repli legacy confirme aussi après succès', cloud.split('setSyncedHashes(table, confirmHashes)').length >= 3);
+S('push DELTA par hash + confirmation serveur avant marquage', cloud.includes('if (isConfirmedHash(st, fullH,') && cloud.includes('const confirmPushed = (table: string'));
+S('P0 — confirmation limitée aux lignes réellement envoyées', cloud.includes('for (const r of rows) if (fullHashesById[String(r.id)])'));
+S('P0 — repli legacy confirme la PROJECTION (\'L:\'), pas le hash complet', cloud.includes('legacyHashOf(r, legacy)') && cloud.includes('pendingMigration.add(table)'));
+S('P0 — succès partiel explicite (pendingMigration dans le résultat)', cloud.includes('pendingMigration: [...pendingMigration]'));
+S('P0 — pull conserve les marqueurs legacy (champs en attente jamais perdus)', cloud.includes('wasLegacy && legacy ? legacyHashOf'));
+S('P0 — échec tombstones VISIBLE (hors table absente pré-migration)', cloud.includes('sync_tombstones: ${msg}'));
 S('tombstones poussés/tirés via sync_tombstones (toléré avant migration)', cloud.includes("upsertTable('sync_tombstones'") && cloud.includes("from('sync_tombstones')"));
 S('suppression confirmée → addTombstone (cloudDelete)', cdel.includes('addTombstone(table, id)'));
+S('P0 — tombstone sur TOUTES les suppressions locales (docs/contrats/factures/tickets/transactions)', ["'documents', id","'contracts', id","'invoices', id","'receipts', id","'transactions', id"].every((x) => store.includes(`withTombstone(s${''}tate, ${x})`) || store.includes(`withTombstone(s, ${x})`)));
+S('P0 — fichier original jamais détruit avant confirmation de la politique', store.includes('la purge physique n\'intervient'));
 S('détection de mutation par HASH DE CONTENU (autoSync)', auto.includes('computeHashes(s[k] || [])') && !auto.includes('txSum'));
 S('suivi durable persisté (syncedHashes/tombstones/syncAccountId)', ['syncedHashes: {}','tombstones: {}','syncAccountId: null'].every((x) => store.includes(x)));
 
@@ -160,6 +209,10 @@ S('lecture réellement branchée dans l\'écran (resolveAttachment)', docs.inclu
 S('3 états distincts : local / cloud / indisponible', dstore.includes("'local' | 'cloud' | 'missing'") && docs.includes('docFileStatus'));
 S('jamais annoncé récupérable sans téléchargement vérifié', dstore.includes('pas annoncé récupéré'));
 S('cache local durable hors ligne après récupération', dstore.includes('_cloud.'));
+S('P1 — partage utilise le fichier RÉELLEMENT récupéré (uri résolue)', docs.includes('const r = await safeShareFile(uri,'));
+S('P1 — rattachement ancien contrat → file d\'envoi', docs.includes('queueUpload(docId); // pièce durable'));
+S('P1 — PDF généré (caméra) → file d\'envoi ; sans fichier, rien d\'annoncé', docs.includes('if (pdfUri) queueUpload(newDocId);'));
+S('P1 — téléchargement : statut réseau + taille attendue contrôlés', dstore.includes('dl.status && dl.status !== 200') && dstore.includes('gotSize !== expected'));
 
 console.log('\n— §5 file d\'envoi fiable —');
 S('reprise au démarrage + retour réseau + après push', auto.includes("setTimeout(() => { attemptPush(); }, 4000)") && auto.includes('st.isOnline && !wasOnline') && auto.includes('processUploadQueue'));
@@ -172,6 +225,10 @@ S('logout réinitialise les marqueurs (jamais transférés)', store.includes('sy
 S('file/tombstones conservés taggés par compte au logout', store.includes('pendingUploads/tombstones conservés'));
 S('changement de compte → clearSyncMarkers avant push ET pull', cloud.split('clearSyncMarkers()').length >= 3);
 S('queueUpload tague le compte courant', store.includes('const accountId = s.syncAccountId'));
+S('P0 — logout stashe les documents non synchronisés (accountVault)', store.includes('stashUnsyncedDocs(prev.documents'));
+S('P0 — restauration UNIQUEMENT pour le compte d\'origine (push et pull)', cloud.split('restoreAccountVault(userId)').length >= 3);
+S('P0 — tâche d\'envoi conservée si le document est dans l\'espace isolé', dstore.includes('if (vaultIds.has(e.docId)) continue;'));
+S('P0 — retrait de file introuvable = explicite, consigné', dstore.includes('upload abandonné, document introuvable'));
 
 console.log('\n— §7 SQL révisé (non appliqué) —');
 S('table sync_tombstones + RLS propriétaire', mig.includes('CREATE TABLE IF NOT EXISTS public.sync_tombstones') && mig.includes('tombstones_owner_select'));

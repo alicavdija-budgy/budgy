@@ -68,7 +68,7 @@ export default function DocumentsScreen() {
   const locale = DATE_LOCALES[lang];
   const FILTERS = useMemo(() => FILTER_KEYS.map((f) => ({ id: f.id, label: t(`documents.${f.tKey}`), emoji: f.emoji })), [t]);
   const CATEGORIES = useMemo(() => CATEGORY_KEYS.map((c) => ({ id: c.id, label: t(`documents.${c.tKey}`), emoji: c.emoji, color: c.color })), [t]);
-  const { documents, addDocument, updateDocument, deleteDocument, contracts, updateContract, deleteContract } = useStore();
+  const { documents, addDocument, updateDocument, deleteDocument, contracts, updateContract, deleteContract, queueUpload } = useStore();
   // TÂCHE 2 — arrivée depuis l'import (« Voir mes contrats »)
   const incoming = useLocalSearchParams<{ filter?: string }>();
   const [permission, requestPermission] = useCameraPermissions();
@@ -177,8 +177,20 @@ export default function DocumentsScreen() {
   };
   const shareContractPdf = async (doc?: PersonalDocument) => {
     const uri = await resolveAttachment(doc);
-    if (!uri) return;
-    await sharePdf(doc as any);
+    if (!uri || !doc) return;
+    try {
+      const { safeShareFile } = await import('../../src/lib/safeShare');
+      const isPdf = (doc.mimeType || '').includes('pdf') || uri.toLowerCase().includes('.pdf');
+      const r = await safeShareFile(uri, {
+        mimeType: (doc.mimeType || (isPdf ? 'application/pdf' : 'image/jpeg')) as any,
+        mime: doc.mimeType || (isPdf ? 'application/pdf' : 'image/jpeg'),
+        name: doc.title || 'document',
+        dialogTitle: doc.title,
+      } as any);
+      if (!r.ok && r.error) Alert.alert(t('documents.shareFailedTitle'), r.error);
+    } catch (e: any) {
+      Alert.alert(t('documents.errorTitle'), e?.message || t('documents.shareFailedFallback'));
+    }
   };
   /** Rattacher un fichier à un ANCIEN contrat sans pièce jointe. */
   const attachFileToContract = async (contractId: string) => {
@@ -199,10 +211,13 @@ export default function DocumentsScreen() {
         pdfUri: isPdf ? vaultUri : undefined,
         fileUri: isPdf ? undefined : vaultUri,
         mimeType: f.mimeType,
+        documentType: 'contract',
+        importedAt: now,
         tags: ['contract'],
         createdAt: now,
         updatedAt: now,
       } as any);
+      queueUpload(docId); // pièce durable → synchronisation documentaire
       updateContract(contractId, { documentId: docId });
       Alert.alert(t('common.success'), t('contractsV2.attached'));
     } catch (e: any) {
@@ -447,8 +462,9 @@ ${pageDataUrls.map((src, i) => `
         pdfBase64 = r.pdfBase64;
       }
       const tags = tagsInput.split(',').map((t) => t.trim()).filter(Boolean);
+      const newDocId = `doc_${Date.now()}`;
       addDocument({
-        id: `doc_${Date.now()}`,
+        id: newDocId,
         title: title.trim(),
         category,
         imageBase64: pages[0],            // first page as thumbnail
@@ -461,6 +477,9 @@ ${pageDataUrls.map((src, i) => `
         createdAt: Date.now(),
         updatedAt: Date.now(),
       });
+      // P1 — fichier durable (PDF natif) → file d'envoi ; sans fichier,
+      // rien n'est annoncé « transféré » (statut « indisponible » affiché).
+      if (pdfUri) queueUpload(newDocId);
       try { await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
       // reset
       setTitle(''); setNote(''); setExpiresAt(''); setTagsInput('');

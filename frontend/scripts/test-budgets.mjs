@@ -121,7 +121,7 @@ check('budgets.tsx réutilise parseDate (cohérence fuseau avec Accueil)',
   budgetsSrc2.includes("import { parseDate } from '../../src/stores/selectors'") &&
   budgetsSrc2.includes('parseDate(tx.date)'));
 check('logout() purge aussi transactions/dettes/factures (fail-safe inter-comptes)',
-  /logout: \(\) => set\(\{[\s\S]*?transactions: \[\],[\s\S]*?debts: \[\],[\s\S]*?invoices: \[\],/.test(storeSrc));
+  /logout: \(\) => set\(\((prev)?\)?[\s\S]{0,1500}?transactions: \[\],[\s\S]*?debts: \[\],[\s\S]*?invoices: \[\],/.test(storeSrc));
 check('listener SIGNED_OUT global dans _layout (purge session expirée/révoquée)',
   layoutSrc.includes("onAuthStateChange") && layoutSrc.includes("'SIGNED_OUT'") === false
     ? layoutSrc.includes('SIGNED_OUT')

@@ -16,7 +16,7 @@
  */
 
 import { getSupabase, isSupabaseConfigured } from '../lib/supabase';
-import { mergeCollectionsV2, diffDirty, tombstoneKey } from '../lib/syncMerge';
+import { mergeCollectionsV2, diffDirty, hashItem, legacyHashOf, isConfirmedHash } from '../lib/syncMerge';
 import { useStore } from '../stores/useStore';
 import type {
   Transaction,
@@ -162,6 +162,8 @@ export async function pushAllToCloud(): Promise<{
   ok: boolean;
   pushed: number;
   error?: string;
+  /** P0 — tables dont certaines métadonnées attendent la migration additive (succès PARTIEL explicite). */
+  pendingMigration?: string[];
 }> {
   if (!isSupabaseConfigured()) return { ok: false, pushed: 0, error: 'Supabase non configuré' };
   const sb = getSupabase();
@@ -176,6 +178,9 @@ export async function pushAllToCloud(): Promise<{
   // les marqueurs de l'ancien compte ne sont JAMAIS réutilisés.
   if (s.syncAccountId && s.syncAccountId !== userId) s.clearSyncMarkers();
   if (s.syncAccountId !== userId) s.setSyncAccountId(userId);
+  // P0 — reprise sécurisée : documents non synchronisés mis de côté au
+  // logout de CE compte → restaurés avant le push.
+  useStore.getState().restoreAccountVault(userId);
   let total = 0;
   const errors: string[] = [];
 
@@ -184,7 +189,12 @@ export async function pushAllToCloud(): Promise<{
   // schema drift like extra columns rejected by PGRST204) threw and aborted
   // the whole push, causing transactions to never reach the cloud and the
   // user's data to "disappear" on reload.
-  const safeUpsert = async (table: string, rows: any[], confirmHashes?: Record<string, string>) => {
+  const confirmPushed = (table: string, map: Record<string, string>) => {
+    const cur = useStore.getState().syncedHashes[table] || {};
+    useStore.getState().setSyncedHashes(table, { ...cur, ...map });
+  };
+
+  const safeUpsert = async (table: string, rows: any[], fullHashesById: Record<string, string>) => {
     if (rows.length === 0) return;
     try {
       // Strict per-table column whitelist + correct PK for upsert conflict
@@ -192,19 +202,27 @@ export async function pushAllToCloud(): Promise<{
       const conflictCol = TABLE_CONFLICT[table] || 'id';
       await upsertTable(table, filtered, conflictCol);
       total += rows.length;
-      // TÂCHE 3 (audit §1) — marqué « synchronisé » UNIQUEMENT après
-      // confirmation effective du serveur (aucune erreur levée).
-      if (confirmHashes) useStore.getState().setSyncedHashes(table, confirmHashes);
+      // P0 — marqué « synchronisé » UNIQUEMENT après confirmation effective
+      // du serveur, et SEULEMENT pour les lignes réellement envoyées.
+      const confirmed: Record<string, string> = {};
+      for (const r of rows) if (fullHashesById[String(r.id)]) confirmed[String(r.id)] = fullHashesById[String(r.id)];
+      confirmPushed(table, confirmed);
     } catch (e: any) {
       const msg = e?.message || String(e);
-      // TÂCHE 3 — repli legacy avant migration : colonnes additives absentes
+      // P0 — repli legacy avant migration : seules les ANCIENNES colonnes
+      // sont acceptées → on ne confirme QUE la projection legacy ('L:'+hash).
+      // Les champs étendus restent explicitement « en attente de migration »
+      // et seront poussés après la migration additive, sans boucle infinie.
       const legacy = TABLE_FIELDS_LEGACY[table];
       if (legacy && isMissingColumnError(msg)) {
         try {
           const filtered = rows.map((r) => pickAllowed(legacy, r));
           await upsertTable(table, filtered, TABLE_CONFLICT[table] || 'id');
           total += rows.length;
-          if (confirmHashes) useStore.getState().setSyncedHashes(table, confirmHashes);
+          const confirmed: Record<string, string> = {};
+          for (const r of rows) confirmed[String(r.id)] = legacyHashOf(r, legacy);
+          confirmPushed(table, confirmed);
+          pendingMigration.add(table);
           return;
         } catch (e2: any) {
           errors.push(`${table}: ${e2?.message || String(e2)}`);
@@ -228,7 +246,7 @@ export async function pushAllToCloud(): Promise<{
     onboarded: !!p.onboarded,
     is_pro: !!(s as any).isPro,
   };
-  await safeUpsert('user_preferences', [prefsRow]);
+  await safeUpsert('user_preferences', [prefsRow], {});
 
   // 2-N collections
   const collections: [string, any[]][] = [
@@ -246,20 +264,33 @@ export async function pushAllToCloud(): Promise<{
     ['expense_groups', s.groups],
     ['group_expenses', s.groupExpenses],
   ];
-  // TÂCHE 3 (audit §1/§2) — PUSH DELTA : seuls les éléments dont le hash de
-  // contenu diffère de la dernière version confirmée sont envoyés. Détecte
-  // renommages, catégories, dates, liens documentaires — pas seulement les
-  // montants. En cas d'échec au milieu du push, les hashes de la table en
-  // échec ne sont PAS avancés : les éléments restent « dirty » et repartent
-  // au prochain cycle.
+  // PUSH DELTA : seuls les éléments dont le contenu diffère de la dernière
+  // version CONFIRMÉE sont envoyés. Une confirmation 'L:' (projection legacy)
+  // reste valable tant que les champs legacy ne changent pas — les champs
+  // étendus demeurent « en attente de migration » sans re-push en boucle.
+  // Échec au milieu d'un push → la table en échec ne confirme rien, ses
+  // éléments restent dirty et repartent au prochain cycle.
   const syncedHashes = useStore.getState().syncedHashes;
+  const pendingMigration = new Set<string>();
   for (const [table, items] of collections) {
     if (!items || items.length === 0) continue;
-    const { dirtyIds, hashes } = diffDirty(items as any[], syncedHashes[table]);
-    if (dirtyIds.size === 0) continue;
-    const dirtyItems = (items as any[]).filter((it) => dirtyIds.has(String(it.id)));
+    const stored = syncedHashes[table] || {};
+    const legacy = TABLE_FIELDS_LEGACY[table];
+    const dirtyItems: any[] = [];
+    const fullHashesById: Record<string, string> = {};
+    for (const it of items as any[]) {
+      const id = String(it.id);
+      const row = toRow(snake(it), userId);
+      const fullH = hashItem(it);
+      fullHashesById[id] = fullH;
+      const st = stored[id];
+      if (st && st.startsWith('L:')) pendingMigration.add(table);
+      if (isConfirmedHash(st, fullH, legacy ? legacyHashOf(row, legacy) : null)) continue;
+      dirtyItems.push(it);
+    }
+    if (dirtyItems.length === 0) continue;
     const rows = dirtyItems.map((it) => toRow(snake(it), userId));
-    await safeUpsert(table, rows, hashes);
+    await safeUpsert(table, rows, fullHashesById);
   }
 
   // TÂCHE 3 (audit §1) — tombstones : suppressions EXPLICITES propagées via
@@ -274,16 +305,26 @@ export async function pushAllToCloud(): Promise<{
       deleted_at: at,
     }));
     if (rows.length > 0) await upsertTable('sync_tombstones', rows, 'id');
-  } catch {}
+  } catch (e: any) {
+    const msg = e?.message || String(e);
+    // Table absente avant migration = attendu (les tombstones restent en
+    // attente, persistés localement) ; toute AUTRE erreur est VISIBLE.
+    if (!isMissingColumnError(msg) && !/does not exist|relation|schema cache|404/i.test(msg)) {
+      errors.push(`sync_tombstones: ${msg}`);
+    }
+  }
 
   if (errors.length > 0) {
     // Partial success: we still pushed what we could. lastCloudPushAt n'est
     // PAS avancé : les éléments des tables en échec restent protégés au pull.
     return { ok: total > 0, pushed: total, error: errors.join(' | ') };
   }
-  // Push COMPLET réussi → un pull ultérieur peut assumer que tout élément
-  // local absent du cloud et antérieur à ce moment a été supprimé ailleurs.
   useStore.getState().markCloudPushed(Date.now());
+  if (pendingMigration.size > 0) {
+    // P0 — succès PARTIEL explicite : certaines métadonnées attendent la
+    // migration additive (jamais présenté comme une synchro complète).
+    return { ok: true, pushed: total, pendingMigration: [...pendingMigration] };
+  }
   return { ok: true, pushed: total };
 }
 
@@ -363,6 +404,7 @@ export async function pullAllFromCloud(): Promise<{ ok: boolean; pulled: number;
     //  • champ NULL/absent côté cloud → valeur locale préservée.
     if (cur.syncAccountId && cur.syncAccountId !== userId) cur.clearSyncMarkers();
     if (cur.syncAccountId !== userId) cur.setSyncAccountId(userId);
+    useStore.getState().restoreAccountVault(userId);
 
     // Tombstones distants (suppressions confirmées sur d'autres appareils).
     let remoteTombs: { entity_key?: string; deleted_at?: number }[] = [];
@@ -394,17 +436,31 @@ export async function pullAllFromCloud(): Promise<{ ok: boolean; pulled: number;
     const postPullHashes: Record<string, Record<string, string>> = {};
     const mg = <T,>(stateKey: string, local: T[], remote: any[]): T[] => {
       const table = TABLE_OF[stateKey];
-      const { dirtyIds } = diffDirty((local || []) as any[], stateHashes[table]);
+      const stored = stateHashes[table] || {};
+      const legacy = TABLE_FIELDS_LEGACY[table];
+      // « dirty » = modification locale non confirmée, en tenant compte des
+      // confirmations partielles 'L:' (projection legacy avant migration).
+      const dirtyIds = new Set<string>();
+      for (const it of (local || []) as any[]) {
+        const id = String(it.id);
+        const lh = legacy ? legacyHashOf(toRow(snake(it), userId), legacy) : null;
+        if (!isConfirmedHash(stored[id], hashItem(it), lh)) dirtyIds.add(id);
+      }
       const res = mergeCollectionsV2((local || []) as any[], remote as any[], {
         dirtyIds,
         tombstoneIds: tombIdsFor(table),
       });
-      // Les éléments NON dirty sont désormais alignés sur le cloud → leur
-      // hash devient la version confirmée ; les dirty restent à pousser.
-      const { hashes } = diffDirty(res.merged as any[], {});
+      // Les éléments NON dirty sont alignés sur le cloud → confirmés. Un
+      // marqueur 'L:' est CONSERVÉ (recalculé sur l'élément fusionné) : les
+      // champs étendus restent « en attente de migration », jamais perdus.
       const confirmed: Record<string, string> = {};
-      for (const [id, h] of Object.entries(hashes)) if (!dirtyIds.has(id)) confirmed[id] = h;
-      postPullHashes[table] = { ...(stateHashes[table] || {}), ...confirmed };
+      for (const m of res.merged as any[]) {
+        const id = String(m.id);
+        if (dirtyIds.has(id)) continue;
+        const wasLegacy = (stored[id] || '').startsWith('L:');
+        confirmed[id] = wasLegacy && legacy ? legacyHashOf(toRow(snake(m), userId), legacy) : hashItem(m);
+      }
+      postPullHashes[table] = { ...stored, ...confirmed };
       return res.merged as T[];
     };
     useStore.setState({

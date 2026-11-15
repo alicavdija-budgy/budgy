@@ -283,7 +283,8 @@ export interface PersonalDocument {
   importedAt?: number;              // date d'import réelle
   fileSize?: number;                // taille vérifiée (octets)
   remotePath?: string;              // chemin Storage privé (JAMAIS une URL signée)
-  remoteUploadedAt?: number;        // confirmé par le serveur uniquement          // TÂCHE 2 : type MIME du fichier original
+  remoteUploadedAt?: number;        // confirmé par le serveur uniquement
+  uploadError?: string;             // ex: fichier local manquant (informatif, jamais silencieux)          // TÂCHE 2 : type MIME du fichier original
   tags: string[];
   note?: string;
   expiresAt?: string;          // YYYY-MM-DD optional expiration

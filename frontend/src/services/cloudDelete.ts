@@ -19,6 +19,7 @@
  * proExpenses are not cloud-synced and are untouched.
  */
 
+import { useStore } from '../stores/useStore';
 import { getSupabase, isSupabaseConfigured } from '../lib/supabase';
 
 export type CloudDeleteTable = 'transactions' | 'invoices' | 'recurring_expenses';
@@ -164,6 +165,12 @@ export async function deleteEntityWithCloud(
   deps: CloudDeleteDeps = defaultDeps
 ): Promise<CloudDeleteResult> {
   const res = await deleteFromCloud(table, id, deps);
-  if (res.ok) removeLocally();
+  if (res.ok) {
+    removeLocally();
+    // TÂCHE 3 (audit §1) — tombstone EXPLICITE : la suppression confirmée ne
+    // pourra jamais être « ressuscitée » par un pull, et sera propagée aux
+    // autres appareils via sync_tombstones (après migration).
+    try { useStore.getState().addTombstone(table, id); } catch {}
+  }
   return res;
 }

@@ -1,27 +1,69 @@
 // ─────────────────────────────────────────────────────────────
-// TÂCHE 3 — Fusion de synchronisation SANS PERTE + types documentaires.
-// Fonctions PURES (aucune dépendance RN/Supabase) : testables en vrai
-// via Node (exécution réelle dans scripts/test-task3.mjs).
+// TÂCHE 3 (audit) — Synchronisation SANS PERTE, v2.
+// Fonctions PURES (aucune dépendance RN/Supabase) : exécutées telles
+// quelles par Node dans scripts/test-task3.mjs (vrais tests de comportement).
 //
-// Stratégie de conflit EXPLICITE :
-//  • élément présent des deux côtés → le cloud gagne champ par champ,
-//    MAIS un champ absent/NULL côté cloud n'écrase JAMAIS une valeur
-//    locale (ex: file_uri avant migration, pièces locales non migrées) ;
-//  • élément UNIQUEMENT local → conservé s'il est plus récent que le
-//    dernier push COMPLET réussi (jamais écrasé par un pull), supprimé
-//    seulement s'il avait déjà été poussé (= suppression distante) ;
-//  • lastPushAt = 0 (jamais poussé) → TOUT le local est conservé.
+// Principes (déterministes, documentés) :
+//  • SUIVI DURABLE : `syncedHashes` (persisté) contient le hash de la
+//    dernière version de chaque élément CONFIRMÉE par le serveur.
+//    dirty = hash local ≠ hash confirmé → modification non synchronisée.
+//  • CONFLIT : un élément local « dirty » GAGNE TOUJOURS sur le cloud
+//    (sa version sera poussée ensuite) ; un élément propre est mis à
+//    jour champ par champ, un champ NULL/absent côté cloud n'écrasant
+//    JAMAIS une valeur locale.
+//  • SUPPRESSION : JAMAIS déduite de l'absence dans une réponse cloud.
+//    Seuls des TOMBSTONES explicites (suppression confirmée) suppriment
+//    ou empêchent la résurrection d'un élément.
+//  • Aucune dépendance aux horloges des appareils pour décider d'une
+//    suppression ou d'un conflit (les hashes remplacent lastPushAt).
 // ─────────────────────────────────────────────────────────────
 
 export type BudgyDocumentType = 'invoice' | 'contract' | 'expense_receipt' | 'unclassified';
 
-// Marge de sécurité : un élément créé juste avant le push est considéré
-// comme potentiellement non poussé (horloges/debounce).
-const PUSH_MARGIN_MS = 60_000;
+type Row = Record<string, any> & { id?: string };
 
-type Row = Record<string, any> & { id?: string; createdAt?: number; updatedAt?: number };
+// ─── Hash stable de contenu ──────────────────────────────────
+// Champs volatils locaux ignorés (ne doivent pas déclencher de push).
+const VOLATILE_FIELDS = new Set(['synced']);
 
-/** Le distant gagne, sauf quand il est null/undefined : le local est préservé. */
+export function stableStringify(obj: any): string {
+  if (obj === null || typeof obj !== 'object') return JSON.stringify(obj);
+  if (Array.isArray(obj)) return `[${obj.map(stableStringify).join(',')}]`;
+  const keys = Object.keys(obj).filter((k) => obj[k] !== undefined && !VOLATILE_FIELDS.has(k)).sort();
+  return `{${keys.map((k) => `${JSON.stringify(k)}:${stableStringify(obj[k])}`).join(',')}}`;
+}
+
+/** Hash djb2 du contenu — détecte renommages, catégories, liens, dates… */
+export function hashItem(obj: any): string {
+  const str = stableStringify(obj);
+  let h = 5381;
+  for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36) + ':' + str.length.toString(36);
+}
+
+export function computeHashes(items: Row[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const it of items || []) if (it && it.id) out[String(it.id)] = hashItem(it);
+  return out;
+}
+
+/** Éléments créés/modifiés localement et non encore confirmés par le serveur. */
+export function diffDirty(items: Row[], syncedHashes: Record<string, string> | undefined):
+  { dirtyIds: Set<string>; hashes: Record<string, string> } {
+  const hashes = computeHashes(items);
+  const synced = syncedHashes || {};
+  const dirtyIds = new Set<string>();
+  for (const id of Object.keys(hashes)) if (hashes[id] !== synced[id]) dirtyIds.add(id);
+  return { dirtyIds, hashes };
+}
+
+// ─── Tombstones (suppressions EXPLICITEMENT confirmées) ──────
+export function tombstoneKey(table: string, id: string): string {
+  return `${table}:${id}`;
+}
+
+// ─── Fusion pull SANS PERTE ──────────────────────────────────
+/** Le distant gagne champ par champ, sauf NULL/absent : le local est préservé. */
 export function mergeItem<T extends Row>(local: T, remote: T): T {
   const out: any = { ...local };
   for (const k of Object.keys(remote)) {
@@ -31,39 +73,66 @@ export function mergeItem<T extends Row>(local: T, remote: T): T {
   return out as T;
 }
 
-function itemTs(it: Row): number {
-  return Math.max(Number(it.updatedAt) || 0, Number(it.createdAt) || 0);
-}
-
-export function mergeCollections<T extends Row>(
+export function mergeCollectionsV2<T extends Row>(
   local: T[],
   remote: T[],
-  lastPushAt: number,
-): { merged: T[]; preservedLocal: number } {
+  opts: { dirtyIds: Set<string>; tombstoneIds: Set<string> },
+): { merged: T[]; preservedLocal: number; protectedDirty: number; removedByTombstone: number } {
+  const { dirtyIds, tombstoneIds } = opts;
   const localById = new Map<string, T>();
   for (const l of local || []) if (l && l.id) localById.set(String(l.id), l);
   const remoteIds = new Set<string>();
 
-  const merged: T[] = (remote || []).map((r) => {
+  let protectedDirty = 0;
+  let removedByTombstone = 0;
+  const merged: T[] = [];
+
+  for (const r of remote || []) {
     const id = String(r.id);
     remoteIds.add(id);
+    if (tombstoneIds.has(id)) { removedByTombstone++; continue; } // pas de résurrection
     const l = localById.get(id);
-    return l ? mergeItem(l, r) : r;
-  });
+    if (!l) { merged.push(r); continue; }
+    if (dirtyIds.has(id)) { merged.push(l); protectedDirty++; continue; } // local non confirmé → GAGNE
+    merged.push(mergeItem(l, r));
+  }
 
+  // Éléments UNIQUEMENT locaux : TOUJOURS conservés (absence ≠ suppression),
+  // sauf tombstone explicite (suppression confirmée appliquée localement).
   let preservedLocal = 0;
   const kept: T[] = [];
   for (const l of local || []) {
     if (!l || !l.id || remoteIds.has(String(l.id))) continue;
-    const neverPushed = !lastPushAt || lastPushAt <= 0;
-    const newerThanPush = itemTs(l) > lastPushAt - PUSH_MARGIN_MS;
-    if (neverPushed || newerThanPush) {
-      kept.push(l);
-      preservedLocal += 1;
-    }
-    // sinon : déjà poussé puis absent du cloud → suppression distante assumée
+    if (tombstoneIds.has(String(l.id))) { removedByTombstone++; continue; }
+    kept.push(l);
+    preservedLocal++;
   }
-  return { merged: [...kept, ...merged], preservedLocal };
+  return { merged: [...kept, ...merged], preservedLocal, protectedDirty, removedByTombstone };
+}
+
+// ─── File d'envoi des pièces jointes (isolée par compte) ─────
+export type UploadEntry = { docId: string; accountId: string };
+
+/** Compatibilité : anciennes entrées `string` → entrée non attribuée (''). */
+export function normalizeUploadQueue(raw: any[]): UploadEntry[] {
+  const out: UploadEntry[] = [];
+  for (const e of raw || []) {
+    if (typeof e === 'string') out.push({ docId: e, accountId: '' });
+    else if (e && typeof e.docId === 'string') out.push({ docId: e.docId, accountId: e.accountId || '' });
+  }
+  return out;
+}
+
+/**
+ * Une pièce du compte A n'est JAMAIS envoyée sous la session du compte B.
+ * Les entrées héritées sans compte ('') sont adoptées par le compte courant
+ * UNIQUEMENT si le document existe encore localement (appareil mono-compte
+ * d'avant le correctif) — comportement documenté et déterministe.
+ */
+export function queueForAccount(entries: UploadEntry[], uid: string, localDocIds: Set<string>): UploadEntry[] {
+  return (entries || []).filter((e) =>
+    e.accountId === uid || (e.accountId === '' && localDocIds.has(e.docId)),
+  );
 }
 
 // ─── Types documentaires (Factures / Contrats / Tickets) ─────

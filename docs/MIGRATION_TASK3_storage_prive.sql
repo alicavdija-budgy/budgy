@@ -15,10 +15,10 @@
 -- (les binaires base64 ne vont PAS en colonnes : ils vont dans Storage)
 ALTER TABLE public.documents ADD COLUMN IF NOT EXISTS document_type text
   CHECK (document_type IN ('invoice','contract','expense_receipt','unclassified'));
-ALTER TABLE public.documents ADD COLUMN IF NOT EXISTS file_uri text;
-ALTER TABLE public.documents ADD COLUMN IF NOT EXISTS pdf_uri text;
+-- (audit §4) file_uri / pdf_uri / pages NE SONT PAS migrés : chemins locaux
+-- propres à un appareil et pages base64 restent locaux ; seuls remote_path
+-- (référence Storage) et les métadonnées portables sont synchronisés.
 ALTER TABLE public.documents ADD COLUMN IF NOT EXISTS mime_type text;
-ALTER TABLE public.documents ADD COLUMN IF NOT EXISTS pages jsonb;
 ALTER TABLE public.documents ADD COLUMN IF NOT EXISTS tags jsonb;
 ALTER TABLE public.documents ADD COLUMN IF NOT EXISTS note text;
 ALTER TABLE public.documents ADD COLUMN IF NOT EXISTS remote_path text;   -- chemin Storage (PAS une URL signée)
@@ -33,7 +33,7 @@ UPDATE public.documents SET document_type = 'unclassified' WHERE document_type I
 
 -- contracts : lien vers le document d'origine (relation additive Tâche 2/3).
 ALTER TABLE public.contracts ADD COLUMN IF NOT EXISTS document_id text;
-ALTER TABLE public.contracts ADD COLUMN IF NOT EXISTS photo_uri text;
+-- (audit §4) photo_uri non migré : chemin local propre à un appareil.
 ALTER TABLE public.contracts ADD COLUMN IF NOT EXISTS notice_period text;
 
 -- invoices : champs jusqu'ici perdus à la synchro.
@@ -55,6 +55,30 @@ ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS invoice_id text;
 ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS debt_id text;
 ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS recurring_id text;
 
+-- ─── A bis. Tombstones de synchronisation (audit §1) ─────────────
+-- Une suppression n'est JAMAIS déduite de l'absence d'un élément dans une
+-- réponse : elle est propagée EXPLICITEMENT via cette table.
+CREATE TABLE IF NOT EXISTS public.sync_tombstones (
+  id text PRIMARY KEY,                   -- `${user_id}:${table}:${item_id}`
+  user_id uuid NOT NULL,
+  entity_key text NOT NULL,              -- `${table}:${item_id}`
+  deleted_at bigint NOT NULL,            -- epoch ms (cohérent avec createdAt TS)
+  created_at timestamptz DEFAULT now()
+);
+ALTER TABLE public.sync_tombstones ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "tombstones_owner_select" ON public.sync_tombstones;
+CREATE POLICY "tombstones_owner_select" ON public.sync_tombstones FOR SELECT TO authenticated
+  USING (user_id = auth.uid());
+DROP POLICY IF EXISTS "tombstones_owner_insert" ON public.sync_tombstones;
+CREATE POLICY "tombstones_owner_insert" ON public.sync_tombstones FOR INSERT TO authenticated
+  WITH CHECK (user_id = auth.uid());
+DROP POLICY IF EXISTS "tombstones_owner_update" ON public.sync_tombstones;
+CREATE POLICY "tombstones_owner_update" ON public.sync_tombstones FOR UPDATE TO authenticated
+  USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+DROP POLICY IF EXISTS "tombstones_owner_delete" ON public.sync_tombstones;
+CREATE POLICY "tombstones_owner_delete" ON public.sync_tombstones FOR DELETE TO authenticated
+  USING (user_id = auth.uid());
+
 -- ─── B. Bucket Storage PRIVÉ + policies propriétaire ─────────────
 -- Arborescence : users/{uid}/invoices|contracts|expense-receipts/{documentId}/…
 -- L'identité vient de auth.uid() (session vérifiée côté serveur), jamais du client.
@@ -67,20 +91,30 @@ VALUES (
 ON CONFLICT (id) DO NOTHING;
 
 -- Lecture/écriture/suppression limitées AU PROPRIÉTAIRE du dossier users/{uid}/…
+-- Idempotent : DROP IF EXISTS avant chaque CREATE (ré-exécution sans erreur).
+DROP POLICY IF EXISTS "docs_owner_read" ON storage.objects;
 CREATE POLICY "docs_owner_read" ON storage.objects FOR SELECT TO authenticated
   USING (bucket_id = 'user-documents' AND (storage.foldername(name))[1] = 'users'
          AND (storage.foldername(name))[2] = auth.uid()::text);
+DROP POLICY IF EXISTS "docs_owner_insert" ON storage.objects;
 CREATE POLICY "docs_owner_insert" ON storage.objects FOR INSERT TO authenticated
   WITH CHECK (bucket_id = 'user-documents' AND (storage.foldername(name))[1] = 'users'
          AND (storage.foldername(name))[2] = auth.uid()::text);
+-- UPDATE requis pour l'upsert (écrasement idempotent du même chemin) :
+-- USING + WITH CHECK empêchent de « déplacer » un objet hors de son dossier.
+DROP POLICY IF EXISTS "docs_owner_update" ON storage.objects;
 CREATE POLICY "docs_owner_update" ON storage.objects FOR UPDATE TO authenticated
   USING (bucket_id = 'user-documents' AND (storage.foldername(name))[1] = 'users'
+         AND (storage.foldername(name))[2] = auth.uid()::text)
+  WITH CHECK (bucket_id = 'user-documents' AND (storage.foldername(name))[1] = 'users'
          AND (storage.foldername(name))[2] = auth.uid()::text);
+DROP POLICY IF EXISTS "docs_owner_delete" ON storage.objects;
 CREATE POLICY "docs_owner_delete" ON storage.objects FOR DELETE TO authenticated
   USING (bucket_id = 'user-documents' AND (storage.foldername(name))[1] = 'users'
          AND (storage.foldername(name))[2] = auth.uid()::text);
 -- Aucune policy `anon`, aucune policy publique : accès uniquement via
 -- URLs signées TEMPORAIRES générées par le propriétaire authentifié.
+-- Aucune clé service_role n'est utilisée ni exposée côté application.
 
 -- RLS des tables : inchangée (policies owner-only déjà en place sur
 -- user_id = auth.uid() d'après docs/SUPABASE_SCHEMA.sql). Les nouvelles

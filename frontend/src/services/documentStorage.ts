@@ -13,7 +13,7 @@ import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import { getSupabase } from '../lib/supabase';
 import { useStore } from '../stores/useStore';
-import { storagePathFor } from '../lib/syncMerge';
+import { storagePathFor, normalizeUploadQueue, queueForAccount } from '../lib/syncMerge';
 
 export const DOCUMENTS_BUCKET = 'user-documents';
 // Cohérent avec fileVault (8 Mo) et la limite backend (~9 Mo bruts).
@@ -121,27 +121,112 @@ export async function getSignedUrlForDocument(docId: string, expiresInSec = 300)
 }
 
 let processing = false;
+// Réessai contrôlé par session (évite les boucles agressives sur une erreur
+// transitoire persistante ; la file DURABLE garantit la reprise au prochain
+// démarrage/retour réseau).
+const attemptCount: Record<string, number> = {};
+const MAX_ATTEMPTS_PER_SESSION = 5;
 
 /**
- * File DURABLE (persistée dans le store) : traitée après chaque push et à la
- * reconnexion. Erreurs transitoires (hors-ligne, bucket absent avant
- * migration) → l'élément RESTE en file et sera retenté ; erreurs définitives
- * (fichier local disparu, trop volumineux) → retiré proprement.
+ * File DURABLE (persistée, isolée PAR COMPTE) : traitée au démarrage (après
+ * hydratation+session), au retour du réseau et après chaque push.
+ *  • une pièce du compte A n'est JAMAIS envoyée sous la session du compte B ;
+ *  • erreur transitoire (hors-ligne, bucket absent avant migration) →
+ *    l'élément RESTE en file, réessai contrôlé ;
+ *  • fichier local manquant/trop volumineux → retiré de la file MAIS le
+ *    document est marqué `uploadError` (visible, jamais silencieux).
  */
 export async function processUploadQueue(): Promise<{ sent: number; left: number }> {
-  if (processing) return { sent: 0, left: useStore.getState().pendingUploads.length };
+  const left = () => useStore.getState().pendingUploads.length;
+  if (processing) return { sent: 0, left: left() };
   processing = true;
   let sent = 0;
   try {
-    const ids = [...useStore.getState().pendingUploads];
-    for (const id of ids) {
-      const r = await uploadDocumentToCloud(id);
-      if (r.ok) { sent += 1; continue; }
-      if (r.permanent) { useStore.getState().dequeueUpload(id); continue; }
-      break; // transitoire → on s'arrête, reprise au prochain cycle
+    const sb = getSupabase();
+    if (!sb) return { sent: 0, left: left() };
+    const { data: sess } = await sb.auth.getSession();
+    const uid = sess.session?.user.id;
+    if (!uid) return { sent: 0, left: left() }; // jamais d'envoi hors session
+    const st = useStore.getState();
+    const entries = queueForAccount(
+      normalizeUploadQueue(st.pendingUploads as any[]),
+      uid,
+      new Set(st.documents.map((d) => d.id)),
+    );
+    for (const e of entries) {
+      if ((attemptCount[e.docId] || 0) >= MAX_ATTEMPTS_PER_SESSION) continue;
+      attemptCount[e.docId] = (attemptCount[e.docId] || 0) + 1;
+      const r = await uploadDocumentToCloud(e.docId);
+      if (r.ok) { sent += 1; delete attemptCount[e.docId]; continue; }
+      if (r.permanent) {
+        // Jamais silencieux : l'échec définitif est enregistré sur le document.
+        useStore.getState().updateDocument(e.docId, { uploadError: r.error } as any);
+        useStore.getState().dequeueUpload(e.docId);
+        continue;
+      }
+      break; // transitoire → arrêt, reprise au prochain cycle (file conservée)
     }
   } finally {
     processing = false;
   }
-  return { sent, left: useStore.getState().pendingUploads.length };
+  return { sent, left: left() };
+}
+
+// ─── Récupération cloud sur un AUTRE appareil (audit §3) ─────
+export type LocalFileStatus = 'local' | 'cloud' | 'missing';
+
+/** Statut d'affichage : fichier local / synchronisé (récupérable) / indisponible. */
+export function docFileStatus(doc: { fileUri?: string; pdfUri?: string; remotePath?: string }): LocalFileStatus {
+  if (doc.pdfUri || doc.fileUri) return 'local';
+  if (doc.remotePath) return 'cloud';
+  return 'missing';
+}
+
+/**
+ * Garantit une copie LOCALE lisible du document :
+ *  1. fichier local présent → retourné tel quel ;
+ *  2. sinon remote_path → URL signée temporaire → téléchargement vérifié
+ *     (taille > 0) dans le coffre local = cache durable hors ligne ;
+ *  3. sinon → null (« indisponible », jamais annoncé récupérable sans
+ *     téléchargement vérifié).
+ * L'URI locale d'un AUTRE appareil n'est jamais utilisée comme chemin valide.
+ */
+export async function ensureLocalCopy(docId: string): Promise<{ uri: string; from: LocalFileStatus } | null> {
+  const doc = useStore.getState().documents.find((d) => d.id === docId);
+  if (!doc) return null;
+  const localUri = doc.pdfUri || doc.fileUri;
+  if (localUri) {
+    try {
+      if (Platform.OS === 'web') {
+        if (localUri.startsWith('data:')) return { uri: localUri, from: 'local' };
+      } else {
+        const info = await FileSystem.getInfoAsync(localUri, { size: true } as any);
+        if (info.exists && Number((info as any).size) > 0) return { uri: localUri, from: 'local' };
+      }
+    } catch {}
+    // URI locale invalide (ex: chemin d'un autre appareil) → tentative cloud.
+  }
+  const remotePath = (doc as any).remotePath as string | undefined;
+  if (!remotePath) return null;
+  const signed = await getSignedUrlForDocument(docId, 300);
+  if (!signed) return null;
+  if (Platform.OS === 'web') return { uri: signed, from: 'cloud' }; // lecture directe (pas de cache durable web)
+  try {
+    const isPdf = (doc.mimeType || '').includes('pdf') || remotePath.toLowerCase().endsWith('.pdf');
+    const ext = isPdf ? 'pdf' : (remotePath.split('.').pop() || 'bin');
+    const dir = `${FileSystem.documentDirectory}vault/`;
+    try { await FileSystem.makeDirectoryAsync(dir, { intermediates: true }); } catch {}
+    const dest = `${dir}${docId}_cloud.${ext}`;
+    const dl = await FileSystem.downloadAsync(signed, dest);
+    const info = await FileSystem.getInfoAsync(dl.uri, { size: true } as any);
+    if (!info.exists || !Number((info as any).size)) {
+      try { await FileSystem.deleteAsync(dl.uri, { idempotent: true }); } catch {}
+      return null; // téléchargement NON vérifié → pas annoncé récupéré
+    }
+    // Cache local durable pour la lecture hors ligne.
+    useStore.getState().updateDocument(docId, (isPdf ? { pdfUri: dest } : { fileUri: dest }) as any);
+    return { uri: dest, from: 'cloud' };
+  } catch {
+    return null;
+  }
 }

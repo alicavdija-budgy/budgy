@@ -32,6 +32,7 @@ import ZoomableImage from '../../src/components/ZoomableImage';
 import CornerEditor from '../../src/components/CornerEditor';
 import type { BudgyDocumentType, DocumentCategory, PersonalDocument } from '../../src/types';
 import { docTypeOf } from '../../src/lib/syncMerge';
+import { ensureLocalCopy, docFileStatus } from '../../src/services/documentStorage';
 import { useTranslation } from '../../src/hooks/useTranslation';
 import { DATE_LOCALES } from '../../src/i18n/translations';
 
@@ -142,19 +143,41 @@ export default function DocumentsScreen() {
   const selCt = contracts.find((c) => c.id === selectedContract) || null;
   const ctDoc = selCt?.documentId ? documents.find((d) => d.id === selCt.documentId) : undefined;
   const [pdfViewerUri, setPdfViewerUri] = useState<string | null>(null);
-  const openContractPdf = async (uri?: string) => {
-    if (!(await vaultFileExists(uri))) {
+  const [recovering, setRecovering] = useState(false);
+  /**
+   * TÂCHE 3 (audit §3) — copie locale GARANTIE avant lecture :
+   * fichier local → direct ; sinon récupération cloud VÉRIFIÉE (URL signée
+   * temporaire + téléchargement contrôlé, mis en cache local durable) ;
+   * sinon erreur claire « indisponible ». L'URI locale d'un autre appareil
+   * n'est jamais considérée comme valide.
+   */
+  const resolveAttachment = async (doc?: PersonalDocument): Promise<string | null> => {
+    if (!doc) {
       Alert.alert(t('contractsV2.fileMissingTitle'), t('contractsV2.fileMissingBody'));
-      return;
+      return null;
     }
-    if (Platform.OS === 'web') { try { window.open(uri!, '_blank'); } catch {} return; }
-    setPdfViewerUri(uri!);
+    setRecovering(true);
+    try {
+      const res = await ensureLocalCopy(doc.id);
+      if (res) return res.uri;
+      Alert.alert(
+        t('contractsV2.fileMissingTitle'),
+        (doc as any).remotePath ? t('docSpaces.recoverFailed') : t('contractsV2.fileMissingBody'),
+      );
+      return null;
+    } finally {
+      setRecovering(false);
+    }
+  };
+  const openContractPdf = async (doc?: PersonalDocument) => {
+    const uri = await resolveAttachment(doc);
+    if (!uri) return;
+    if (Platform.OS === 'web') { try { window.open(uri, '_blank'); } catch {} return; }
+    setPdfViewerUri(uri);
   };
   const shareContractPdf = async (doc?: PersonalDocument) => {
-    if (!doc || !(await vaultFileExists(doc.pdfUri || doc.fileUri))) {
-      Alert.alert(t('contractsV2.fileMissingTitle'), t('contractsV2.fileMissingBody'));
-      return;
-    }
+    const uri = await resolveAttachment(doc);
+    if (!uri) return;
     await sharePdf(doc as any);
   };
   /** Rattacher un fichier à un ANCIEN contrat sans pièce jointe. */
@@ -974,6 +997,8 @@ ${pageDataUrls.map((src, i) => `
                     {cat?.label} · {new Date(d.createdAt).toLocaleDateString(locale)}
                     {docTypeOf(d, linkedDocIds) === 'unclassified' ? ` · ${t('docSpaces.toClassify')}` : ''}
                     {(d as any).remoteUploadedAt ? ' · ☁️' : ''}
+                    {docFileStatus(d as any) === 'cloud' ? ` · ${t('docSpaces.fileCloud')}` : ''}
+                    {(d as any).uploadError ? ` · ⚠️ ${t('docSpaces.uploadFailed')}` : ''}
                   </Text>
                   {d.tags?.length ? (
                     <Text style={styles.docTags} numberOfLines={1}>{d.tags.map(t => `#${t}`).join(' ')}</Text>
@@ -1020,14 +1045,15 @@ ${pageDataUrls.map((src, i) => `
                 </View>
                 {ctDoc ? (
                   <>
-                    {ctDoc.pdfUri ? (
+                    {(ctDoc.pdfUri || ((ctDoc as any).remotePath && (ctDoc.mimeType || '').includes('pdf'))) ? (
                       <TouchableOpacity
                         style={[styles.ctBtn, { backgroundColor: 'rgba(52,211,153,0.14)' }]}
-                        onPress={() => openContractPdf(ctDoc.pdfUri)}
+                        onPress={() => openContractPdf(ctDoc)}
+                        disabled={recovering}
                         testID="contract-open-pdf"
                       >
-                        <Ionicons name="document-text" size={18} color={theme.primary} />
-                        <Text style={{ color: theme.primary, fontWeight: '700' }}>{t('contractsV2.openPdf')}</Text>
+                        {recovering ? <ActivityIndicator size="small" color={theme.primary} /> : <Ionicons name="document-text" size={18} color={theme.primary} />}
+                        <Text style={{ color: theme.primary, fontWeight: '700' }}>{recovering ? t('docSpaces.downloading') : t('contractsV2.openPdf')}</Text>
                       </TouchableOpacity>
                     ) : (
                       <TouchableOpacity

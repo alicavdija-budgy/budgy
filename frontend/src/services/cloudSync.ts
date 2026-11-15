@@ -16,7 +16,7 @@
  */
 
 import { getSupabase, isSupabaseConfigured } from '../lib/supabase';
-import { mergeCollections } from '../lib/syncMerge';
+import { mergeCollectionsV2, diffDirty, tombstoneKey } from '../lib/syncMerge';
 import { useStore } from '../stores/useStore';
 import type {
   Transaction,
@@ -107,14 +107,16 @@ const TABLE_FIELDS: Record<string, string[]> = {
   savings_goals:      ['id', 'user_id', 'title', 'emoji', 'color', 'target', 'saved', 'deadline', 'category', 'created_at'],
   budgets:            ['id', 'user_id', 'category', 'monthly', 'spent', 'created_at'],
   recurring_expenses: ['id', 'user_id', 'title', 'amount', 'category', 'frequency', 'active', 'next_date', 'created_at'],
-  contracts:          ['id', 'user_id', 'title', 'issuer', 'amount', 'category', 'expiration_date', 'start_date', 'urgent', 'auto_renew', 'notes', 'document_id', 'photo_uri', 'notice_period', 'created_at'],
+  contracts:          ['id', 'user_id', 'title', 'issuer', 'amount', 'category', 'expiration_date', 'start_date', 'urgent', 'auto_renew', 'notes', 'document_id', 'notice_period', 'created_at'],
   debts:              ['id', 'user_id', 'title', 'color', 'total', 'paid', 'interest_rate', 'monthly_payment', 'created_at'],
   investments:        ['id', 'user_id', 'symbol', 'shares', 'avg_cost', 'current_price', 'name', 'type', 'created_at'],
   receipts:           ['id', 'user_id', 'merchant', 'amount', 'date', 'category', 'image_uri', 'currency', 'type', 'note', 'transaction_id', 'document_id', 'created_at'],
   invoices:           ['id', 'user_id', 'title', 'issuer', 'amount', 'currency', 'due_date', 'invoice_date', 'iban', 'reference', 'category', 'status', 'source', 'paid_at', 'recurring_id', 'created_at'],
-  // TÂCHE 3 — métadonnées documentaires ; les binaires (image_base64,
-  // pdf_base64) ne vont JAMAIS en colonnes : ils vont dans Supabase Storage.
-  documents:          ['id', 'user_id', 'title', 'category', 'document_type', 'file_uri', 'pdf_uri', 'mime_type', 'pages', 'tags', 'note', 'remote_path', 'file_size', 'imported_at', 'expires_at', 'created_at', 'updated_at'],
+  // TÂCHE 3 (audit §4) — SEULES les métadonnées PORTABLES et la référence
+  // Storage (remote_path) sont synchronisées. Les chemins locaux file://
+  // (file_uri, pdf_uri), les pages base64 et les binaires ne vont JAMAIS
+  // en colonnes : ils restent locaux ou vont dans Supabase Storage.
+  documents:          ['id', 'user_id', 'title', 'category', 'document_type', 'mime_type', 'tags', 'note', 'remote_path', 'file_size', 'imported_at', 'expires_at', 'created_at', 'updated_at'],
   expense_groups:     ['id', 'user_id', 'name', 'members', 'created_at'],
   group_expenses:     ['id', 'user_id', 'group_id', 'title', 'amount', 'paid_by', 'split', 'date', 'created_at'],
 };
@@ -170,6 +172,10 @@ export async function pushAllToCloud(): Promise<{
   if (!userId) return { ok: false, pushed: 0, error: 'Non connecté' };
 
   const s = useStore.getState();
+  // TÂCHE 3 (audit §6) — isolation par compte : changement d'identité →
+  // les marqueurs de l'ancien compte ne sont JAMAIS réutilisés.
+  if (s.syncAccountId && s.syncAccountId !== userId) s.clearSyncMarkers();
+  if (s.syncAccountId !== userId) s.setSyncAccountId(userId);
   let total = 0;
   const errors: string[] = [];
 
@@ -178,7 +184,7 @@ export async function pushAllToCloud(): Promise<{
   // schema drift like extra columns rejected by PGRST204) threw and aborted
   // the whole push, causing transactions to never reach the cloud and the
   // user's data to "disappear" on reload.
-  const safeUpsert = async (table: string, rows: any[]) => {
+  const safeUpsert = async (table: string, rows: any[], confirmHashes?: Record<string, string>) => {
     if (rows.length === 0) return;
     try {
       // Strict per-table column whitelist + correct PK for upsert conflict
@@ -186,6 +192,9 @@ export async function pushAllToCloud(): Promise<{
       const conflictCol = TABLE_CONFLICT[table] || 'id';
       await upsertTable(table, filtered, conflictCol);
       total += rows.length;
+      // TÂCHE 3 (audit §1) — marqué « synchronisé » UNIQUEMENT après
+      // confirmation effective du serveur (aucune erreur levée).
+      if (confirmHashes) useStore.getState().setSyncedHashes(table, confirmHashes);
     } catch (e: any) {
       const msg = e?.message || String(e);
       // TÂCHE 3 — repli legacy avant migration : colonnes additives absentes
@@ -195,6 +204,7 @@ export async function pushAllToCloud(): Promise<{
           const filtered = rows.map((r) => pickAllowed(legacy, r));
           await upsertTable(table, filtered, TABLE_CONFLICT[table] || 'id');
           total += rows.length;
+          if (confirmHashes) useStore.getState().setSyncedHashes(table, confirmHashes);
           return;
         } catch (e2: any) {
           errors.push(`${table}: ${e2?.message || String(e2)}`);
@@ -236,11 +246,35 @@ export async function pushAllToCloud(): Promise<{
     ['expense_groups', s.groups],
     ['group_expenses', s.groupExpenses],
   ];
+  // TÂCHE 3 (audit §1/§2) — PUSH DELTA : seuls les éléments dont le hash de
+  // contenu diffère de la dernière version confirmée sont envoyés. Détecte
+  // renommages, catégories, dates, liens documentaires — pas seulement les
+  // montants. En cas d'échec au milieu du push, les hashes de la table en
+  // échec ne sont PAS avancés : les éléments restent « dirty » et repartent
+  // au prochain cycle.
+  const syncedHashes = useStore.getState().syncedHashes;
   for (const [table, items] of collections) {
     if (!items || items.length === 0) continue;
-    const rows = items.map((it) => toRow(snake(it), userId));
-    await safeUpsert(table, rows);
+    const { dirtyIds, hashes } = diffDirty(items as any[], syncedHashes[table]);
+    if (dirtyIds.size === 0) continue;
+    const dirtyItems = (items as any[]).filter((it) => dirtyIds.has(String(it.id)));
+    const rows = dirtyItems.map((it) => toRow(snake(it), userId));
+    await safeUpsert(table, rows, hashes);
   }
+
+  // TÂCHE 3 (audit §1) — tombstones : suppressions EXPLICITES propagées via
+  // la table sync_tombstones (migration additive). Table absente avant
+  // migration → ignoré proprement, les tombstones locaux restent persistés.
+  try {
+    const tombs = useStore.getState().tombstones[userId] || {};
+    const rows = Object.entries(tombs).map(([key, at]) => ({
+      id: `${userId}:${key}`,
+      user_id: userId,
+      entity_key: key,
+      deleted_at: at,
+    }));
+    if (rows.length > 0) await upsertTable('sync_tombstones', rows, 'id');
+  } catch {}
 
   if (errors.length > 0) {
     // Partial success: we still pushed what we could. lastCloudPushAt n'est
@@ -318,28 +352,77 @@ export async function pullAllFromCloud(): Promise<{ ok: boolean; pulled: number;
       });
     }
 
-    // TÂCHE 3 — FUSION SANS PERTE (plus d'écrasement intégral) :
-    //  • une création locale non encore poussée n'est JAMAIS supprimée ;
-    //  • un champ absent/NULL côté cloud (ex: file_uri avant migration)
-    //    n'écrase JAMAIS la valeur locale (pièces jointes locales conservées).
-    const lastPushAt = cur.lastCloudPushAt || 0;
-    const mg = <T,>(local: T[], remote: any[]): T[] =>
-      mergeCollections((local || []) as any[], remote as any[], lastPushAt).merged as T[];
+    // TÂCHE 3 (audit §1) — FUSION v2 SANS PERTE :
+    //  • un élément local « dirty » (hash ≠ dernière version confirmée)
+    //    GAGNE toujours — une modification hors ligne survit à la version
+    //    cloud antérieure ;
+    //  • l'absence dans la réponse cloud ne supprime JAMAIS rien (réponse
+    //    incomplète = aucun effacement) ;
+    //  • seules les suppressions explicites (tombstones) suppriment ou
+    //    empêchent une résurrection ;
+    //  • champ NULL/absent côté cloud → valeur locale préservée.
+    if (cur.syncAccountId && cur.syncAccountId !== userId) cur.clearSyncMarkers();
+    if (cur.syncAccountId !== userId) cur.setSyncAccountId(userId);
+
+    // Tombstones distants (suppressions confirmées sur d'autres appareils).
+    let remoteTombs: { entity_key?: string; deleted_at?: number }[] = [];
+    try {
+      const { data: tData, error: tErr } = await sb.from('sync_tombstones').select('*').eq('user_id', userId);
+      if (!tErr && tData) remoteTombs = tData;
+    } catch {}
+    const localTombs = useStore.getState().tombstones[userId] || {};
+    const allTombs: Record<string, number> = { ...localTombs };
+    for (const rt of remoteTombs) if (rt.entity_key) allTombs[rt.entity_key] = Number(rt.deleted_at) || Date.now();
+    if (Object.keys(allTombs).length !== Object.keys(localTombs).length) {
+      useStore.setState({ tombstones: { ...useStore.getState().tombstones, [userId]: allTombs } });
+    }
+    const tombIdsFor = (table: string): Set<string> => {
+      const out = new Set<string>();
+      for (const key of Object.keys(allTombs)) {
+        if (key.startsWith(`${table}:`)) out.add(key.slice(table.length + 1));
+      }
+      return out;
+    };
+
+    const stateHashes = useStore.getState().syncedHashes;
+    const TABLE_OF: Record<string, string> = {
+      transactions: 'transactions', incomes: 'incomes', savingsGoals: 'savings_goals',
+      budgets: 'budgets', recurringExpenses: 'recurring_expenses', contracts: 'contracts',
+      debts: 'debts', investments: 'investments', receipts: 'receipts', invoices: 'invoices',
+      documents: 'documents', groups: 'expense_groups', groupExpenses: 'group_expenses',
+    };
+    const postPullHashes: Record<string, Record<string, string>> = {};
+    const mg = <T,>(stateKey: string, local: T[], remote: any[]): T[] => {
+      const table = TABLE_OF[stateKey];
+      const { dirtyIds } = diffDirty((local || []) as any[], stateHashes[table]);
+      const res = mergeCollectionsV2((local || []) as any[], remote as any[], {
+        dirtyIds,
+        tombstoneIds: tombIdsFor(table),
+      });
+      // Les éléments NON dirty sont désormais alignés sur le cloud → leur
+      // hash devient la version confirmée ; les dirty restent à pousser.
+      const { hashes } = diffDirty(res.merged as any[], {});
+      const confirmed: Record<string, string> = {};
+      for (const [id, h] of Object.entries(hashes)) if (!dirtyIds.has(id)) confirmed[id] = h;
+      postPullHashes[table] = { ...(stateHashes[table] || {}), ...confirmed };
+      return res.merged as T[];
+    };
     useStore.setState({
-      transactions: mg(cur.transactions, transactions) as Transaction[],
-      incomes: mg(cur.incomes, incomes) as Income[],
-      savingsGoals: mg(cur.savingsGoals, savingsGoals) as SavingsGoal[],
-      budgets: mg(cur.budgets, budgets) as Budget[],
-      recurringExpenses: mg(cur.recurringExpenses, recurringExpenses) as RecurringExpense[],
-      contracts: mg(cur.contracts, contracts) as Contract[],
-      debts: mg(cur.debts, debts) as Debt[],
-      investments: mg(cur.investments, investments) as Investment[],
-      receipts: mg(cur.receipts, receipts) as Receipt[],
-      invoices: mg(cur.invoices, invoices) as Invoice[],
-      documents: mg(cur.documents, documents) as PersonalDocument[],
-      groups: mg(cur.groups, groups) as ExpenseGroup[],
-      groupExpenses: mg(cur.groupExpenses, groupExpenses) as GroupExpense[],
+      transactions: mg('transactions', cur.transactions, transactions) as Transaction[],
+      incomes: mg('incomes', cur.incomes, incomes) as Income[],
+      savingsGoals: mg('savingsGoals', cur.savingsGoals, savingsGoals) as SavingsGoal[],
+      budgets: mg('budgets', cur.budgets, budgets) as Budget[],
+      recurringExpenses: mg('recurringExpenses', cur.recurringExpenses, recurringExpenses) as RecurringExpense[],
+      contracts: mg('contracts', cur.contracts, contracts) as Contract[],
+      debts: mg('debts', cur.debts, debts) as Debt[],
+      investments: mg('investments', cur.investments, investments) as Investment[],
+      receipts: mg('receipts', cur.receipts, receipts) as Receipt[],
+      invoices: mg('invoices', cur.invoices, invoices) as Invoice[],
+      documents: mg('documents', cur.documents, documents) as PersonalDocument[],
+      groups: mg('groups', cur.groups, groups) as ExpenseGroup[],
+      groupExpenses: mg('groupExpenses', cur.groupExpenses, groupExpenses) as GroupExpense[],
     });
+    useStore.setState({ syncedHashes: { ...useStore.getState().syncedHashes, ...postPullHashes } });
 
     total =
       transactions.length + incomes.length + savingsGoals.length + budgets.length +

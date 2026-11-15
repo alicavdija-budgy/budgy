@@ -3607,6 +3607,10 @@ dueThisMonth: 'Da pagare questo mese', paidThisMonth: 'Pagato questo mese', next
       createExpense: 'Créer la dépense',
       noExpense: 'Sans dépense',
       manualCategory: 'Catégorie',
+      downloading: 'Récupération…',
+      fileCloud: 'Dans le cloud',
+      recoverFailed: 'Fichier indisponible pour le moment. Vérifiez votre connexion : il sera récupéré depuis le stockage sécurisé.',
+      uploadFailed: 'Envoi impossible',
     },
     en: {
       spaceAll: 'All',
@@ -3628,6 +3632,10 @@ dueThisMonth: 'Da pagare questo mese', paidThisMonth: 'Pagato questo mese', next
       createExpense: 'Create expense',
       noExpense: 'No expense',
       manualCategory: 'Category',
+      downloading: 'Retrieving…',
+      fileCloud: 'In the cloud',
+      recoverFailed: 'File unavailable right now. Check your connection: it will be retrieved from secure storage.',
+      uploadFailed: 'Upload failed',
     },
     de: {
       spaceAll: 'Alle',
@@ -3649,6 +3657,10 @@ dueThisMonth: 'Da pagare questo mese', paidThisMonth: 'Pagato questo mese', next
       createExpense: 'Ausgabe erstellen',
       noExpense: 'Ohne Ausgabe',
       manualCategory: 'Kategorie',
+      downloading: 'Wird geladen…',
+      fileCloud: 'In der Cloud',
+      recoverFailed: 'Datei momentan nicht verfügbar. Prüfen Sie Ihre Verbindung: sie wird aus dem sicheren Speicher geladen.',
+      uploadFailed: 'Upload fehlgeschlagen',
     },
     it: {
       spaceAll: 'Tutti',
@@ -3670,6 +3682,10 @@ dueThisMonth: 'Da pagare questo mese', paidThisMonth: 'Pagato questo mese', next
       createExpense: 'Crea la spesa',
       noExpense: 'Senza spesa',
       manualCategory: 'Categoria',
+      downloading: 'Recupero…',
+      fileCloud: 'Nel cloud',
+      recoverFailed: 'File non disponibile al momento. Controlla la connessione: verrà recuperato dall\'archivio sicuro.',
+      uploadFailed: 'Invio non riuscito',
     },
   },
   contractsV2: {

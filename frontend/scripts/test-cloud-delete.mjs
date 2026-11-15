@@ -50,13 +50,21 @@ const serviceJs = ts.transpileModule(serviceSrc, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
 }).outputText;
 
-function loadService(supabaseMock) {
+function loadService(supabaseMock, storeMock) {
   const mod = { exports: {} };
+  // TÂCHE 3 (audit) — le service enregistre désormais un TOMBSTONE après
+  // chaque suppression confirmée : le store est mocké et observé.
+  const tombstones = [];
+  const store = storeMock || {
+    useStore: { getState: () => ({ addTombstone: (t, i) => tombstones.push(`${t}:${i}`) }) },
+  };
   const fakeRequire = (name) => {
     if (name === '../lib/supabase') return supabaseMock;
+    if (name === '../stores/useStore') return store;
     throw new Error(`Unexpected import in cloudDelete.ts: ${name}`);
   };
   new Function('require', 'module', 'exports', serviceJs)(fakeRequire, mod, mod.exports);
+  mod.exports.__tombstones = tombstones;
   return mod.exports;
 }
 

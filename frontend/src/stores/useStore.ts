@@ -136,10 +136,18 @@ interface AppState {
   addReceipt: (receipt: Receipt) => void;
   deleteReceipt: (id: string) => void;
   updateReceipt: (id: string, receipt: Partial<Receipt>) => void;
-  // TÂCHE 3 — synchro documentaire sans perte + file d'envoi durable
-  lastCloudPushAt: number;
-  pendingUploads: string[];
+  // TÂCHE 3 (audit) — synchro sans perte : suivi DURABLE des mutations,
+  // tombstones de suppression, file d'envoi isolée par compte.
+  lastCloudPushAt: number;                                   // informatif (affichage)
+  pendingUploads: { docId: string; accountId: string }[];    // file durable par compte
+  syncedHashes: Record<string, Record<string, string>>;      // table → id → hash CONFIRMÉ serveur
+  tombstones: Record<string, Record<string, number>>;        // uid → `${table}:${id}` → deletedAt
+  syncAccountId: string | null;                              // compte propriétaire des marqueurs
   markCloudPushed: (ts: number) => void;
+  setSyncedHashes: (table: string, hashes: Record<string, string>) => void;
+  clearSyncMarkers: () => void;
+  setSyncAccountId: (uid: string | null) => void;
+  addTombstone: (table: string, id: string) => void;
   queueUpload: (docId: string) => void;
   dequeueUpload: (docId: string) => void;
 
@@ -218,6 +226,9 @@ export const useStore = create<AppState>()(
       syncQueue: [],
       lastCloudPushAt: 0,
       pendingUploads: [],
+      syncedHashes: {},
+      tombstones: {},
+      syncAccountId: null,
       isOnline: true,
       isPro: false,
       documents: [],
@@ -459,19 +470,33 @@ export const useStore = create<AppState>()(
       deleteDocument: (id) =>
         set((s) => ({
           documents: s.documents.filter((d) => d.id !== id),
-          pendingUploads: s.pendingUploads.filter((i) => i !== id),
+          pendingUploads: s.pendingUploads.filter((e: any) => (typeof e === 'string' ? e !== id : e.docId !== id)),
         })),
 
-      // TÂCHE 3 — file d'envoi durable (persistée) et horodatage du dernier
-      // push COMPLET : un pull ne peut plus écraser une création locale
-      // non encore synchronisée.
+      // TÂCHE 3 (audit) — suivi durable des mutations + tombstones + file
+      // d'envoi isolée par compte. Une opération n'est marquée synchronisée
+      // (setSyncedHashes) qu'après CONFIRMATION effective du serveur.
       markCloudPushed: (ts) => set({ lastCloudPushAt: ts }),
+      setSyncedHashes: (table, hashes) =>
+        set((s) => ({ syncedHashes: { ...s.syncedHashes, [table]: hashes } })),
+      clearSyncMarkers: () => set({ syncedHashes: {}, lastCloudPushAt: 0 }),
+      setSyncAccountId: (uid) => set({ syncAccountId: uid }),
+      addTombstone: (table, id) =>
+        set((s) => {
+          const uid = s.syncAccountId || '';
+          const cur = s.tombstones[uid] || {};
+          return { tombstones: { ...s.tombstones, [uid]: { ...cur, [`${table}:${id}`]: Date.now() } } };
+        }),
       queueUpload: (docId) =>
-        set((s) => ({
-          pendingUploads: s.pendingUploads.includes(docId) ? s.pendingUploads : [...s.pendingUploads, docId],
-        })),
+        set((s) => {
+          const accountId = s.syncAccountId || '';
+          const exists = s.pendingUploads.some((e: any) => (typeof e === 'string' ? e === docId : e.docId === docId));
+          return exists ? {} : { pendingUploads: [...s.pendingUploads, { docId, accountId }] };
+        }),
       dequeueUpload: (docId) =>
-        set((s) => ({ pendingUploads: s.pendingUploads.filter((i) => i !== docId) })),
+        set((s) => ({
+          pendingUploads: s.pendingUploads.filter((e: any) => (typeof e === 'string' ? e !== docId : e.docId !== docId)),
+        })),
 
       // Groups
       addGroup: (group) => set((s) => ({ groups: [group, ...s.groups] })),
@@ -538,6 +563,9 @@ export const useStore = create<AppState>()(
         syncQueue: [],
         lastCloudPushAt: 0,
         pendingUploads: [],
+        syncedHashes: {},
+        tombstones: {},
+        syncAccountId: null,
         documents: [],
         groups: [],
         groupExpenses: [],
@@ -549,6 +577,12 @@ export const useStore = create<AppState>()(
         user: null,
         isAuthenticated: false,
         isPro: false, // v3.9.0 Build 74: never leak Pro across accounts
+        // TÂCHE 3 (audit §6) — marqueurs de synchro JAMAIS transférés à un
+        // autre compte ; pendingUploads/tombstones conservés mais taggés par
+        // compte (reprise sécurisée à la reconnexion du compte d'origine).
+        syncedHashes: {},
+        lastCloudPushAt: 0,
+        syncAccountId: null,
         preferences: { ...get().preferences, onboarded: false },
         // v4.0.0 fail-safe : logout seul ne doit JAMAIS laisser les données
         // financières du compte précédent visibles (même purge que clearAllData,

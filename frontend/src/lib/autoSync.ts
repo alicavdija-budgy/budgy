@@ -21,6 +21,7 @@ import { AppState } from 'react-native';
 import { useStore } from '../stores/useStore';
 import { getSupabase, isSupabaseConfigured } from './supabase';
 import { pushAllToCloud } from '../services/cloudSync';
+import { computeHashes } from './syncMerge';
 
 const TAG = '[auto-sync]';
 const DEBOUNCE_MS = 4000;
@@ -31,33 +32,20 @@ let lastSnapshot = '';
 let started = false;
 
 /**
- * Hash léger des collections suivies — détecte une vraie mutation.
- * On évite de checker l'objet entier (preferences peuvent changer souvent
- * pour des champs non synchronisés comme `theme`).
+ * TÂCHE 3 (audit §2) — détection FIABLE des mutations : hash de CONTENU de
+ * chaque élément synchronisé (computeHashes), pas seulement compteurs/sommes.
+ * Détecte renommages, dates, catégories, liens documentaires, pièces jointes…
  */
 function buildSnapshot(s: any): string {
-  return JSON.stringify({
-    tx: s.transactions?.length || 0,
-    pro: s.proExpenses?.length || 0,
-    inc: s.incomes?.length || 0,
-    sav: s.savingsGoals?.length || 0,
-    bud: s.budgets?.length || 0,
-    rec: s.recurringExpenses?.length || 0,
-    ctr: s.contracts?.length || 0,
-    deb: s.debts?.length || 0,
-    inv: s.investments?.length || 0,
-    rcp: s.receipts?.length || 0,
-    invo: s.invoices?.length || 0,
-    doc: s.documents?.length || 0,
-    grp: s.groups?.length || 0,
-    grpE: s.groupExpenses?.length || 0,
-    // Aussi : sommes des amounts pour détecter UPDATE (pas juste add/delete)
-    txSum: (s.transactions || []).reduce((a: number, t: any) => a + (t.amount || 0), 0),
-    incSum: (s.incomes || []).reduce((a: number, i: any) => a + (i.amount || 0), 0),
-    savSum: (s.savingsGoals || []).reduce((a: number, g: any) => a + (g.saved || 0), 0),
-    debSum: (s.debts || []).reduce((a: number, d: any) => a + (d.paid || 0), 0),
-    recSum: (s.recurringExpenses || []).reduce((a: number, r: any) => a + (r.amount || 0), 0),
-  });
+  const keys = ['transactions','incomes','savingsGoals','budgets','recurringExpenses',
+    'contracts','debts','investments','receipts','invoices','documents','groups','groupExpenses'];
+  const parts: string[] = [];
+  for (const k of keys) {
+    const h = computeHashes(s[k] || []);
+    parts.push(k + '=' + Object.keys(h).sort().map((id) => id + h[id]).join('|'));
+  }
+  parts.push('up=' + (s.pendingUploads || []).length);
+  return parts.join(';');
 }
 
 async function attemptPush() {
@@ -102,6 +90,20 @@ export function startAutoSync() {
 
   // Snapshot initial pour ne pas push immédiatement au boot
   lastSnapshot = buildSnapshot(useStore.getState());
+
+  // TÂCHE 3 (audit §5) — REPRISE au démarrage : file d'envoi + éléments
+  // « dirty » traités après hydratation du store et présence d'une session.
+  setTimeout(() => { attemptPush(); }, 4000);
+  // Retour du réseau → reprise immédiate.
+  let wasOnline = useStore.getState().isOnline;
+  useStore.subscribe((st) => {
+    if (st.isOnline && !wasOnline) {
+      wasOnline = true;
+      attemptPush();
+    } else if (!st.isOnline) {
+      wasOnline = false;
+    }
+  });
 
   useStore.subscribe((state) => {
     const snap = buildSnapshot(state);

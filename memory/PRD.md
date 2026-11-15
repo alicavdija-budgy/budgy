@@ -372,3 +372,15 @@ test
 - Migration ADDITIVE preparee NON appliquee: docs/MIGRATION_TASK3_storage_prive.sql (colonnes + bucket + policies proprietaire + rollback).
 - Tests: test-task3 54/54 (execution reelle de syncMerge), suites non-reg vertes, E2E espaces + rehydratation OK. NON TESTE: 2 comptes reels sur bucket (migration non appliquee), iPhone natif.
 - EN ATTENTE: validation utilisateur avant TÂCHE 5.
+
+## TÂCHE 3 — CORRECTIFS AUDIT (synchro sans perte v2)
+- syncMerge v2: syncedHashes (hash de contenu, dernier etat CONFIRME serveur), dirty local GAGNE tout conflit, absence cloud ≠ suppression, tombstones explicites (cloudDelete → addTombstone → sync_tombstones), zero dependance horloge.
+- autoSync: detection par hash de contenu (renommages/categories/dates/liens detectes), reprise au demarrage + retour reseau + apres push.
+- Push DELTA par table avec confirmation serveur avant marquage ; echec mi-push → elements restent dirty.
+- §4: file_uri/pdf_uri/pages/photo_uri NE sont PLUS synchronises en colonnes (seulement metadonnees portables + remote_path).
+- §3: ensureLocalCopy (URL signee → telechargement VERIFIE → cache local durable), 3 etats local/cloud/indisponible, branche dans documents.tsx (ouvrir/partager).
+- §5: file d envoi — reprise demarrage/reseau, reessai controle, fichier manquant → uploadError VISIBLE.
+- §6: isolation par compte (pendingUploads taggés, syncAccountId, clearSyncMarkers au logout/changement de compte).
+- §7: SQL revise (sync_tombstones + RLS, policies idempotentes DROP IF EXISTS, UPDATE avec WITH CHECK) — NON APPLIQUE.
+- Tests: test-task3 65/65 (34 unitaires REELLEMENT executes + 31 statiques), cloud-delete 21/21 (tombstone mocke), toutes suites vertes, E2E statuts cloud/echec. NON TESTE: 2 clients reels sur Storage (bucket non cree).
+- EN ATTENTE: validation utilisateur avant TÂCHE 5.

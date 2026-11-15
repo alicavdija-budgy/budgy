@@ -41,8 +41,9 @@ Thumbs.db
 .env.local
 .env.*.local
 
-# Yarn (we are npm-only)
-yarn.lock
+# Yarn 1 Classic is canonical for Budgy (see packageManager in package.json).
+# IMPORTANT: never exclude yarn.lock from EAS upload; it ensures reproducible builds.
+# Yarn Berry files are not used by this Yarn 1 project.
 .yarn/
 .yarnrc.yml
 

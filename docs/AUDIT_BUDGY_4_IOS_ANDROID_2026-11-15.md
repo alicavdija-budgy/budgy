@@ -1,6 +1,33 @@
 # Budgy 4.0 — audit technique iOS, Android, API, finance et données
 Date : 15 novembre 2026 — branche de travail `budgy-smart-4.0`
 
+## Mise à jour 15 novembre 2026 — après redéploiement Coolify
+
+L'utilisateur a redéployé `api.budgy.ch`. Une nouvelle vérification **après** ce redéploiement a réussi :
+[GitHub Actions LIVE 43769061287](https://github.com/alicavdija-budgy/budgy/actions/runs/43769061287).
+
+- `/api/health` : 200 OK ; `APP_VERSION=3.7.29` demeure, mais c'est une valeur d'environnement qui **ne permet pas d'identifier un commit**.
+- `/api/config/status` : clé OpenAI déclarée configurée.
+- `/openapi.json` : `document_type` et `needs_user_confirmation` existent ; `swiss_qr_content` est ABSENT. Le code de `backend/server.py` sur `main` n'a pas ce champ, celui de `budgy-smart-4.0` l'a. Vérifier dans Coolify la branche/le commit/le répertoire réellement déployés avant toute action.
+- `supabase.budgy.ch/auth/v1/health` : HTTP 401 **sans clé**, service joignable mais aucune autorisation de lire les données ou le schéma. Aucun SQL exécuté sur le Supabase de production.
+
+### Corrections complémentaires enregistrées sur `budgy-smart-4.0`
+
+- `src/utils/localDate.ts` + dépenses manuelles/scannées : date locale en ISO `YYYY-MM-DD`, sans changement de jour par UTC ni format `MM/DD/YYYY` incompatible avec le moteur financier.
+- `app/(tabs)/expenses.tsx` : normalisation CHF exacte à la création et la modification ; parser de dates de la liste aligné sur le moteur financier.
+- `app/scanner-modal.tsx` : si le backend reconnait un `swiss_qr_content`, ouverture de la revue Swiss QR (pas du ticket vide). Capture et correction de la devise OCR dans les trois enregistrements : facture, transaction et reçu, sans considérer 100 EUR comme 100 CHF.
+- Facture depuis appareil photo : détection des doublons avec confirmation, copie préalable dans le coffre durable, ajout d'un document lié et mise en file d'envoi privé ; pas de faux succès si la copie échoue.
+- `scripts/test-local-dates.mjs` : tests exécutant la vraie normalisation du montant CHF et la vraie date locale, plus garde-fous des routes.
+
+**Tous les tests du code ont finalement réussi** : [GitHub Actions audit iOS + Android 43769917571](https://github.com/alicavdija-budgy/budgy/actions/runs/43769917571), incluant TypeScript, i18n, régressions financières, OCR Python et exports Metro iOS/Android. Le code a été testé hors production ; pas de compilation native, d'essai réel sur mobile ni de migration de production.
+
+### Intervention dépendant d'un accès d'opérateur privé
+
+- [Prompt complet Claude pour Coolify et le vrai Supabase](./CLAUDE_MISSION_INFRA_BUDGY_EXISTANTE.md)
+- [SQL de diagnostic uniquement en lecture sur supabase.budgy.ch](./PRODUCTION_SELFHOST_READONLY_AUDIT.sql)
+
+**Ne jamais réutiliser la base Cloud séparée de préproduction.** Ne jamais forcer un push, basculer la production ou lancer un build EAS sans autorisation.
+
 ## Portée et principes de sûreté
 
 Audit du code GitHub, exécution de tests GitHub Actions SANS compilation native, vérifications non destructives du projet Supabase Cloud `budgy-preprod`, et interrogation **lecture seule** de l'API publique `https://api.budgy.ch`.

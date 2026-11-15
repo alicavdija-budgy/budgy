@@ -38,4 +38,27 @@ for(const path of ['app/(tabs)/expenses.tsx','app/scanner-modal.tsx']){
   assert.ok(content.includes('date: formatLocalISODate(now),'),path+' must save local ISO');
   assert.ok(!content.includes('date: now.toLocaleDateString('),path+' must not store locale formatted dates');
 }
-console.log('PASS: real local ISO date formatter + CHF ledger save paths; both timezones and locales guarded');
+
+// Execute the real Swiss amount parser. parseFloat("1'234.50") returns 1,
+// which previously corrupted both daily and professional expense inputs.
+const amtSrc=readFileSync(resolve(root,'src/utils/amount.ts'),'utf8');
+const amtMod={exports:{}};
+const amtJs=ts.transpileModule(amtSrc,{
+  compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}
+}).outputText;
+vm.runInNewContext(amtJs,{exports:amtMod.exports,module:amtMod,Number,String,RegExp,parseFloat});
+const parseAmount=amtMod.exports.normalizeChfAmount;
+assert.equal(parseAmount("1'234.50"),1234.5);
+assert.equal(parseAmount('1 234,50'),1234.5);
+assert.equal(parseAmount('123,45 CHF'),123.45);
+assert.equal(parseAmount('12abc'),null);
+assert.equal(parseAmount('-100'),null);
+const expenses=readFileSync(resolve(root,'app/(tabs)/expenses.tsx'),'utf8');
+assert.ok(expenses.includes('amount: validatedAmount,'),'Expense creation must use normalized CHF');
+assert.ok(expenses.includes('const amt = normalizeChfAmount(values.amount ?? editingTx.amount);'),'Expense editing must validate Swiss amounts');
+assert.ok(expenses.includes('const parseTxDate = (s: string): Date | null => parseFinancialDate(s);'),'List and budget must use same calendar parser');
+const scanner=readFileSync(resolve(root,'app/scanner-modal.tsx'),'utf8');
+assert.ok(scanner.includes('qrHandled = handleBarcodeScanned({ data: data.swiss_qr_content });'),'Backend Swiss QR must reach native QR review UI');
+assert.ok(scanner.includes("if (!qrHandled) setStage('edit');"),'QR review must not be overwritten by receipt editor');
+console.log('PASS: real Swiss amount parser, two ledger forms, timezone-safe ISO, backend Swiss QR routing');
+

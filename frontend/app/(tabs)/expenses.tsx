@@ -38,6 +38,7 @@ import { formatNumber } from '../../src/utils/calculations';
 import { EXPENSE_CATEGORIES, PAYMENT_METHODS } from '../../src/data/swiss-data';
 import { useTranslation } from '../../src/hooks/useTranslation';
 import { DATE_LOCALES } from '../../src/i18n/translations';
+import { formatLocalISODate } from '../../src/utils/localDate';
 import { EntityActionsSheet, type EntityActionsContext } from '../../src/components/EntityActionsSheet';
 import { deleteEntityWithCloud } from '../../src/services/cloudDelete';
 import { EntityEditModal, type EditField } from '../../src/components/EntityEditModal';
@@ -181,7 +182,7 @@ export default function ExpensesScreen() {
       id: `tx_${Date.now()}`,
       title: newExpense.title,
       amount: parseFloat(newExpense.amount),
-      date: now.toLocaleDateString(locale),
+      date: formatLocalISODate(now),
       category: newExpense.category,
       createdAt: now.getTime(),
       updatedAt: now.getTime(),

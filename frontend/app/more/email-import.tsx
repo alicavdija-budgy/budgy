@@ -15,15 +15,17 @@
 import React, { useState, useMemo } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  Alert, Platform, KeyboardAvoidingView, ActivityIndicator,
+  Alert, Platform, KeyboardAvoidingView, ActivityIndicator, TextInput,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
-import { safeFetchJson } from '../../src/lib/network';
+import { apiFetchJson } from '../../src/lib/network';
 import { normalizeImageForUpload } from '../../src/lib/imageUpload';
+import { parseSwissQrBill } from '../../src/services/qrBill';
+import { normalizeChfAmount } from '../../src/utils/amount';
 import * as ImagePicker from 'expo-image-picker';
 import { readAsBase64, readAsText } from '../../src/utils/fsCompat';
 import { Colors, BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
@@ -35,8 +37,6 @@ import { Card, Button } from '../../src/components/ui';
 import { humanizeError } from '../../src/lib/errorSanitizer';
 import { useTranslation } from '../../src/hooks/useTranslation';
 import { getApiLocale } from '../../src/utils/apiLocale';
-
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://api.budgy.ch';
 
 type ImportMethod = 'scan' | 'pdf' | 'file' | 'photo';
 
@@ -59,6 +59,9 @@ export default function ImportInvoiceScreen() {
   const [busyLabel, setBusyLabel] = useState(t('emailImport.busyAnalyzing'));
   const [result, setResult] = useState<any>(null);
   const [pendingFile, setPendingFile] = useState<{ uri: string; mime: string } | null>(null);
+  // TÂCHE 1 — montant OBLIGATOIRE saisi/corrigé par l'utilisateur quand
+  // l'extraction ne fournit pas un montant exploitable. Jamais 0 par défaut.
+  const [manualAmount, setManualAmount] = useState('');
 
   // ── Backend calls ──
   const parseEmailText = async (content: string, subject = '') => {
@@ -70,11 +73,15 @@ export default function ImportInvoiceScreen() {
     setBusyLabel(t('emailImport.busyAiInvoice'));
     setResult(null);
     try {
-      const r = await safeFetchJson<any>(`${BACKEND_URL}/api/email/parse`, {
+      const r = await apiFetchJson<any>(`/api/email/parse`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Accept-Language': getApiLocale(lang) },
         body: JSON.stringify({ content, subject, locale: getApiLocale(lang) }),
       }, { timeoutMs: 20000, retries: 1, silent: true });
+      if (r.status === 401 || r.status === 403) {
+        Alert.alert(t('importErrors.authTitle'), t('importErrors.authBody'));
+        return;
+      }
       const data = r.data || { success: false, error: r.error };
       if (data.success) setResult({ ...data, _source: 'email' });
       else Alert.alert(
@@ -121,13 +128,44 @@ export default function ImportInvoiceScreen() {
         return;
       }
       console.log('[email-import] OCR call, b64 length:', base64.length, 'mime:', mime);
-      const r = await safeFetchJson<any>(`${BACKEND_URL}/api/scanner/ocr`, {
+      const r = await apiFetchJson<any>(`/api/scanner/ocr`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Accept-Language': getApiLocale(lang) },
         body: JSON.stringify({ image_base64: `data:${mime};base64,${base64}`, locale: getApiLocale(lang) }),
       }, { timeoutMs: 25000, retries: 1, silent: true });
+      if (r.status === 401 || r.status === 403) {
+        Alert.alert(t('importErrors.authTitle'), t('importErrors.authBody'));
+        return;
+      }
       const data = r.data || { success: false, error: r.error };
+      if (data.success && data.swiss_qr_content) {
+        // VRAI Swiss QR décodé dans la photo/le PDF → parseur SPC éprouvé
+        try {
+          const bill = parseSwissQrBill(String(data.swiss_qr_content));
+          setManualAmount('');
+          setResult({
+            success: true,
+            _source: 'qr',
+            _originalUri: uriOrPath,
+            _mime: mime,
+            _qrRaw: String(data.swiss_qr_content),
+            document_type: 'invoice',
+            title: bill.creditor?.name || undefined,
+            issuer: bill.creditor?.name || undefined,
+            amount: bill.amount ?? undefined, // undefined = saisie manuelle OBLIGATOIRE
+            currency: bill.currency || 'CHF',
+            iban: bill.iban || undefined,
+            reference: bill.reference || undefined,
+            confidence: 1,
+          });
+          return;
+        } catch {
+          Alert.alert(t('importErrors.qrInvalidTitle'), t('importErrors.qrInvalidBody'));
+          return;
+        }
+      }
       if (data.success) {
+        setManualAmount('');
         setResult({ ...data, _source: 'photo', _originalUri: uriOrPath, _mime: mime });
       } else {
         setPendingFile({ uri: uriOrPath, mime });
@@ -215,15 +253,39 @@ export default function ImportInvoiceScreen() {
     }
   };
 
+  /** Montant retenu : extraction OU saisie manuelle — via la normalisation
+   *  CHF unique. null = pas de montant exploitable (enregistrement bloqué). */
+  const resolvedAmount = (): number | null => {
+    const manual = normalizeChfAmount(manualAmount);
+    if (manual !== null) return manual;
+    return (
+      normalizeChfAmount(result?.amount) ??
+      normalizeChfAmount(result?.total) ??
+      normalizeChfAmount(result?.total_amount)
+    );
+  };
+  const extractionFailed = !!result && (result.success === false || result._failedOcr);
+
   /** Save as Invoice (Factures section) */
   const persistAsInvoice = () => {
     if (!result) return;
-    const isPhoto = result._source === 'photo';
+    // TÂCHE 1 — JAMAIS d'enregistrement si l'extraction a échoué
+    if (extractionFailed) {
+      Alert.alert(t('importErrors.extractFailedTitle'), t('importErrors.extractFailedBody'));
+      return;
+    }
+    const amount = resolvedAmount();
+    // JAMAIS de facture à 0 CHF : montant absent → saisie manuelle obligatoire
+    if (amount === null) {
+      Alert.alert(t('importErrors.amountMissingTitle'), t('importErrors.amountMissingBody'));
+      return;
+    }
+    const isPhoto = result._source === 'photo' || result._source === 'qr';
     addInvoice({
       id: `inv_${Date.now()}`,
       title: result.title || result.merchant || t('emailImport.defaultInvoiceTitle'),
       issuer: result.issuer || result.merchant || t('emailImport.defaultUnknownIssuer'),
-      amount: Number(result.amount) || Number(result.total) || Number(result.total_amount) || 0,
+      amount,
       currency: result.currency || 'CHF',
       dueDate: result.due_date || undefined,
       invoiceDate: result.invoice_date || result.date || undefined,
@@ -236,6 +298,7 @@ export default function ImportInvoiceScreen() {
     });
     Alert.alert(t('emailImport.invoiceSavedTitle'), t('emailImport.invoiceSavedBody'));
     setResult(null);
+    setManualAmount('');
   };
 
   /** Save as Contract (Mon Classeur) */
@@ -437,8 +500,22 @@ export default function ImportInvoiceScreen() {
           </TouchableOpacity>
         ))}
 
+        {/* Échec d'extraction : carte d'erreur — JAMAIS de badge succès */}
+        {result && (result.success === false || result._failedOcr) && (
+          <View style={[styles.resultCard, { borderColor: '#EF444455' }]}>
+            <View style={styles.resultHeader}>
+              <Ionicons name="alert-circle" size={22} color="#EF4444" />
+              <Text style={styles.resultTitle}>{t('importErrors.extractFailedTitle')}</Text>
+              <TouchableOpacity onPress={dismissResult} style={{ marginLeft: 'auto' }}>
+                <Ionicons name="close" size={20} color={theme.textTertiary} />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.tipsText}>{t('importErrors.extractFailedBody')}</Text>
+          </View>
+        )}
+
         {/* Result preview */}
-        {result && (() => {
+        {result && result.success !== false && !result._failedOcr && (() => {
           const dt: string = (result.document_type || '').toLowerCase();
           const isContract = dt === 'contract';
           const needsConfirm = !!result.needs_user_confirmation;
@@ -472,7 +549,25 @@ export default function ImportInvoiceScreen() {
               </View>
               {result.merchant || result.issuer ? <Row label={t('emailImport.rowIssuer')} value={result.merchant || result.issuer} /> : null}
               {result.title ? <Row label={t('emailImport.rowSubject')} value={result.title} /> : null}
-              {result.amount || result.total || result.total_amount ? <Row label={t('emailImport.rowAmount')} value={`${result.currency || 'CHF'} ${result.amount || result.total || result.total_amount}`} highlight /> : null}
+              {resolvedAmount() !== null && !manualAmount ? (
+                <Row label={t('emailImport.rowAmount')} value={`${result.currency || 'CHF'} ${resolvedAmount()!.toFixed(2)}`} highlight />
+              ) : (
+                <View style={styles.amountInputWrap}>
+                  <Text style={styles.rowLabel}>{t('importErrors.amountInputLabel')} *</Text>
+                  <TextInput
+                    style={styles.amountInput}
+                    value={manualAmount}
+                    onChangeText={setManualAmount}
+                    placeholder={t('importErrors.amountPlaceholder')}
+                    placeholderTextColor={theme.textTertiary}
+                    keyboardType="decimal-pad"
+                    testID="import-amount-input"
+                  />
+                  {manualAmount.length > 0 && normalizeChfAmount(manualAmount) === null && (
+                    <Text style={{ color: '#EF4444', fontSize: 12, marginTop: 4 }}>{t('importErrors.amountInvalid')}</Text>
+                  )}
+                </View>
+              )}
               {result.due_date ? <Row label={t('emailImport.rowDueDate')} value={result.due_date} /> : null}
               {result.invoice_date || result.date ? <Row label={t('emailImport.rowDate')} value={result.invoice_date || result.date} /> : null}
               {result.iban ? <Row label={t('emailImport.rowIban')} value={result.iban} /> : null}
@@ -515,6 +610,12 @@ function Row({ label, value, highlight }: { label: string; value: string; highli
 }
 
 const makeStyles = (Colors: ThemePalette) => StyleSheet.create({
+  amountInputWrap: { marginTop: Spacing.sm },
+  amountInput: {
+    marginTop: 6, borderWidth: 1, borderColor: 'rgba(148,163,184,0.35)', borderRadius: BorderRadius.md,
+    paddingHorizontal: 12, paddingVertical: 10, color: Colors.text, fontSize: FontSizes.lg,
+    backgroundColor: Colors.card,
+  },
   container: { flex: 1, backgroundColor: Colors.background },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.md, paddingTop: Spacing.sm, paddingBottom: Spacing.md },
   iconBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },

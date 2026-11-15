@@ -19,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Svg, { Circle } from 'react-native-svg';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import { normalizeChfAmount } from '../../src/utils/amount';
 import { Spacing, FontSizes, FontWeights, BorderRadius } from '../../src/constants/theme';
 import { useTheme } from '../../src/hooks/useTheme';
 import type { ThemePalette } from '../../src/constants/palettes';
@@ -148,13 +149,8 @@ export default function BudgetsScreen() {
   const catMeta = (id: string) => EXPENSE_CATEGORIES.find((c) => c.id === id);
 
   // Validation stricte : jamais de conversion silencieuse en CHF 0.
-  const parseAmountStrict = (raw: string): number | null => {
-    const cleaned = raw.trim().replace(/['’\u00A0\u202F ]/g, '').replace(',', '.');
-    if (!cleaned) return null;
-    if (!/^\d+(\.\d{1,2})?$/.test(cleaned)) return null;
-    const v = parseFloat(cleaned);
-    return Number.isFinite(v) && v > 0 ? v : null;
-  };
+  // TÂCHE 1 — normalisation CHF UNIQUE pour toute l'app (src/utils/amount.ts)
+  const parseAmountStrict = (raw: string): number | null => normalizeChfAmount(raw);
 
   const resetAddForm = () => {
     setNewCat(null); setNewLimit(''); setNewName(''); setNewAlerts(true); setAmountError(null);

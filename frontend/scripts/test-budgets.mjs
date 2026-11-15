@@ -31,7 +31,7 @@ check('détail catégorie : transactions du mois + modifier limite + ajout rapid
   src.includes('detailTx') && src.includes('editLimit') && src.includes("router.push('/quick-add'"));
 check('Budgy Pulse : messages basés sur des calculs vérifiables',
   src.includes('now.getDate() / daysIn') && src.includes('pulseOver') && !src.includes('prédiction'));
-check('montants suisses normalisés à la saisie (validation stricte)', src.includes("replace(/['’\\u00A0\\u202F ]/g, '')"));
+check('montants suisses normalisés à la saisie (normalisation UNIQUE src/utils/amount.ts)', src.includes('normalizeChfAmount'));
 
 // ── Reproduction logique du moteur (mêmes expressions que l'écran) ──
 console.log('\n— Scénarios financiers —');

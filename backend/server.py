@@ -25,6 +25,8 @@ from typing import Optional
 import json
 import re
 import base64
+import math
+import qr_decode
 
 # Load .env BEFORE importing modules that read os.getenv at import time
 load_dotenv()
@@ -715,6 +717,10 @@ class OCRResponse(BaseModel):
     #   "unknown"  → Demander confirmation à l'utilisateur (ne rien créer auto)
     document_type: Optional[str] = "unknown"
     needs_user_confirmation: Optional[bool] = False
+    # TÂCHE 1 — payload SPC BRUT du Swiss QR réellement décodé dans la
+    # photo/le PDF (préserve \r\n et lignes vides). Le client le parse avec
+    # son lecteur éprouvé. None si aucun QR lisible (OCR complémentaire).
+    swiss_qr_content: Optional[str] = None
     items: Optional[list] = None
     raw_text: Optional[str] = None
     confidence: Optional[float] = None
@@ -821,13 +827,54 @@ async def scanner_ocr(
         if idx > 0:
             img_b64 = img_b64[idx + 1:]
 
-    # Validate image briefly
+    # Validate payload + détecter le VRAI type (un PDF n'est pas un JPEG)
     try:
-        raw = base64.b64decode(img_b64[:200] + "=" * (-len(img_b64[:200]) % 4))
-        if len(raw) < 50:
+        head = base64.b64decode(img_b64[:200] + "=" * (-len(img_b64[:200]) % 4))
+        if len(head) < 50:
             return OCRResponse(success=False, error="IMAGE_TOO_SMALL")
     except Exception:
         return OCRResponse(success=False, error="INVALID_BASE64")
+
+    # TÂCHE 1 — chaîne fiable photo/PDF :
+    #   PDF → rendu PNG (PyMuPDF), puis détection du Swiss QR (OpenCV).
+    #   Si un payload SPC est décodé, on le renvoie BRUT : le client le parse
+    #   avec le lecteur SPC éprouvé (index fixes, lignes vides, \n/\r\n).
+    #   L'OCR vision n'est utilisé qu'en COMPLÉMENT (aucun QR lisible).
+    corr_id = f"ocr_{uuid.uuid4().hex[:12]}"
+    is_pdf = head.startswith(b"%PDF") or (req.mime_type or "").lower() == "application/pdf"
+    page_images: list = []
+    if is_pdf:
+        try:
+            full = base64.b64decode(img_b64 + "=" * (-len(img_b64) % 4))
+            page_images = qr_decode.pdf_first_pages_to_png_b64(full, max_pages=2)
+            if not page_images:
+                return OCRResponse(success=False, error="PDF_RENDER_FAILED")
+            log.info("[%s] step=pdf_render pages=%d ok", corr_id, len(page_images))
+        except Exception as e:
+            log.warning("[%s] step=pdf_render failed: %s", corr_id, type(e).__name__)
+            return OCRResponse(success=False, error="PDF_RENDER_FAILED")
+    else:
+        page_images = [img_b64]
+
+    for page_b64 in page_images:
+        try:
+            qr_payload = qr_decode.decode_swiss_qr_from_image_b64(page_b64)
+        except Exception as e:
+            log.warning("[%s] step=qr_decode error: %s", corr_id, type(e).__name__)
+            qr_payload = None
+        if qr_payload:
+            log.info("[%s] step=qr_decode result=SPC_FOUND doc_type=invoice", corr_id)
+            return OCRResponse(
+                success=True,
+                swiss_qr_content=qr_payload,
+                currency=None,  # le client lit la devise depuis le payload SPC
+                document_type="invoice",
+                needs_user_confirmation=False,
+                confidence=1.0,
+            )
+    log.info("[%s] step=qr_decode result=none → fallback OCR vision", corr_id)
+    # OCR vision : pour un PDF on envoie le rendu PNG, jamais les octets PDF bruts
+    img_b64 = page_images[0]
 
     try:
         session_id = f"ocr_{uuid.uuid4().hex[:12]}"
@@ -854,6 +901,9 @@ async def scanner_ocr(
         try:
             amt = float(amt_raw) if amt_raw is not None else None
         except Exception:
+            amt = None
+        # Jamais de montant inventé : négatif / non fini / 0 → absent (saisie manuelle)
+        if amt is not None and (not math.isfinite(amt) or amt <= 0):
             amt = None
 
         # Strict routing classification

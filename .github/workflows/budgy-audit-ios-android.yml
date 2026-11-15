@@ -1,0 +1,127 @@
+name: Budgy 4.0 - complete offline iOS & Android audit (NO builds)
+
+# Read-only quality checks on development branch.
+# NO Expo token, NO EAS builds, NO Apple/Google submission,
+# NO production database writes or backend deploy.
+on:
+  push:
+    branches:
+      - budgy-smart-4.0
+    paths:
+      - 'frontend/**'
+      - 'backend/**'
+      - '.github/workflows/budgy-audit-ios-android.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: budgy-offline-audit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Finance + docs + sync + iOS/Android config
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: frontend
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: yarn
+          cache-dependency-path: frontend/yarn.lock
+      - name: Yarn frozen dependencies
+        run: |
+          corepack enable
+          yarn install --frozen-lockfile --non-interactive
+      - name: TypeScript strict static check
+        run: npx tsc --noEmit
+      - name: Localizations FR/EN/DE/IT
+        run: |
+          npm run check:i18n
+          npm run audit:i18n
+      - name: Financial, document, sync, IAP and Siri regression suites
+        run: |
+          set -e
+          for test in \
+            test-import test-contracts test-qrbill test-budgets-sync \
+            test-budgets test-engine test-cloud-auth test-cloud-delete \
+            test-task3 test-task4 test-task5 test-stability \
+            test-premium test-pro-gating test-savings-tier \
+            test-ai-optimizer test-iap-v15 test-iap-restore \
+            test-notifications test-alerts test-lamal test-widgets; do
+            echo "::group::${test}"
+            node "scripts/${test}.mjs"
+            echo "::endgroup::"
+          done
+      - name: Confirm original app and Android configuration (without building)
+        run: |
+          node <<'NODE'
+          const a=require('./app.json').expo;
+          const e=require('./eas.json');
+          const assert=(x,msg)=>{ if(!x)throw new Error(msg); };
+          assert(a.version==='4.0.0' && a.ios?.buildNumber==='91','Wrong Budgy iOS version');
+          assert(a.ios?.bundleIdentifier==='com.budgy.ch.budgy','Wrong existing Apple app');
+          assert(a.android?.package==='com.budgy.ch.budgy','Wrong Google Play package');
+          assert(Number.isInteger(a.android?.versionCode) && a.android.versionCode>0,'Missing Android versionCode');
+          assert(e.build?.production?.android?.buildType==='app-bundle','Google Play AAB build type missing');
+          assert(e.build?.preview?.android?.buildType==='apk','Internal Android APK profile missing');
+          assert(e.build?.production?.env?.EXPO_PUBLIC_SUPABASE_URL==='https://supabase.budgy.ch','Production DB URL mismatch');
+          assert(e.build?.production?.env?.EXPO_PUBLIC_BACKEND_URL==='https://api.budgy.ch','Production backend URL mismatch');
+          assert(a.extra?.eas?.projectId==='cf75668b-71ba-4bfb-9169-8ad2f572e982','Expo project mismatch');
+          console.log('PASS: original Budgy identity, Android package + AAB/APK profiles');
+          NODE
+          npx expo config --type public >/tmp/budgy-ios-android-config.json
+          node <<'NODE'
+          const c=require('/tmp/budgy-ios-android-config.json');
+          if(c.ios?.bundleIdentifier!=='com.budgy.ch.budgy'||
+             c.android?.package!=='com.budgy.ch.budgy')throw Error('Resolved native config identity mismatch');
+          console.log('PASS: resolved Expo config');
+          NODE
+      - name: Confirm Android purchases cannot charge before backend verification
+        run: |
+          node <<'NODE'
+          const fs=require('fs');
+          const c=fs.readFileSync('src/services/iap.ts','utf8');
+          if (!c.includes("if (Platform.OS === 'android') return false;") ||
+              !c.includes("e.code = 'android_billing_not_configured'") ||
+              !c.includes("platform: 'ios'")) throw Error('Unverified Google Play charge path not blocked');
+          console.log('PASS: Android billing blocked safely until server-side Google verification exists');
+          NODE
+      - name: Metro JavaScript bundle for BOTH platforms (not a native build)
+        run: |
+          npx expo export --platform ios --output-dir /tmp/budgy-ios-js
+          npx expo export --platform android --output-dir /tmp/budgy-android-js
+          echo "PASS: both JS bundles exported without EAS"
+
+  backend:
+    name: Backend Python syntax, offline OCR media tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Python syntax compilation (no imports, no network)
+        run: python -m compileall -q backend
+      - name: Actual QR/OCR media helper unit tests
+        run: python -m unittest discover -s backend/tests -p 'test_ocr_media.py' -v
+      - name: Confirm OCR is JWT protected and Google subscription is not simulated
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          code=Path('backend/server.py').read_text()
+          assert 'async def scanner_ocr' in code and 'user: AuthenticatedUser = Depends(require_user)' in code
+          assert 'ImageContent(image_base64=img_b64, mime=image_mime)' in code
+          assert 'qr_decode.detect_image_mime(' in code
+          assert 'platform: \'ios\'' in Path('frontend/src/services/iap.ts').read_text()
+          print('PASS: OCR auth + actual MIME, Android payment validation intentionally disabled')
+          PY

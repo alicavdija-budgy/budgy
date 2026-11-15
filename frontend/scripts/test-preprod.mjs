@@ -22,7 +22,7 @@ const eas = JSON.parse(readFileSync(join(root, 'eas.json'), 'utf8'));
   S('canal dédié « preprod » (jamais d\'OTA croisé avec preview/prod)', p.channel === 'preprod');
   S('Supabase = budgy-preprod EXCLUSIVEMENT (kodnbllysingkwispyfx)', p.env.EXPO_PUBLIC_SUPABASE_URL === 'https://kodnbllysingkwispyfx.supabase.co');
   S('backend = sentinelle RFC 2606 (.invalid — ne résout jamais)', p.env.EXPO_PUBLIC_BACKEND_URL === 'https://backend-preprod.invalid');
-  S('clé anon preprod : emplacement prêt (placeholder à coller, pas service_role)', typeof p.env.EXPO_PUBLIC_SUPABASE_ANON_KEY === 'string' && p.env.EXPO_PUBLIC_SUPABASE_ANON_KEY.includes('COLLER') && !JSON.stringify(p).toLowerCase().includes('service_role'));
+  S('clé publique Supabase preprod réelle (pas de placeholder ni service_role)', /^sb_publishable_[A-Za-z0-9_-]{15,}$/.test(p.env.EXPO_PUBLIC_SUPABASE_ANON_KEY) && !JSON.stringify(p).toLowerCase().includes('service_role'));
   S('AUCUNE URL de production dans le profil preprod', !JSON.stringify(p).includes('api.budgy.ch') && !JSON.stringify(p).includes('supabase.budgy.ch'));
   const others = ['development', 'preview', 'production', 'testflight'];
   S('les 4 profils actifs sont INTACTS (URLs de prod inchangées)', others.every((k) => eas.build[k] && eas.build[k].env.EXPO_PUBLIC_BACKEND_URL === 'https://api.budgy.ch' && eas.build[k].env.EXPO_PUBLIC_SUPABASE_URL === 'https://supabase.budgy.ch'));
@@ -113,13 +113,13 @@ console.log('\n═══ §G Achats natifs StoreKit désactivés en préprod (st
   S('raison lisible et traduite dans l\'UI (version de test)', hook.includes("r === 'preprod_disabled' ? t('errors.backendDisabled') : r"));
   S('production intacte : product IDs / StoreKit inchangés hors variante', iapSrc.includes("monthly: 'budgy.pro.monthly'") || iapSrc.includes('IAP_PRODUCT_IDS'));
   S('eas.json : APP_VARIANT + EXPO_PUBLIC_APP_VARIANT dans le profil preprod', eas.build.preprod.env.APP_VARIANT === 'preprod' && eas.build.preprod.env.EXPO_PUBLIC_APP_VARIANT === 'preprod');
-  S('clé publique : emplacement sb_publishable_ (jamais de secret commité)', eas.build.preprod.env.EXPO_PUBLIC_SUPABASE_ANON_KEY.includes('sb_publishable') && eas.build.preprod.env.EXPO_PUBLIC_SUPABASE_ANON_KEY.includes('COLLER'));
+  S('clé publique : sb_publishable_ valide et placeholder supprimé', /^sb_publishable_[A-Za-z0-9_-]{15,}$/.test(eas.build.preprod.env.EXPO_PUBLIC_SUPABASE_ANON_KEY) && !eas.build.preprod.env.EXPO_PUBLIC_SUPABASE_ANON_KEY.includes('COLLER'));
 }
 
 console.log('\n═══ [NT] NON TESTABLE ICI (build réel / iPhone / Supabase) ═══');
 [
   'exécution de SUPABASE_OPTIMIZATIONS.sql sur budgy-preprod (votre feu vert)',
-  'collage de la clé publique sb_publishable_ preprod dans eas.json puis build preprod',
+  'vérification de connexion Supabase Auth/RLS avec la clé publique lors du premier build preprod',
   'compilation Swift réelle des extensions (App Group dynamique) — premier build',
   'installation côte à côte Budgy + Budgy Test sur le même iPhone',
   'paywall en préprod : message « version de test », aucun achat possible',

@@ -50,7 +50,7 @@ def source_ocr_model_and_route():
     # Compile the actual class AST, with just its type dependencies.
     # Avoid importing server.py and its HTTP/LLM/Supabase side effects.
     module = ast.Module(body=[cls], type_ignores=[])
-    namespace = {"BaseModel": BaseModel, "Optional": Optional}
+    namespace = {"__name__": __name__, "BaseModel": BaseModel, "Optional": Optional}
     exec(compile(module, str(BACKEND / "server.py"), "exec"), namespace)
     return namespace["OCRResponse"]
 

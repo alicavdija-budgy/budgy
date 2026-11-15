@@ -14,6 +14,7 @@
 
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { normalizeChfAmount } from '../src/utils/amount';
+import { formatLocalISODate } from '../src/utils/localDate';
 import {
   View,
   Text,
@@ -540,7 +541,7 @@ export default function ScannerModal() {
         id: txId,
         title: title.trim(),
         amount: amt,
-        date: now.toLocaleDateString('fr-CH'),
+        date: formatLocalISODate(now),
         category,
         paymentMethod: paymentMethod as any,
         note: note.trim() || undefined,

@@ -222,6 +222,7 @@ export interface Receipt {
   items?: string[];
   note?: string;
   transactionId?: string;         // linked transaction id
+  documentId?: string;            // TÂCHE 3 — pièce (PersonalDocument) liée
   createdAt: number;
 }
 
@@ -264,6 +265,9 @@ export type DocumentCategory =
   | 'identity'
   | 'other';
 
+// TÂCHE 3 — type documentaire STRICT, distinct de la catégorie métier.
+export type BudgyDocumentType = 'invoice' | 'contract' | 'expense_receipt' | 'unclassified';
+
 export interface PersonalDocument {
   id: string;
   title: string;
@@ -273,7 +277,13 @@ export interface PersonalDocument {
   pdfBase64?: string;         // optional: rendered PDF data URL (data:application/pdf;base64,...)
   pdfUri?: string;            // optional: local file URI for PDF
   fileUri?: string;           // TÂCHE 2 : URI DURABLE (vault) du fichier original
-  mimeType?: string;          // TÂCHE 2 : type MIME du fichier original
+  mimeType?: string;
+  // TÂCHE 3 — espaces documentaires + stockage privé (additif)
+  documentType?: BudgyDocumentType; // Facture / Contrat / Ticket / À classer
+  importedAt?: number;              // date d'import réelle
+  fileSize?: number;                // taille vérifiée (octets)
+  remotePath?: string;              // chemin Storage privé (JAMAIS une URL signée)
+  remoteUploadedAt?: number;        // confirmé par le serveur uniquement          // TÂCHE 2 : type MIME du fichier original
   tags: string[];
   note?: string;
   expiresAt?: string;          // YYYY-MM-DD optional expiration

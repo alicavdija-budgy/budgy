@@ -10,7 +10,7 @@ const read = (p) => readFileSync(p, 'utf8');
 
 console.log('— persistAsContract : plus AUCUNE donnée inventée —');
 const imp = read('app/more/email-import.tsx');
-const ct = imp.slice(imp.indexOf('const saveContractRecord'), imp.indexOf('const saveInvoice'));
+const ct = imp.slice(imp.indexOf('const saveContractRecord'), imp.indexOf('const persistAsReceipt'));
 ok('plus d’échéance fictive à un an', !ct.includes('oneYearLater') && ct.includes("meta.expirationDate || ''"));
 ok('plus d’autoRenew supposé', !ct.includes('autoRenew: true') && ct.includes('autoRenew: undefined'));
 ok('startDate uniquement si réellement extrait (jamais la date du jour)', !ct.includes('toISOString') && ct.includes('result.contract_start || undefined'));
@@ -51,7 +51,7 @@ const types = read('src/types/index.ts');
 ok('champs ADDITIFS PersonalDocument (fileUri, mimeType) — aucune suppression', types.includes('fileUri?: string') && types.includes('mimeType?: string'));
 ok('migration SQL fournie SANS être appliquée', existsSync('../docs/MIGRATION_TASK2_contracts_document_id.sql'));
 const sync = read('src/services/cloudSync.ts');
-ok('mapping contracts inchangé (pas de colonne inconnue qui casserait la synchro)', !sync.includes("'document_id'"));
+ok('mapping contracts étendu AVEC repli legacy (synchro jamais cassée avant migration)', sync.includes("'document_id'") && sync.includes('TABLE_FIELDS_LEGACY'));
 
 console.log('— Audit complémentaire TÂCHE 2 —');
 ok('contrats affichés INDÉPENDAMMENT de documents[] (hors ternaire vide)', docs.includes('visibleContracts.length === 0 ?') && docs.includes('visibleContracts.map((c)'));

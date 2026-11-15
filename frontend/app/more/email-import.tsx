@@ -41,13 +41,25 @@ import { getApiLocale } from '../../src/utils/apiLocale';
 
 type ImportMethod = 'scan' | 'pdf' | 'file' | 'photo';
 
+
+// Catégories métier des contrats (identiques à add-contract.tsx)
+const CT_CATS: { id: string; tKey: string }[] = [
+  { id: 'abonnements', tKey: 'typePhone' },
+  { id: 'assurances', tKey: 'typeInsurance' },
+  { id: 'logement', tKey: 'typeHousing' },
+  { id: 'transports', tKey: 'typeTransport' },
+  { id: 'sante', tKey: 'typeHealth' },
+  { id: 'energie', tKey: 'typeEnergy' },
+  { id: 'autre', tKey: 'typeOther' },
+];
+
 export default function ImportInvoiceScreen() {
   const theme = useTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const params = useLocalSearchParams<{ mode?: string }>();
-  const { addInvoice, addContract, addDocument, updateDocument } = useStore();
+  const { addInvoice, addContract, addDocument, updateDocument, addReceipt, addTransaction, updateReceipt, queueUpload } = useStore();
   // TÂCHE 2 — fichier transmis par le menu Partager iOS (ShareIntentRouter)
   const sharedParams = useLocalSearchParams<{ sharedUri?: string; sharedMime?: string; sharedName?: string; sharedText?: string }>();
   const sharedHandled = React.useRef(false);
@@ -90,7 +102,9 @@ export default function ImportInvoiceScreen() {
   const [manualAmount, setManualAmount] = useState('');
   // TÂCHE 2 (audit) — saisie MANUELLE d'un contrat quand l'OCR échoue
   const [showManualCt, setShowManualCt] = useState(false);
-  const [manualCt, setManualCt] = useState({ title: '', issuer: '', amount: '', expiry: '' });
+  // TÂCHE 3 (réserve B) — plus d'« assurance » imposée : catégories métier
+  // réellement définies dans l'app (mêmes clés que l'assistant contrat).
+  const [manualCt, setManualCt] = useState({ title: '', issuer: '', amount: '', expiry: '', category: 'autre' });
 
   // ── Backend calls ──
   const parseEmailText = async (content: string, subject = '') => {
@@ -128,9 +142,9 @@ export default function ImportInvoiceScreen() {
     setBusy(true);
     setBusyLabel(t('emailImport.busyOcrAi'));
     setResult(null);
+    let mime = mimeHint || 'image/jpeg';
     try {
       let base64 = '';
-      let mime = 'image/jpeg';
       if (uriOrPath.startsWith('data:')) {
         base64 = uriOrPath.split(',')[1] || '';
         const m = /^data:([^;]+);/.exec(uriOrPath);
@@ -208,7 +222,19 @@ export default function ImportInvoiceScreen() {
         });
       }
     } catch (e: any) {
-      console.error('[email-import] parseImageFile error:', e);
+      console.error('[email-import] parseImageFile error:', e?.message || e);
+      // TÂCHE 3 (réserve A) — exception/timeout/indisponibilité réseau :
+      // le fichier ORIGINAL est conservé et la saisie manuelle proposée
+      // (à ne pas confondre avec 401/403, traités plus haut = reconnexion).
+      setPendingFile({ uri: uriOrPath, mime });
+      setResult({
+        success: false,
+        _source: 'photo',
+        _originalUri: uriOrPath,
+        _mime: mime,
+        _failedOcr: true,
+        _errorMessage: e?.message || 'network', // i18n-technical (interne)
+      });
       const h = humanizeError(e, {
         title: t('emailImport.importImpossibleTitle'),
         message: t('emailImport.importImpossibleBody'),
@@ -361,11 +387,14 @@ export default function ImportInvoiceScreen() {
           pdfUri: isPdf ? vaultUri : undefined,
           fileUri: isPdf ? undefined : vaultUri,
           mimeType: mime,
+          documentType: 'contract', // TÂCHE 3 — espace Contrats
+          importedAt: now,
           tags: ['contract', 'import'],
           note: t('emailImport.importedByAiNote'),
           createdAt: now,
           updatedAt: now,
         } as any);
+        queueUpload(docId); // TÂCHE 3 — envoi différé vers le stockage privé
         documentId = docId;
       } catch (e: any) {
         const code = e instanceof VaultError ? e.code : 'SAVE_FAILED';
@@ -397,7 +426,7 @@ export default function ImportInvoiceScreen() {
     );
     setResult(null);
     setShowManualCt(false);
-    setManualCt({ title: '', issuer: '', amount: '', expiry: '' });
+    setManualCt({ title: '', issuer: '', amount: '', expiry: '', category: 'autre' });
     return true;
   };
 
@@ -421,6 +450,91 @@ export default function ImportInvoiceScreen() {
     );
   };
 
+  // TÂCHE 3 — TICKET DE DÉPENSE : enregistré dans le système de tickets
+  // (receipts[]), JAMAIS dans invoices[]. Rattachement à une transaction
+  // uniquement sur confirmation explicite de l'utilisateur.
+  const persistAsReceipt = async () => {
+    if (!result) return;
+    const now = Date.now();
+    const amount = normalizeChfAmount(result.amount) ?? normalizeChfAmount(result.total_amount);
+    const title = result.merchant || result.title || result.issuer || t('docSpaces.defaultReceiptTitle');
+    const rDate: string = result.date || new Date().toISOString().slice(0, 10);
+    const rCat: string = result.category || 'autre';
+    let documentId: string | undefined;
+    if (result._originalUri) {
+      try {
+        const docId = `doc_${now}`;
+        const vaultUri = await saveToVault(result._originalUri, docId, result._mime);
+        if (!(await vaultFileExists(vaultUri))) throw new VaultError('SAVE_FAILED');
+        const isPdf = (result._mime || '').includes('pdf') || vaultUri.toLowerCase().endsWith('.pdf');
+        addDocument({
+          id: docId,
+          title,
+          category: 'other',
+          documentType: 'expense_receipt', // TÂCHE 3 — espace Tickets
+          imageBase64: '',
+          pdfUri: isPdf ? vaultUri : undefined,
+          fileUri: isPdf ? undefined : vaultUri,
+          mimeType: result._mime,
+          importedAt: now,
+          tags: ['receipt', 'import'],
+          note: t('emailImport.importedByAiNote'),
+          createdAt: now,
+          updatedAt: now,
+        } as any);
+        queueUpload(docId);
+        documentId = docId;
+      } catch (e: any) {
+        const code = e instanceof VaultError ? e.code : 'SAVE_FAILED';
+        Alert.alert(t('contractsV2.fileErrorTitle'), t(`contractsV2.${code}`));
+        return; // jamais de ticket sans sa pièce conservée
+      }
+    }
+    const receiptId = `rcpt_${now}`;
+    addReceipt({
+      id: receiptId,
+      imageBase64: '',
+      merchant: title,
+      amount: amount ?? 0, // 0 = montant non lu (jamais inventé)
+      currency: result.currency || 'CHF',
+      date: rDate,
+      category: rCat,
+      type: 'ticket',
+      note: t('emailImport.importedByAiNote'),
+      documentId,
+      createdAt: now,
+    } as any);
+    setResult(null);
+    if (amount != null && amount > 0) {
+      Alert.alert(
+        t('docSpaces.askLinkTxTitle'),
+        t('docSpaces.askLinkTxBody', { amount: amount.toFixed(2) }),
+        [
+          {
+            text: t('docSpaces.noExpense'),
+            style: 'cancel',
+            onPress: () => Alert.alert(t('docSpaces.receiptSavedTitle'), t('docSpaces.receiptSavedBody')),
+          },
+          {
+            text: t('docSpaces.createExpense'),
+            onPress: () => {
+              const txId = `tx_${Date.now()}`;
+              addTransaction({
+                id: txId, title, amount, date: rDate, category: rCat,
+                createdAt: Date.now(), updatedAt: Date.now(), synced: false,
+                type: 'expense', source: 'manual',
+              } as any);
+              updateReceipt(receiptId, { transactionId: txId });
+              Alert.alert(t('docSpaces.receiptSavedTitle'), t('docSpaces.receiptLinkedBody'));
+            },
+          },
+        ],
+      );
+    } else {
+      Alert.alert(t('docSpaces.receiptSavedTitle'), t('docSpaces.receiptSavedBody'));
+    }
+  };
+
   const saveInvoice = () => {
     if (!result) return;
     if (mode === 'contract') return persistAsContract();
@@ -428,8 +542,23 @@ export default function ImportInvoiceScreen() {
 
     const docType: string = (result.document_type || '').toLowerCase();
     if (docType === 'contract') return persistAsContract();
-    if (docType === 'invoice' || docType === 'receipt') return persistAsInvoice();
+    if (docType === 'invoice') return persistAsInvoice();
+    if (docType === 'receipt') {
+      // TÂCHE 3 — un ticket n'est JAMAIS transformé en facture
+      // automatiquement : confirmation explicite demandée.
+      Alert.alert(
+        t('docSpaces.classifyTitle'),
+        t('docSpaces.receiptConfirmBody'),
+        [
+          { text: t('common.cancel'), style: 'cancel' },
+          { text: t('docSpaces.pickTicketOption'), onPress: persistAsReceipt },
+          { text: t('emailImport.pickInvoiceOption'), onPress: persistAsInvoice },
+        ],
+      );
+      return;
+    }
 
+    // Classification OCR incertaine → confirmation utilisateur (3 espaces)
     Alert.alert(
       t('emailImport.docTypeConfirmTitle'),
       t('emailImport.docTypeConfirmBody'),
@@ -437,6 +566,7 @@ export default function ImportInvoiceScreen() {
         { text: t('common.cancel'), style: 'cancel' },
         { text: t('emailImport.pickContractOption'), onPress: persistAsContract },
         { text: t('emailImport.pickInvoiceOption'), onPress: persistAsInvoice },
+        { text: t('docSpaces.pickTicketOption'), onPress: persistAsReceipt },
       ],
     );
   };
@@ -614,6 +744,19 @@ export default function ImportInvoiceScreen() {
                 <Text style={styles.rowLabel}>{t('contractsV2.manualTitle')}</Text>
                 <TextInput style={styles.amountInput} value={manualCt.title} onChangeText={(v) => setManualCt((m) => ({ ...m, title: v }))} placeholder={t('contractsV2.manualName')} placeholderTextColor={theme.textTertiary} testID="manual-ct-title" />
                 <TextInput style={styles.amountInput} value={manualCt.issuer} onChangeText={(v) => setManualCt((m) => ({ ...m, issuer: v }))} placeholder={t('contractsV2.manualIssuer')} placeholderTextColor={theme.textTertiary} />
+                <Text style={styles.rowLabel}>{t('docSpaces.manualCategory')}</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                  {CT_CATS.map((c) => (
+                    <TouchableOpacity
+                      key={c.id}
+                      onPress={() => setManualCt((m) => ({ ...m, category: c.id }))}
+                      style={[styles.ctCatChip, manualCt.category === c.id && { borderColor: theme.primary }]}
+                      testID={`manual-ct-cat-${c.id}`}
+                    >
+                      <Text style={{ color: manualCt.category === c.id ? theme.primary : theme.textSecondary, fontSize: 12, fontWeight: '600' }}>{t(`addContract.${c.tKey}`)}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
                 <TextInput style={styles.amountInput} value={manualCt.amount} onChangeText={(v) => setManualCt((m) => ({ ...m, amount: v }))} placeholder={t('contractsV2.manualAmount')} placeholderTextColor={theme.textTertiary} keyboardType="decimal-pad" />
                 {manualCt.amount.length > 0 && normalizeChfAmount(manualCt.amount) === null && (
                   <Text style={{ color: '#EF4444', fontSize: 12 }}>{t('importErrors.amountInvalid')}</Text>
@@ -630,7 +773,7 @@ export default function ImportInvoiceScreen() {
                       {
                         title: manualCt.title.trim(),
                         issuer: manualCt.issuer.trim() || undefined,
-                        category: 'assurance',
+                        category: manualCt.category,
                         amount: manualCt.amount.trim() ? normalizeChfAmount(manualCt.amount) : null,
                         expirationDate: manualCt.expiry.trim() || undefined,
                       },
@@ -743,6 +886,7 @@ function Row({ label, value, highlight }: { label: string; value: string; highli
 }
 
 const makeStyles = (Colors: ThemePalette) => StyleSheet.create({
+  ctCatChip: { paddingHorizontal: 10, paddingVertical: 8, borderRadius: 999, borderWidth: 1, borderColor: Colors.cardBorder, backgroundColor: Colors.card },
   saveBtnAlt: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
     backgroundColor: 'rgba(52,211,153,0.16)', borderRadius: BorderRadius.md, paddingVertical: 12,

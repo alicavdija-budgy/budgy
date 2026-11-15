@@ -75,6 +75,12 @@ async function attemptPush() {
     if (Date.now() - lastPush < 1500) return; // anti-burst
     const r = await pushAllToCloud();
     lastPush = Date.now();
+    // TÂCHE 3 — file durable des pièces jointes : traitée après chaque push
+    // (idempotente ; en cas d'échec transitoire, le fichier reste en file).
+    try {
+      const { processUploadQueue } = await import('../services/documentStorage');
+      processUploadQueue().catch(() => {});
+    } catch {}
     if (__DEV__) {
       if (r.ok) {
         console.log(`${TAG} pushed ${r.pushed} items`);

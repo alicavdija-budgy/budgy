@@ -16,6 +16,7 @@
  */
 
 import { getSupabase, isSupabaseConfigured } from '../lib/supabase';
+import { mergeCollections } from '../lib/syncMerge';
 import { useStore } from '../stores/useStore';
 import type {
   Transaction,
@@ -100,19 +101,35 @@ async function upsertTable(table: string, rows: any[], conflictCol: string = 'id
 // client-only comme `synced`, `receipt` base64, `color`, `icon`, etc.).
 const TABLE_FIELDS: Record<string, string[]> = {
   user_preferences: ['user_id', 'currency', 'language', 'canton', 'onboarded', 'is_pro'],
-  transactions:       ['id', 'user_id', 'title', 'amount', 'category', 'date', 'payment_method', 'note', 'created_at', 'updated_at'],
+  // TÂCHE 3 — champs anti-double-comptage (liens par ID) désormais synchronisés
+  transactions:       ['id', 'user_id', 'title', 'amount', 'category', 'date', 'payment_method', 'note', 'type', 'source', 'invoice_id', 'debt_id', 'recurring_id', 'created_at', 'updated_at'],
   incomes:            ['id', 'user_id', 'title', 'amount', 'frequency', 'type', 'category', 'created_at'],
   savings_goals:      ['id', 'user_id', 'title', 'emoji', 'color', 'target', 'saved', 'deadline', 'category', 'created_at'],
   budgets:            ['id', 'user_id', 'category', 'monthly', 'spent', 'created_at'],
   recurring_expenses: ['id', 'user_id', 'title', 'amount', 'category', 'frequency', 'active', 'next_date', 'created_at'],
-  contracts:          ['id', 'user_id', 'title', 'issuer', 'amount', 'category', 'expiration_date', 'start_date', 'urgent', 'auto_renew', 'notes', 'created_at'],
+  contracts:          ['id', 'user_id', 'title', 'issuer', 'amount', 'category', 'expiration_date', 'start_date', 'urgent', 'auto_renew', 'notes', 'document_id', 'photo_uri', 'notice_period', 'created_at'],
   debts:              ['id', 'user_id', 'title', 'color', 'total', 'paid', 'interest_rate', 'monthly_payment', 'created_at'],
   investments:        ['id', 'user_id', 'symbol', 'shares', 'avg_cost', 'current_price', 'name', 'type', 'created_at'],
-  receipts:           ['id', 'user_id', 'merchant', 'amount', 'date', 'category', 'image_uri', 'created_at'],
-  invoices:           ['id', 'user_id', 'title', 'issuer', 'amount', 'currency', 'due_date', 'invoice_date', 'iban', 'reference', 'category', 'status', 'source', 'created_at'],
-  documents:          ['id', 'user_id', 'title', 'category', 'data_uri', 'notes', 'created_at'],
+  receipts:           ['id', 'user_id', 'merchant', 'amount', 'date', 'category', 'image_uri', 'currency', 'type', 'note', 'transaction_id', 'document_id', 'created_at'],
+  invoices:           ['id', 'user_id', 'title', 'issuer', 'amount', 'currency', 'due_date', 'invoice_date', 'iban', 'reference', 'category', 'status', 'source', 'paid_at', 'recurring_id', 'created_at'],
+  // TÂCHE 3 — métadonnées documentaires ; les binaires (image_base64,
+  // pdf_base64) ne vont JAMAIS en colonnes : ils vont dans Supabase Storage.
+  documents:          ['id', 'user_id', 'title', 'category', 'document_type', 'file_uri', 'pdf_uri', 'mime_type', 'pages', 'tags', 'note', 'remote_path', 'file_size', 'imported_at', 'expires_at', 'created_at', 'updated_at'],
   expense_groups:     ['id', 'user_id', 'name', 'members', 'created_at'],
   group_expenses:     ['id', 'user_id', 'group_id', 'title', 'amount', 'paid_by', 'split', 'date', 'created_at'],
+};
+
+// TÂCHE 3 — REPLI « legacy » : tant que la migration additive
+// (docs/MIGRATION_TASK3_storage_prive.sql) n'est PAS appliquée, les
+// nouvelles colonnes n'existent pas en base. En cas d'erreur de colonne
+// (42703/PGRST204), on retente avec la liste v3.7.28 : la synchro reste
+// fonctionnelle AVANT et APRÈS migration, sans rien casser.
+const TABLE_FIELDS_LEGACY: Record<string, string[]> = {
+  transactions: ['id', 'user_id', 'title', 'amount', 'category', 'date', 'payment_method', 'note', 'created_at', 'updated_at'],
+  contracts:    ['id', 'user_id', 'title', 'issuer', 'amount', 'category', 'expiration_date', 'start_date', 'urgent', 'auto_renew', 'notes', 'created_at'],
+  receipts:     ['id', 'user_id', 'merchant', 'amount', 'date', 'category', 'image_uri', 'created_at'],
+  invoices:     ['id', 'user_id', 'title', 'issuer', 'amount', 'currency', 'due_date', 'invoice_date', 'iban', 'reference', 'category', 'status', 'source', 'created_at'],
+  documents:    ['id', 'user_id', 'title', 'category', 'data_uri', 'notes', 'created_at'],
 };
 
 // PK column for upsert conflict resolution. Most tables use 'id' (default),
@@ -121,8 +138,7 @@ const TABLE_CONFLICT: Record<string, string> = {
   user_preferences: 'user_id',
 };
 
-function pickFields(table: string, row: any): any {
-  const allowed = TABLE_FIELDS[table];
+function pickAllowed(allowed: string[] | undefined, row: any): any {
   if (!allowed) return row;
   const out: any = {};
   for (const f of allowed) {
@@ -130,6 +146,14 @@ function pickFields(table: string, row: any): any {
     if (v !== undefined) out[f] = v;
   }
   return out;
+}
+
+function pickFields(table: string, row: any): any {
+  return pickAllowed(TABLE_FIELDS[table], row);
+}
+
+function isMissingColumnError(msg: string): boolean {
+  return /42703|PGRST204|column .* does not exist|schema cache/i.test(msg);
 }
 
 export async function pushAllToCloud(): Promise<{
@@ -163,7 +187,21 @@ export async function pushAllToCloud(): Promise<{
       await upsertTable(table, filtered, conflictCol);
       total += rows.length;
     } catch (e: any) {
-      errors.push(`${table}: ${e?.message || String(e)}`);
+      const msg = e?.message || String(e);
+      // TÂCHE 3 — repli legacy avant migration : colonnes additives absentes
+      const legacy = TABLE_FIELDS_LEGACY[table];
+      if (legacy && isMissingColumnError(msg)) {
+        try {
+          const filtered = rows.map((r) => pickAllowed(legacy, r));
+          await upsertTable(table, filtered, TABLE_CONFLICT[table] || 'id');
+          total += rows.length;
+          return;
+        } catch (e2: any) {
+          errors.push(`${table}: ${e2?.message || String(e2)}`);
+          return;
+        }
+      }
+      errors.push(`${table}: ${msg}`);
     }
   };
 
@@ -205,9 +243,13 @@ export async function pushAllToCloud(): Promise<{
   }
 
   if (errors.length > 0) {
-    // Partial success: we still pushed what we could.
+    // Partial success: we still pushed what we could. lastCloudPushAt n'est
+    // PAS avancé : les éléments des tables en échec restent protégés au pull.
     return { ok: total > 0, pushed: total, error: errors.join(' | ') };
   }
+  // Push COMPLET réussi → un pull ultérieur peut assumer que tout élément
+  // local absent du cloud et antérieur à ce moment a été supprimé ailleurs.
+  useStore.getState().markCloudPushed(Date.now());
   return { ok: true, pushed: total };
 }
 
@@ -276,20 +318,27 @@ export async function pullAllFromCloud(): Promise<{ ok: boolean; pulled: number;
       });
     }
 
+    // TÂCHE 3 — FUSION SANS PERTE (plus d'écrasement intégral) :
+    //  • une création locale non encore poussée n'est JAMAIS supprimée ;
+    //  • un champ absent/NULL côté cloud (ex: file_uri avant migration)
+    //    n'écrase JAMAIS la valeur locale (pièces jointes locales conservées).
+    const lastPushAt = cur.lastCloudPushAt || 0;
+    const mg = <T,>(local: T[], remote: any[]): T[] =>
+      mergeCollections((local || []) as any[], remote as any[], lastPushAt).merged as T[];
     useStore.setState({
-      transactions: transactions as Transaction[],
-      incomes: incomes as Income[],
-      savingsGoals: savingsGoals as SavingsGoal[],
-      budgets: budgets as Budget[],
-      recurringExpenses: recurringExpenses as RecurringExpense[],
-      contracts: contracts as Contract[],
-      debts: debts as Debt[],
-      investments: investments as Investment[],
-      receipts: receipts as Receipt[],
-      invoices: invoices as Invoice[],
-      documents: documents as PersonalDocument[],
-      groups: groups as ExpenseGroup[],
-      groupExpenses: groupExpenses as GroupExpense[],
+      transactions: mg(cur.transactions, transactions) as Transaction[],
+      incomes: mg(cur.incomes, incomes) as Income[],
+      savingsGoals: mg(cur.savingsGoals, savingsGoals) as SavingsGoal[],
+      budgets: mg(cur.budgets, budgets) as Budget[],
+      recurringExpenses: mg(cur.recurringExpenses, recurringExpenses) as RecurringExpense[],
+      contracts: mg(cur.contracts, contracts) as Contract[],
+      debts: mg(cur.debts, debts) as Debt[],
+      investments: mg(cur.investments, investments) as Investment[],
+      receipts: mg(cur.receipts, receipts) as Receipt[],
+      invoices: mg(cur.invoices, invoices) as Invoice[],
+      documents: mg(cur.documents, documents) as PersonalDocument[],
+      groups: mg(cur.groups, groups) as ExpenseGroup[],
+      groupExpenses: mg(cur.groupExpenses, groupExpenses) as GroupExpense[],
     });
 
     total =

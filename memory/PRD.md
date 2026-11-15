@@ -363,3 +363,12 @@ test
 ## TÂCHE 2 complément audit — commit ci-dessus
 - Contrats visibles meme documents[] vide + recherche titre/emetteur + dedoublonnage PJ ; saisie manuelle OCR-down (saveContractRecord commun) ; vault: integrite taille+nettoyage+noms uniques+web data URL ; Ouvrir PDF (WebView) separe de Partager + rattacher fichier ancien contrat + fileMissing ; limite 8 Mo coherente backend 12M b64 ; test-contracts 39/39 ; E2E navigateur valide.
 - EN ATTENTE: autorisation utilisateur pour TÂCHE 3.
+
+## TÂCHE 3 — Séparation documentaire + stockage privé (branche task3-documents-storage)
+- documentType strict (invoice/contract/expense_receipt/unclassified) distinct de la categorie metier ; 3 espaces UI + À classer + classification manuelle (jamais auto) ; ticket jamais transforme en facture.
+- Reserves T2 corrigees: A) exception/timeout OCR → fichier conserve + saisie manuelle (401/403 = reconnexion distincte) ; B) categorie metier choisie (plus d assurance imposee) ; C) rehydratation + lien contrat-document verifies E2E.
+- Supabase: stockage prive users/{uid}/{invoices|contracts|expense-receipts}/{documentId}/ (documentStorage.ts, bucket user-documents PRIVE, URLs signees temporaires, file d envoi durable idempotente pendingUploads).
+- Sync sans perte: mergeCollections (pull ne clobber plus le local non pousse ; champ NULL cloud n ecrase jamais le local) ; mappings etendus (document_id, document_type, file_uri, mime_type, invoice_id/debt_id/recurring_id...) avec repli legacy avant migration ; lastCloudPushAt uniquement sur push complet.
+- Migration ADDITIVE preparee NON appliquee: docs/MIGRATION_TASK3_storage_prive.sql (colonnes + bucket + policies proprietaire + rollback).
+- Tests: test-task3 54/54 (execution reelle de syncMerge), suites non-reg vertes, E2E espaces + rehydratation OK. NON TESTE: 2 comptes reels sur bucket (migration non appliquee), iPhone natif.
+- EN ATTENTE: validation utilisateur avant TÂCHE 5.

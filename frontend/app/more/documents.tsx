@@ -30,7 +30,8 @@ import { useStore } from '../../src/stores/useStore';
 import { Card, EmptyState, Button } from '../../src/components/ui';
 import ZoomableImage from '../../src/components/ZoomableImage';
 import CornerEditor from '../../src/components/CornerEditor';
-import type { DocumentCategory, PersonalDocument } from '../../src/types';
+import type { BudgyDocumentType, DocumentCategory, PersonalDocument } from '../../src/types';
+import { docTypeOf } from '../../src/lib/syncMerge';
 import { useTranslation } from '../../src/hooks/useTranslation';
 import { DATE_LOCALES } from '../../src/i18n/translations';
 
@@ -66,7 +67,7 @@ export default function DocumentsScreen() {
   const locale = DATE_LOCALES[lang];
   const FILTERS = useMemo(() => FILTER_KEYS.map((f) => ({ id: f.id, label: t(`documents.${f.tKey}`), emoji: f.emoji })), [t]);
   const CATEGORIES = useMemo(() => CATEGORY_KEYS.map((c) => ({ id: c.id, label: t(`documents.${c.tKey}`), emoji: c.emoji, color: c.color })), [t]);
-  const { documents, addDocument, deleteDocument, contracts, updateContract, deleteContract } = useStore();
+  const { documents, addDocument, updateDocument, deleteDocument, contracts, updateContract, deleteContract } = useStore();
   // TÂCHE 2 — arrivée depuis l'import (« Voir mes contrats »)
   const incoming = useLocalSearchParams<{ filter?: string }>();
   const [permission, requestPermission] = useCameraPermissions();
@@ -75,6 +76,8 @@ export default function DocumentsScreen() {
     incoming.filter === 'contracts' ? 'contracts' : 'all'
   );
   const [selectedContract, setSelectedContract] = useState<string | null>(null);
+  // TÂCHE 3 — trois espaces documentaires STRICTS (type ≠ catégorie métier)
+  const [typeFilter, setTypeFilter] = useState<'all' | BudgyDocumentType>('all');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<string | null>(null);
 
@@ -95,6 +98,16 @@ export default function DocumentsScreen() {
   const [retakeIndex, setRetakeIndex] = useState<number | null>(null);
   const cameraRef = useRef<CameraView | null>(null);
 
+  // TÂCHE 3 — classification manuelle d'un document (jamais automatique)
+  const classifyDoc = (d: PersonalDocument) => {
+    Alert.alert(t('docSpaces.classifyTitle'), t('docSpaces.classifyBody'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('docSpaces.spaceInvoices'), onPress: () => updateDocument(d.id, { documentType: 'invoice' } as any) },
+      { text: t('docSpaces.spaceContracts'), onPress: () => updateDocument(d.id, { documentType: 'contract' } as any) },
+      { text: t('docSpaces.spaceReceipts'), onPress: () => updateDocument(d.id, { documentType: 'expense_receipt' } as any) },
+    ]);
+  };
+
   // Recherche contrats (titre + émetteur) — anciens contrats SANS documentId inclus
   const visibleContracts = useMemo(() => contracts.filter((c) => {
     if (!search.trim()) return true;
@@ -102,16 +115,19 @@ export default function DocumentsScreen() {
     return c.title.toLowerCase().includes(q) || (c.issuer || '').toLowerCase().includes(q);
   }), [contracts, search]);
   // Les pièces jointes de contrats ne sont PAS doublées dans la grille
-  const linkedDocIds = useMemo(() => new Set(contracts.map((c) => c.documentId).filter(Boolean)), [contracts]);
+  const linkedDocIds = useMemo(() => new Set(contracts.map((c) => c.documentId).filter((id): id is string => !!id)), [contracts]);
   const filtered = useMemo(() => documents.filter((d) => {
     if (linkedDocIds.has(d.id) && (filter === 'all' || filter === 'contracts')) return false;
+    // TÂCHE 3 — espace documentaire : un contrat d'assurance reste dans
+    // Contrats même si sa catégorie métier est « assurance ».
+    if (typeFilter !== 'all' && docTypeOf(d, linkedDocIds) !== typeFilter) return false;
     if (filter !== 'all' && d.category !== filter) return false;
     if (search.trim()) {
       const q = search.toLowerCase();
       if (!d.title.toLowerCase().includes(q) && !(d.tags || []).some((t) => t.toLowerCase().includes(q)) && !(d.note || '').toLowerCase().includes(q)) return false;
     }
     return true;
-  }), [documents, filter, search, linkedDocIds]);
+  }), [documents, filter, search, linkedDocIds, typeFilter]);
 
   const counts = useMemo(() => {
     const m: Record<string, number> = { all: documents.length };
@@ -807,6 +823,28 @@ ${pageDataUrls.map((src, i) => `
           placeholderTextColor={theme.textTertiary}
         />
 
+        {/* TÂCHE 3 — espaces documentaires : Factures / Contrats / Tickets / À classer */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }}>
+          <View style={styles.filterRow}>
+            {([
+              { id: 'all', tKey: 'spaceAll' },
+              { id: 'invoice', tKey: 'spaceInvoices' },
+              { id: 'contract', tKey: 'spaceContracts' },
+              { id: 'expense_receipt', tKey: 'spaceReceipts' },
+              { id: 'unclassified', tKey: 'spaceUnclassified' },
+            ] as { id: 'all' | BudgyDocumentType; tKey: string }[]).map((sp) => (
+              <TouchableOpacity
+                key={sp.id}
+                style={[styles.filterChip, typeFilter === sp.id && styles.filterChipActive]}
+                onPress={() => setTypeFilter(sp.id)}
+                testID={`space-${sp.id}`}
+              >
+                <Text style={[styles.filterText, typeFilter === sp.id && styles.filterTextActive]}>{t(`docSpaces.${sp.tKey}`)}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </ScrollView>
+
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: Spacing.md }}>
           <View style={styles.filterRow}>
             <TouchableOpacity style={[styles.filterChip, filter === 'all' && styles.filterChipActive]} onPress={() => setFilter('all')}>
@@ -835,7 +873,7 @@ ${pageDataUrls.map((src, i) => `
 
         {/* TÂCHE 2 (audit) — VRAIE section Contrats : affichée depuis
             contracts[] indépendamment de documents[], recherche incluse */}
-        {(filter === 'all' || filter === 'contracts') && visibleContracts.length > 0 && (
+        {(filter === 'all' || filter === 'contracts') && (typeFilter === 'all' || typeFilter === 'contract') && visibleContracts.length > 0 && (
             <View style={{ marginBottom: 14 }}>
               <Text style={styles.sectionLabel}>{t('contractsV2.sectionTitle')} ({contracts.length})</Text>
               {visibleContracts.map((c) => {
@@ -917,7 +955,7 @@ ${pageDataUrls.map((src, i) => `
             const cat = CATEGORIES.find((c) => c.id === d.category);
             const numPages = d.pages?.length || 1;
             return (
-              <TouchableOpacity key={d.id} style={styles.docCard} onPress={() => { setSelected(d.id); setMode('detail'); }}>
+              <TouchableOpacity key={d.id} style={styles.docCard} onPress={() => { setSelected(d.id); setMode('detail'); }} onLongPress={() => classifyDoc(d)} testID={`doc-card-${d.id}`}>
                 <View style={[styles.docThumb, { backgroundColor: `${cat?.color}20` }]}>
                   {d.imageBase64 ? (
                     <Image source={{ uri: d.imageBase64 }} style={StyleSheet.absoluteFill} />
@@ -932,7 +970,11 @@ ${pageDataUrls.map((src, i) => `
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.docTitle} numberOfLines={1}>{d.title}</Text>
-                  <Text style={styles.docMeta}>{cat?.label} · {new Date(d.createdAt).toLocaleDateString(locale)}</Text>
+                  <Text style={styles.docMeta}>
+                    {cat?.label} · {new Date(d.createdAt).toLocaleDateString(locale)}
+                    {docTypeOf(d, linkedDocIds) === 'unclassified' ? ` · ${t('docSpaces.toClassify')}` : ''}
+                    {(d as any).remoteUploadedAt ? ' · ☁️' : ''}
+                  </Text>
                   {d.tags?.length ? (
                     <Text style={styles.docTags} numberOfLines={1}>{d.tags.map(t => `#${t}`).join(' ')}</Text>
                   ) : null}

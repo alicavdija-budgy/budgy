@@ -136,6 +136,12 @@ interface AppState {
   addReceipt: (receipt: Receipt) => void;
   deleteReceipt: (id: string) => void;
   updateReceipt: (id: string, receipt: Partial<Receipt>) => void;
+  // TÂCHE 3 — synchro documentaire sans perte + file d'envoi durable
+  lastCloudPushAt: number;
+  pendingUploads: string[];
+  markCloudPushed: (ts: number) => void;
+  queueUpload: (docId: string) => void;
+  dequeueUpload: (docId: string) => void;
 
   // Invoice actions
   addInvoice: (invoice: Invoice) => void;
@@ -210,6 +216,8 @@ export const useStore = create<AppState>()(
       receipts: [],
       invoices: [],
       syncQueue: [],
+      lastCloudPushAt: 0,
+      pendingUploads: [],
       isOnline: true,
       isPro: false,
       documents: [],
@@ -449,7 +457,21 @@ export const useStore = create<AppState>()(
           documents: s.documents.map((d) => (d.id === id ? { ...d, ...doc, updatedAt: Date.now() } : d)),
         })),
       deleteDocument: (id) =>
-        set((s) => ({ documents: s.documents.filter((d) => d.id !== id) })),
+        set((s) => ({
+          documents: s.documents.filter((d) => d.id !== id),
+          pendingUploads: s.pendingUploads.filter((i) => i !== id),
+        })),
+
+      // TÂCHE 3 — file d'envoi durable (persistée) et horodatage du dernier
+      // push COMPLET : un pull ne peut plus écraser une création locale
+      // non encore synchronisée.
+      markCloudPushed: (ts) => set({ lastCloudPushAt: ts }),
+      queueUpload: (docId) =>
+        set((s) => ({
+          pendingUploads: s.pendingUploads.includes(docId) ? s.pendingUploads : [...s.pendingUploads, docId],
+        })),
+      dequeueUpload: (docId) =>
+        set((s) => ({ pendingUploads: s.pendingUploads.filter((i) => i !== docId) })),
 
       // Groups
       addGroup: (group) => set((s) => ({ groups: [group, ...s.groups] })),
@@ -514,6 +536,8 @@ export const useStore = create<AppState>()(
         receipts: [],
         invoices: [],
         syncQueue: [],
+        lastCloudPushAt: 0,
+        pendingUploads: [],
         documents: [],
         groups: [],
         groupExpenses: [],

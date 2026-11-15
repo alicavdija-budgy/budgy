@@ -141,3 +141,46 @@ jobs:
           assert 'platform: \'ios\'' in Path('frontend/src/services/iap.ts').read_text()
           print('PASS: OCR auth + actual MIME, Android payment validation intentionally disabled')
           PY
+
+  docker-smoke:
+    name: Dockerfile build + FastAPI /health smoke (NO deploy)
+    if: github.event_name == 'pull_request'
+    needs: backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build existing backend Docker image locally (NO registry push)
+        run: |
+          docker build --build-arg BUDGY_GIT_SHA="$GITHUB_SHA" \
+            -f backend/Dockerfile -t budgy-pr-smoke:local backend
+      - name: Start isolated container and verify HTTP 8000 + real OpenAPI
+        run: |
+          set -euo pipefail
+          docker run -d --name budgy-pr-smoke \
+            -p 127.0.0.1:18000:8000 budgy-pr-smoke:local
+          trap 'docker logs --tail 35 budgy-pr-smoke || true; docker rm -f budgy-pr-smoke >/dev/null 2>&1 || true' EXIT
+          ready=0
+          for attempt in $(seq 1 35); do
+            if curl --fail --silent --show-error --max-time 3 \
+              http://127.0.0.1:18000/health -o /tmp/budgy-docker-health.json 2>/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          test "$ready" -eq 1 || { echo "::error::Container never became healthy"; exit 1; }
+          curl --fail --silent --show-error --max-time 10 \
+            http://127.0.0.1:18000/openapi.json -o /tmp/budgy-docker-openapi.json
+          python - <<'PY'
+          import json, os
+          h=json.load(open('/tmp/budgy-docker-health.json'))
+          a=json.load(open('/tmp/budgy-docker-openapi.json'))
+          p=a['components']['schemas']['OCRResponse']['properties']
+          assert h['status']=='ok'
+          assert h['version']=='4.0.0'
+          assert h['commit_sha']==os.environ['GITHUB_SHA'].lower()
+          assert {'swiss_qr_content','document_type','needs_user_confirmation'}.issubset(p)
+          assert '/api/scanner/ocr' in a['paths']
+          print('PASS: production Dockerfile built and served real port 8000; SHA/4.0.0/Swiss QR verified')
+          PY

@@ -257,6 +257,8 @@ export interface Invoice {
   chfAmount?: number;
   fxRate?: number;
   fxDate?: string;
+  /** Source du taux utilisé (ex. 'BNS', 'manuel') — jamais de taux anonyme. */
+  fxSource?: string;
 }
 
 export interface SyncQueueItem {

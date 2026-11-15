@@ -16,7 +16,7 @@ import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useStore } from '../stores/useStore';
 import { useAlertsStore } from '../stores/useAlertsStore';
-import { getMonthlyFinancialSnapshot } from '../stores/selectors';
+import { getMonthlyFinancialSnapshot, computeBudgetConsumption, parseDate } from '../stores/selectors';
 
 const APP_GROUP = 'group.com.budgy.ch.budgy';
 const SNAPSHOT_KEY = 'budgy.widget.snapshot';
@@ -108,17 +108,29 @@ export async function refreshWidgetSnapshot(): Promise<void> {
       debts: s.debts,
     });
     const goal = (s.savingsGoals || []).find((g: any) => (g.target || 0) > 0);
-    // TÂCHE 4 — données RÉELLES pour les commandes Siri « factures »,
-    // « épargne » et « budget mensuel ». Aucune invention : factures CHF
-    // comptées, devises étrangères signalées à part (texte), budgets depuis
-    // les enveloppes existantes. Jamais de solde fictif.
-    const unpaidBills = (s.invoices || []).filter((i: any) => (i.status || '') !== 'paid');
-    const nextDue = unpaidBills
-      .filter((i: any) => !!i.dueDate)
-      .sort((a: any, b: any) => String(a.dueDate).localeCompare(String(b.dueDate)))[0];
+    // TÂCHE 4 — données RÉELLES pour les commandes Siri. Périmètre des
+    // factures EXPLICITE et UNIQUE : « exigibles d'ici la fin du mois »
+    // (y compris déjà en retard) — billsCount et billsTotal portent sur le
+    // MÊME périmètre (le total CHF exclut les devises étrangères, énoncées à
+    // part). Échéances triées sur dates réellement analysées (parseDate).
+    const nowD = new Date();
+    const endOfMonth = new Date(nowD.getFullYear(), nowD.getMonth() + 1, 0, 23, 59, 59, 999);
+    const dueBillsList = (s.invoices || []).filter((i: any) => {
+      if ((i.status || '') === 'paid') return false;
+      const due = parseDate(i.dueDate);
+      return !due || due <= endOfMonth;
+    });
+    const nextDue = dueBillsList
+      .map((i: any) => ({ i, d: parseDate(i.dueDate) }))
+      .filter((x: any) => !!x.d)
+      .sort((a: any, b: any) => a.d.getTime() - b.d.getTime())[0]?.i;
     const savedTotal = (s.savingsGoals || []).reduce((sum: number, g: any) => sum + (Number(g.saved) || 0), 0);
-    const budgetTotal = (s.budgets || []).reduce((sum: number, b: any) => sum + (Number(b.monthly) || 0), 0);
-    const budgetSpent = (s.budgets || []).reduce((sum: number, b: any) => sum + (Number(b.spent) || 0), 0);
+    // Budget mensuel : SÉLECTEUR PARTAGÉ avec l'écran Budgets (limites
+    // réelles budget.limit + transactions du mois par catégorie — jamais un
+    // second moteur qui diverge de l'interface).
+    const consumption = computeBudgetConsumption(
+      s.budgets as any, s.transactions as any, nowD.getFullYear(), nowD.getMonth(),
+    );
     const payload = {
       v: 1,
       scope: activeScope(),
@@ -134,8 +146,10 @@ export async function refreshWidgetSnapshot(): Promise<void> {
       lockAmounts: lockRaw === '1',
       siriAmounts: siriRaw === '1',
       updatedAt: Date.now() / 1000,
-      // TÂCHE 4 — Siri factures / épargne / budget (champs optionnels)
-      billsCount: unpaidBills.length,
+      // TÂCHE 4 — Siri factures / épargne / budget (champs optionnels).
+      // billsCount et billsTotal = MÊME périmètre (exigibles fin de mois).
+      billsCount: snap.dueBillsCount,
+      billsOverdue: snap.overdueBillsCount || undefined,
       billsTotal: Math.round(snap.upcomingBills * 100) / 100,
       billsForeign: (snap.foreignBills || [])
         .map((f) => `${f.count} × ${f.currency} ${f.total.toFixed(2)}`)
@@ -143,9 +157,12 @@ export async function refreshWidgetSnapshot(): Promise<void> {
       nextBillTitle: nextDue ? String(nextDue.title || '').slice(0, 30) : undefined,
       nextBillDue: nextDue ? String(nextDue.dueDate) : undefined,
       savedTotal: Math.round(savedTotal * 100) / 100,
-      budgetTotal: Math.round(budgetTotal * 100) / 100,
-      budgetSpent: Math.round(budgetSpent * 100) / 100,
+      budgetCount: consumption.rows.length,
+      budgetTotal: Math.round(consumption.totalLimit * 100) / 100,
+      budgetSpent: Math.round(consumption.totalSpent * 100) / 100,
       availablePartial: snap.availableIsPartial || undefined,
+      // Langue active de l'app → les dialogues Siri répondent FR/DE/IT/EN.
+      lang: String(s.preferences?.language || 'fr'),
     };
     storage.set(SNAPSHOT_KEY, JSON.stringify(payload));
     reloadWidgets();

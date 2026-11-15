@@ -97,7 +97,7 @@ S('TABLE_FIELDS invoices transmet document_id + qr_payload', /invoices:\s*\[[^\]
 S('TABLE_FIELDS documents transmet spc_payload', /documents:\s*\[[^\]]*'spc_payload'[^\]]*\]/.test(cs));
 S('aucun binaire en colonne (pas de base64/file_uri dans TABLE_FIELDS)', !/TABLE_FIELDS[^;]*'(image_base64|pdf_base64|file_uri|pdf_uri|pages)'/s.test(cs));
 S('repli legacy SANS les nouveaux champs (compatible ancien schéma)', !/TABLE_FIELDS_LEGACY[\s\S]{0,900}qr_payload/.test(cs) && !/TABLE_FIELDS_LEGACY[\s\S]{0,900}spc_payload/.test(cs));
-S('sonde schéma sur les colonnes Tâche 5 (migration partielle → reste en L:)', cs.includes("invoices: 'qr_payload'") && cs.includes("documents: 'spc_payload'"));
+S('sonde schéma sur les colonnes les PLUS récentes (migration partielle → reste en L:)', cs.includes("invoices: 'fx_source'") && cs.includes("documents: 'spc_payload'"));
 {
   // [UNIT] Les 3 champs participent au hash de contenu → mutation détectée,
   // envoi après migration via le mécanisme L:/dirty.

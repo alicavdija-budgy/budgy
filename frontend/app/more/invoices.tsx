@@ -179,6 +179,12 @@ export default function InvoicesScreen() {
       const candidate = transactions.find((tx) => {
         if ((tx as any).invoiceId || (tx as any).type === 'income') return false;
         if ((tx as any).source && (tx as any).source !== 'manual') return false;
+        // TÂCHE 4 — DEVISES comparées, pas seulement les montants : un
+        // paiement de 100 EUR n'est jamais rapproché d'une dépense de
+        // 100 CHF sur la seule égalité numérique.
+        const txCur = String((tx as any).currency || 'CHF').toUpperCase();
+        const invCur = String(inv.currency || 'CHF').toUpperCase();
+        if (txCur !== invCur) return false;
         if (Math.abs((Number(tx.amount) || 0) - (Number(inv.amount) || 0)) > 0.01) return false;
         const d = new Date(tx.date);
         return d.getFullYear() === nowD2.getFullYear() && d.getMonth() === nowD2.getMonth();

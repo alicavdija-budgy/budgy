@@ -426,3 +426,10 @@ test
 - Découverte : écran Siri & raccourcis → section « Commandes Siri natives » (4 commandes copiables, note build requis), note obsolète corrigée ×4.
 - Tests : test-task4 45/45 (15 unit exécutés : devises, nombres dictés, protection pull des dépenses Siri ; 30 statiques), toutes suites vertes (engine 23, budgets 67, qrbill 49, import 38, contracts 39, task3 117, task5 69, stability 46 build 91, cloud-delete 21, alerts 56, widgets 44), tsc/eslint/i18n ×4.
 - NON TESTÉ : exécution réelle Siri/App Intents/App Group/démarrage à froid sur iPhone physique (build natif interdit dans ce cycle).
+
+## CORRECTIFS FINAUX TÂCHE 4 (branche task4-siri)
+- P0 budget Siri exact : sélecteur PARTAGÉ computeBudgetConsumption (selectors.ts) = limites réelles budget.limit + transactions du mois par catégorie (remboursements négatifs déduits, devises étrangères jamais 1:1) ; écran Budgets ET widgetBridge branchés dessus (zéro divergence) ; aucune enveloppe → annoncé clairement.
+- P0 centimes Siri : BudgyIntentStore.chf réécrit — arrondi sur cents ENTIERS (25.50 → « 25.50 », jamais 26 ; 1 234.50 groupé ; −12.75 signé ; 0.1+0.2 → 0.30) ; montant réel jamais modifié.
+- P0 synchro devises : transactions.currency + invoices.chf_amount/fx_rate/fx_date/fx_source dans migration + TABLE_FIELDS (legacy inchangé, sondes déplacées sur currency/fx_source) ; cohérence montant×taux≈CHF re-validée (sinon NON vérifié) ; pull legacy ne fait jamais revenir un paiement EUR en CHF (dirty gagne, testé) ; rapprochements comparent les DEVISES (facture↔transaction, QR↔charge récurrente CHF uniquement).
+- P1 dialogues Siri localisés FR/DE/IT/EN : BudgyL10n (18 clés ×4, langue = celle de l app via snapshot.lang, repli système) + Localizable.xcstrings (19 titres/paramètres en/de/it) ; mention « disponible partiel » dans GetBudget + secours GetMonthlyBudget ; périmètre factures ÉNONCÉ (« exigibles fin de mois »), retards comptés par DATE analysée, tri des échéances par date réelle.
+- Tests : test-task4 75/75 (33 unit exécutés + 42 statiques), toutes suites vertes, tsc/eslint/i18n. NON TESTÉ : compilation Swift (pas de toolchain dans le pod), App Intents sur iPhone physique.

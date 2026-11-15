@@ -52,9 +52,9 @@ check('identifiant unique par dépense (UUID)', intentsShared.includes('UUID().u
 check('rattachée au scope du compte', intentsShared.includes('scope: scope'));
 check('aucune mutation du solde affiché avant enregistrement', !intentsShared.includes('snap.available -='));
 check('montant validé (0 < m < 1 000 000)', intents.includes('amount > 0, amount < 1_000_000'));
-check('annonce honnête : « confirmez » (pas « enregistré »)', intents.includes('confirmez') && !intents.includes('Il te reste'));
+check('annonce honnête : « confirmez » (pas « enregistré »)', intentsShared.includes('confirmez') && !intentsShared.includes('Il te reste'));
 check('budget vocal : opt-in explicite + non masqué + frais', intents.includes('s.siriAmounts') && intents.includes('!s.hide') && intents.includes('36 * 3600'));
-check('sinon ouverture de Budgy (pas de montant énoncé)', intents.includes('Ouvrez Budgy pour voir votre budget'));
+check('sinon ouverture de Budgy (pas de montant énoncé)', intentsShared.includes('Ouvrez Budgy pour consulter vos chiffres'));
 check('4 raccourcis déclarés (dépense, budget, scanner, ouvrir)', ['AddExpenseIntent', 'GetBudgetIntent', 'ScanBillIntent', 'OpenBudgyIntent'].every((i) => shortcuts.includes(i)));
 check('phrases françaises présentes', shortcuts.includes('Combien me reste-t-il dans'));
 
@@ -85,7 +85,7 @@ let bridgeSrc = bridge
   .replace(/import AsyncStorage.*\n/, 'const AsyncStorage = { getItem: async () => null, setItem: async () => {}, };\n')
   .replace(/import \{ useStore \}.*\n/, 'const useStore = { getState: () => ({ user: null, incomes: [], transactions: [], recurringExpenses: [], invoices: [], savingsGoals: [] }) };\n')
   .replace(/import \{ useAlertsStore \}.*\n/, 'const useAlertsStore = { getState: () => ({ activeScope: "guest" }) };\n')
-  .replace(/import \{ getMonthlyFinancialSnapshot \}.*\n/, 'const getMonthlyFinancialSnapshot = () => ({});\n')
+  .replace(/import \{ getMonthlyFinancialSnapshot, computeBudgetConsumption, parseDate \}.*\n/, 'const getMonthlyFinancialSnapshot = () => ({});\nconst computeBudgetConsumption = () => ({ rows: [], totalLimit: 0, totalSpent: 0 });\nconst parseDate = () => null;\n')
   .replace(/export interface PendingExpense \{[\s\S]*?\}\n/, '')
   .replace(/type Storage = \{[\s\S]*?\};\n/, '')
   .replace(/let storage: Storage \| null/, 'let storage')
@@ -100,6 +100,7 @@ let bridgeSrc = bridge
   .replace(/ as Storage/g, '')
   .replace(/\(useStore as any\)/g, '(useStore)')
   .replace(/: any/g, '')
+  .replace(/ as any/g, '')
   .replace(/: number/g, '')
   .replace(/: string/g, '')
   .replace(/: boolean/g, '')

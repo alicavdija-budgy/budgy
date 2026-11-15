@@ -105,9 +105,9 @@ const shared = read('targets/intents/BudgyShared.swift');
 const cfg = read('targets/intents/expo-target.config.js');
 const appJson = read('app.json');
 S('Commande 1 — AddExpenseIntent natif (pas un raccourci URL)', intents.includes('struct AddExpenseIntent: AppIntent') && intents.includes('BudgyIntentStore.enqueue'));
-S('Commande 2 — GetBudgetIntent + GetSavingsIntent (données réelles, jamais inventées)', intents.includes('struct GetBudgetIntent: AppIntent') && intents.includes('struct GetSavingsIntent: AppIntent') && intents.includes('Aucune épargne enregistrée'));
-S('Commande 3 — GetBillsIntent : impayées + échéance + devises à part', intents.includes('struct GetBillsIntent: AppIntent') && intents.includes('billsForeign') && intents.includes('nextBillTitle') && intents.includes('non comprises dans le total en francs'));
-S('Commande 4 — GetMonthlyBudgetIntent : budget restant ≠ disponible', intents.includes('struct GetMonthlyBudgetIntent: AppIntent') && intents.includes('budgetTotal') && intents.includes('disponible réel'));
+S('Commande 2 — GetBudgetIntent + GetSavingsIntent (données réelles, jamais inventées)', intents.includes('struct GetBudgetIntent: AppIntent') && intents.includes('struct GetSavingsIntent: AppIntent') && shared.includes('Aucune épargne enregistrée'));
+S('Commande 3 — GetBillsIntent : impayées + échéance + devises à part', intents.includes('struct GetBillsIntent: AppIntent') && intents.includes('billsForeign') && intents.includes('nextBillTitle') && shared.includes('non comprises dans le total en francs'));
+S('Commande 4 — GetMonthlyBudgetIntent : budget restant ≠ disponible', intents.includes('struct GetMonthlyBudgetIntent: AppIntent') && intents.includes('budgetTotal') && shared.includes('Votre disponible réel'));
 S('exposition Siri/Raccourcis : les 4 commandes dans AppShortcutsProvider', ['AddExpenseIntent()', 'GetBudgetIntent()', 'GetBillsIntent()', 'GetSavingsIntent()', 'GetMonthlyBudgetIntent()'].every((x) => shortcuts.includes(x)));
 S('phrases FR + DE + IT + EN présentes', shortcuts.includes('Füge eine Ausgabe') && shortcuts.includes('Aggiungi una spesa') && shortcuts.includes('Add an expense') && shortcuts.includes('Quali fatture'));
 S('App Group group.com.budgy.ch.budgy (entitlements + stockage partagé)', cfg.includes("'group.com.budgy.ch.budgy'") && shared.includes('"group.com.budgy.ch.budgy"'));
@@ -115,8 +115,8 @@ S('bundle identifier com.budgy.ch.budgy conservé', appJson.includes('"bundleIde
 S('build iOS 91 conservé', appJson.includes('"buildNumber": "91"'));
 S('extension @main préservée (ITMS-90896)', read('targets/intents/BudgyIntentsExtension.swift').includes('@main'));
 S('snapshot partagé étendu rétro-compatible (champs optionnels Swift)', shared.includes('var billsCount: Int?') && shared.includes('var savedTotal: Double?') && shared.includes('var budgetSpent: Double?'));
-S('confidentialité : montants énoncés SEULEMENT si siriAmounts + non masqué + données < 36 h', (intents.match(/s\.siriAmounts/g) || []).length >= 4 && (intents.match(/36 \* 3600/g) || []).length >= 4);
-S('Siri ne dit jamais « enregistré » avant sauvegarde (dialogue = « confirmez »)', intents.includes('confirmez') && !intents.includes('a été enregistrée'));
+S('confidentialité : montants énoncés SEULEMENT si siriAmounts + non masqué + données < 36 h', intents.includes('s.siriAmounts') && intents.includes('36 * 3600') && (intents.match(/guardedSnapshot\(route:/g) || []).length >= 4);
+S('Siri ne dit jamais « enregistré » avant sauvegarde (dialogue = « confirmez »)', shared.includes('confirmez') && !intents.includes('a été enregistrée'));
 
 console.log('\n═ TÂCHE 4 §4 — sauvegarde fiable (contrôles statiques) ═');
 const bridge = read('src/services/widgetBridge.ts');
@@ -134,9 +134,9 @@ S('purge totale UNIQUEMENT sur action explicite (logout/suppression)', bridge.in
 S('routes de consultation branchées (factures, budgets)', wsync.includes("'invoices': '/more/invoices'") && wsync.includes("'budgets': '/more/budgets'"));
 
 console.log('\n═ TÂCHE 4 §2 — données snapshot réelles pour les consultations ═');
-S('factures : impayées + total CHF (moteur existant) + devises à part', bridge.includes('billsCount: unpaidBills.length') && bridge.includes('snap.upcomingBills') && bridge.includes('snap.foreignBills'));
+S('factures : périmètre UNIQUE (exigibles fin de mois) pour count + total', bridge.includes('billsCount: snap.dueBillsCount') && bridge.includes('snap.upcomingBills') && bridge.includes('snap.foreignBills'));
 S('épargne : total réellement épargné + objectif existant', bridge.includes('savedTotal') && bridge.includes('goalPct'));
-S('budget mensuel : enveloppes existantes (jamais un 2e moteur)', bridge.includes('budgetTotal') && bridge.includes('budgetSpent') && bridge.includes('getMonthlyFinancialSnapshot'));
+S('budget mensuel : SÉLECTEUR PARTAGÉ avec l\'écran Budgets (un seul moteur)', bridge.includes('computeBudgetConsumption(') && bridge.includes('consumption.totalLimit') && bridge.includes('consumption.totalSpent') && !bridge.includes('b.monthly'));
 S('disponible partiel propagé à Siri (availablePartial)', bridge.includes('availablePartial: snap.availableIsPartial'));
 
 console.log('\n═ UI — signalement du disponible partiel + découverte des commandes ═');
@@ -146,6 +146,137 @@ const invScreen = read('app/more/invoices.tsx');
 S('dashboard : note « hors devises étrangères » quand partiel (héro + détail)', (home.match(/availableIsPartial/g) || []).length >= 2 && home.includes("t('home.foreignPartial'"));
 S('paiement d\'une facture EUR → transaction marquée de SA devise', invScreen.includes('{ currency: inv.currency }'));
 S('écran Siri : les 4 commandes natives découvrables (FR/DE/IT/EN via i18n)', ['cmd1Phrase', 'cmd2Phrase', 'cmd3Phrase', 'cmd4Phrase'].every((k) => siriScreen.includes(k)) && siriScreen.includes("t('siriAssistant.sectionNative')"));
+
+console.log('\n═ CORRECTIFS FINAUX T4 — budget Siri = écran Budgets (exécution réelle) ═');
+{
+  const now = new Date(2026, 5, 15);
+  // 1) Budget CHF 500, dépenses CHF 125 → Siri annonce 375 restants
+  const b1 = sel.computeBudgetConsumption(
+    [{ id: 'b1', category: 'courses', limit: 500 }],
+    [{ id: 't1', title: 'Migros', amount: 125, date: '2026-06-10', category: 'courses' }],
+    2026, 5,
+  );
+  U('budget 500, dépensé 125 → restant 375 (limites RÉELLES budget.limit)', b1.totalLimit === 500 && b1.totalSpent === 125 && b1.totalLimit - b1.totalSpent === 375);
+  // 2) Plusieurs budgets/catégories + remboursement négatif + hors-mois exclu
+  const b2 = sel.computeBudgetConsumption(
+    [{ id: 'b1', category: 'courses', limit: 500 }, { id: 'b2', category: 'transports', limit: 100 }],
+    [
+      { id: 't1', title: 'Migros', amount: 125, date: '2026-06-10', category: 'courses' },
+      { id: 't2', title: 'Remboursement', amount: -25, date: '2026-06-11', category: 'courses' },
+      { id: 't3', title: 'CFF', amount: 40, date: '2026-06-12', category: 'transports' },
+      { id: 't4', title: 'Resto (autre cat.)', amount: 60, date: '2026-06-12', category: 'restaurants' },
+      { id: 't5', title: 'Mois précédent', amount: 999, date: '2026-05-10', category: 'courses' },
+    ],
+    2026, 5,
+  );
+  U('multi-budgets : catégories respectées, remboursement déduit, hors-mois exclu', b2.rows[0].spent === 100 && b2.rows[1].spent === 40 && b2.totalSpent === 140);
+  // 3) Aucune enveloppe → totaux 0 (Siri l'indique clairement)
+  const b3 = sel.computeBudgetConsumption([], [{ id: 't1', title: 'X', amount: 50, date: '2026-06-10', category: 'courses' }], 2026, 5);
+  U('aucune enveloppe → total 0 (annonce « aucune enveloppe », rien d\'inventé)', b3.totalLimit === 0 && b3.rows.length === 0);
+  // 4) Budget modifié en cours de mois → recalcul immédiat sur la nouvelle limite
+  const b4 = sel.computeBudgetConsumption(
+    [{ id: 'b1', category: 'courses', limit: 800 }],
+    [{ id: 't1', title: 'Migros', amount: 125, date: '2026-06-10', category: 'courses' }],
+    2026, 5,
+  );
+  U('limite modifiée en cours de mois → restant recalculé (800-125=675)', b4.totalLimit - b4.totalSpent === 675);
+  // 5) Devise : une dépense EUR ne consomme JAMAIS une enveloppe CHF (1:1 interdit)
+  const b5 = sel.computeBudgetConsumption(
+    [{ id: 'b1', category: 'courses', limit: 500 }],
+    [
+      { id: 't1', title: 'Migros', amount: 125, date: '2026-06-10', category: 'courses' },
+      { id: 't2', title: 'Carrefour FR', amount: 100, date: '2026-06-10', category: 'courses', currency: 'EUR' },
+    ],
+    2026, 5,
+  );
+  U('dépense EUR exclue de l\'enveloppe CHF (jamais 1:1)', b5.totalSpent === 125);
+  // Parité réelle écran ↔ Siri : l'écran consomme le MÊME sélecteur
+  const budgetsScreen = read('app/more/budgets.tsx');
+  S('écran Budgets branché sur computeBudgetConsumption (zéro divergence)', budgetsScreen.includes('computeBudgetConsumption(budgets') && !budgetsScreen.includes('const spent = catTx.reduce'));
+}
+
+console.log('\n═ CORRECTIFS FINAUX T4 — centimes Siri (port JS exact de l\'algorithme Swift) ═');
+{
+  // Port 1:1 de BudgyIntentStore.chf (arrondi sur cents ENTIERS, groupes
+  // suisses, signe mathématique) — vérifié identique au source Swift ci-après.
+  const chf = (v) => {
+    const cents = Math.round(Math.abs(v) * 100);
+    const francs = Math.floor(cents / 100);
+    const rem = cents % 100;
+    const digits = String(francs);
+    let grouped = '';
+    for (let i = 0; i < digits.length; i++) {
+      const c = digits[digits.length - 1 - i];
+      if (i > 0 && i % 3 === 0) grouped = '\u2019' + grouped;
+      grouped = c + grouped;
+    }
+    const sign = v < 0 && cents > 0 ? '\u2212' : '';
+    return rem === 0 ? sign + grouped : sign + grouped + '.' + String(rem).padStart(2, '0');
+  };
+  U('CHF 25.50 → « 25.50 » (jamais 26)', chf(25.5) === '25.50');
+  U('CHF 25.05 → « 25.05 » (zéro de tête des centimes)', chf(25.05) === '25.05');
+  U('CHF 25.95 → « 25.95 » (jamais 26)', chf(25.95) === '25.95');
+  U('CHF 1\u2019234.50 → milliers groupés + centimes', chf(1234.5) === '1\u2019234.50');
+  U('CHF −12.75 → signe négatif préservé', chf(-12.75) === '\u221212.75');
+  U('CHF 25 → entier sans décimales inutiles', chf(25) === '25');
+  U('erreur binaire 0.1+0.2 → 0.30 exact (arrondi sur cents entiers)', chf(0.1 + 0.2) === '0.30');
+  const sharedSrc = read('targets/intents/BudgyShared.swift');
+  S('algorithme Swift identique (cents entiers, %02d, signe, apostrophe)', sharedSrc.includes('Int((abs(v) * 100).rounded())') && sharedSrc.includes('String(format: "%02d", rem)') && sharedSrc.includes('cents % 100') && !sharedSrc.includes('Int(v.rounded())'));
+}
+
+console.log('\n═ CORRECTIFS FINAUX T4 — synchro devises/conversions ═');
+{
+  const cs = read('src/services/cloudSync.ts');
+  const mig = readFileSync(join(root, '..', 'docs/MIGRATION_TASK3_storage_prive.sql'), 'utf8');
+  S('migration : transactions.currency + invoices.chf_amount/fx_rate/fx_date/fx_source', ['transactions ADD COLUMN IF NOT EXISTS currency', 'chf_amount double precision', 'fx_rate double precision', 'fx_date text', 'fx_source text'].every((x) => mig.includes(x)));
+  S('TABLE_FIELDS : currency (transactions) + chf_amount/fx_rate/fx_date/fx_source (invoices)', /transactions:\s*\[[^\]]*'currency'/.test(cs) && /invoices:\s*\[[^\]]*'chf_amount'[^\]]*'fx_rate'[^\]]*'fx_date'[^\]]*'fx_source'/.test(cs));
+  S('repli legacy SANS ces champs (préservés localement avant migration)', !/TABLE_FIELDS_LEGACY[\s\S]{0,900}(chf_amount|fx_rate)/.test(cs) && !/TABLE_FIELDS_LEGACY[\s\S]{0,500}currency.*transactions/.test(cs));
+  S('sonde schéma sur les colonnes les plus récentes (currency / fx_source)', cs.includes("transactions: 'currency'") && cs.includes("invoices: 'fx_source'"));
+  // [UNIT] un paiement EUR ne revient JAMAIS du cloud comme paiement CHF
+  const localEur = { id: 'tx1', title: 'Hôtel', amount: 100, date: '2026-06-12', category: 'autre', currency: 'EUR' };
+  const remoteNoCur = [{ id: 'tx1', title: 'Hôtel', amount: 100, date: '2026-06-12', category: 'autre' }];
+  const merged = sm.mergeCollectionsV2([localEur], remoteNoCur, { dirtyIds: new Set(['tx1']), tombstoneIds: new Set() });
+  U('pull cloud (schéma legacy sans currency) → devise EUR locale CONSERVÉE', merged.merged.find((x) => x.id === 'tx1').currency === 'EUR');
+  U('currency/chfAmount/fxRate modifient le hash (→ dirty → envoi post-migration)', sm.hashItem({ id: 'a' }) !== sm.hashItem({ id: 'a', currency: 'EUR' }) && sm.hashItem({ id: 'b' }) !== sm.hashItem({ id: 'b', chfAmount: 95.2, fxRate: 0.952, fxDate: '2026-06-10', fxSource: 'BNS' }));
+  // [UNIT] cohérence montant × taux ≈ montant CHF, sinon NON vérifié
+  const base = { incomes: [], transactions: [], recurringExpenses: [], debts: [], now: new Date(2026, 5, 15) };
+  const incoherent = sel.getMonthlyFinancialSnapshot({ ...base, invoices: [
+    { id: 'e', title: 'X', amount: 100, currency: 'EUR', status: 'pending', chfAmount: 500, fxRate: 0.952, fxDate: '2026-06-10' },
+  ] });
+  U('conversion INCOHÉRENTE (100×0.952 ≠ 500) → rejetée, facture présentée à part', incoherent.upcomingBills === 0 && incoherent.foreignBills.length === 1);
+  const coherent = sel.getMonthlyFinancialSnapshot({ ...base, invoices: [
+    { id: 'e', title: 'X', amount: 100, currency: 'EUR', status: 'pending', chfAmount: 95.2, fxRate: 0.952, fxDate: '2026-06-10', fxSource: 'BNS' },
+  ] });
+  U('conversion cohérente (taux + date + source conservés) → 95.20 CHF compté', coherent.upcomingBills === 95.2);
+  // [UNIT] périmètre factures : exigibles fin de mois, retard analysé par DATE
+  const scope = sel.getMonthlyFinancialSnapshot({ ...base, invoices: [
+    { id: 'late', title: 'Retard', amount: 50, currency: 'CHF', status: 'overdue', dueDate: '2026-05-20' },
+    { id: 'due', title: 'Ce mois', amount: 30, currency: 'CHF', status: 'pending', dueDate: '30.06.2026' },
+    { id: 'future', title: 'Mois prochain', amount: 999, currency: 'CHF', status: 'pending', dueDate: '2026-07-15' },
+  ] });
+  U('retard + échéance du mois comptés, futur exclu (dates analysées, pas des chaînes)', scope.upcomingBills === 80 && scope.dueBillsCount === 2 && scope.overdueBillsCount === 1);
+  U('billsTotal cohérent avec le périmètre annoncé (même liste)', scope.dueBillsCount === 2 && scope.upcomingBills === 80);
+  // Rapprochements : devises comparées, pas seulement les montants
+  const invScreen2 = read('app/more/invoices.tsx');
+  const scanner2 = read('app/scanner-modal.tsx');
+  S('rapprochement facture↔transaction : refus si devises différentes', invScreen2.includes('if (txCur !== invCur) return false;'));
+  S('rapprochement QR↔charge récurrente : réservé aux QR en CHF', scanner2.includes("qrBill.currency === 'CHF'") && scanner2.includes(': undefined'));
+}
+
+console.log('\n═ CORRECTIFS FINAUX T4 — réponses Siri localisées FR/DE/IT/EN ═');
+{
+  const sharedSrc = read('targets/intents/BudgyShared.swift');
+  const keys = ['openPrivacy', 'addAuth', 'addConfirm', 'budgetAnswer', 'partialSuffix', 'billsNone', 'billsOne', 'billsMany', 'billsOverdue', 'billsTotal', 'billsForeign', 'billsNext', 'savingsNone', 'savingsMain', 'savingsGoal', 'mbNoEnvelopes', 'mbMain', 'mbAvailable'];
+  let allLoc = true;
+  for (const k of keys) {
+    const block = sharedSrc.split(`"${k}": [`)[1]?.split('],')[0] || '';
+    if (!(block.includes('"fr":') && block.includes('"de":') && block.includes('"it":') && block.includes('"en":'))) { allLoc = false; console.log('    ✗ clé non localisée ×4 :', k); }
+  }
+  S(`18 dialogues Siri localisés ×4 langues (${keys.length} clés fr/de/it/en)`, allLoc);
+  S('langue pilotée par l\'app (snapshot.lang) avec repli système', sharedSrc.includes('BudgyIntentStore.loadSnapshot()?.lang') && sharedSrc.includes('Locale.preferredLanguages') && read('src/services/widgetBridge.ts').includes('lang: String(s.preferences?.language'));
+  S('catalogue de chaînes (titres/paramètres) : Localizable.xcstrings en/de/it', (() => { try { const x = JSON.parse(read('targets/intents/Localizable.xcstrings')); const v = Object.values(x.strings); return x.sourceLanguage === 'fr' && v.length >= 19 && v.every((e) => e.localizations.en && e.localizations.de && e.localizations.it); } catch { return false; } })());
+  S('disponible PARTIEL énoncé par GetBudgetIntent ET en secours du budget mensuel', (read('targets/intents/BudgyIntents.swift').match(/partialSuffix/g) || []).length >= 3);
+}
 
 console.log(`\nRésultat : ${unit} unitaires exécutés + ${stat} statiques = ${unit + stat} réussis, ${fail} échoués`);
 console.log('NON TESTÉ (iPhone physique + build natif requis) : exécution réelle des');

@@ -39,13 +39,13 @@ export function resetSchemaProbes(): void {
   for (const k of Object.keys(schemaProbe)) delete schemaProbe[k];
 }
 const EXT_PROBE_COL: Record<string, string> = {
-  transactions: 'invoice_id',
+  // TÂCHE 4 — sonde sur la colonne la PLUS récente de chaque table : une
+  // migration partielle reste en repli legacy 'L:' (champs conservés en
+  // local, envoyés dès que le schéma complet est disponible).
+  transactions: 'currency',
   contracts: 'document_id',
   receipts: 'transaction_id',
-  // TÂCHE 5 — sonde sur les colonnes les PLUS récentes : une migration
-  // partielle (sans qr_payload/spc_payload) reste en repli legacy 'L:' au
-  // lieu d'être faussement considérée comme étendue.
-  invoices: 'qr_payload',
+  invoices: 'fx_source',
   documents: 'spc_payload',
 };
 
@@ -148,7 +148,7 @@ async function upsertTable(table: string, rows: any[], conflictCol: string = 'id
 const TABLE_FIELDS: Record<string, string[]> = {
   user_preferences: ['user_id', 'currency', 'language', 'canton', 'onboarded', 'is_pro'],
   // TÂCHE 3 — champs anti-double-comptage (liens par ID) désormais synchronisés
-  transactions:       ['id', 'user_id', 'title', 'amount', 'category', 'date', 'payment_method', 'note', 'type', 'source', 'invoice_id', 'debt_id', 'recurring_id', 'created_at', 'updated_at'],
+  transactions:       ['id', 'user_id', 'title', 'amount', 'category', 'date', 'payment_method', 'note', 'type', 'source', 'invoice_id', 'debt_id', 'recurring_id', 'currency', 'created_at', 'updated_at'],
   incomes:            ['id', 'user_id', 'title', 'amount', 'frequency', 'type', 'category', 'created_at'],
   savings_goals:      ['id', 'user_id', 'title', 'emoji', 'color', 'target', 'saved', 'deadline', 'category', 'created_at'],
   budgets:            ['id', 'user_id', 'category', 'monthly', 'spent', 'created_at'],
@@ -160,7 +160,9 @@ const TABLE_FIELDS: Record<string, string[]> = {
   // TÂCHE 5 — document_id (lien vers le document conservé) et qr_payload
   // (payload SPC BRUT, texte) sont synchronisés APRÈS migration : la relation
   // facture ↔ document ↔ QR est restaurée sur un deuxième appareil.
-  invoices:           ['id', 'user_id', 'title', 'issuer', 'amount', 'currency', 'due_date', 'invoice_date', 'iban', 'reference', 'category', 'status', 'source', 'paid_at', 'recurring_id', 'document_id', 'qr_payload', 'created_at'],
+  // TÂCHE 4 — devise/conversion vérifiée : chf_amount + fx_rate + fx_date +
+  // fx_source voyagent ensemble (cohérence re-validée par le sélecteur).
+  invoices:           ['id', 'user_id', 'title', 'issuer', 'amount', 'currency', 'due_date', 'invoice_date', 'iban', 'reference', 'category', 'status', 'source', 'paid_at', 'recurring_id', 'document_id', 'qr_payload', 'chf_amount', 'fx_rate', 'fx_date', 'fx_source', 'created_at'],
   // TÂCHE 3 (audit §4) — SEULES les métadonnées PORTABLES et la référence
   // Storage (remote_path) sont synchronisées. Les chemins locaux file://
   // (file_uri, pdf_uri), les pages base64 et les binaires ne vont JAMAIS

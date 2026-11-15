@@ -242,10 +242,14 @@ export default function ScannerModal() {
       // v4.0 — RAPPROCHEMENT facture ↔ charge récurrente : si une charge active
       // du même montant existe (ex. prime LAMal), on PROPOSE de lier la facture
       // à la charge (jamais automatique) — l'obligation ne compte alors qu'une
-      // seule fois dans le disponible.
-      const candidate = recurringExpenses.find(
-        (r) => r.active && Math.abs((Number(r.amount) || 0) - amt) <= 0.01,
-      );
+      // seule fois dans le disponible. TÂCHE 4 — les charges récurrentes
+      // sont en CHF : AUCUN rapprochement proposé pour une QR-facture en
+      // devise étrangère sur la seule égalité numérique.
+      const candidate = qrBill.currency === 'CHF'
+        ? recurringExpenses.find(
+            (r) => r.active && Math.abs((Number(r.amount) || 0) - amt) <= 0.01,
+          )
+        : undefined;
       if (candidate) {
         Alert.alert(
           t('invoiceReconcile.recTitle'),

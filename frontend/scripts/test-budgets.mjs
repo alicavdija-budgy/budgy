@@ -118,8 +118,9 @@ const i18nSrc = read('src/i18n/translations.ts');
 check('parseDate : dates YYYY-MM-DD parsées en minuit LOCAL (pas UTC)',
   /parseInt\(iso\[1\]\), parseInt\(iso\[2\]\) - 1, parseInt\(iso\[3\]\)/.test(selSrc));
 check('budgets.tsx réutilise parseDate (cohérence fuseau avec Accueil)',
-  budgetsSrc2.includes("import { parseDate } from '../../src/stores/selectors'") &&
-  budgetsSrc2.includes('parseDate(tx.date)'));
+  budgetsSrc2.includes("from '../../src/stores/selectors'") &&
+  budgetsSrc2.includes('parseDate') &&
+  budgetsSrc2.includes('computeBudgetConsumption('));
 check('logout() purge aussi transactions/dettes/factures (fail-safe inter-comptes)',
   /logout: \(\) => set\(\((prev)?\)?[\s\S]{0,1500}?transactions: \[\],[\s\S]*?debts: \[\],[\s\S]*?invoices: \[\],/.test(storeSrc));
 check('listener SIGNED_OUT global dans _layout (purge session expirée/révoquée)',

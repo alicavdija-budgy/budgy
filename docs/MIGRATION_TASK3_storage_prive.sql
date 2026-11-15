@@ -45,6 +45,12 @@ ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS recurring_id text;
 -- TÂCHE 5 — lien facture ↔ document conservé + payload SPC brut (texte).
 ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS document_id text;
 ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS qr_payload text;
+-- TÂCHE 4 — conversion VÉRIFIÉE uniquement : montant CHF calculé + taux +
+-- date + source du taux (jamais de conversion implicite 1:1).
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS chf_amount double precision;
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS fx_rate double precision;
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS fx_date text;
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS fx_source text;
 
 -- receipts (tickets) : type, devise, note, liens transaction/document.
 ALTER TABLE public.receipts ADD COLUMN IF NOT EXISTS currency text;
@@ -60,6 +66,9 @@ ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS source text;
 ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS invoice_id text;
 ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS debt_id text;
 ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS recurring_id text;
+-- TÂCHE 4 — devise du paiement (absent = CHF) : un paiement EUR ne revient
+-- JAMAIS du cloud comme un paiement CHF.
+ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS currency text;
 
 -- ─── A bis. Tombstones de synchronisation (audit §1) ─────────────
 -- Une suppression n'est JAMAIS déduite de l'absence d'un élément dans une

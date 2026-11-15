@@ -37,6 +37,10 @@ export interface FinancialSnapshot {
   foreignBills: { currency: string; total: number; count: number }[];
   /** true = le disponible CHF n'intègre pas encore ces obligations. */
   availableIsPartial: boolean;
+  /** Factures exigibles d'ici la fin du mois (toutes devises). */
+  dueBillsCount: number;
+  /** …dont déjà en retard (date d'échéance réellement analysée). */
+  overdueBillsCount: number;
 }
 
 const SUBSCRIPTION_CATEGORIES = new Set([
@@ -214,7 +218,12 @@ export function getMonthlyFinancialSnapshot(input: {
     if (cur === 'CHF') return Number(inv.amount) || 0;
     const chf = Number((inv as any).chfAmount);
     const rate = Number((inv as any).fxRate);
-    if (isFinite(chf) && chf > 0 && isFinite(rate) && rate > 0 && (inv as any).fxDate) return chf;
+    if (isFinite(chf) && chf > 0 && isFinite(rate) && rate > 0 && (inv as any).fxDate) {
+      // COHÉRENCE obligatoire : montant original × taux ≈ montant CHF
+      // (tolérance 1 % + 5 ct d'arrondi). Incohérent = NON vérifié.
+      const expected = (Number(inv.amount) || 0) * rate;
+      if (Math.abs(expected - chf) <= Math.max(0.05, expected * 0.01)) return chf;
+    }
     return null;
   };
   const dueBills = (input.invoices || [])
@@ -239,6 +248,15 @@ export function getMonthlyFinancialSnapshot(input: {
     .map(([currency, v]) => ({ currency, total: Math.round(v.total * 100) / 100, count: v.count }))
     .sort((a, b) => a.currency.localeCompare(b.currency));
   const availableIsPartial = foreignBills.length > 0;
+  // TÂCHE 4 (Siri) — périmètre EXPLICITE : factures exigibles d'ici la fin du
+  // mois (CHF + devises), dont celles déjà en retard (dates réellement
+  // analysées, jamais une comparaison de chaînes).
+  const dueBillsCount = dueBills.length;
+  const startOfToday = new Date(year, month, now.getDate());
+  const overdueBillsCount = dueBills.filter((inv) => {
+    const due = parseDate((inv as any).dueDate);
+    return !!due && due < startOfToday;
+  }).length;
 
   // 4b) Dettes — PAR IDENTIFIANT : chaque mensualité est calculée dette par
   // dette ; un paiement lié (debtId) ne règle JAMAIS une autre dette.
@@ -286,5 +304,48 @@ export function getMonthlyFinancialSnapshot(input: {
     recurringCount: activeRecurring.length,
     foreignBills,
     availableIsPartial,
+    dueBillsCount,
+    overdueBillsCount,
   };
+}
+
+/**
+ * TÂCHE 4 — SÉLECTEUR PARTAGÉ écran Budgets ↔ snapshot Siri (un SEUL moteur,
+ * aucune divergence possible). Règles IDENTIQUES à l'écran :
+ *  • limites = budget.limit (les vraies enveloppes) ;
+ *  • dépensé = transactions du mois, par catégorie du budget ;
+ *  • remboursement négatif réduit le dépensé (convention Accueil) ;
+ *  • devise : une transaction en devise étrangère (currency ≠ CHF) ne
+ *    consomme JAMAIS une enveloppe CHF au taux 1:1.
+ */
+export function computeBudgetConsumption(
+  budgets: Budget[],
+  transactions: Transaction[],
+  year: number,
+  month: number,
+): {
+  rows: { id: string; category: string; limit: number; spent: number; count: number }[];
+  totalLimit: number;
+  totalSpent: number;
+} {
+  const monthTx = (transactions || []).filter((tx) => {
+    const d = parseDate(tx.date);
+    if (!d || d.getFullYear() !== year || d.getMonth() !== month) return false;
+    const cur = String((tx as any).currency || 'CHF').toUpperCase();
+    return cur === 'CHF';
+  });
+  const rows = (budgets || []).map((b) => {
+    const catTx = monthTx.filter((tx) => tx.category === b.category);
+    const spent = catTx.reduce((s, tx) => s + (Number(tx.amount) || 0), 0);
+    return {
+      id: b.id,
+      category: b.category,
+      limit: Number((b as any).limit) || 0,
+      spent: Math.round(spent * 100) / 100,
+      count: catTx.length,
+    };
+  });
+  const totalLimit = rows.reduce((s, r) => s + r.limit, 0);
+  const totalSpent = Math.round(rows.reduce((s, r) => s + r.spent, 0) * 100) / 100;
+  return { rows, totalLimit, totalSpent };
 }

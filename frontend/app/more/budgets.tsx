@@ -24,7 +24,7 @@ import { Spacing, FontSizes, FontWeights, BorderRadius } from '../../src/constan
 import { useTheme } from '../../src/hooks/useTheme';
 import type { ThemePalette } from '../../src/constants/palettes';
 import { Card } from '../../src/components/ui';
-import { parseDate } from '../../src/stores/selectors';
+import { parseDate, computeBudgetConsumption } from '../../src/stores/selectors';
 import { useTranslation } from '../../src/hooks/useTranslation';
 import { useStore } from '../../src/stores/useStore';
 import { EXPENSE_CATEGORIES, BUDGET_CATEGORY_GROUPS } from '../../src/data/swiss-data';
@@ -97,20 +97,25 @@ export default function BudgetsScreen() {
   const [amountError, setAmountError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  // ── Moteur : dépenses du MOIS sélectionné uniquement (convention Accueil :
-  // somme des montants ; un remboursement négatif réduit le dépensé). ──
+  // ── Moteur : SÉLECTEUR PARTAGÉ avec le snapshot Siri (un seul moteur —
+  // limites réelles, transactions du mois par catégorie, remboursements
+  // négatifs déduits, devises étrangères jamais comptées 1:1). ──
+  const consumption = useMemo(
+    () => computeBudgetConsumption(budgets as any, transactions as any, py, pm),
+    [budgets, transactions, py, pm],
+  );
   const monthTx = useMemo(() => transactions.filter((tx) => {
     const d = parseDate(tx.date);
     return !!d && d.getFullYear() === py && d.getMonth() === pm;
   }), [transactions, py, pm]);
 
   const data = useMemo(() => budgets.map((b) => {
-    const catTx = monthTx.filter((tx) => tx.category === b.category);
-    const spent = catTx.reduce((s, tx) => s + (Number(tx.amount) || 0), 0);
-    const limit = Number(b.limit) || 0;
+    const row = consumption.rows.find((r) => r.id === b.id);
+    const spent = row ? row.spent : 0;
+    const limit = row ? row.limit : Number(b.limit) || 0;
     const pctUsed = limit > 0 ? spent / limit : 0;
-    return { ...b, spent, limit, pctUsed, over: Math.max(0, spent - limit), count: catTx.length };
-  }).sort((a, b) => b.pctUsed - a.pctUsed), [budgets, monthTx]);
+    return { ...b, spent, limit, pctUsed, over: Math.max(0, spent - limit), count: row ? row.count : 0 };
+  }).sort((a, b) => b.pctUsed - a.pctUsed), [budgets, consumption]);
 
   const totalLimit = data.reduce((s, b) => s + b.limit, 0);
   const totalSpent = data.reduce((s, b) => s + b.spent, 0);

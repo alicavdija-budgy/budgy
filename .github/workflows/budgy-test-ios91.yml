@@ -40,10 +40,10 @@ jobs:
           fi
           echo "Expo token is configured (value hidden)."
 
-      - name: Setup Node 20
+      - name: Setup Node 22
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: yarn
           cache-dependency-path: frontend/yarn.lock
 

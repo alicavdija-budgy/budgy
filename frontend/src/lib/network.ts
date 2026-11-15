@@ -187,6 +187,12 @@ export async function safeFetch<T = any>(
     };
   }
 
+  // PRÉPROD — backend désactivé (sentinelle .invalid) : échec propre et
+  // immédiat, sans tentative réseau ni timeout DNS.
+  if (isBackendDisabled()) {
+    return { ok: false, status: 0, data: null, error: 'backend_disabled', offline: false };
+  }
+
   let lastErr: string | null = null;
   let lastStatus = 0;
   for (let attempt = 0; attempt <= retries; attempt++) {
@@ -302,6 +308,7 @@ export function describeError(
 ): string {
   if (r.offline) return 'network.noInternet';
   if (!r.error) return 'errors.unknown';
+  if (r.error === 'backend_disabled') return 'errors.backendDisabled';
   if (r.status === 0 || r.error.includes('aborted')) return 'errors.timeout';
   if (r.status === 404) return 'errors.notFound';
   if (r.status === 401 || r.status === 403) return 'errors.unauthorized';
@@ -325,6 +332,22 @@ export function getApiBaseUrl(): string {
   const raw = (process.env.EXPO_PUBLIC_BACKEND_URL as string | undefined) || '';
   const url = raw.trim() || DEFAULT_PRODUCTION_API;
   return url.replace(/\/$/, ''); // strip trailing slash
+}
+
+/**
+ * PRÉPROD — backend volontairement désactivé.
+ * Le profil EAS `preprod` définit EXPO_PUBLIC_BACKEND_URL sur un domaine
+ * sentinelle `*.invalid` (RFC 2606, ne résout jamais) : AUCUN appel ne peut
+ * atteindre api.budgy.ch. Ce détecteur permet d'échouer PROPREMENT
+ * (message clair, immédiat) au lieu d'attendre un timeout DNS.
+ * En production l'URL réelle ne se termine jamais par `.invalid` → inactif.
+ */
+export function isBackendDisabled(): boolean {
+  try {
+    return new URL(getApiBaseUrl()).hostname.endsWith('.invalid');
+  } catch {
+    return false;
+  }
 }
 
 /** Returns true if a base URL is configured at runtime. Always true now (fallback). */

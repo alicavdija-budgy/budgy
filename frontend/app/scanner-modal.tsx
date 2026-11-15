@@ -51,9 +51,6 @@ import * as Haptics from 'expo-haptics';
 import { isSwissQrBill, parseSwissQrBill, findDuplicateInvoice, QrBillError, type SwissQrBill } from '../src/services/qrBill';
 import { findInvoiceDuplicate } from '../src/lib/invoiceDocs';
 
-const BACKEND_URL =
-  process.env.EXPO_PUBLIC_BACKEND_URL || 'https://api.budgy.ch';
-
 type Stage = 'permission' | 'camera' | 'ocr' | 'edit' | 'saving' | 'qrbill';
 
 export default function ScannerModal() {

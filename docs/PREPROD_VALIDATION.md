@@ -4,35 +4,26 @@ Toute la procédure est réalisable **depuis un navigateur (iPhone inclus)** :
 Supabase Studio (SQL Editor, Table Editor, Storage, Backups) et l'app Budgy.
 Aucun terminal requis.
 
-## 0. ÉTAT ACTUEL — schéma initial VALIDÉ, correctif sécurité à appliquer
-VÉRIFIÉ directement dans `budgy-preprod` (SQL réel exécuté) :
-- projet actif et sain ; 14 tables Budgy, 14 clés primaires, types conformes ;
-- RLS activée partout, 56 politiques ; fonction `set_user_id_default()` +
-  13 déclencheurs `set_user_id_*` (user_preferences n'en a pas) ;
-- 14 tables vides, 0 utilisateur, 0 fichier Storage ;
-- AUCUNE colonne T3/T4/T5 présente — migration non appliquée.
-→ Le schéma initial est **VALIDÉ**. Inutile de relancer ces contrôles.
+## 0. ÉTAT ACTUEL — préprod MIGRÉE et sécurisée, prête pour les tests
+VÉRIFIÉ directement dans `budgy-preprod`
+(réf. `kodnbllysingkwispyfx`, https://kodnbllysingkwispyfx.supabase.co) :
+- correctif `SECURITY_FIX_set_user_id.sql` **APPLIQUÉ** ;
+- migration T3/T4/T5 (commit e0ee4557, avec section A ter budgets) **APPLIQUÉE** ;
+- **15 tables** (14 métier + sync_tombstones), **60 politiques RLS** public,
+  **4 politiques Storage**, bucket `user-documents` privé opérationnel ;
+- **0 alerte de sécurité Supabase** ; aucune donnée utilisateur.
+→ Les étapes 1 à 5 de l'ancien ordre d'exécution sont TERMINÉES.
 
-⚠️ L'audit de sécurité signale 3 avertissements sur `set_user_id_default()`
-(SECURITY DEFINER, search_path non épinglé, EXECUTE ouvert à anon/
-authenticated). Correctif prêt : `docs/SECURITY_FIX_set_user_id.sql`.
-
-**ORDRE D'EXÉCUTION en préproduction (chaque étape sur votre feu vert) :**
-1. `docs/SECURITY_FIX_set_user_id.sql` (idempotent, aucune donnée touchée)
-   puis ses requêtes de validation V1/V2 (en bas du fichier).
-2. Section A de `docs/VERIFY_MIGRATION.sql` (copier les résultats — sur une
-   base vide, tous les comptages sont à 0 : c'est la référence).
-3. Backup vérifié (§2).
-4. `docs/MIGRATION_TASK3_storage_prive.sql` (inclut la section **A ter** :
-   colonnes budgets/récurrences/épargne/investissements du correctif P0).
-5. Section B de `VERIFY_MIGRATION.sql` + contrôles RLS/bucket (§4).
-⚠️ La base est VIDE : n'importer AUCUNE donnée utilisateur réelle — comptes
-et données de test uniquement.
-Audit de compatibilité : la migration ne référence QUE des tables du schéma
-initial (`ADD COLUMN IF NOT EXISTS`, UPDATE de backfill, `sync_tombstones`,
-bucket et politiques) — aucune suppression, identifiants et relations
-conservés, NULL jamais interprétés comme 0, aucune conversion monétaire
-implicite.
+RESTE À FAIRE (chaque étape sur votre feu vert) :
+1. (Optionnel, recommandé par l'advisor Supabase) exécuter
+   `docs/SUPABASE_OPTIMIZATIONS.sql` : 15 index `user_id` + politiques RLS
+   réécrites en `(select auth.uid())` (évaluation 1× par requête au lieu de
+   ligne par ligne). Mêmes règles d'accès, aucune donnée touchée, idempotent.
+2. Coller la clé `anon public` de budgy-preprod dans `eas.json → build →
+   preprod → env → EXPO_PUBLIC_SUPABASE_ANON_KEY` (Studio → Settings → API ;
+   clé PUBLIQUE par conception — JAMAIS la service_role).
+3. Créer les 2 comptes de test (§4) puis dérouler la campagne §4 bis.
+⚠️ La base reste réservée aux données de test — AUCUNE donnée réelle.
 
 ## ⚠️ CONSTAT D'AUDIT (environnements)
 - `eas.json` : les profils **development, preview, production et testflight
@@ -80,41 +71,27 @@ Le projet `budgy-preprod` existe déjà (§0). Reste :
    (b) **limiter la campagne préprod au périmètre Supabase** (synchro,
    RLS, documents/Storage, devises, tombstones) — ces flux ne passent pas
    par le backend. NE PAS inventer d'URL backend.
-4. Profil EAS `preprod` (MODÈLE — ne l'appliquer qu'après votre accord ;
-   aucun profil actif n'a été modifié).
-   ⚠️ **PIÈGE D'HÉRITAGE EAS** : un profil `"extends": "preview"` hérite de
-   TOUTES les variables `env` de preview non redéfinies — donc
-   `EXPO_PUBLIC_BACKEND_URL=https://api.budgy.ch` resterait actif. De plus,
-   le code contient un filet de sécurité (`src/lib/network.ts`,
-   `src/services/iap.ts`) : si `EXPO_PUBLIC_BACKEND_URL` est VIDE, l'app
-   retombe sur `https://api.budgy.ch`. Conséquence : pour une isolation
-   RÉELLE, le profil préprod ne doit PAS hériter de preview et doit définir
-   **explicitement** les deux URL — avec, à défaut de backend de test, une
-   valeur sentinelle inoffensive qui fait échouer proprement les appels
-   backend au lieu d'atteindre la production :
-```json
-"preprod": {
-  "distribution": "internal",
-  "channel": "preprod",
-  "environment": "preview",
-  "ios": { "simulator": false, "resourceClass": "m-medium" },
-  "android": { "buildType": "apk" },
-  "env": {
-    "EXPO_PUBLIC_SUPABASE_URL": "https://<ref-budgy-preprod>.supabase.co",
-    "EXPO_PUBLIC_BACKEND_URL": "https://backend-preprod.invalid"
-  }
-}
-```
-   (`https://backend-preprod.invalid` = domaine réservé RFC 2606, ne résout
-   jamais : OCR/e-mail/coach/IAP échouent proprement, AUCUN appel ne part
-   vers `api.budgy.ch`. Remplacer par l'URL du backend de test le jour où il
-   existera réellement.) L'URL Supabase est celle du NOUVEAU projet :
-   Studio budgy-preprod → Settings → API → « Project URL ».
-   (+ `EXPO_PUBLIC_SUPABASE_ANON_KEY` préprod via secret EAS — la clé `anon`
-   est publique par conception, mais ne JAMAIS mettre la `service_role`.)
-   GARANTIE d'isolation : avec ce profil, l'app ne connaît QUE l'URL
-   budgy-preprod — aucune écriture possible vers supabase.budgy.ch ni appel
-   vers api.budgy.ch.
+4. Profil EAS `preprod` : **AJOUTÉ dans `eas.json`** (profil AUTONOME, sans
+   `extends` — les profils development/preview/production/testflight sont
+   INTACTS). Contenu réel :
+   - `EXPO_PUBLIC_SUPABASE_URL = https://kodnbllysingkwispyfx.supabase.co`
+     (budgy-preprod — seule base que ce build connaîtra) ;
+   - `EXPO_PUBLIC_BACKEND_URL = https://backend-preprod.invalid` : domaine
+     réservé RFC 2606, ne résout jamais → AUCUN appel ne peut atteindre
+     `api.budgy.ch`. Remplacer par l'URL du backend de test le jour où il
+     existera réellement ;
+   - `EXPO_PUBLIC_SUPABASE_ANON_KEY` : **une action restante** — coller la
+     clé `anon public` de budgy-preprod (Studio → Settings → API). Elle est
+     PUBLIQUE par conception ; ne JAMAIS mettre la `service_role`.
+   DURCISSEMENT CODE (fait) : les 2 derniers replis codés en dur vers
+   `api.budgy.ch` (`src/services/iap.ts`, `app/scanner-modal.tsx`) passent
+   désormais par l'accesseur central `getApiBaseUrl()` ; et `safeFetch`
+   détecte la sentinelle `.invalid` → les fonctions backend (OCR, e-mail,
+   coach, export PDF, LAMal, impôts, optimiseur, IAP, dictée serveur)
+   échouent PROPREMENT et IMMÉDIATEMENT avec un message traduit
+   (« Fonction désactivée dans cette version de test ») au lieu d'un
+   timeout DNS. En production, l'URL réelle ne finit jamais par `.invalid`
+   → comportement inchangé (repli de sécurité conservé).
 
 ## 2. Sauvegarde VÉRIFIÉE et retour arrière SANS destruction
 **Stratégie : on ne « dé-migre » JAMAIS en supprimant des colonnes, des
@@ -167,7 +144,7 @@ jetons des comptes de test, depuis le navigateur :
    clé `anon` + email/mot de passe du compte B.
 3. Avec le jeton de B (en-têtes `apikey: <anon>`, `Authorization: Bearer
    <jeton B>`), appeler :
-   - `GET https://<ref-preprod>.supabase.co/rest/v1/invoices?select=*`
+   - `GET https://kodnbllysingkwispyfx.supabase.co/rest/v1/invoices?select=*`
      → attendu : UNIQUEMENT les factures de B (aucune de A) ;
    - idem `documents`, `transactions`, `sync_tombstones` ;
    - Storage : `GET /storage/v1/object/user-documents/users/<uid-A>/...`
@@ -177,6 +154,29 @@ jetons des comptes de test, depuis le navigateur :
 4. Répéter en sens inverse (jeton A sur les données de B).
 5. PDF complet avec le compte A : upload depuis l'app, lecture via URL
    signée, suppression, récupération sur un 2e appareil/session.
+
+## 4 bis. Campagne iPhone avec les 2 comptes fictifs (build preprod)
+Comptes : `test-a@budgy-preprod.ch` / `test-b@budgy-preprod.ch` (mots de
+passe de test uniques, jamais notés dans un document). À créer via
+l'inscription DANS l'app (build preprod) ou Authentication → Add user.
+**Budgets** : A crée un budget Courses CHF 500 → dépense CHF 400 (80 %)
+puis CHF 100 (100 %) → alertes correctes ; déconnexion/reconnexion → la
+LIMITE revient à 500 (jamais 0) ; modifier à 650 → 2e session de A → 650.
+**Factures + QR** : A scanne une QR-facture suisse (ou saisie manuelle
+IBAN/référence) → payer → la transaction liée apparaît ; facture EUR avec
+conversion vérifiée → le disponible CHF reste exact après synchro.
+**Documents privés** : A importe un PDF → visible après reconnexion via URL
+signée ; B ne voit RIEN de A (liste vide) ; suppression chez A → ne
+réapparaît jamais (tombstone).
+**Synchronisation** : créer hors ligne (mode avion) → reconnecter → tout
+part sans doublon ; charge récurrente marquée payée → 2e session → toujours
+payée (disponible identique).
+**Isolation RLS** : dérouler §4 (REST avec les jetons A/B) — chaque croisé
+doit être refusé.
+**Backend désactivé** : ouvrir Scanner OCR / Coach IA / Export PDF →
+message clair « Fonction désactivée dans cette version de test », pas de
+blocage ni de crash ; AUCUNE requête vers api.budgy.ch (vérifiable : le
+domaine sentinelle `.invalid` ne résout pas).
 
 ## 5. Ancien → nouveau schéma, devises, QR
 1. Partir de la préprod SANS les colonnes T4/T5 → synchroniser (l'app marque

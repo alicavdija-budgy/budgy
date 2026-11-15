@@ -1501,6 +1501,7 @@ export const TRANSLATIONS = {
       invoiceParseFailed: 'Impossible d\'analyser cette facture.',
       aiUnavailable: 'Analyse IA momentanément indisponible',
       addFailed: 'Impossible d\'enregistrer. Réessayez.',
+      backendDisabled: 'Fonction désactivée dans cette version de test (aucun serveur de test configuré).',
     },
     en: {
       titleError: 'Something went wrong',
@@ -1519,6 +1520,7 @@ export const TRANSLATIONS = {
       invoiceParseFailed: 'Could not parse this invoice.',
       aiUnavailable: 'AI analysis temporarily unavailable',
       addFailed: 'Could not save. Please try again.',
+      backendDisabled: 'Feature disabled in this test version (no test server configured).',
     },
     de: {
       titleError: 'Etwas ist schiefgelaufen',
@@ -1537,6 +1539,7 @@ export const TRANSLATIONS = {
       invoiceParseFailed: 'Diese Rechnung konnte nicht gelesen werden.',
       aiUnavailable: 'KI-Analyse vorübergehend nicht verfügbar',
       addFailed: 'Konnte nicht gespeichert werden. Bitte erneut versuchen.',
+      backendDisabled: 'Funktion in dieser Testversion deaktiviert (kein Testserver konfiguriert).',
     },
     it: {
       titleError: 'Qualcosa è andato storto',
@@ -1555,6 +1558,7 @@ export const TRANSLATIONS = {
       invoiceParseFailed: 'Impossibile leggere questa fattura.',
       aiUnavailable: 'Analisi IA momentaneamente non disponibile',
       addFailed: 'Impossibile salvare. Riprova.',
+      backendDisabled: 'Funzione disattivata in questa versione di test (nessun server di test configurato).',
     },
   },
 

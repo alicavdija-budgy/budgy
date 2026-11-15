@@ -492,8 +492,10 @@ export async function getAvailableReceipts(opts: { syncFirst?: boolean } = {}): 
   }
 }
 
-import { safeFetch } from '../lib/network';
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://api.budgy.ch';
+import { safeFetch, getApiBaseUrl } from '../lib/network';
+// Isolation préprod : plus AUCUNE URL de production codée en dur ici —
+// l'accès passe par l'accesseur central (sentinelle .invalid gérée).
+const BACKEND_URL = getApiBaseUrl();
 
 export type SubscriptionState = 'FREE' | 'PRO' | 'EXPIRED' | 'GRACE_PERIOD' | 'REFUNDED';
 

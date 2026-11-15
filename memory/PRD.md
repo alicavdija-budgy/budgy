@@ -472,3 +472,11 @@ test
 - EAS §7 : piège d'héritage documenté — profil preprod SANS extends, EXPO_PUBLIC_BACKEND_URL explicite (sentinelle https://backend-preprod.invalid car network.ts/iap.ts retombent sur api.budgy.ch si vide).
 - Tests : scripts/test-budgets-sync.mjs (25 UNIT + 16 STATIC, 0 échec) ; régressions task3 117/117, task4 94/94, task5 69/69, budgets 67/67, engine 23/23, qrbill 49/49 ; tsc OK ; app OK (smoke).
 - Ordre préprod : SECURITY_FIX → Section A → backup → MIGRATION (avec A ter) → Section B → tests RLS A/B. Rien exécuté sur aucune base, build 91 intact.
+
+## PRÉPROD ISOLÉE — PROFIL EAS + DURCISSEMENT RÉSEAU
+- budgy-preprod (kodnbllysingkwispyfx) : SECURITY_FIX + migration T3/T4/T5 APPLIQUÉS par le propriétaire via ChatGPT — 15 tables, 60 politiques RLS, 4 Storage, bucket privé, 0 alerte, base vide.
+- eas.json : profil `preprod` AUTONOME ajouté (sans extends, channel preprod, URL Supabase préprod réelle, backend sentinelle https://backend-preprod.invalid, placeholder anon key à coller). Profils actifs intacts, build 91 intact.
+- Code durci : iap.ts repli api.budgy.ch supprimé → getApiBaseUrl() ; scanner-modal.tsx BACKEND_URL (code mort hardcodé) supprimé ; network.ts isBackendDisabled() (.invalid) + court-circuit safeFetch (error backend_disabled) + describeError → errors.backendDisabled traduit FR/EN/DE/IT. Tous les appels backend passent par safeFetch (iap, predict, sync.ping, voice, scanner via apiFetchJson) → échec propre immédiat en préprod, comportement prod inchangé (seul filet restant : DEFAULT_PRODUCTION_API dans network.ts, inactif avec la sentinelle).
+- docs/SUPABASE_OPTIMIZATIONS.sql (préparé, NON exécuté, idempotent) : 15 index user_id + politiques réécrites (select auth.uid()) (initplan advisor) + tombstones + validations lecture seule.
+- PREPROD_VALIDATION.md : §0 état migré, §1.4 profil réel + 1 action restante (coller anon key), §4 URLs réelles, §4bis campagne iPhone 2 comptes (budgets, factures+QR, documents, synchro, RLS, backend désactivé).
+- Tests : scripts/test-preprod.mjs 26/26 ; régressions budgets-sync 41/41, task3 117/117, task5 69/69, engine 23/23 ; tsc OK ; app OK.

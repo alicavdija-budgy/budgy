@@ -37,6 +37,23 @@
         "EXPO_PUBLIC_SUPABASE_URL": "https://supabase.budgy.ch"
       }
     },
+    "preprod": {
+      "distribution": "internal",
+      "channel": "preprod",
+      "environment": "preview",
+      "ios": {
+        "simulator": false,
+        "resourceClass": "m-medium"
+      },
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_BACKEND_URL": "https://backend-preprod.invalid",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://kodnbllysingkwispyfx.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "COLLER_ICI_ANON_PUBLIC_KEY_DE_BUDGY_PREPROD"
+      }
+    },
     "production": {
       "distribution": "store",
       "channel": "production",

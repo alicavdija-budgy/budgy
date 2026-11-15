@@ -1,0 +1,90 @@
+name: Budgy iOS 91 - submit EXISTING build to TestFlight
+
+# Manual-only upload of the already compiled ORIGINAL Budgy 4.0.0 (91) IPA.
+# Does not start a build, create an application, or publish to App Store.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: budgy-existing-ios91-testflight-submit
+  cancel-in-progress: false
+
+jobs:
+  submit-existing:
+    name: Upload exact Budgy build 91 (no rebuild)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: frontend
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EAS_NO_VCS: '1'
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      BUDGY_BUILD_ID: '5b921ef1-aecb-40c9-86f3-088b07bf91d5'
+
+    steps:
+      - name: Checkout current Budgy source for configuration only
+        uses: actions/checkout@v4
+        with:
+          ref: budgy-smart-4.0
+          fetch-depth: 1
+
+      - name: Guard EXISTING Budgy app and submission destination
+        run: |
+          if [ -z "${EXPO_TOKEN:-}" ]; then
+            echo "::error::EXPO_TOKEN missing; upload cancelled."
+            exit 1
+          fi
+          node <<'NODE'
+          const a=require('./app.json').expo;
+          const e=require('./eas.json');
+          const s=e.submit?.testflight?.ios;
+          if (a.name!=='Budgy'||a.slug!=='budgy'||a.version!=='4.0.0'||
+              a.ios?.buildNumber!=='91'||a.ios?.bundleIdentifier!=='com.budgy.ch.budgy'||
+              a.extra?.eas?.projectId!=='cf75668b-71ba-4bfb-9169-8ad2f572e982'||
+              e.build?.testflight?.channel!=='testflight'||
+              s?.ascAppId!=='6767026949'||s?.appleTeamId!=='N69NHCB9S3') {
+            throw new Error('Original Budgy TestFlight destination guard failed.');
+          }
+          console.log('PASS: existing Budgy, iOS 4.0.0 (91), original App Store Connect app.');
+          NODE
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup Expo EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Verify exact EXISTING Expo build is finished before upload
+        run: |
+          eas build:view "$BUDGY_BUILD_ID" --json > /tmp/existing-budgy-ios91.json
+          node <<'NODE'
+          const b=require('/tmp/existing-budgy-ios91.json');
+          const bad=(msg)=>{throw new Error('Pre-submit safety check: '+msg)};
+          const eq=(x,y)=>String(x).toUpperCase()===String(y).toUpperCase();
+          if (!eq(b.id,process.env.BUDGY_BUILD_ID)) bad('build ID mismatch');
+          if (!eq(b.status,'FINISHED')) bad('build not finished');
+          if (!eq(b.platform,'IOS')) bad('not an iOS build');
+          if (b.appVersion && b.appVersion!=='4.0.0') bad('not version 4.0.0');
+          if (b.appBuildVersion && String(b.appBuildVersion)!=='91') bad('not build number 91');
+          if (b.buildProfile && b.buildProfile!=='testflight') bad('not TestFlight profile');
+          if (b.applicationIdentifier && b.applicationIdentifier!=='com.budgy.ch.budgy') bad('different application identifier');
+          console.log('PASS: Expo build is finished and matches the fixed existing build ID.');
+          NODE
+
+      - name: Upload exact finished IPA to EXISTING TestFlight app (NO rebuild, NO App Store review)
+        run: |
+          eas submit --platform ios --profile testflight --id "$BUDGY_BUILD_ID" --non-interactive --no-wait
+          echo '### Budgy iOS 4.0.0 (91)' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Submission to **existing** App Store Connect app initiated. No build was created and no public App Store release was requested.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Check processing in [App Store Connect](https://appstoreconnect.apple.com/apps/6767026949/testflight).' >> "$GITHUB_STEP_SUMMARY"

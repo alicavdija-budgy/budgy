@@ -833,7 +833,11 @@ export default function ScannerModal() {
         <TouchableOpacity onPress={photo ? handleRetake : handleClose} style={styles.iconBtn}>
           <Ionicons name={photo ? 'arrow-back' : 'close'} size={26} color={theme.text} />
         </TouchableOpacity>
-        <Text style={styles.editTitle}>Détails du ticket</Text>
+        <Text style={styles.editTitle}>
+          {receiptType === 'invoice' ? t('emailImport.titleInvoice')
+            : receiptType === 'contract' ? t('emailImport.titleContract')
+            : t('receipts.title')}
+        </Text>
         <View style={{ width: 36 }} />
       </View>
 
@@ -858,44 +862,29 @@ export default function ScannerModal() {
           </View>
         )}
 
-        {/* Receipt type toggle */}
+        {/* Document type picker: all three destinations are visible and explicit. */}
         <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Type de reçu</Text>
-          <View style={styles.typeToggle}>
-            <TouchableOpacity
-              style={[
-                styles.typeOption,
-                receiptType === 'ticket' && styles.typeOptionSelected,
-              ]}
-              onPress={() => setReceiptType('ticket')}
-            >
-              <Text style={styles.typeEmoji}>🛒</Text>
-              <Text
-                style={[
-                  styles.typeLabel,
-                  receiptType === 'ticket' && styles.typeLabelSelected,
-                ]}
+          <Text style={styles.label}>{t('docSpaces.classifyTitle')}</Text>
+          <View style={[styles.typeToggle, { flexWrap: 'wrap' }]}>
+            {([
+              { id: 'invoice', icon: '📄', label: t('emailImport.pickInvoiceOption') },
+              { id: 'contract', icon: '📁', label: t('emailImport.pickContractOption') },
+              { id: 'ticket', icon: '🛒', label: t('docSpaces.pickTicketOption') },
+              { id: 'remboursement', icon: '💼', label: t('receipts.typeReimb') },
+            ] as { id: ReceiptType; icon: string; label: string }[]).map((choice) => (
+              <TouchableOpacity
+                key={choice.id}
+                style={[styles.typeOption, { minWidth: '43%' },
+                  receiptType === choice.id && styles.typeOptionSelected]}
+                onPress={() => setReceiptType(choice.id)}
+                testID={`scanner-type-${choice.id}`}
               >
-                Ticket de caisse
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.typeOption,
-                receiptType === 'remboursement' && styles.typeOptionSelected,
-              ]}
-              onPress={() => setReceiptType('remboursement')}
-            >
-              <Text style={styles.typeEmoji}>💼</Text>
-              <Text
-                style={[
-                  styles.typeLabel,
-                  receiptType === 'remboursement' && styles.typeLabelSelected,
-                ]}
-              >
-                Remboursement
-              </Text>
-            </TouchableOpacity>
+                <Text style={styles.typeEmoji}>{choice.icon}</Text>
+                <Text style={[styles.typeLabel, receiptType === choice.id && styles.typeLabelSelected]}>
+                  {choice.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
         </View>
         {/* Preview */}
@@ -1028,7 +1017,7 @@ export default function ScannerModal() {
                   ? t('scanner.addContractCta')
                   : t('scanner.saveExpense')
           }
-          onPress={handleSave}
+          onPress={() => handleSave()}
           fullWidth
           size="lg"
           loading={stage === 'saving'}

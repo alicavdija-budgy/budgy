@@ -1,0 +1,119 @@
+name: Budgy iOS 91 - update existing app (TestFlight)
+
+# Affects EXISTING app com.budgy.ch.budgy, NOT Budgy Test.
+# Manual only. Stops after starting a build; never submits to TestFlight or App Store.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: budgy-original-ios91-testflight
+  cancel-in-progress: false
+
+jobs:
+  original-budgy:
+    name: Existing Budgy iOS 91 - verify and build (no submit)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+        shell: bash
+    env:
+      CI: 'true'
+      EAS_NO_VCS: '1'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+    steps:
+      - name: Checkout Budgy 4.0 latest fixes
+        uses: actions/checkout@v4
+        with:
+          ref: budgy-smart-4.0
+          fetch-depth: 1
+
+      - name: Verify build credentials prerequisite without revealing token
+        run: |
+          if [ -z "${EXPO_TOKEN:-}" ]; then
+            echo "::error::GitHub EXPO_TOKEN is missing. Do not paste it in issues or chat."
+            exit 1
+          fi
+          echo "Existing Expo token is configured; identity will be validated by EAS."
+
+      - name: Setup Node 22 and Yarn cache
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: yarn
+          cache-dependency-path: frontend/yarn.lock
+
+      - name: Install project dependencies
+        run: |
+          corepack enable
+          yarn install --frozen-lockfile --non-interactive
+
+      - name: Guard original app identity and TestFlight profile
+        run: |
+          node <<'NODE'
+          const cfg=require('./app.json').expo;
+          const eas=require('./eas.json');
+          const b=eas.build?.testflight;
+          const originalAppGroup=cfg.ios?.entitlements?.['com.apple.security.application-groups']||[];
+          if (cfg.name!=='Budgy'||cfg.version!=='4.0.0'||cfg.slug!=='budgy'||
+              cfg.ios?.buildNumber!=='91'||cfg.ios?.bundleIdentifier!=='com.budgy.ch.budgy'||
+              !originalAppGroup.includes('group.com.budgy.ch.budgy')||
+              cfg.extra?.eas?.projectId!=='cf75668b-71ba-4bfb-9169-8ad2f572e982'||
+              cfg.owner!=='avdijaalic'||cfg.ios?.appleTeamId!=='N69NHCB9S3'||
+              !b||b.extends!=='production'||b.channel!=='testflight'||b.node!=='22.23.3'||b.yarn!=='1.22.22'||
+              eas.build?.production?.distribution!=='store'||
+              b.env?.EXPO_PUBLIC_BACKEND_URL!=='https://api.budgy.ch'||
+              b.env?.EXPO_PUBLIC_SUPABASE_URL!=='https://supabase.budgy.ch'||
+              b.env?.APP_VARIANT||b.env?.EXPO_PUBLIC_APP_VARIANT) {
+            throw new Error('Existing Budgy / iOS 91 / original TestFlight configuration guard FAILED.');
+          }
+          console.log('PASS: ORIGINAL Budgy app, existing Expo project, Team, App Group and build 91.');
+          console.log('PASS: TestFlight channel; no separate app or preproduction backend.');
+          NODE
+          APP_VARIANT= EXPO_PUBLIC_APP_VARIANT= npx expo config --json >/tmp/budgy-original-expo.json
+          node <<'NODE'
+          const c=require('/tmp/budgy-original-expo.json');
+          if(c.name!=='Budgy'||c.ios?.buildNumber!=='91'||c.ios?.bundleIdentifier!=='com.budgy.ch.budgy'||
+             c.extra?.appVariant==='preprod'||c.scheme!=='budgy'||
+             !c.ios?.entitlements?.['com.apple.security.application-groups']?.includes('group.com.budgy.ch.budgy')) {
+            throw new Error('Expo resolved configuration diverges from original Budgy');
+          }
+          console.log('PASS: resolved Expo config is the original application.');
+          NODE
+
+      - name: Offline code regression tests
+        run: |
+          npx tsc --noEmit
+          npm run check:i18n
+          npm run audit:i18n
+          node scripts/test-budgets-sync.mjs
+          node scripts/test-preprod.mjs
+          npm run test:cloud-auth
+          npm run test:iap-restore
+
+      - name: Setup Expo EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+          packager: yarn
+
+      - name: Build ORIGINAL Budgy iOS 91 via existing Apple credentials - NO SUBMISSION
+        run: |
+          eas whoami
+          eas build --platform ios --profile testflight --non-interactive --no-wait --json >/tmp/budgy-ios91-build.json
+          node <<'NODE'
+          const fs=require('fs');
+          const r=JSON.parse(fs.readFileSync('/tmp/budgy-ios91-build.json','utf8'));
+          const b=Array.isArray(r)?r[0]:r;
+          if(!b?.id)throw new Error('Build was not confirmed by Expo');
+          const url='https://expo.dev/accounts/avdijaalic/projects/budgy/builds/'+encodeURIComponent(b.id);
+          console.log('Existing Budgy build 91 queued; status not yet finished. Build ID:',b.id);
+          console.log('View EAS build:',url);
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,'### Existing Budgy iOS 91\n\nBuild queued (not published): [Expo build details]('+url+')\n');
+          NODE

@@ -1,0 +1,115 @@
+name: Budgy Test iOS 91 - preproduction only
+
+# Manual, one-purpose workflow. Never touches production or TestFlight.
+# Installable iOS build; requires EXPO_TOKEN repository secret and valid Apple ad-hoc credentials.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: budgy-test-ios91
+  cancel-in-progress: false
+
+jobs:
+  preprod-ios:
+    name: Build Budgy Test iOS (91, internal, no submit)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+        shell: bash
+    env:
+      CI: 'true'
+      EAS_NO_VCS: '1'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - name: Checkout validated Budgy 4.0 branch
+        uses: actions/checkout@v4
+        with:
+          ref: budgy-smart-4.0
+          fetch-depth: 1
+
+      - name: Require a configured Expo token
+        run: |
+          if [ -z "${EXPO_TOKEN:-}" ]; then
+            echo "::error::EXPO_TOKEN GitHub Actions secret is missing. Add a NEW restricted Expo token; never reuse one exposed in a chat."
+            exit 1
+          fi
+          echo "Expo token is configured (value hidden)."
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps --no-audit --no-fund
+
+      - name: Verify strict preprod identity and network isolation
+        run: |
+          node <<'NODE'
+          const c = require('./eas.json');
+          const p = c.build?.preprod;
+          const a = require('./app.json').expo;
+          const valid = p && !p.extends &&
+            p.distribution === 'internal' &&
+            p.channel === 'preprod' &&
+            p.env?.APP_VARIANT === 'preprod' &&
+            p.env?.EXPO_PUBLIC_APP_VARIANT === 'preprod' &&
+            p.env?.EXPO_PUBLIC_BACKEND_URL === 'https://backend-preprod.invalid' &&
+            p.env?.EXPO_PUBLIC_SUPABASE_URL === 'https://kodnbllysingkwispyfx.supabase.co' &&
+            /^sb_publishable_[A-Za-z0-9_-]{15,}$/.test(p.env?.EXPO_PUBLIC_SUPABASE_ANON_KEY || '') &&
+            a.version === '4.0.0' && a.ios?.buildNumber === '91';
+          if (!valid) throw new Error('Preproduction guard failed; build stopped before EAS.');
+          console.log('PASS: internal / preprod / isolated API / matching Supabase URL / publishable key / iOS 91.');
+          NODE
+          APP_VARIANT=preprod EXPO_PUBLIC_APP_VARIANT=preprod npx expo config --json >/tmp/budgy-preprod-resolved.json
+          node <<'NODE'
+          const c = require('/tmp/budgy-preprod-resolved.json');
+          const ag = c.ios?.entitlements?.['com.apple.security.application-groups'] || [];
+          if (c.name !== 'Budgy Test' ||
+              c.ios?.bundleIdentifier !== 'com.budgy.ch.budgy.preprod' ||
+              c.android?.package !== 'com.budgy.ch.budgy.preprod' ||
+              c.scheme !== 'budgy-preprod' ||
+              c.ios?.buildNumber !== '91' ||
+              !ag.includes('group.com.budgy.ch.budgy.preprod') ||
+              (c.ios?.associatedDomains || []).length ||
+              (c.android?.intentFilters || []).length) {
+            throw new Error('Resolved native identity is not safely isolated.');
+          }
+          console.log('PASS: native iOS, Android, Siri/widgets App Group and links are isolated.');
+          NODE
+
+      - name: Preproduction regression checks
+        run: |
+          npx tsc --noEmit
+          node scripts/test-preprod.mjs
+          node scripts/test-budgets-sync.mjs
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+          packager: npm
+
+      - name: Launch internal iOS build 91 (NO submit, NO OTA)
+        run: |
+          eas whoami
+          eas build --platform ios --profile preprod --non-interactive --no-wait --json >/tmp/budgy-preprod-build.json
+          node <<'NODE'
+          const fs=require('fs');
+          const raw=JSON.parse(fs.readFileSync('/tmp/budgy-preprod-build.json','utf8'));
+          const b=Array.isArray(raw)?raw[0]:raw;
+          if (!b?.id) throw new Error('EAS returned no build ID; build launch unverified.');
+          const url='https://expo.dev/accounts/avdijaalic/projects/budgy/builds/'+encodeURIComponent(b.id);
+          console.log('Build submitted to EAS. Its compilation is NOT yet proven successful.');
+          console.log('Build ID:',b.id);
+          console.log('Build page:',url);
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,'### Budgy Test (iOS 91)\n\nBuild queued (not necessarily finished): [view in Expo]('+url+')\n');
+          NODE

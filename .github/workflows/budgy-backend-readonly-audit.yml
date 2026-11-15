@@ -1,0 +1,42 @@
+name: Budgy production API - health only (READ ONLY)
+
+# Reads only public diagnostic endpoints. No user accounts, private documents,
+# auth tokens, Supabase service keys, deployment or data mutation.
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/budgy-backend-readonly-audit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Fetch public backend health (no secrets)
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 15 \
+            "https://api.budgy.ch/api/health" -o /tmp/budgy-health.json
+          node - <<'NODE'
+          const d=require('/tmp/budgy-health.json');
+          if(d.status!=='ok')throw Error('Unexpected health status');
+          console.log('PASS: public API responds; reported app version:',String(d.version||'unknown'));
+          NODE
+      - name: Check non-secret AI provider readiness flags
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 15 \
+            "https://api.budgy.ch/api/config/status" -o /tmp/budgy-config.json
+          node - <<'NODE'
+          const d=require('/tmp/budgy-config.json');
+          const flags=['openai','anthropic','gemini'];
+          const statuses=flags.map(k=>k+': '+(d[k]==='configured'?'configured':'not confirmed'));
+          console.log('Non-secret provider flags:',statuses.join(', '));
+          if(!flags.some(k=>d[k]==='configured'))
+            console.log('ATTENTION: no direct AI provider key reported (OCR may be unavailable).');
+          NODE

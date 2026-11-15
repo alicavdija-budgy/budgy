@@ -27,6 +27,7 @@ import { Button } from '../../src/components/ui';
 import { EXPENSE_CATEGORIES } from '../../src/data/swiss-data';
 import { scheduleDeadlineRemindersForEntity } from '../../src/services/notifications';
 import type { DocumentCategory } from '../../src/types';
+import { normalizeChfAmount } from '../../src/utils/amount';
 import { useTranslation } from '../../src/hooks/useTranslation';
 
 const CONTRACT_TYPE_KEYS = [
@@ -83,20 +84,25 @@ export default function AddContractScreen() {
   const [category, setCategory] = useState(params.category || 'abonnements');
   const [startDate, setStartDate] = useState(params.startDate || '');
   const [dueDate, setDueDate] = useState(params.dueDate || '');
-  const [autoRenew, setAutoRenew] = useState(true);
-  const [noticePeriod, setNoticePeriod] = useState('3');
+  // No auto-renewal or notice period can be inferred from a scan.
+  const [autoRenew, setAutoRenew] = useState(false);
+  const [noticePeriod, setNoticePeriod] = useState('');
   const [notes, setNotes] = useState(params.notes || '');
   const [editing, setEditing] = useState(!hasExtractedData); // start in edit mode if manual
   const [saving, setSaving] = useState(false);
 
   const handleAdd = () => {
     const tt = title.trim();
-    const amt = parseFloat(amount.replace(',', '.'));
+    // The price is optional for contracts; zero is a storage sentinel for
+    // 'not specified', not a verified recurring financial obligation.
+    const amountText = amount.trim();
+    const parsedAmount = amountText ? normalizeChfAmount(amountText) : null;
+    const amt = parsedAmount ?? 0;
     if (!tt) {
       Alert.alert(t('addContract.missingNameTitle'), t('addContract.missingNameBody'));
       return;
     }
-    if (!amt || isNaN(amt) || amt <= 0) {
+    if (amountText && (parsedAmount === null || parsedAmount <= 0)) {
       Alert.alert(t('addContract.invalidAmountTitle'), t('addContract.invalidAmountBody'));
       return;
     }
@@ -119,6 +125,8 @@ export default function AddContractScreen() {
           id: documentId,
           title: tt,
           category: docCategory,
+          documentType: 'contract',
+          importedAt: Date.now(),
           imageBase64: params.photoUri,
           pages: [params.photoUri],
           tags: [issuer.trim(), category, 'contrat'].filter(Boolean),
@@ -153,7 +161,7 @@ export default function AddContractScreen() {
           type: 'contract',
           name: tt,
           dueDate: iso,
-          amount: amt,
+          ...(parsedAmount !== null ? { amount: parsedAmount } : {}),
         }).catch(() => {});
       }
       try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}

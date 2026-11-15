@@ -347,3 +347,10 @@ test
 - server.py: check EMERGENT_LLM_KEY deplace APRES decode Swiss QR (QR fonctionne sans OCR externe).
 - Divergence 73bda302 documentee: 9 commits distants recrees localement (2f8ecfce, verifie par stability 43/43). test-import 38/38.
 - EN ATTENTE: validation utilisateur pour TÂCHE 2.
+
+## TÂCHE 1 finalisation — commit 337766e0
+- build iOS 91 prepare (89/90 consommes), test-stability exige ===91 (46/46), test-alerts >=91.
+- qr_decode: zxing-cpp decodeur principal (QR denses ~700c, roue pip autonome prod-safe), cv2 en repli.
+- backend/tests/test_qr_decode.py 10/10 EXECUTES (CRLF/LF, sans montant, PDF multi-pages, QR invalide, PDF corrompu).
+- Auth testee en reel: 401 missing_token / malformed_token sur /api/scanner/ocr et /api/email/parse.
+- EN ATTENTE: validation utilisateur pour TÂCHE 2 (contrats). Ordre: 2, 3, 5, 4, 6.

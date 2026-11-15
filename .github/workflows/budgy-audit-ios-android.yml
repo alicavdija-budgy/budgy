@@ -79,7 +79,7 @@ jobs:
           assert(a.extra?.eas?.projectId==='cf75668b-71ba-4bfb-9169-8ad2f572e982','Expo project mismatch');
           console.log('PASS: original Budgy identity, Android package + AAB/APK profiles');
           NODE
-          npx expo config --type public >/tmp/budgy-ios-android-config.json
+          npx expo config --type public --json >/tmp/budgy-ios-android-config.json
           node <<'NODE'
           const c=require('/tmp/budgy-ios-android-config.json');
           if(c.ios?.bundleIdentifier!=='com.budgy.ch.budgy'||

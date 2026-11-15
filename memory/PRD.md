@@ -354,3 +354,8 @@ test
 - backend/tests/test_qr_decode.py 10/10 EXECUTES (CRLF/LF, sans montant, PDF multi-pages, QR invalide, PDF corrompu).
 - Auth testee en reel: 401 missing_token / malformed_token sur /api/scanner/ocr et /api/email/parse.
 - EN ATTENTE: validation utilisateur pour TÂCHE 2 (contrats). Ordre: 2, 3, 5, 4, 6.
+
+## TÂCHE 2 — commit ci-dessus
+- persistAsContract: vault durable + documentId + rien d invente ; fileVault.ts (15Mo, formats, VaultError) ; documents.tsx section Contrats reelle + detail (PJ/renommer/supprimer, Not set) ; ShareIntentRouter transmet sharedUri/Mime/Name/Text, email-import consomme ; types additifs fileUri/mimeType ; SQL additive fournie NON appliquee ; test-contracts.mjs 27/27 ; E2E navigateur valide.
+- LIMITES: lien documentId non synchronise inter-appareils tant que la migration SQL n est pas appliquee (fichier binaire = TÂCHE 3) ; Alert.prompt renommage iOS only (web: non dispo) ; partage iOS reel = NON TESTE (iPhone requis).
+- EN ATTENTE: validation utilisateur pour TÂCHE 3.

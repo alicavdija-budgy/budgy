@@ -11,6 +11,9 @@
  * arrays are internal matching tokens, not UI text.
  */
 
+import { parseSpokenChf } from './numberWords';
+
+
 export type VoiceIntent = 'expense' | 'income' | 'recurring' | 'unknown';
 
 export interface ParsedVoice {
@@ -57,6 +60,10 @@ function extractAmount(text: string): number | undefined {
       if (!isNaN(n) && n > 0 && n < 1_000_000) return n;
     }
   }
+  // TÂCHE 4 — montant dicté en toutes lettres (FR/DE/IT/EN) :
+  // « vingt-cinq francs cinquante » → 25.50. Jamais d'approximation.
+  const spoken = parseSpokenChf(text);
+  if (spoken !== null) return spoken;
   return undefined;
 }
 

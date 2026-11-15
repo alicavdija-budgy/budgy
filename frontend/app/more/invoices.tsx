@@ -197,6 +197,9 @@ export default function InvoicesScreen() {
           type: 'expense',
           source: 'invoice',
           invoiceId: id,
+          // TÂCHE 4 — un paiement en devise étrangère reste dans SA devise :
+          // jamais compté comme des CHF au taux 1:1.
+          ...((inv.currency || 'CHF').toUpperCase() !== 'CHF' ? { currency: inv.currency } : {}),
         });
       };
       if (candidate) {

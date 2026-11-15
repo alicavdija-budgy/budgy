@@ -21,6 +21,9 @@ const ROUTES: Record<string, string> = {
   'home': '/',
   'quick-add': '/quick-add',
   'scanner-modal': '/scanner-modal',
+  // TÂCHE 4 — cibles des commandes de consultation (repli confidentialité)
+  'invoices': '/more/invoices',
+  'budgets': '/more/budgets',
 };
 
 export default function WidgetSync() {

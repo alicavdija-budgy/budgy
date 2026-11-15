@@ -108,6 +108,17 @@ export async function refreshWidgetSnapshot(): Promise<void> {
       debts: s.debts,
     });
     const goal = (s.savingsGoals || []).find((g: any) => (g.target || 0) > 0);
+    // TÂCHE 4 — données RÉELLES pour les commandes Siri « factures »,
+    // « épargne » et « budget mensuel ». Aucune invention : factures CHF
+    // comptées, devises étrangères signalées à part (texte), budgets depuis
+    // les enveloppes existantes. Jamais de solde fictif.
+    const unpaidBills = (s.invoices || []).filter((i: any) => (i.status || '') !== 'paid');
+    const nextDue = unpaidBills
+      .filter((i: any) => !!i.dueDate)
+      .sort((a: any, b: any) => String(a.dueDate).localeCompare(String(b.dueDate)))[0];
+    const savedTotal = (s.savingsGoals || []).reduce((sum: number, g: any) => sum + (Number(g.saved) || 0), 0);
+    const budgetTotal = (s.budgets || []).reduce((sum: number, b: any) => sum + (Number(b.monthly) || 0), 0);
+    const budgetSpent = (s.budgets || []).reduce((sum: number, b: any) => sum + (Number(b.spent) || 0), 0);
     const payload = {
       v: 1,
       scope: activeScope(),
@@ -123,6 +134,18 @@ export async function refreshWidgetSnapshot(): Promise<void> {
       lockAmounts: lockRaw === '1',
       siriAmounts: siriRaw === '1',
       updatedAt: Date.now() / 1000,
+      // TÂCHE 4 — Siri factures / épargne / budget (champs optionnels)
+      billsCount: unpaidBills.length,
+      billsTotal: Math.round(snap.upcomingBills * 100) / 100,
+      billsForeign: (snap.foreignBills || [])
+        .map((f) => `${f.count} × ${f.currency} ${f.total.toFixed(2)}`)
+        .join(', ') || undefined,
+      nextBillTitle: nextDue ? String(nextDue.title || '').slice(0, 30) : undefined,
+      nextBillDue: nextDue ? String(nextDue.dueDate) : undefined,
+      savedTotal: Math.round(savedTotal * 100) / 100,
+      budgetTotal: Math.round(budgetTotal * 100) / 100,
+      budgetSpent: Math.round(budgetSpent * 100) / 100,
+      availablePartial: snap.availableIsPartial || undefined,
     };
     storage.set(SNAPSHOT_KEY, JSON.stringify(payload));
     reloadWidgets();

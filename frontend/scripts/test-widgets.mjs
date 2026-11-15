@@ -100,6 +100,7 @@ let bridgeSrc = bridge
   .replace(/ as Storage/g, '')
   .replace(/\(useStore as any\)/g, '(useStore)')
   .replace(/: any/g, '')
+  .replace(/: number/g, '')
   .replace(/: string/g, '')
   .replace(/: boolean/g, '')
   .replace(/: void/g, '')

@@ -53,6 +53,9 @@ export interface Transaction {
   invoiceId?: string;
   debtId?: string;
   recurringId?: string;
+  /** TÂCHE 4 — devise du paiement (absent = CHF). Un paiement EUR n'entre
+   *  jamais dans les totaux CHF au taux 1:1. */
+  currency?: string;
 }
 
 export interface ProExpense extends Transaction {
@@ -248,6 +251,12 @@ export interface Invoice {
   documentId?: string;
   /** TÂCHE 5 — payload SPC brut conservé (jamais présenté comme l'original) */
   qrPayload?: string;
+  /** TÂCHE 4 — devise étrangère avec conversion VÉRIFIÉE uniquement :
+   *  montant CHF calculé + taux utilisé + date du taux. Sans ces trois
+   *  champs, une facture non-CHF n'entre JAMAIS dans les totaux CHF. */
+  chfAmount?: number;
+  fxRate?: number;
+  fxDate?: string;
 }
 
 export interface SyncQueueItem {

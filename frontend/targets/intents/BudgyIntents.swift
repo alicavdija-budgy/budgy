@@ -59,6 +59,101 @@ struct GetBudgetIntent: AppIntent {
     }
 }
 
+/// « Dis Siri, quelles factures dois-je encore payer dans Budgy ? »
+/// Données réelles uniquement : factures impayées, total CHF exact, prochaine
+/// échéance connue ; les obligations en devise étrangère sans taux vérifié
+/// sont énoncées À PART (jamais converties ni additionnées aux CHF).
+struct GetBillsIntent: AppIntent {
+    static let title: LocalizedStringResource = "Mes factures à payer"
+    static let description = IntentDescription("Indique les factures impayées dans Budgy.")
+
+    func perform() async throws -> some IntentResult & ProvidesDialog {
+        guard let s = BudgyIntentStore.loadSnapshot(),
+              s.widgetsEnabled,
+              s.siriAmounts,
+              !s.hide,
+              Date().timeIntervalSince1970 - s.updatedAt < 36 * 3600
+        else {
+            BudgyIntentStore.setRoute("invoices")
+            return .result(dialog: "Ouvrez Budgy pour voir vos factures en toute confidentialité.")
+        }
+        let count = s.billsCount ?? 0
+        if count == 0 {
+            return .result(dialog: "Aucune facture en attente dans Budgy. Tout est payé.")
+        }
+        var msg = "Vous avez \(count) facture\(count > 1 ? "s" : "") à payer"
+        if let total = s.billsTotal, total > 0 {
+            msg += ", pour \(BudgyIntentStore.chf(total)) francs"
+        }
+        if let foreign = s.billsForeign, !foreign.isEmpty {
+            msg += ", plus des factures en devise étrangère : \(foreign), non comprises dans le total en francs"
+        }
+        if let next = s.nextBillTitle, let due = s.nextBillDue {
+            msg += ". Prochaine échéance : \(next), le \(due)"
+        }
+        return .result(dialog: "\(msg).")
+    }
+}
+
+/// « Dis Siri, combien ai-je économisé dans Budgy ? »
+/// Répond avec l'épargne réellement enregistrée et la progression du premier
+/// objectif — jamais de progression inventée.
+struct GetSavingsIntent: AppIntent {
+    static let title: LocalizedStringResource = "Mon épargne"
+    static let description = IntentDescription("Indique l'épargne et la progression des objectifs Budgy.")
+
+    func perform() async throws -> some IntentResult & ProvidesDialog {
+        guard let s = BudgyIntentStore.loadSnapshot(),
+              s.widgetsEnabled,
+              s.siriAmounts,
+              !s.hide,
+              Date().timeIntervalSince1970 - s.updatedAt < 36 * 3600
+        else {
+            BudgyIntentStore.setRoute("home")
+            return .result(dialog: "Ouvrez Budgy pour voir votre épargne en toute confidentialité.")
+        }
+        guard let saved = s.savedTotal, saved > 0 || s.goalName != nil else {
+            return .result(dialog: "Aucune épargne enregistrée pour l'instant dans Budgy.")
+        }
+        var msg = "Vous avez économisé \(BudgyIntentStore.chf(saved)) francs"
+        if let name = s.goalName, let pct = s.goalPct {
+            msg += ". Votre objectif \(name) est à \(Int(pct)) pour cent"
+        }
+        return .result(dialog: "\(msg).")
+    }
+}
+
+/// « Dis Siri, combien me reste-t-il dans mon budget ce mois-ci ? »
+/// Distinction stricte : BUDGET restant (enveloppes) ≠ DISPONIBLE du mois.
+struct GetMonthlyBudgetIntent: AppIntent {
+    static let title: LocalizedStringResource = "Mon budget mensuel"
+    static let description = IntentDescription("Indique le budget restant des enveloppes du mois.")
+
+    func perform() async throws -> some IntentResult & ProvidesDialog {
+        guard let s = BudgyIntentStore.loadSnapshot(),
+              s.widgetsEnabled,
+              s.siriAmounts,
+              !s.hide,
+              Date().timeIntervalSince1970 - s.updatedAt < 36 * 3600
+        else {
+            BudgyIntentStore.setRoute("budgets")
+            return .result(dialog: "Ouvrez Budgy pour voir votre budget en toute confidentialité.")
+        }
+        guard let total = s.budgetTotal, total > 0 else {
+            // Pas d'enveloppes définies → on répond avec le DISPONIBLE réel,
+            // en le nommant correctement (jamais présenté comme un budget).
+            return .result(dialog: "Aucune enveloppe de budget définie. Votre disponible réel ce mois-ci est de \(BudgyIntentStore.chf(s.available)) francs.")
+        }
+        let remaining = total - (s.budgetSpent ?? 0)
+        var msg = "Il reste \(BudgyIntentStore.chf(remaining)) francs sur vos budgets du mois, sur \(BudgyIntentStore.chf(total)) francs prévus"
+        msg += ". Votre disponible réel est de \(BudgyIntentStore.chf(s.available)) francs"
+        if s.availablePartial == true {
+            msg += ", hors factures en devise étrangère"
+        }
+        return .result(dialog: "\(msg).")
+    }
+}
+
 /// « Dis Siri, scanne une facture avec Budgy »
 struct ScanBillIntent: AppIntent {
     static let title: LocalizedStringResource = "Scanner une facture"

@@ -31,6 +31,12 @@ export interface FinancialSnapshot {
   monthLabel: string;               // localised month + year (via toLocaleDateString)
   txCountThisMonth: number;
   recurringCount: number;
+  /** TÂCHE 4 — obligations en devise étrangère SANS conversion vérifiée :
+   *  présentées séparément, JAMAIS additionnées aux totaux CHF (ni au taux
+   *  1:1, ni à un taux inventé). */
+  foreignBills: { currency: string; total: number; count: number }[];
+  /** true = le disponible CHF n'intègre pas encore ces obligations. */
+  availableIsPartial: boolean;
 }
 
 const SUBSCRIPTION_CATEGORIES = new Set([
@@ -112,7 +118,15 @@ export function getMonthlyFinancialSnapshot(input: {
     return d && d.getFullYear() === year && d.getMonth() === month;
   });
   const expenseTx = thisMonthTx.filter((t) => (t as any).type !== 'income');
-  const paidExpenses = expenseTx.reduce((s, t) => s + (Number(t.amount) || 0), 0);
+  // TÂCHE 4 — un paiement en devise étrangère (transaction portant `currency`
+  // ≠ CHF) n'entre JAMAIS dans les dépenses CHF au taux 1:1.
+  const isForeignTx = (t: Transaction): boolean => {
+    const c = String((t as any).currency || 'CHF').toUpperCase();
+    return c !== 'CHF';
+  };
+  const paidExpenses = expenseTx
+    .filter((t) => !isForeignTx(t))
+    .reduce((s, t) => s + (Number(t.amount) || 0), 0);
   // Revenus ponctuels réellement reçus ce mois (saisis comme transactions).
   const oneOffIncome = thisMonthTx
     .filter((t) => (t as any).type === 'income')
@@ -187,14 +201,44 @@ export function getMonthlyFinancialSnapshot(input: {
   //    les factures EN RETARD des mois précédents (elles restent dues tant
   //    qu'elles ne sont pas payées). Statut 'paid' exclu — son paiement réel
   //    vit dans paidExpenses (remplacement de l'engagement).
-  const upcomingBills = (input.invoices || [])
+  //
+  // TÂCHE 4 — DEVISES : une facture de 100 EUR n'est JAMAIS 100 CHF.
+  //  • CHF (ou devise absente — héritage) → comptée en CHF.
+  //  • Devise étrangère AVEC conversion vérifiée (chfAmount + fxRate + fxDate
+  //    conservés sur la facture) → comptée pour son montant CHF calculé.
+  //  • Devise étrangère SANS taux vérifié → présentée séparément dans
+  //    foreignBills, exclue des totaux CHF (aucun taux inventé), et le
+  //    disponible est marqué PARTIEL (availableIsPartial).
+  const chfValueOf = (inv: Invoice): number | null => {
+    const cur = String((inv as any).currency || 'CHF').toUpperCase();
+    if (cur === 'CHF') return Number(inv.amount) || 0;
+    const chf = Number((inv as any).chfAmount);
+    const rate = Number((inv as any).fxRate);
+    if (isFinite(chf) && chf > 0 && isFinite(rate) && rate > 0 && (inv as any).fxDate) return chf;
+    return null;
+  };
+  const dueBills = (input.invoices || [])
     .filter((inv) => (inv.status || '').toLowerCase() !== 'paid')
     .filter((inv) => {
       const due = parseDate((inv as any).dueDate);
       if (!due) return true; // facture sans échéance = due
       return due <= endOfMonth;
-    })
-    .reduce((s, inv) => s + (Number(inv.amount) || 0), 0);
+    });
+  let upcomingBills = 0;
+  const foreignMap = new Map<string, { total: number; count: number }>();
+  for (const inv of dueBills) {
+    const chf = chfValueOf(inv);
+    if (chf !== null) { upcomingBills += chf; continue; }
+    const cur = String((inv as any).currency).toUpperCase();
+    const e = foreignMap.get(cur) || { total: 0, count: 0 };
+    e.total += Number(inv.amount) || 0;
+    e.count += 1;
+    foreignMap.set(cur, e);
+  }
+  const foreignBills = Array.from(foreignMap.entries())
+    .map(([currency, v]) => ({ currency, total: Math.round(v.total * 100) / 100, count: v.count }))
+    .sort((a, b) => a.currency.localeCompare(b.currency));
+  const availableIsPartial = foreignBills.length > 0;
 
   // 4b) Dettes — PAR IDENTIFIANT : chaque mensualité est calculée dette par
   // dette ; un paiement lié (debtId) ne règle JAMAIS une autre dette.
@@ -240,5 +284,7 @@ export function getMonthlyFinancialSnapshot(input: {
     monthLabel,
     txCountThisMonth: thisMonthTx.length,
     recurringCount: activeRecurring.length,
+    foreignBills,
+    availableIsPartial,
   };
 }

@@ -130,6 +130,45 @@ export default function SiriAssistantScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* TÂCHE 4 — commandes Siri NATIVES (App Intents) : découverte des
+            4 commandes réelles, sans remplacer les intents par un simple
+            raccourci URL. Fonctionnelles sur build natif iOS uniquement. */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="sparkles" size={22} color={C.primary} />
+            <Text style={styles.sectionTitle}>{t('siriAssistant.sectionNative')}</Text>
+          </View>
+          <View style={styles.card}>
+            {([
+              ['plus-circle', 'cmd1Title', 'cmd1Phrase'],
+              ['wallet', 'cmd2Title', 'cmd2Phrase'],
+              ['document-text', 'cmd3Title', 'cmd3Phrase'],
+              ['calendar', 'cmd4Title', 'cmd4Phrase'],
+            ] as const).map(([icon, titleKey, phraseKey], i) => (
+              <TouchableOpacity
+                key={titleKey}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingVertical: Spacing.sm, borderTopWidth: i === 0 ? 0 : StyleSheet.hairlineWidth, borderTopColor: C.cardBorder }}
+                onPress={() => copy(t(`siriAssistant.${titleKey}`), t(`siriAssistant.${phraseKey}`))}
+                accessibilityRole="button"
+              >
+                <Ionicons name={icon as any} size={20} color={C.primary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: C.text, fontSize: FontSizes.sm, fontWeight: FontWeights.bold }}>
+                    {t(`siriAssistant.${titleKey}`)}
+                  </Text>
+                  <Text style={{ color: C.textSecondary, fontSize: FontSizes.xs, marginTop: 2 }}>
+                    « {t(`siriAssistant.${phraseKey}`)} »
+                  </Text>
+                </View>
+                <Ionicons name="copy-outline" size={16} color={C.textTertiary} />
+              </TouchableOpacity>
+            ))}
+            <Text style={{ color: C.textTertiary, fontSize: FontSizes.xs, marginTop: Spacing.sm }}>
+              {t('siriAssistant.nativeNote')}
+            </Text>
+          </View>
+        </View>
+
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Ionicons name="logo-apple" size={22} color={C.text} />

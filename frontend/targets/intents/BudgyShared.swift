@@ -30,6 +30,17 @@ struct BudgySnapshot: Codable {
     var lockAmounts: Bool
     var siriAmounts: Bool
     var updatedAt: Double
+    // TÂCHE 4 — champs OPTIONNELS (rétro-compatibles) pour les commandes
+    // Siri factures / épargne / budget. Données réelles uniquement.
+    var billsCount: Int?
+    var billsTotal: Double?
+    var billsForeign: String?
+    var nextBillTitle: String?
+    var nextBillDue: String?
+    var savedTotal: Double?
+    var budgetTotal: Double?
+    var budgetSpent: Double?
+    var availablePartial: Bool?
 }
 
 /// Dépense dictée à Siri, en attente de confirmation DANS l'app.

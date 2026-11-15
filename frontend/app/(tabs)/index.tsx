@@ -369,6 +369,16 @@ export default function HomeScreen() {
               <Text style={styles.heroSubTxt}>{t('homeV2.availableSub')}</Text>
               <Ionicons name="information-circle-outline" size={13} color="rgba(255,255,255,0.75)" />
             </TouchableOpacity>
+            {/* TÂCHE 4 — obligations en devise étrangère SANS taux vérifié :
+                le disponible CHF est PARTIEL et ne doit jamais paraître
+                définitif. Aucune conversion implicite. */}
+            {snapshot.availableIsPartial && (
+              <Text style={[styles.heroSubTxt, { marginTop: 4, color: '#FDE68A' }]}>
+                {t('home.foreignPartial', {
+                  list: snapshot.foreignBills.map((f) => `${f.count} × ${f.currency} ${f.total.toFixed(2)}`).join(', '),
+                })}
+              </Text>
+            )}
 
             {/* progress bar */}
             <View style={styles.heroProgressBg}>
@@ -619,6 +629,13 @@ export default function HomeScreen() {
               </Text>
             </View>
             {available < 0 && <Text style={styles.bdDeficit}>{t('homeV2.bdDeficit')}</Text>}
+            {snapshot.availableIsPartial && (
+              <Text style={[styles.bdDeficit, { color: '#D97706' }]}>
+                {t('home.foreignPartial', {
+                  list: snapshot.foreignBills.map((f) => `${f.count} × ${f.currency} ${f.total.toFixed(2)}`).join(', '),
+                })}
+              </Text>
+            )}
             <Text style={styles.bdNote}>{t('homeV2.bdNote')}</Text>
           </TouchableOpacity>
         </TouchableOpacity>

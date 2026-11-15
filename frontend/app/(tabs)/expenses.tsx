@@ -39,6 +39,8 @@ import { EXPENSE_CATEGORIES, PAYMENT_METHODS } from '../../src/data/swiss-data';
 import { useTranslation } from '../../src/hooks/useTranslation';
 import { DATE_LOCALES } from '../../src/i18n/translations';
 import { formatLocalISODate } from '../../src/utils/localDate';
+import { normalizeChfAmount } from '../../src/utils/amount';
+import { parseDate as parseFinancialDate } from '../../src/stores/selectors';
 import { EntityActionsSheet, type EntityActionsContext } from '../../src/components/EntityActionsSheet';
 import { deleteEntityWithCloud } from '../../src/services/cloudDelete';
 import { EntityEditModal, type EditField } from '../../src/components/EntityEditModal';
@@ -97,7 +99,11 @@ export default function ExpensesScreen() {
   ], [t, CUR]);
   const handleEditTxSubmit = (values: Record<string, any>) => {
     if (!editingTx) return;
-    const amt = parseFloat(String(values.amount).replace(',', '.')) || editingTx.amount;
+    const amt = normalizeChfAmount(values.amount ?? editingTx.amount);
+    if (amt === null) {
+      Alert.alert(t('scanner.invalidAmountTitle'), t('scanner.invalidAmountBody'));
+      return;
+    }
     updateTransaction(editingTx.id, {
       title: String(values.title || '').trim() || editingTx.title,
       amount: amt,
@@ -116,14 +122,10 @@ export default function ExpensesScreen() {
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth() + monthOffset, 1);
   }, [monthOffset]);
-  const parseTxDate = (s: string): Date | null => {
-    if (!s) return null;
-    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return new Date(s);
-    const eu = s.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})/);
-    if (eu) return new Date(parseInt(eu[3]), parseInt(eu[2]) - 1, parseInt(eu[1]));
-    const d = new Date(s);
-    return isNaN(d.getTime()) ? null : d;
-  };
+  // Use the exact same local calendar parser as the financial engine.
+  // Parsing ISO YYYY-MM-DD via new Date(s) causes a previous-day shift in
+  // negative UTC offsets and can move expenses into the wrong month.
+  const parseTxDate = (s: string): Date | null => parseFinancialDate(s);
   const monthTx = useMemo(
     () => transactions.filter((tx) => {
       const d = parseTxDate(tx.date);
@@ -177,11 +179,16 @@ export default function ExpensesScreen() {
       return;
     }
 
+    const validatedAmount = normalizeChfAmount(newExpense.amount);
+    if (validatedAmount === null) {
+      Alert.alert(t('scanner.invalidAmountTitle'), t('scanner.invalidAmountBody'));
+      return;
+    }
     const now = new Date();
     const expense = {
       id: `tx_${Date.now()}`,
       title: newExpense.title,
-      amount: parseFloat(newExpense.amount),
+      amount: validatedAmount,
       date: formatLocalISODate(now),
       category: newExpense.category,
       createdAt: now.getTime(),

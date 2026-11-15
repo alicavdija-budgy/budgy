@@ -295,6 +295,7 @@ export default function ScannerModal() {
   // Form state for edit stage
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
+  const [scannedCurrency, setScannedCurrency] = useState('CHF');
   const [category, setCategory] = useState('courses');
   const [paymentMethod, setPaymentMethod] = useState('card');
   const [note, setNote] = useState(t('scanner.addedViaScan'));
@@ -343,6 +344,7 @@ export default function ScannerModal() {
     setOcrError(null);
     setDetectedDocType('unknown');
     setOcrConfidence(null);
+    setScannedCurrency('CHF');
     let qrHandled = false;
     const r = await apiFetchJson<any>(
       `/api/scanner/ocr`,
@@ -378,6 +380,10 @@ export default function ScannerModal() {
         if (data.success || merged.rescued) {
           if (merged.merchant) setTitle(merged.merchant);
           if (merged.total_amount) setAmount(String(merged.total_amount));
+          // Do not turn an OCR invoice of EUR 100 into a CHF 100 obligation.
+          // Foreign amounts stay in their own currency (no invented FX rate).
+          const detectedCurrency = String(data.currency || 'CHF').trim().toUpperCase();
+          setScannedCurrency(/^[A-Z]{3}$/.test(detectedCurrency) ? detectedCurrency : 'CHF');
           if (merged.category) setCategory(merged.category);
           // Use the explicit document_type returned by OCR, not the default
           // receipt_type='ticket' (which caused invoices to become receipts).
@@ -541,8 +547,8 @@ export default function ScannerModal() {
         title: title.trim(),
         issuer: title.trim(),
         amount: amt,
-        currency: 'CHF',
-        invoiceDate: now.toISOString().split('T')[0],
+        currency: scannedCurrency,
+        invoiceDate: formatLocalISODate(now),
         category,
         status: 'pending',
         source: 'scan',
@@ -553,6 +559,7 @@ export default function ScannerModal() {
         id: txId,
         title: title.trim(),
         amount: amt,
+        currency: scannedCurrency,
         date: formatLocalISODate(now),
         category,
         paymentMethod: paymentMethod as any,
@@ -570,8 +577,8 @@ export default function ScannerModal() {
           imageBase64: receiptData,
           merchant: title.trim(),
           amount: amt,
-          currency: 'CHF',
-          date: now.toISOString().split('T')[0],
+          currency: scannedCurrency,
+          date: formatLocalISODate(now),
           category,
           type: receiptType,
           note: note.trim() || undefined,
@@ -940,7 +947,7 @@ export default function ScannerModal() {
         <View style={styles.fieldGroup}>
           <Text style={styles.label}>Montant</Text>
           <View style={styles.inputWrap}>
-            <Text style={styles.currencyLabel}>CHF</Text>
+            <Text style={styles.currencyLabel}>{scannedCurrency}</Text>
             <TextInput
               style={[styles.input, { fontSize: FontSizes.xl, fontWeight: FontWeights.bold }]}
               value={amount}
@@ -949,6 +956,20 @@ export default function ScannerModal() {
               placeholderTextColor={theme.textTertiary}
               keyboardType="decimal-pad"
             />
+          </View>
+          <View style={[styles.chipRow, { marginTop: 8 }]}>
+            {(['CHF', 'EUR', 'USD'] as const).map((currency) => (
+              <TouchableOpacity
+                key={currency}
+                testID={`scanner-currency-${currency}`}
+                style={[styles.chip, scannedCurrency === currency && styles.chipSelected]}
+                onPress={() => setScannedCurrency(currency)}
+              >
+                <Text style={[styles.chipText, scannedCurrency === currency && styles.chipTextSelected]}>
+                  {currency}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
         </View>
 

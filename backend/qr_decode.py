@@ -34,6 +34,17 @@ def decode_swiss_qr_from_image_b64(img_b64: str):
     img = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
     if img is None:
         return None
+    # Décodeur PRINCIPAL : zxing-cpp (roue pip autonome, fiable sur les QR
+    # DENSES des vraies QR-factures ~700 caractères). OpenCV reste en repli.
+    try:
+        import zxingcpp
+        gray0 = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        for cand0 in (img, gray0, cv2.resize(gray0, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)):
+            for r in zxingcpp.read_barcodes(cand0):
+                if r.text and r.text.strip().startswith("SPC"):
+                    return r.text
+    except ImportError:
+        pass
     det = cv2.QRCodeDetector()
     candidates = [img]
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)

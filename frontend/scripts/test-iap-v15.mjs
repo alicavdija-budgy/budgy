@@ -196,7 +196,7 @@ ok('paywall has no hardcoded subscription CHF prices', () => {
 });
 
 ok('Budgy app version remains 4.x or newer', () => {
-  assert.ok(/^4\\.\\d+\\.\\d+$/.test(appJson.expo.version));
+  assert.ok(/^4\.\d+\.\d+$/.test(appJson.expo.version));
 });
 
 ok('iOS build number is at least the verified TestFlight 91', () => {

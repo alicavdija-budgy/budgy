@@ -60,5 +60,9 @@ assert.ok(expenses.includes('const parseTxDate = (s: string): Date | null => par
 const scanner=readFileSync(resolve(root,'app/scanner-modal.tsx'),'utf8');
 assert.ok(scanner.includes('qrHandled = handleBarcodeScanned({ data: data.swiss_qr_content });'),'Backend Swiss QR must reach native QR review UI');
 assert.ok(scanner.includes("if (!qrHandled) setStage('edit');"),'QR review must not be overwritten by receipt editor');
+assert.ok(scanner.includes("setScannedCurrency(/^[A-Z]{3}$/.test(detectedCurrency)"),'Detected currency must not silently become CHF');
+assert.ok((scanner.match(/currency: scannedCurrency/g)||[]).length>=3,'Invoice, ticket and receipt must all preserve scanned currency');
+assert.ok(scanner.includes('scanner-currency-${currency}'),'User must be able to correct OCR currency');
+
 console.log('PASS: real Swiss amount parser, two ledger forms, timezone-safe ISO, backend Swiss QR routing');
 

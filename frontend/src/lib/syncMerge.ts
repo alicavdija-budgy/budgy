@@ -101,6 +101,120 @@ export function stashUnsyncedDocs<T extends Row>(documents: T[], confirmedHashes
   return (documents || []).filter((d) => d.id && dirtyIds.has(String(d.id)));
 }
 
+// ─── Espace isolé par compte : TOUTES les entités (P0) ───────
+// Un contrat/facture/ticket/transaction non confirmé ne doit pas disparaître
+// au logout alors que son PDF survit : on stashe TOUTES les entités non
+// synchronisées et leurs relations, plus les marqueurs associés.
+export const STASHED_COLLECTIONS = ['documents', 'contracts', 'invoices', 'receipts', 'transactions'] as const;
+const STASH_TABLE: Record<string, string> = {
+  documents: 'documents', contracts: 'contracts', invoices: 'invoices',
+  receipts: 'receipts', transactions: 'transactions',
+};
+
+/**
+ * Construit le nouvel accountVault au logout. uid vide ('') = première
+ * synchronisation jamais réussie / hors session : trace durable ANONYME,
+ * isolée, adoptée par le premier compte qui s'authentifie sur CET appareil
+ * (résolution d'identité déterministe et documentée) — jamais perdue.
+ */
+export function buildLogoutStash(prev: any): Record<string, any> {
+  const uid = prev.syncAccountId || '';
+  const hashes = prev.syncedHashes || {};
+  const entry: any = { savedAt: Date.now(), syncedHashes: hashes };
+  let hasData = false;
+  for (const key of STASHED_COLLECTIONS) {
+    const unsynced = stashUnsyncedDocs(prev[key] || [], hashes[STASH_TABLE[key]]);
+    entry[key] = unsynced;
+    if (unsynced.length > 0) hasData = true;
+  }
+  if (!hasData) return prev.accountVault || {};
+  return { ...(prev.accountVault || {}), [uid]: entry };
+}
+
+/**
+ * Restaure l'espace isolé du compte authentifié + l'espace anonyme ''
+ * (identité désormais résolue). Retourne null si rien à restaurer.
+ * Les éléments existants ne sont jamais écrasés (dédupliqué par id) et les
+ * marqueurs courants gardent priorité : rien n'est marqué synchronisé à tort.
+ */
+export function applyAccountRestore(state: any, uid: string): Record<string, any> | null {
+  const vault = state.accountVault || {};
+  const sources = [vault[uid], uid ? vault[''] : undefined].filter(Boolean) as any[];
+  if (sources.length === 0) return null;
+  const updates: any = {};
+  for (const key of STASHED_COLLECTIONS) {
+    const existingIds = new Set((state[key] || []).map((x: any) => String(x.id)));
+    const restored: any[] = [];
+    for (const src of sources) {
+      for (const it of src[key] || []) {
+        if (it && it.id && !existingIds.has(String(it.id))) { restored.push(it); existingIds.add(String(it.id)); }
+      }
+    }
+    if (restored.length > 0) updates[key] = [...restored, ...(state[key] || [])];
+  }
+  const mergedHashes: any = { ...(state.syncedHashes || {}) };
+  for (const src of sources) {
+    const h = src.syncedHashes || {};
+    for (const t of Object.keys(h)) mergedHashes[t] = { ...(h[t] || {}), ...(mergedHashes[t] || {}) };
+  }
+  updates.syncedHashes = mergedHashes;
+  const rest = { ...vault };
+  delete rest[uid];
+  if (uid) delete rest[''];
+  updates.accountVault = rest;
+  return updates;
+}
+
+/**
+ * P1 — résolution d'identité : les tombstones et tâches d'envoi créés SANS
+ * session (clé '') sont conservés durablement puis attribués au premier
+ * compte authentifié de l'appareil — jamais perdus, jamais envoyés sous une
+ * identité vide, jamais ignorés définitivement.
+ */
+export function adoptAnonymousState(
+  tombstones: Record<string, Record<string, number>> | undefined,
+  pendingUploads: any[] | undefined,
+  uid: string,
+): { tombstones: Record<string, Record<string, number>>; pendingUploads: UploadEntry[]; changed: boolean } {
+  const t = tombstones || {};
+  const q = normalizeUploadQueue(pendingUploads || []);
+  if (!uid) return { tombstones: t, pendingUploads: q, changed: false };
+  let changed = false;
+  let outT = t;
+  const anon = t[''] || {};
+  if (Object.keys(anon).length > 0) {
+    const cur = t[uid] || {};
+    const { ['']: _drop, ...rest } = t;
+    outT = { ...rest, [uid]: { ...anon, ...cur } };
+    changed = true;
+  }
+  const outQ = q.map((e) => {
+    if (e.accountId === '') { changed = true; return { ...e, accountId: uid }; }
+    return e;
+  });
+  return { tombstones: outT, pendingUploads: outQ, changed };
+}
+
+/**
+ * P0 — décision de push : une confirmation 'L:' reste valable tant que le
+ * schéma étendu n'est PAS disponible ; dès qu'il l'est (sonde fiable), les
+ * éléments 'L:' redeviennent dirty et leurs métadonnées en attente partent.
+ */
+export function isDirtyForPush(
+  stored: string | undefined,
+  fullHash: string,
+  legacyHash: string | null,
+  extendedSchemaAvailable: boolean,
+): boolean {
+  if (!stored) return true;
+  if (stored === fullHash) return false;
+  if (stored.startsWith('L:')) {
+    if (extendedSchemaAvailable) return true; // migration dispo → envoyer les champs en attente
+    return legacyHash ? stored !== legacyHash : true;
+  }
+  return true;
+}
+
 // ─── Tombstones (suppressions EXPLICITEMENT confirmées) ──────
 export function tombstoneKey(table: string, id: string): string {
   return `${table}:${id}`;

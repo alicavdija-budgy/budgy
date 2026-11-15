@@ -392,3 +392,11 @@ test
 - P1: partage utilise l URI réellement récupérée (safeShareFile(uri)) ; queueUpload sur rattachement contrat + PDF caméra ; hash sans binaires (imageBase64/pages/pdfBase64/chemins locaux exclus) ; téléchargement contrôlé (statut 200 + taille attendue).
 - Tests: test-task3 91/91 (46 unitaires exécutés + 45 statiques), toutes suites vertes (budgets 67/67 après adaptation du garde-fou logout).
 - EN ATTENTE: validation utilisateur avant TÂCHE 5.
+
+## TÂCHE 3 — DERNIERS RISQUES P0 CORRIGÉS
+- logout: buildLogoutStash stashe TOUTES les entités non confirmées (documents/contrats/factures/tickets/transactions) + syncedHashes dans accountVault[uid] (uid "" = jamais synchronisé → espace anonyme adopté au 1er login) ; applyAccountRestore restaure entités + relations + marqueurs, dédupliqué.
+- Ordre push/pull: prepareAccountState(uid) (switch → restore → adoption identité) AVANT toute lecture d état ; verrou syncBusy push/pull ; hydratation exigée ; garde d identité (confirmPushed + abandon du pull si compte changé).
+- Post-migration: sonde EXT_PROBE_COL par table (select colonne étendue), schemaExtended ; isDirtyForPush → marqueurs L: redeviennent dirty dès schéma dispo → métadonnées en attente envoyées, confirmation complète, zéro boucle.
+- P1 identités: adoptAnonymousState — tombstones/file "" conservés puis attribués au compte authentifié, jamais perdus ni envoyés sous identité vide.
+- Tests: test-task3 117/117 (67 unitaires exécutés dont scénarios A/B/C d intégration + 50 statiques), toutes suites vertes.
+- EN ATTENTE: validation utilisateur avant TÂCHE 5.

@@ -20,7 +20,8 @@ const sm = await import(join(root, 'src/lib/syncMerge.ts'));
 const { mergeCollectionsV2, mergeItem, hashItem, computeHashes, diffDirty,
   docTypeOf, storagePathFor, sanitizeFileName, storageFolderFor,
   normalizeUploadQueue, queueForAccount, tombstoneKey,
-  legacyHashOf, isConfirmedHash, pickProjection, stashUnsyncedDocs } = sm;
+  legacyHashOf, isConfirmedHash, pickProjection, stashUnsyncedDocs,
+  buildLogoutStash, applyAccountRestore, adoptAnonymousState, isDirtyForPush } = sm;
 
 console.log('\n═══ TESTS UNITAIRES (exécution réelle) ═══');
 
@@ -156,6 +157,86 @@ console.log('\n— P1 Performance : binaires exclus du hash —');
   U('remotePath (référence cloud) reste suivi', hashItem({ id: 'd', remotePath: 'p1' }) !== hashItem({ id: 'd', remotePath: 'p2' }));
 }
 
+console.log('\n═ SCÉNARIO A — compte A hors ligne → logout → compte B → retour A ═');
+{
+  // 1-3. Compte A, hors ligne : contrat + PDF + lien documentId (jamais confirmés)
+  const doc = { id: 'doc_A', title: 'Bail.pdf', documentType: 'contract', fileUri: 'file:///vault/doc_A.pdf', mimeType: 'application/pdf', createdAt: 1 };
+  const ct = { id: 'ct_A', title: 'Bail 2026', category: 'logement', documentId: 'doc_A', createdAt: 1 };
+  const stateA = {
+    syncAccountId: 'userA', accountVault: {}, syncedHashes: {},
+    documents: [doc], contracts: [ct], invoices: [], receipts: [], transactions: [],
+  };
+  // 4. Logout → mise en réserve COMPLÈTE (entités + relations + marqueurs)
+  const vault = buildLogoutStash(stateA);
+  U('A4. le contrat ET son document sont stashés ensemble (relations)', vault.userA.contracts.length === 1 && vault.userA.documents.length === 1);
+  U('A4. le lien documentId est préservé dans la réserve', vault.userA.contracts[0].documentId === 'doc_A');
+  // 5. Connexion compte B : rien de A n'est visible ni restauré
+  const stateB = { syncAccountId: 'userB', accountVault: vault, syncedHashes: {}, documents: [], contracts: [], invoices: [], receipts: [], transactions: [] };
+  const restoredB = applyAccountRestore(stateB, 'userB');
+  U('A5. le compte B ne restaure AUCUNE donnée du compte A', restoredB === null || !(restoredB.contracts || []).some((c) => c.id === 'ct_A'));
+  U('A5. la réserve de A reste intacte sous la session B', !!vault.userA && vault.userA.contracts[0].id === 'ct_A');
+  // 6. Retour au compte A : tout est restauré
+  const stateA2 = { syncAccountId: 'userA', accountVault: vault, syncedHashes: {}, documents: [], contracts: [], invoices: [], receipts: [], transactions: [] };
+  const restoredA = applyAccountRestore(stateA2, 'userA');
+  U('A6. contrat restauré au retour de A', restoredA.contracts.length === 1 && restoredA.contracts[0].title === 'Bail 2026');
+  U('A6. document (fichier local) restauré avec son lien', restoredA.documents[0].fileUri === 'file:///vault/doc_A.pdf' && restoredA.contracts[0].documentId === 'doc_A');
+  U('A6. la réserve de A est consommée (pas de double restauration)', !restoredA.accountVault.userA);
+  // 7. Reconnexion réseau : le push détecte tout comme à envoyer
+  const { dirtyIds } = diffDirty(restoredA.contracts, restoredA.syncedHashes.contracts);
+  U('A7. données restaurées détectées comme à pousser', dirtyIds.has('ct_A'));
+}
+
+console.log('\n═ SCÉNARIO B — restauration puis pull avec une ANCIENNE version cloud ═');
+{
+  const docs = [
+    { id: 'off1', title: 'Créé hors ligne 1', createdAt: 10 },
+    { id: 'off2', title: 'Créé hors ligne 2', createdAt: 11 },
+  ];
+  const vault = buildLogoutStash({ syncAccountId: 'userA', accountVault: {}, syncedHashes: {}, documents: docs, contracts: [], invoices: [], receipts: [], transactions: [] });
+  const state = { syncAccountId: 'userA', accountVault: vault, syncedHashes: {}, documents: [], contracts: [], invoices: [], receipts: [], transactions: [] };
+  const restored = applyAccountRestore(state, 'userA');
+  U('B. restauration complète au login', restored.documents.length === 2);
+  // pull retourne une ANCIENNE version du cloud (vide / partielle) —
+  // exactement le calcul fait par cloudSync : dirty depuis l'état POST-restauration.
+  const { dirtyIds } = diffDirty(restored.documents, restored.syncedHashes.documents);
+  const res = mergeCollectionsV2(restored.documents, [], { dirtyIds, tombstoneIds: new Set() });
+  U('B. AUCUNE donnée restaurée ne disparaît au pull (ancienne version cloud)', res.merged.length === 2);
+  const res2 = mergeCollectionsV2(restored.documents, [{ id: 'off1', title: 'Version cloud périmée' }], { dirtyIds, tombstoneIds: new Set() });
+  U('B. la version cloud PÉRIMÉE n\'écrase pas la donnée restaurée (dirty gagne)', res2.merged.find((d) => d.id === 'off1').title === 'Créé hors ligne 1');
+}
+
+console.log('\n═ SCÉNARIO C — ancien schéma → migration → envoi automatique ═');
+{
+  const legacyFields = ['id', 'user_id', 'title', 'category', 'created_at'];
+  const row = { id: 'd1', user_id: 'u1', title: 'Doc', category: 'contracts', document_type: 'contract', remote_path: 'users/u1/contracts/d1/f.pdf', created_at: 1 };
+  const item = { id: 'd1', title: 'Doc', category: 'contracts', documentType: 'contract', remotePath: 'users/u1/contracts/d1/f.pdf', createdAt: 1 };
+  const fullH = hashItem(item);
+  const lH = legacyHashOf(row, legacyFields);
+  // 1-2. ancien schéma : push → confirmation partielle 'L:' → plus de boucle
+  U('C1. ancien schéma : élément dirty au départ', isDirtyForPush(undefined, fullH, lH, false));
+  U('C2. confirmation partielle L: → PAS de boucle avant migration', !isDirtyForPush(lH, fullH, lH, false));
+  // 3. schéma étendu disponible (sonde) → les champs en attente repartent
+  U('C3. schéma étendu disponible → métadonnées en attente RE-POUSSÉES', isDirtyForPush(lH, fullH, lH, true));
+  // 4. confirmation complète → terminé, aucun doublon ni nouvelle boucle
+  U('C4. confirmation complète après migration → plus rien à envoyer', !isDirtyForPush(fullH, fullH, lH, true));
+  U('C. aucune perte : la projection ne contient jamais moins que les champs legacy', Object.keys(pickProjection(legacyFields, row)).length === 5);
+}
+
+console.log('\n═ P1 — identités et tombstones sans session ═');
+{
+  // Suppression effectuée AVANT toute synchro (syncAccountId null → clé '')
+  const t = { '': { 'documents:doc_x': 123 } };
+  const q = [{ docId: 'doc_y', accountId: '' }];
+  const adopted = adoptAnonymousState(t, q, 'userA');
+  U('tombstone anonyme JAMAIS perdu : adopté à la résolution d\'identité', adopted.tombstones.userA['documents:doc_x'] === 123);
+  U('plus aucune trace sous l\'identité vide après adoption', !adopted.tombstones['']);
+  U('file anonyme ré-attribuée au compte authentifié', adopted.pendingUploads[0].accountId === 'userA');
+  U('sans identité résolue : rien n\'est ré-attribué (trace conservée)', adoptAnonymousState(t, q, '').changed === false);
+  const existing = { '': { 'documents:doc_x': 123 }, userA: { 'documents:doc_z': 9 } };
+  const a2 = adoptAnonymousState(existing, [], 'userA');
+  U('fusion sans écraser les tombstones existants du compte', a2.tombstones.userA['documents:doc_z'] === 9 && a2.tombstones.userA['documents:doc_x'] === 123);
+}
+
 console.log('\n— Relations et types (non-régression) —');
 {
   const m = mergeItem({ id: 'c1', documentId: 'doc_1', fileUri: 'file:///v/c1.pdf' }, { id: 'c1', documentId: null });
@@ -183,7 +264,7 @@ console.log('\n═══ CONTRÔLES STATIQUES ═══');
 console.log('\n— §1/§2 câblage synchro —');
 S('pull utilise mergeCollectionsV2 (dirty + tombstones)', cloud.includes('mergeCollectionsV2') && cloud.includes('tombstoneIds: tombIdsFor(table)'));
 S('plus AUCUNE inférence de suppression par lastCloudPushAt', !cloud.includes('lastPushAt') || !cloud.includes('mergeCollections((local'));
-S('push DELTA par hash + confirmation serveur avant marquage', cloud.includes('if (isConfirmedHash(st, fullH,') && cloud.includes('const confirmPushed = (table: string'));
+S('push DELTA par hash + confirmation serveur avant marquage', cloud.includes('isDirtyForPush(st, fullH,') && cloud.includes('const confirmPushed = (table: string'));
 S('P0 — confirmation limitée aux lignes réellement envoyées', cloud.includes('for (const r of rows) if (fullHashesById[String(r.id)])'));
 S('P0 — repli legacy confirme la PROJECTION (\'L:\'), pas le hash complet', cloud.includes('legacyHashOf(r, legacy)') && cloud.includes('pendingMigration.add(table)'));
 S('P0 — succès partiel explicite (pendingMigration dans le résultat)', cloud.includes('pendingMigration: [...pendingMigration]'));
@@ -223,10 +304,15 @@ S('aucun envoi hors session', dstore.includes('jamais d\'envoi hors session'));
 console.log('\n— §6 isolation par compte —');
 S('logout réinitialise les marqueurs (jamais transférés)', store.includes('syncedHashes: {},\n        lastCloudPushAt: 0,\n        syncAccountId: null,'));
 S('file/tombstones conservés taggés par compte au logout', store.includes('pendingUploads/tombstones conservés'));
-S('changement de compte → clearSyncMarkers avant push ET pull', cloud.split('clearSyncMarkers()').length >= 3);
+S('changement de compte → clearSyncMarkers (centralisé dans prepareAccountState)', cloud.includes('clearSyncMarkers()'));
 S('queueUpload tague le compte courant', store.includes('const accountId = s.syncAccountId'));
-S('P0 — logout stashe les documents non synchronisés (accountVault)', store.includes('stashUnsyncedDocs(prev.documents'));
-S('P0 — restauration UNIQUEMENT pour le compte d\'origine (push et pull)', cloud.split('restoreAccountVault(userId)').length >= 3);
+S('P0 — logout stashe TOUTES les entités non synchronisées (buildLogoutStash)', store.includes('buildLogoutStash(prev)'));
+S('P0 — restauration + adoption AVANT lecture d\'état (push ET pull)', cloud.split('prepareAccountState(userId)').length >= 3 && cloud.indexOf('prepareAccountState(userId);\n  const s = useStore.getState()') > 0);
+S('P0 — verrou anti-concurrence push/pull', cloud.includes('let syncBusy = false') && cloud.split('syncBusy = false').length >= 4);
+S('P0 — hydratation du store exigée avant synchro', cloud.split('storeHydrated()').length >= 3);
+S('P0 — changement de compte en cours d\'opération → abandon sans écrire', cloud.includes('Compte modifié pendant la synchronisation') && cloud.includes('syncAccountId !== userId) return;'));
+S('P0 — sonde fiable du schéma étendu (colonne testée, par table)', cloud.includes('EXT_PROBE_COL[table]').valueOf() && cloud.includes('schemaExtended[table] = !probeErr'));
+S('P0 — migration détectée → marqueurs L: redeviennent dirty (isDirtyForPush)', cloud.includes('isDirtyForPush(st, fullH,'));
 S('P0 — tâche d\'envoi conservée si le document est dans l\'espace isolé', dstore.includes('if (vaultIds.has(e.docId)) continue;'));
 S('P0 — retrait de file introuvable = explicite, consigné', dstore.includes('upload abandonné, document introuvable'));
 

@@ -16,7 +16,47 @@
  */
 
 import { getSupabase, isSupabaseConfigured } from '../lib/supabase';
-import { mergeCollectionsV2, diffDirty, hashItem, legacyHashOf, isConfirmedHash } from '../lib/syncMerge';
+import {
+  mergeCollectionsV2, diffDirty, hashItem, legacyHashOf, isConfirmedHash,
+  adoptAnonymousState, isDirtyForPush,
+} from '../lib/syncMerge';
+
+// P0 — verrou : push et pull ne s'exécutent jamais en parallèle (ni entre
+// eux) ; un changement de compte en cours d'opération est détecté et
+// l'opération abandonnée sans écrire.
+let syncBusy = false;
+
+// P0 — sonde de disponibilité du schéma étendu (par session, par table) :
+// undefined = pas encore sondé ; true = migration appliquée (les
+// confirmations 'L:' redeviennent dirty et les métadonnées en attente
+// partent) ; false = ancien schéma (repli legacy, aucune boucle).
+const schemaExtended: Record<string, boolean | undefined> = {};
+const EXT_PROBE_COL: Record<string, string> = {
+  transactions: 'invoice_id',
+  contracts: 'document_id',
+  receipts: 'transaction_id',
+  invoices: 'paid_at',
+  documents: 'document_type',
+};
+
+function storeHydrated(): boolean {
+  try { return (useStore as any).persist?.hasHydrated?.() ?? true; } catch { return true; }
+}
+
+/** Restauration + adoption AVANT toute lecture d'état pour la synchro. */
+function prepareAccountState(userId: string): void {
+  const st = useStore.getState();
+  if (st.syncAccountId && st.syncAccountId !== userId) st.clearSyncMarkers();
+  if (st.syncAccountId !== userId) st.setSyncAccountId(userId);
+  // P0 — restaurer l'espace isolé (compte + anonyme) AVANT de lire l'état.
+  useStore.getState().restoreAccountVault(userId);
+  // P1 — identité résolue : tombstones/file anonymes ('' ) adoptés par ce compte.
+  const cur = useStore.getState();
+  const adopted = adoptAnonymousState(cur.tombstones, cur.pendingUploads as any[], userId);
+  if (adopted.changed) {
+    useStore.setState({ tombstones: adopted.tombstones, pendingUploads: adopted.pendingUploads });
+  }
+}
 import { useStore } from '../stores/useStore';
 import type {
   Transaction,
@@ -172,15 +212,14 @@ export async function pushAllToCloud(): Promise<{
   const { data: sess } = await sb.auth.getSession();
   const userId = sess.session?.user.id;
   if (!userId) return { ok: false, pushed: 0, error: 'Non connecté' };
-
+  if (!storeHydrated()) return { ok: false, pushed: 0, error: 'Store non hydraté' };
+  if (syncBusy) return { ok: false, pushed: 0, error: 'Synchronisation déjà en cours' };
+  syncBusy = true;
+  try {
+  // P0 — ORDRE : session vérifiée → restauration de l'espace isolé →
+  // RELECTURE de l'état APRÈS restauration (jamais d'état périmé).
+  prepareAccountState(userId);
   const s = useStore.getState();
-  // TÂCHE 3 (audit §6) — isolation par compte : changement d'identité →
-  // les marqueurs de l'ancien compte ne sont JAMAIS réutilisés.
-  if (s.syncAccountId && s.syncAccountId !== userId) s.clearSyncMarkers();
-  if (s.syncAccountId !== userId) s.setSyncAccountId(userId);
-  // P0 — reprise sécurisée : documents non synchronisés mis de côté au
-  // logout de CE compte → restaurés avant le push.
-  useStore.getState().restoreAccountVault(userId);
   let total = 0;
   const errors: string[] = [];
 
@@ -190,6 +229,8 @@ export async function pushAllToCloud(): Promise<{
   // the whole push, causing transactions to never reach the cloud and the
   // user's data to "disappear" on reload.
   const confirmPushed = (table: string, map: Record<string, string>) => {
+    // P0 — si le compte a changé pendant l'opération, ne rien écrire.
+    if (useStore.getState().syncAccountId !== userId) return;
     const cur = useStore.getState().syncedHashes[table] || {};
     useStore.getState().setSyncedHashes(table, { ...cur, ...map });
   };
@@ -202,6 +243,7 @@ export async function pushAllToCloud(): Promise<{
       const conflictCol = TABLE_CONFLICT[table] || 'id';
       await upsertTable(table, filtered, conflictCol);
       total += rows.length;
+      if (EXT_PROBE_COL[table]) schemaExtended[table] = true; // schéma étendu accepté
       // P0 — marqué « synchronisé » UNIQUEMENT après confirmation effective
       // du serveur, et SEULEMENT pour les lignes réellement envoyées.
       const confirmed: Record<string, string> = {};
@@ -219,6 +261,7 @@ export async function pushAllToCloud(): Promise<{
           const filtered = rows.map((r) => pickAllowed(legacy, r));
           await upsertTable(table, filtered, TABLE_CONFLICT[table] || 'id');
           total += rows.length;
+          schemaExtended[table] = false; // ancien schéma confirmé
           const confirmed: Record<string, string> = {};
           for (const r of rows) confirmed[String(r.id)] = legacyHashOf(r, legacy);
           confirmPushed(table, confirmed);
@@ -276,6 +319,16 @@ export async function pushAllToCloud(): Promise<{
     if (!items || items.length === 0) continue;
     const stored = syncedHashes[table] || {};
     const legacy = TABLE_FIELDS_LEGACY[table];
+    const hasLegacyMarkers = Object.values(stored).some((h) => typeof h === 'string' && h.startsWith('L:'));
+    // P0 — sonde fiable : des confirmations 'L:' existent et le schéma n'a
+    // pas encore été sondé cette session → on interroge une colonne étendue.
+    if (hasLegacyMarkers && EXT_PROBE_COL[table] && schemaExtended[table] === undefined) {
+      try {
+        const { error: probeErr } = await sb.from(table).select(EXT_PROBE_COL[table]).limit(1);
+        schemaExtended[table] = !probeErr;
+      } catch { schemaExtended[table] = false; }
+    }
+    const extAvailable = schemaExtended[table] === true;
     const dirtyItems: any[] = [];
     const fullHashesById: Record<string, string> = {};
     for (const it of items as any[]) {
@@ -284,8 +337,8 @@ export async function pushAllToCloud(): Promise<{
       const fullH = hashItem(it);
       fullHashesById[id] = fullH;
       const st = stored[id];
-      if (st && st.startsWith('L:')) pendingMigration.add(table);
-      if (isConfirmedHash(st, fullH, legacy ? legacyHashOf(row, legacy) : null)) continue;
+      if (st && st.startsWith('L:') && !extAvailable) pendingMigration.add(table);
+      if (!isDirtyForPush(st, fullH, legacy ? legacyHashOf(row, legacy) : null, extAvailable)) continue;
       dirtyItems.push(it);
     }
     if (dirtyItems.length === 0) continue;
@@ -326,6 +379,9 @@ export async function pushAllToCloud(): Promise<{
     return { ok: true, pushed: total, pendingMigration: [...pendingMigration] };
   }
   return { ok: true, pushed: total };
+  } finally {
+    syncBusy = false;
+  }
 }
 
 // ─── Pull: fetch cloud data and replace local store ───────────
@@ -335,6 +391,14 @@ export async function pullAllFromCloud(): Promise<{ ok: boolean; pulled: number;
   const { data: sess } = await sb.auth.getSession();
   const userId = sess.session?.user.id;
   if (!userId) return { ok: false, pulled: 0, error: 'Non connecté' };
+  if (!storeHydrated()) return { ok: false, pulled: 0, error: 'Store non hydraté' };
+  if (syncBusy) return { ok: false, pulled: 0, error: 'Synchronisation déjà en cours' };
+  syncBusy = true;
+
+  // P0 — ORDRE : restauration de l'espace isolé AVANT toute capture d'état :
+  // la fusion travaille sur l'état POST-restauration, jamais sur une version
+  // périmée qui écraserait les données restaurées.
+  prepareAccountState(userId);
 
   let total = 0;
   try {
@@ -402,9 +466,6 @@ export async function pullAllFromCloud(): Promise<{ ok: boolean; pulled: number;
     //  • seules les suppressions explicites (tombstones) suppriment ou
     //    empêchent une résurrection ;
     //  • champ NULL/absent côté cloud → valeur locale préservée.
-    if (cur.syncAccountId && cur.syncAccountId !== userId) cur.clearSyncMarkers();
-    if (cur.syncAccountId !== userId) cur.setSyncAccountId(userId);
-    useStore.getState().restoreAccountVault(userId);
 
     // Tombstones distants (suppressions confirmées sur d'autres appareils).
     let remoteTombs: { entity_key?: string; deleted_at?: number }[] = [];
@@ -433,6 +494,10 @@ export async function pullAllFromCloud(): Promise<{ ok: boolean; pulled: number;
       debts: 'debts', investments: 'investments', receipts: 'receipts', invoices: 'invoices',
       documents: 'documents', groups: 'expense_groups', groupExpenses: 'group_expenses',
     };
+    // P0 — changement de compte pendant le pull → abandon sans écrire.
+    if (useStore.getState().syncAccountId !== userId) {
+      return { ok: false, pulled: 0, error: 'Compte modifié pendant la synchronisation' };
+    }
     const postPullHashes: Record<string, Record<string, string>> = {};
     const mg = <T,>(stateKey: string, local: T[], remote: any[]): T[] => {
       const table = TABLE_OF[stateKey];
@@ -488,6 +553,8 @@ export async function pullAllFromCloud(): Promise<{ ok: boolean; pulled: number;
     return { ok: true, pulled: total };
   } catch (e: any) {
     return { ok: false, pulled: total, error: e?.message || String(e) };
+  } finally {
+    syncBusy = false;
   }
 }
 

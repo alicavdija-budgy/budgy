@@ -4,7 +4,7 @@
  */
 
 import { create } from 'zustand';
-import { stashUnsyncedDocs } from '../lib/syncMerge';
+import { buildLogoutStash, applyAccountRestore } from '../lib/syncMerge';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type {
@@ -149,7 +149,7 @@ interface AppState {
   clearSyncMarkers: () => void;
   setSyncAccountId: (uid: string | null) => void;
   addTombstone: (table: string, id: string) => void;
-  accountVault: Record<string, { documents: PersonalDocument[]; savedAt: number }>;
+  accountVault: Record<string, { savedAt: number; syncedHashes?: Record<string, Record<string, string>>; documents?: PersonalDocument[]; contracts?: Contract[]; invoices?: Invoice[]; receipts?: Receipt[]; transactions?: Transaction[] }>;
   restoreAccountVault: (uid: string) => void;
   queueUpload: (docId: string) => void;
   dequeueUpload: (docId: string) => void;
@@ -507,18 +507,7 @@ export const useStore = create<AppState>()(
       // au logout sont restaurés UNIQUEMENT quand leur compte d'origine se
       // reconnecte (jamais fusionnés dans un autre compte).
       restoreAccountVault: (uid) =>
-        set((s) => {
-          const entry = s.accountVault[uid];
-          if (!entry || entry.documents.length === 0) {
-            if (!entry) return {};
-            const { [uid]: _drop, ...rest } = s.accountVault;
-            return { accountVault: rest };
-          }
-          const existing = new Set(s.documents.map((d) => d.id));
-          const restored = entry.documents.filter((d) => !existing.has(d.id));
-          const { [uid]: _gone, ...rest } = s.accountVault;
-          return { documents: [...restored, ...s.documents], accountVault: rest };
-        }),
+        set((s) => applyAccountRestore(s, uid) || {}),
       addTombstone: (table, id) =>
         set((s) => {
           const uid = s.syncAccountId || '';
@@ -613,14 +602,13 @@ export const useStore = create<AppState>()(
       }),
       
       logout: () => set((prev) => {
-        // P0 — JAMAIS détruire des documents non synchronisés : ils sont mis
-        // de côté dans un espace local durable isolé par compte (accountVault)
-        // et restaurés à la reconnexion de CE compte uniquement.
-        const uid = prev.syncAccountId || '';
-        const unsynced = uid ? stashUnsyncedDocs(prev.documents as any[], (prev.syncedHashes || {}).documents) : [];
-        const accountVault = uid && unsynced.length > 0
-          ? { ...prev.accountVault, [uid]: { documents: unsynced as PersonalDocument[], savedAt: Date.now() } }
-          : prev.accountVault;
+        // P0 — JAMAIS détruire des données non synchronisées : TOUTES les
+        // entités non confirmées (documents, contrats, factures, tickets,
+        // transactions) et leurs marqueurs sont mis de côté dans un espace
+        // local durable isolé par compte (y compris si la première synchro
+        // n'a jamais réussi → espace anonyme ''), restaurés UNIQUEMENT après
+        // authentification du compte propriétaire.
+        const accountVault = buildLogoutStash(prev);
         return {
         accountVault,
         user: null,

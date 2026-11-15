@@ -332,7 +332,7 @@ export default function ImportInvoiceScreen() {
   /** TÂCHE 5 — conserve le document ORIGINAL (vault) + payload SPC brut,
    *  lié à la facture ; détecte les doublons par signaux fiables ; montant
    *  absent → « Montant à compléter » (JAMAIS de facture CHF 0). */
-  const saveInvoiceDocument = async (opts: { toComplete: boolean }): Promise<string | undefined> => {
+  const saveInvoiceDocument = async (opts: { toComplete: boolean; titleOverride?: string }): Promise<string | undefined> => {
     if (!result) return undefined;
     const now = Date.now();
     const qrRaw: string | undefined = result._qrRaw ? String(result._qrRaw) : undefined;
@@ -347,7 +347,7 @@ export default function ImportInvoiceScreen() {
     const isPdf = !!vaultUri && ((result._mime || '').includes('pdf') || vaultUri.toLowerCase().endsWith('.pdf'));
     addDocument({
       id: docId,
-      title: result.title || result.issuer || result.merchant || t('invoiceDocs.defaultTitle'),
+      title: opts.titleOverride || result.title || result.issuer || result.merchant || t('invoiceDocs.defaultTitle'),
       category: 'other',
       documentType: 'invoice',
       imageBase64: '',
@@ -451,6 +451,65 @@ export default function ImportInvoiceScreen() {
       return;
     }
     await doPersist();
+  };
+
+  /**
+   * OCR failure fallback for invoices. Never saves an invoice with a fabricated
+   * amount or converts a failed invoice scan into a contract.
+   * A missing amount keeps only the original document (toComplete).
+   */
+  const persistManualInvoice = async () => {
+    if (!result || !extractionFailed) return;
+    const title = manualCt.title.trim();
+    if (!title) { Alert.alert(t('contractsV2.manualNeedTitle')); return; }
+    const issuer = manualCt.issuer.trim() || title;
+    const rawAmount = manualCt.amount.trim();
+    const amount = rawAmount ? normalizeChfAmount(rawAmount) : null;
+    if (rawAmount && (amount === null || amount <= 0)) {
+      Alert.alert(t('importErrors.amountInvalid'));
+      return;
+    }
+    const commit = async () => {
+      try {
+        setBusy(true);
+        const documentId = await saveInvoiceDocument({
+          toComplete: amount === null,
+          titleOverride: title,
+        });
+        if (!documentId) {
+          Alert.alert(t('emailImport.importFailedTitle'), t('emailImport.importFailedFallback'));
+          return;
+        }
+        if (amount !== null) {
+          addInvoice({
+            id: `inv_${Date.now()}`,
+            title, issuer, amount, currency: 'CHF', category: 'autre',
+            status: 'pending', source: 'manual', documentId,
+            createdAt: Date.now(),
+          } as any);
+          Alert.alert(t('emailImport.invoiceSavedTitle'), t('emailImport.invoiceSavedBody'));
+        } else {
+          Alert.alert(t('invoiceDocs.savedNoAmountTitle'), t('invoiceDocs.savedNoAmountBody'));
+        }
+        setResult(null);
+        setShowManualCt(false);
+        setManualCt({ title: '', issuer: '', amount: '', expiry: '', category: 'autre' });
+      } catch (e: any) {
+        const code = e instanceof VaultError ? e.code : 'SAVE_FAILED';
+        Alert.alert(t('contractsV2.fileErrorTitle'), t(`contractsV2.${code}`));
+      } finally { setBusy(false); }
+    };
+    if (amount !== null) {
+      const duplicate = findInvoiceDuplicate(invoices, { issuer, amount });
+      if (duplicate) {
+        Alert.alert(t('invoiceDocs.dupTitle'),
+          t('invoiceDocs.dupBody', { title: duplicate.title || '', amount: String(duplicate.amount ?? '') }),
+          [{ text: t('common.cancel'), style: 'cancel' },
+           { text: t('invoiceDocs.dupConfirm'), onPress: () => { void commit(); } }]);
+        return;
+      }
+    }
+    await commit();
   };
 
   /** Save as Contract (Mon Classeur) */
@@ -628,10 +687,25 @@ export default function ImportInvoiceScreen() {
 
   const saveInvoice = () => {
     if (!result) return;
+    const docType: string = (result.document_type || '').toLowerCase();
+    // The entry screen never silently overrides a different high-confidence
+    // OCR classification. The user must confirm the destination explicitly.
+    if (mode && !result.needs_user_confirmation &&
+        ['invoice', 'contract', 'receipt'].includes(docType) && docType !== mode) {
+      const saveDetected = docType === 'contract' ? persistAsContract
+        : docType === 'receipt' ? persistAsReceipt : persistAsInvoice;
+      const detectedLabel = docType === 'contract' ? t('emailImport.pickContractOption')
+        : docType === 'receipt' ? t('docSpaces.pickTicketOption') : t('emailImport.pickInvoiceOption');
+      const requestedLabel = mode === 'contract' ? t('emailImport.pickContractOption') : t('emailImport.pickInvoiceOption');
+      Alert.alert(t('emailImport.docTypeConfirmTitle'), t('emailImport.docTypeConfirmBody'), [
+        { text: t('common.cancel'), style: 'cancel' },
+        { text: detectedLabel, onPress: () => { void saveDetected(); } },
+        { text: requestedLabel, onPress: () => { void (mode === 'contract' ? persistAsContract() : persistAsInvoice()); } },
+      ]);
+      return;
+    }
     if (mode === 'contract') return persistAsContract();
     if (mode === 'invoice') return persistAsInvoice();
-
-    const docType: string = (result.document_type || '').toLowerCase();
     if (docType === 'contract') return persistAsContract();
     if (docType === 'invoice') return persistAsInvoice();
     if (docType === 'receipt') {
@@ -820,7 +894,9 @@ export default function ImportInvoiceScreen() {
                 <Ionicons name="close" size={20} color={theme.textTertiary} />
               </TouchableOpacity>
             </View>
-            <Text style={styles.tipsText}>{t('importErrors.extractFailedBody')}</Text>
+            <Text style={styles.tipsText}>
+              {mode === 'contract' ? t('emailImport.importFailedFallback') : t('importErrors.extractFailedBody')}
+            </Text>
             {!showManualCt ? (
               <TouchableOpacity
                 style={[styles.saveBtnAlt, { marginTop: 12 }]}
@@ -832,9 +908,10 @@ export default function ImportInvoiceScreen() {
               </TouchableOpacity>
             ) : (
               <View style={{ marginTop: 12, gap: 8 }}>
-                <Text style={styles.rowLabel}>{t('contractsV2.manualTitle')}</Text>
+                <Text style={styles.rowLabel}>{mode === 'contract' ? t('contractsV2.manualTitle') : t('invoices.labelTitle')}</Text>
                 <TextInput style={styles.amountInput} value={manualCt.title} onChangeText={(v) => setManualCt((m) => ({ ...m, title: v }))} placeholder={t('contractsV2.manualName')} placeholderTextColor={theme.textTertiary} testID="manual-ct-title" />
                 <TextInput style={styles.amountInput} value={manualCt.issuer} onChangeText={(v) => setManualCt((m) => ({ ...m, issuer: v }))} placeholder={t('contractsV2.manualIssuer')} placeholderTextColor={theme.textTertiary} />
+                {mode === 'contract' && <>
                 <Text style={styles.rowLabel}>{t('docSpaces.manualCategory')}</Text>
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
                   {CT_CATS.map((c) => (
@@ -848,15 +925,17 @@ export default function ImportInvoiceScreen() {
                     </TouchableOpacity>
                   ))}
                 </View>
+                </>}
                 <TextInput style={styles.amountInput} value={manualCt.amount} onChangeText={(v) => setManualCt((m) => ({ ...m, amount: v }))} placeholder={t('contractsV2.manualAmount')} placeholderTextColor={theme.textTertiary} keyboardType="decimal-pad" />
                 {manualCt.amount.length > 0 && normalizeChfAmount(manualCt.amount) === null && (
                   <Text style={{ color: '#EF4444', fontSize: 12 }}>{t('importErrors.amountInvalid')}</Text>
                 )}
-                <TextInput style={styles.amountInput} value={manualCt.expiry} onChangeText={(v) => setManualCt((m) => ({ ...m, expiry: v }))} placeholder={t('contractsV2.manualExpiry')} placeholderTextColor={theme.textTertiary} />
+                {mode === 'contract' && <TextInput style={styles.amountInput} value={manualCt.expiry} onChangeText={(v) => setManualCt((m) => ({ ...m, expiry: v }))} placeholder={t('contractsV2.manualExpiry')} placeholderTextColor={theme.textTertiary} />}
                 <TouchableOpacity
                   style={styles.saveBtnAlt}
                   testID="manual-ct-save"
                   onPress={async () => {
+                    if (mode === 'invoice') { await persistManualInvoice(); return; }
                     if (!manualCt.title.trim()) { Alert.alert(t('contractsV2.manualNeedTitle')); return; }
                     if (manualCt.amount.trim() && normalizeChfAmount(manualCt.amount) === null) { Alert.alert(t('importErrors.amountInvalid')); return; }
                     if (manualCt.expiry.trim() && !/^\d{4}-\d{2}-\d{2}$/.test(manualCt.expiry.trim())) { Alert.alert(t('contractsV2.manualExpiry')); return; }
@@ -874,7 +953,7 @@ export default function ImportInvoiceScreen() {
                   }}
                 >
                   <Ionicons name="save-outline" size={18} color={theme.text} />
-                  <Text style={styles.saveBtnAltTxt}>{t('contractsV2.manualSave')}</Text>
+                  <Text style={styles.saveBtnAltTxt}>{mode === 'contract' ? t('contractsV2.manualSave') : t('emailImport.ctaSaveInvoice')}</Text>
                 </TouchableOpacity>
               </View>
             )}

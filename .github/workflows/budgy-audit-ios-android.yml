@@ -12,6 +12,14 @@ on:
       - 'backend/**'
       - '.github/workflows/budgy-audit-ios-android.yml'
   workflow_dispatch:
+  pull_request:
+    branches:
+      - budgy-smart-4.0
+    paths:
+      - 'backend/**'
+      - 'docs/PRODUCTION_SELFHOST_READONLY_AUDIT.sql'
+      - 'docs/DEPLOIEMENT_COOLIFY.md'
+      - '.github/workflows/budgy-audit-ios-android.yml'
 
 permissions:
   contents: read
@@ -112,6 +120,14 @@ jobs:
           python-version: '3.12'
       - name: Python syntax compilation (no imports, no network)
         run: python -m compileall -q backend
+      - name: Install minimal FastAPI schema-test dependencies only
+        run: python -m pip install --disable-pip-version-check --quiet 'fastapi==0.110.1' 'pydantic==2.12.5'
+      - name: Verify real OCR Pydantic source generates required OpenAPI fields
+        run: python -m unittest discover -s backend/tests -p 'test_openapi_contract.py' -v
+      - name: Verify release SHA, version precedence and safe env readiness
+        run: python -m unittest discover -s backend/tests -p 'test_release_identity.py' -v
+      - name: Verify self-hosted SQL metadata audit is read-only
+        run: python -m unittest discover -s backend/tests -p 'test_sql_metadata_readonly.py' -v
       - name: Actual QR/OCR media helper unit tests
         run: python -m unittest discover -s backend/tests -p 'test_ocr_media.py' -v
       - name: Confirm OCR is JWT protected and Google subscription is not simulated

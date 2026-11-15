@@ -25,14 +25,17 @@ SELECT 'transactions' AS t, md5(string_agg(concat_ws('|', id, user_id, title, am
 UNION ALL SELECT 'invoices', md5(string_agg(concat_ws('|', id, user_id, title, amount::text, currency, status, due_date), ',' ORDER BY id)) FROM public.invoices
 UNION ALL SELECT 'documents', md5(string_agg(concat_ws('|', id, user_id, title, category), ',' ORDER BY id)) FROM public.documents;
 
--- A4) Relations existantes (à comparer à B4 : IDENTIQUE)
+-- A4) Relations et spécificités du SCHÉMA INITIAL uniquement.
+--     ⚠️ Compatible base NON migrée : transactions.invoice_id et
+--     documents.document_type N'EXISTENT PAS encore ici — ils ne sont
+--     vérifiés qu'en SECTION B (après migration).
 SELECT
-  (SELECT count(*) FROM public.transactions WHERE invoice_id IS NOT NULL) AS tx_liees_factures,
-  (SELECT count(*) FROM public.transactions tx WHERE invoice_id IS NOT NULL
-     AND NOT EXISTS (SELECT 1 FROM public.invoices i WHERE i.id = tx.invoice_id)) AS tx_orphelines,
-  (SELECT count(*) FROM public.documents WHERE document_type IS NULL) AS documents_type_null;
--- NOTE : documents_type_null passera à 0 après migration (UPDATE documenté) —
--- c'est la SEULE modification de lignes attendue.
+  (SELECT count(*) FROM public.documents) AS documents_total_avant,
+  (SELECT count(*) FROM public.invoices WHERE currency IS NOT NULL AND upper(currency) <> 'CHF') AS factures_devise_etrangere,
+  (SELECT count(DISTINCT user_id) FROM public.transactions) AS proprietaires_transactions;
+-- NOTE : après migration, TOUTES les lignes de documents auront
+-- document_type = 'unclassified' (backfill documenté) puisque la colonne
+-- n'existe pas encore : noter ici documents_total_avant pour le contrôle B5.
 
 -- ════════════════ SECTION B — ÉTAT APRÈS MIGRATION ════════════════
 -- B1) = A1 (mêmes requêtes de comptage) → résultats IDENTIQUES attendus
@@ -54,12 +57,18 @@ SELECT 'transactions' AS t, md5(string_agg(concat_ws('|', id, user_id, title, am
 UNION ALL SELECT 'invoices', md5(string_agg(concat_ws('|', id, user_id, title, amount::text, currency, status, due_date), ',' ORDER BY id)) FROM public.invoices
 UNION ALL SELECT 'documents', md5(string_agg(concat_ws('|', id, user_id, title, category), ',' ORDER BY id)) FROM public.documents;
 
--- B4) = A4 : relations inchangées, aucune orpheline créée
+-- B4) Relations APRÈS migration (colonnes désormais présentes) : aucune
+--     relation orpheline créée, backfill contrôlé
 SELECT
   (SELECT count(*) FROM public.transactions WHERE invoice_id IS NOT NULL) AS tx_liees_factures,
   (SELECT count(*) FROM public.transactions tx WHERE invoice_id IS NOT NULL
-     AND NOT EXISTS (SELECT 1 FROM public.invoices i WHERE i.id = tx.invoice_id)) AS tx_orphelines,
-  (SELECT count(*) FROM public.documents WHERE document_type IS NULL) AS documents_type_null; -- attendu : 0
+     AND NOT EXISTS (SELECT 1 FROM public.invoices i WHERE i.id = tx.invoice_id)) AS tx_orphelines,     -- attendu : 0
+  (SELECT count(*) FROM public.invoices inv WHERE document_id IS NOT NULL
+     AND NOT EXISTS (SELECT 1 FROM public.documents d WHERE d.id = inv.document_id)) AS factures_sans_document, -- attendu : 0
+  (SELECT count(*) FROM public.documents WHERE document_type IS NULL) AS documents_type_null;            -- attendu : 0
+-- documents_type_null = 0 : le backfill (NULL → 'unclassified') est la SEULE
+-- modification de lignes de la migration ; le total de documents doit rester
+-- égal à documents_total_avant (A4).
 
 -- B5) La SEULE modification de lignes autorisée : backfill document_type
 SELECT count(*) AS doc_type_invalide

@@ -454,3 +454,11 @@ test
 - PREPROD_VALIDATION.md rectifié : la migration MODIFIE des lignes (UPDATE documents.document_type NULL→unclassified) et remplace des politiques RLS (DROP/CREATE) — plus aucune affirmation « aucune ligne modifiée » ; rollback destructif (DROP COLUMN/TABLE/bucket) SUPPRIMÉ → stratégie backup vérifié + restauration + conservation ; api-preprod.budgy.ch signalé comme INEXISTANT (2 options backend) ; procédure 100 % navigateur/iPhone (Studio, hoppscotch) ; certificats Apple marqués NON VÉRIFIÉS (les IDs EAS ne prouvent pas leur validité).
 - VERIFY_MIGRATION.sql renforcé : SECTION A (avant) / SECTION B (après) — comptages, empreintes md5 des identifiants ET des valeurs préexistantes, relations/orphelines, B5 backfill contrôlé, B6 nouvelles colonnes NULL, B7/B8 RLS+bucket, B9 isolation via JETONS des comptes A/B (jamais service_role).
 - Rien créé, rien migré, rien buildé. EN ATTENTE : création du projet Supabase préprod par le propriétaire.
+
+## FINALISATION PRÉPROD (branche task4-siri)
+- budgy-preprod créé PAR LE PROPRIÉTAIRE (schéma initial exécuté, résultat NON vérifié) ; nouveau docs/VERIFY_SCHEMA_INITIAL.sql (lecture seule : 14 tables, PK, types, RLS, 56 politiques auth.uid, fonction+14 triggers, zéro donnée, zéro colonne T3/4/5 déjà présente).
+- VERIFY_MIGRATION.sql corrigé : Section A 100 % compatible schéma NON migré (A4 ne référence plus transactions.invoice_id ni documents.document_type — déplacés en B4 avec contrôle orphelines factures↔documents) ; backfill document_type documenté (toutes les lignes → unclassified car colonne nouvelle).
+- PREPROD_VALIDATION.md : §0 état réel (fait/à faire), fonctions dépendant du backend listées (ocr, email/parse, voice, coach, export pdf, lamal, tax, optimizer, iap) — pas d URL backend inventée, option périmètre Supabase ; profil EAS preprod modèle avec URL budgy-preprod réelle (Settings→API) ; sauvegarde complète 6 périmètres (CSV seul insuffisant, binaires Storage séparés).
+- Audit migration vs schéma initial : uniquement ADD COLUMN sur tables existantes + backfill + tombstones + bucket/politiques — compatible, rien d effacé.
+- Aucun code applicatif modifié, rien exécuté sur aucune base, build 91 intact.
+- PROCHAINE ACTION UNIQUE pour l utilisateur : exécuter VERIFY_SCHEMA_INITIAL.sql dans le SQL Editor de budgy-preprod et transmettre les résultats.

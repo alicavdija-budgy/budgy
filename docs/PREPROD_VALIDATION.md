@@ -4,6 +4,25 @@ Toute la procédure est réalisable **depuis un navigateur (iPhone inclus)** :
 Supabase Studio (SQL Editor, Table Editor, Storage, Backups) et l'app Budgy.
 Aucun terminal requis.
 
+## 0. ÉTAT ACTUEL (mis à jour — préprod créée par le propriétaire)
+FAIT par vous, depuis l'iPhone :
+- organisation Budgy + projet Supabase Cloud **`budgy-preprod`** (Healthy) ;
+- vérification « No rows returned » (base vierge) ;
+- exécution manuelle de `docs/SUPABASE_SCHEMA.sql` dans le SQL Editor.
+À FAIRE MAINTENANT (résultat d'exécution non transmis → **non vérifié**) :
+1. **Exécuter `docs/VERIFY_SCHEMA_INITIAL.sql`** (lecture seule) dans le SQL
+   Editor de budgy-preprod : 14 tables, clés primaires, types, RLS, 56
+   politiques, fonction + 14 déclencheurs, zéro donnée, zéro colonne T3/4/5.
+2. Seulement si tout est conforme : Section A de `VERIFY_MIGRATION.sql`
+   (copier les résultats), backup, puis — sur votre autorisation —
+   `MIGRATION_TASK3_storage_prive.sql`, puis Section B.
+⚠️ Audit de compatibilité effectué : la migration ne référence QUE des tables
+du schéma initial (uniquement `ADD COLUMN IF NOT EXISTS`, l'UPDATE de
+backfill, la table `sync_tombstones`, le bucket et les politiques) — aucune
+suppression de colonne métier, identifiants et relations conservés, anciennes
+valeurs NULL gérées (jamais interprétées comme 0), aucune conversion
+monétaire implicite.
+
 ## ⚠️ CONSTAT D'AUDIT (environnements)
 - `eas.json` : les profils **development, preview, production et testflight
   pointent TOUS sur `https://api.budgy.ch` et `https://supabase.budgy.ch`**.
@@ -32,52 +51,71 @@ Aucun terminal requis.
 que la comparaison avant/après (ci-dessous) et la sauvegarde VÉRIFIÉE sont
 obligatoires, même en préproduction.
 
-## 1. Créer la préproduction isolée (ACTION PROPRIÉTAIRE — navigateur)
-1. supabase.com → New project → ex. `budgy-preprod` (région CH/UE).
-2. Recréer le schéma de base ACTUEL (avant migration) : Studio du projet de
-   production → SQL Editor → `select ... from information_schema` ou copie du
-   script de schéma existant → l'exécuter dans le SQL Editor de la préprod.
-   (Ne copier AUCUNE donnée réelle d'utilisateur.)
-3. Créer 2 comptes de test (Authentication → Add user) :
-   `test-a@budgy-preprod.ch` / `test-b@budgy-preprod.ch`.
-4. Insérer quelques données de test pour A (Table Editor ou SQL) :
-   transactions, 1 facture, 1 document.
-5. Backend : ne PAS supposer `api-preprod.budgy.ch`. Options :
-   a. déployer une seconde instance backend pointant sur la préprod (idéal) ;
-   b. ou limiter la campagne aux vérifications Supabase (SQL + Storage + RLS),
-      qui ne passent pas par le backend.
-6. Profil EAS `preprod` (MODÈLE — ne l'appliquer qu'après création réelle
-   des services, et sur votre accord ; aucun profil actif n'a été modifié) :
+## 1. Préproduction isolée — reste à faire (navigateur)
+Le projet `budgy-preprod` existe déjà (§0). Reste :
+1. Créer 2 comptes de test (Authentication → Add user) :
+   `test-a@budgy-preprod.ch` / `test-b@budgy-preprod.ch` (mots de passe de
+   test, jamais réutilisés ailleurs, jamais collés dans un document).
+2. Après validation du schéma (§0) et migration autorisée : quelques données
+   de test pour A/B via l'app pointée préprod — jamais de données réelles.
+3. **Backend : fonctions qui DÉPENDENT de `api.budgy.ch`** (audit du code) :
+   scan OCR (`/api/scanner/ocr`), import e-mail (`/api/email/parse`),
+   dictée serveur (`/api/voice/parse`), coach (`/api/coach/chat`),
+   export PDF (`/api/export/pdf`), subsides LAMal (`/api/lamal/subsidy`),
+   simulation impôts (`/api/tax/simulate`), optimiseur
+   (`/api/optimizer/analyze`), abonnement IAP (`/api/iap/*`).
+   → Tant qu'aucune instance backend de test n'existe RÉELLEMENT, deux
+   choix : (a) déployer une seconde instance backend (votre action), ou
+   (b) **limiter la campagne préprod au périmètre Supabase** (synchro,
+   RLS, documents/Storage, devises, tombstones) — ces flux ne passent pas
+   par le backend. NE PAS inventer d'URL backend.
+4. Profil EAS `preprod` (MODÈLE — ne l'appliquer qu'après votre accord ;
+   aucun profil actif n'a été modifié). L'URL Supabase est celle du NOUVEAU
+   projet : Studio budgy-preprod → Settings → API → « Project URL » et
+   « anon public key » :
 ```json
 "preprod": {
   "extends": "preview",
   "channel": "preprod",
   "env": {
-    "EXPO_PUBLIC_BACKEND_URL": "<URL backend de test RÉELLEMENT créée>",
-    "EXPO_PUBLIC_SUPABASE_URL": "https://<ref-preprod>.supabase.co"
+    "EXPO_PUBLIC_SUPABASE_URL": "https://<ref-budgy-preprod>.supabase.co",
+    "EXPO_PUBLIC_BACKEND_URL": "<UNIQUEMENT si une instance backend de test existe — sinon ne pas définir et limiter les tests au périmètre Supabase>"
   }
 }
 ```
-   (+ `EXPO_PUBLIC_SUPABASE_ANON_KEY` préprod via secret EAS, jamais en clair.)
+   (+ `EXPO_PUBLIC_SUPABASE_ANON_KEY` préprod via secret EAS — la clé `anon`
+   est publique par conception, mais ne JAMAIS mettre la `service_role`.)
+   GARANTIE d'isolation : avec ce profil, l'app ne connaît QUE l'URL
+   budgy-preprod — aucune écriture possible vers supabase.budgy.ch.
 
 ## 2. Sauvegarde VÉRIFIÉE et retour arrière SANS destruction
 **Stratégie : on ne « dé-migre » JAMAIS en supprimant des colonnes, des
-tables ou le bucket — on RESTAURE une sauvegarde vérifiée.** Les anciennes
-instructions destructives (DROP COLUMN / DROP TABLE / suppression du bucket)
-sont retirées de la procédure : elles détruiraient les données écrites après
-migration.
-1. AVANT migration : Studio → Database → **Backups** → vérifier qu'un backup
-   récent existe ; sinon en déclencher un (plan payant) OU exporter les
-   tables en CSV depuis Table Editor (navigateur, adapté à une base de test).
-2. **Vérifier la sauvegarde** : ouvrir le backup/CSV et contrôler le nombre
-   de lignes de chaque table par rapport à l'étape « AVANT » du script de
-   comparaison (§3). Une sauvegarde non vérifiée n'est pas une sauvegarde.
+tables ou le bucket — on RESTAURE une sauvegarde vérifiée.**
+Une sauvegarde COMPLÈTE couvre SIX périmètres distincts (un export CSV seul
+n'en couvre qu'un et n'est PAS une sauvegarde complète) :
+1. **Données PostgreSQL** : Studio → Database → Backups (backup géré) ;
+2. **Schéma SQL** (tables/colonnes/index) : inclus dans le backup géré ;
+3. **Politiques RLS** : vérifiées séparément (requêtes §B7 — les politiques
+   sont dans le schéma, mais contrôler leur présence APRÈS restauration) ;
+4. **Authentification** (utilisateurs auth.users) : incluse dans le backup
+   géré Supabase ; noter à part la liste des comptes de test ;
+5. **Métadonnées documentaires** (table documents) : incluses dans 1 ;
+6. **Fichiers binaires Storage** (bucket user-documents) : NON couverts par
+   le backup PostgreSQL — à sauvegarder séparément (téléchargement des
+   objets via Studio → Storage, réaliste en préprod avec peu de fichiers).
+Procédure :
+1. AVANT migration : vérifier qu'un backup géré récent existe (sinon le
+   déclencher) ET exécuter la Section A (empreintes) — le COUPLE
+   backup + empreintes constitue la sauvegarde « vérifiée ».
+2. **Vérifier la sauvegarde** : comparer les comptages du backup aux
+   résultats de la Section A. Une sauvegarde non vérifiée n'en est pas une.
 3. Retour arrière si problème : **restaurer le backup** (Studio → Backups →
-   Restore) — les données sont conservées à l'état antérieur. En production
-   réelle : uniquement cette voie, jamais de DROP.
+   Restore) sur l'environnement ISOLÉ, puis re-vérifier RLS (§B7) et
+   Storage. Jamais de DROP comme procédure standard ; jamais de
+   restauration de production déclenchée automatiquement.
 4. Filet supplémentaire : l'app fonctionne à 100 % sur l'ANCIEN schéma
-   (repli `L:` testé). En cas de doute, on peut donc restaurer sans casser
-   les clients, puis re-planifier la migration.
+   (repli `L:` testé) — on peut restaurer sans casser les clients, puis
+   re-planifier la migration.
 
 ## 3. Comparaison AVANT/APRÈS (obligatoire)
 Dans `docs/VERIFY_MIGRATION.sql` :

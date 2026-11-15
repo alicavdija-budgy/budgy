@@ -13,10 +13,14 @@
 create extension if not exists "uuid-ossp";
 
 -- ─── Helper : Trigger pour défaut user_id = auth.uid() ──────────────────────
+-- SÉCURITÉ (audit Supabase) : SECURITY INVOKER + search_path épinglé +
+-- aucun droit EXECUTE direct (voir docs/SECURITY_FIX_set_user_id.sql).
+-- Une installation future ne recrée donc PAS les faiblesses signalées.
 create or replace function public.set_user_id_default()
 returns trigger
 language plpgsql
-security definer
+security invoker
+set search_path = ''
 as $$
 begin
   if new.user_id is null then
@@ -25,6 +29,9 @@ begin
   return new;
 end;
 $$;
+revoke execute on function public.set_user_id_default() from public;
+revoke execute on function public.set_user_id_default() from anon;
+revoke execute on function public.set_user_id_default() from authenticated;
 
 -- ─── Tables ──────────────────────────────────────────────────────────────────
 -- Convention : chaque table a (id text PK, user_id uuid not null, ...).

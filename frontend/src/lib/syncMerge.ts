@@ -236,6 +236,69 @@ export function mergeItem<T extends Row>(local: T, remote: T): T {
   return out as T;
 }
 
+// ─── P0 BUDGETS — correspondance applicatif ↔ colonnes SQL héritées ──
+// La table `budgets` stocke la limite dans la colonne HISTORIQUE `monthly`
+// (et `investments` dans name/shares/avg_cost). On ADAPTE le mapping au lieu
+// de renommer les colonnes : les ANCIENNES lignes restent lisibles et les
+// anciennes versions de l'app continuent de fonctionner.
+// Clés = noms snake_case APRÈS conversion ; valeur = colonne SQL réelle.
+export const CLOUD_OUTBOUND_RENAME: Record<string, Record<string, string>> = {
+  budgets: { limit: 'monthly' },
+  investments: { title: 'name', quantity: 'shares', buy_price: 'avg_cost' },
+};
+// Clés côté cloud (camelCase après conversion) à RETIRER au pull une fois
+// le mapping inverse appliqué — l'élément retrouve EXACTEMENT la forme du
+// type local (hash stable, aucune clé parasite type `spent: null`).
+const CLOUD_INBOUND_DROP: Record<string, string[]> = {
+  budgets: ['monthly', 'spent'],
+  investments: ['name', 'shares', 'avgCost', 'symbol'],
+};
+const CLOUD_INBOUND_RENAME: Record<string, Record<string, string>> = {
+  budgets: { monthly: 'limit' },
+  investments: { name: 'title', shares: 'quantity', avgCost: 'buyPrice' },
+};
+
+/** PUSH : ligne snake_case → colonnes SQL réelles (ex. limit → monthly). */
+export function mapOutboundRow(table: string, snakeRow: Record<string, any>): Record<string, any> {
+  const m = CLOUD_OUTBOUND_RENAME[table];
+  if (!m) return snakeRow;
+  const out: Record<string, any> = { ...snakeRow };
+  for (const [from, to] of Object.entries(m)) {
+    if (out[from] !== undefined) {
+      if (out[to] === undefined || out[to] === null) out[to] = out[from];
+      delete out[from];
+    }
+  }
+  return out;
+}
+
+/** PULL : ligne camelCase cloud → forme du type local. Un `monthly` NULL ne
+ *  produit JAMAIS `limit: 0` — la clé est simplement absente et la fusion
+ *  préserve la valeur locale (jamais d'écrasement par NULL). */
+export function mapInboundRow(table: string, camelRow: Record<string, any>): Record<string, any> {
+  const m = CLOUD_INBOUND_RENAME[table];
+  if (!m) return camelRow;
+  const out: Record<string, any> = { ...camelRow };
+  for (const [from, to] of Object.entries(m)) {
+    const v = out[from];
+    if (v !== undefined && v !== null && (out[to] === undefined || out[to] === null)) out[to] = v;
+  }
+  for (const k of CLOUD_INBOUND_DROP[table] || []) delete out[k];
+  return out;
+}
+
+// ─── Re-synchronisation forcée v2 (P0 budgets) ───────────────
+// Avant ce correctif, les budgets (et investissements) étaient confirmés
+// avec un hash COMPLET alors que la limite n'atteignait jamais le cloud
+// (colonne `limit` filtrée par la liste blanche). Préfixer le hash de ces
+// tables invalide UNE SEULE FOIS les anciennes confirmations : chaque
+// élément redevient « dirty » et repart ENTIER au prochain push.
+export const CLOUD_RESYNC_V2 = new Set(['budgets', 'investments', 'recurring_expenses', 'savings_goals']);
+export function fullHashFor(table: string, item: Row): string {
+  const h = hashItem(item);
+  return CLOUD_RESYNC_V2.has(table) ? 'R2:' + h : h;
+}
+
 export function mergeCollectionsV2<T extends Row>(
   local: T[],
   remote: T[],

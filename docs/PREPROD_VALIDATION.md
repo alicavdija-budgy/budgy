@@ -4,24 +4,35 @@ Toute la procédure est réalisable **depuis un navigateur (iPhone inclus)** :
 Supabase Studio (SQL Editor, Table Editor, Storage, Backups) et l'app Budgy.
 Aucun terminal requis.
 
-## 0. ÉTAT ACTUEL (mis à jour — préprod créée par le propriétaire)
-FAIT par vous, depuis l'iPhone :
-- organisation Budgy + projet Supabase Cloud **`budgy-preprod`** (Healthy) ;
-- vérification « No rows returned » (base vierge) ;
-- exécution manuelle de `docs/SUPABASE_SCHEMA.sql` dans le SQL Editor.
-À FAIRE MAINTENANT (résultat d'exécution non transmis → **non vérifié**) :
-1. **Exécuter `docs/VERIFY_SCHEMA_INITIAL.sql`** (lecture seule) dans le SQL
-   Editor de budgy-preprod : 14 tables, clés primaires, types, RLS, 56
-   politiques, fonction + 14 déclencheurs, zéro donnée, zéro colonne T3/4/5.
-2. Seulement si tout est conforme : Section A de `VERIFY_MIGRATION.sql`
-   (copier les résultats), backup, puis — sur votre autorisation —
-   `MIGRATION_TASK3_storage_prive.sql`, puis Section B.
-⚠️ Audit de compatibilité effectué : la migration ne référence QUE des tables
-du schéma initial (uniquement `ADD COLUMN IF NOT EXISTS`, l'UPDATE de
-backfill, la table `sync_tombstones`, le bucket et les politiques) — aucune
-suppression de colonne métier, identifiants et relations conservés, anciennes
-valeurs NULL gérées (jamais interprétées comme 0), aucune conversion
-monétaire implicite.
+## 0. ÉTAT ACTUEL — schéma initial VALIDÉ, correctif sécurité à appliquer
+VÉRIFIÉ directement dans `budgy-preprod` (SQL réel exécuté) :
+- projet actif et sain ; 14 tables Budgy, 14 clés primaires, types conformes ;
+- RLS activée partout, 56 politiques ; fonction `set_user_id_default()` +
+  13 déclencheurs `set_user_id_*` (user_preferences n'en a pas) ;
+- 14 tables vides, 0 utilisateur, 0 fichier Storage ;
+- AUCUNE colonne T3/T4/T5 présente — migration non appliquée.
+→ Le schéma initial est **VALIDÉ**. Inutile de relancer ces contrôles.
+
+⚠️ L'audit de sécurité signale 3 avertissements sur `set_user_id_default()`
+(SECURITY DEFINER, search_path non épinglé, EXECUTE ouvert à anon/
+authenticated). Correctif prêt : `docs/SECURITY_FIX_set_user_id.sql`.
+
+**ORDRE D'EXÉCUTION en préproduction (chaque étape sur votre feu vert) :**
+1. `docs/SECURITY_FIX_set_user_id.sql` (idempotent, aucune donnée touchée)
+   puis ses requêtes de validation V1/V2 (en bas du fichier).
+2. Section A de `docs/VERIFY_MIGRATION.sql` (copier les résultats — sur une
+   base vide, tous les comptages sont à 0 : c'est la référence).
+3. Backup vérifié (§2).
+4. `docs/MIGRATION_TASK3_storage_prive.sql` (inclut la section **A ter** :
+   colonnes budgets/récurrences/épargne/investissements du correctif P0).
+5. Section B de `VERIFY_MIGRATION.sql` + contrôles RLS/bucket (§4).
+⚠️ La base est VIDE : n'importer AUCUNE donnée utilisateur réelle — comptes
+et données de test uniquement.
+Audit de compatibilité : la migration ne référence QUE des tables du schéma
+initial (`ADD COLUMN IF NOT EXISTS`, UPDATE de backfill, `sync_tombstones`,
+bucket et politiques) — aucune suppression, identifiants et relations
+conservés, NULL jamais interprétés comme 0, aucune conversion monétaire
+implicite.
 
 ## ⚠️ CONSTAT D'AUDIT (environnements)
 - `eas.json` : les profils **development, preview, production et testflight
@@ -70,23 +81,40 @@ Le projet `budgy-preprod` existe déjà (§0). Reste :
    RLS, documents/Storage, devises, tombstones) — ces flux ne passent pas
    par le backend. NE PAS inventer d'URL backend.
 4. Profil EAS `preprod` (MODÈLE — ne l'appliquer qu'après votre accord ;
-   aucun profil actif n'a été modifié). L'URL Supabase est celle du NOUVEAU
-   projet : Studio budgy-preprod → Settings → API → « Project URL » et
-   « anon public key » :
+   aucun profil actif n'a été modifié).
+   ⚠️ **PIÈGE D'HÉRITAGE EAS** : un profil `"extends": "preview"` hérite de
+   TOUTES les variables `env` de preview non redéfinies — donc
+   `EXPO_PUBLIC_BACKEND_URL=https://api.budgy.ch` resterait actif. De plus,
+   le code contient un filet de sécurité (`src/lib/network.ts`,
+   `src/services/iap.ts`) : si `EXPO_PUBLIC_BACKEND_URL` est VIDE, l'app
+   retombe sur `https://api.budgy.ch`. Conséquence : pour une isolation
+   RÉELLE, le profil préprod ne doit PAS hériter de preview et doit définir
+   **explicitement** les deux URL — avec, à défaut de backend de test, une
+   valeur sentinelle inoffensive qui fait échouer proprement les appels
+   backend au lieu d'atteindre la production :
 ```json
 "preprod": {
-  "extends": "preview",
+  "distribution": "internal",
   "channel": "preprod",
+  "environment": "preview",
+  "ios": { "simulator": false, "resourceClass": "m-medium" },
+  "android": { "buildType": "apk" },
   "env": {
     "EXPO_PUBLIC_SUPABASE_URL": "https://<ref-budgy-preprod>.supabase.co",
-    "EXPO_PUBLIC_BACKEND_URL": "<UNIQUEMENT si une instance backend de test existe — sinon ne pas définir et limiter les tests au périmètre Supabase>"
+    "EXPO_PUBLIC_BACKEND_URL": "https://backend-preprod.invalid"
   }
 }
 ```
+   (`https://backend-preprod.invalid` = domaine réservé RFC 2606, ne résout
+   jamais : OCR/e-mail/coach/IAP échouent proprement, AUCUN appel ne part
+   vers `api.budgy.ch`. Remplacer par l'URL du backend de test le jour où il
+   existera réellement.) L'URL Supabase est celle du NOUVEAU projet :
+   Studio budgy-preprod → Settings → API → « Project URL ».
    (+ `EXPO_PUBLIC_SUPABASE_ANON_KEY` préprod via secret EAS — la clé `anon`
    est publique par conception, mais ne JAMAIS mettre la `service_role`.)
    GARANTIE d'isolation : avec ce profil, l'app ne connaît QUE l'URL
-   budgy-preprod — aucune écriture possible vers supabase.budgy.ch.
+   budgy-preprod — aucune écriture possible vers supabase.budgy.ch ni appel
+   vers api.budgy.ch.
 
 ## 2. Sauvegarde VÉRIFIÉE et retour arrière SANS destruction
 **Stratégie : on ne « dé-migre » JAMAIS en supprimant des colonnes, des

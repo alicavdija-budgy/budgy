@@ -83,7 +83,12 @@ FROM information_schema.columns
 WHERE table_schema = 'public'
   AND ((table_name = 'transactions' AND column_name IN ('currency', 'invoice_id', 'debt_id', 'recurring_id'))
     OR (table_name = 'invoices'  AND column_name IN ('paid_at', 'recurring_id', 'document_id', 'qr_payload', 'chf_amount', 'fx_rate', 'fx_date', 'fx_source'))
-    OR (table_name = 'documents' AND column_name IN ('document_type', 'mime_type', 'remote_path', 'file_size', 'imported_at', 'expires_at', 'spc_payload', 'updated_at')))
+    OR (table_name = 'documents' AND column_name IN ('document_type', 'mime_type', 'remote_path', 'file_size', 'imported_at', 'expires_at', 'spc_payload', 'updated_at'))
+    -- Correctif P0 budgets (section A ter de la migration) :
+    OR (table_name = 'budgets' AND column_name IN ('name', 'color', 'alerts_enabled'))
+    OR (table_name = 'recurring_expenses' AND column_name IN ('day_of_month', 'end_date', 'last_paid_month', 'payment_history'))
+    OR (table_name = 'savings_goals' AND column_name = 'auto_save')
+    OR (table_name = 'investments' AND column_name = 'currency'))
 ORDER BY table_name, column_name;
 SELECT count(*) AS invoices_fx_renseignes_avant_sync
 FROM public.invoices WHERE chf_amount IS NOT NULL OR fx_rate IS NOT NULL; -- attendu : 0 avant toute synchro

@@ -37,7 +37,7 @@ UPDATE public.documents SET document_type = 'unclassified' WHERE document_type I
 -- contracts : lien vers le document d'origine (relation additive Tâche 2/3).
 ALTER TABLE public.contracts ADD COLUMN IF NOT EXISTS document_id text;
 -- (audit §4) photo_uri non migré : chemin local propre à un appareil.
-ALTER TABLE public.contracts ADD COLUMN IF NOT EXISTS notice_period text;
+ALTER TABLE public.contracts ADD COLUMN IF NOT EXISTS notice_period numeric; -- MOIS (nombre côté app — `text` provoquerait une dérive de type au pull)
 
 -- invoices : champs jusqu'ici perdus à la synchro.
 ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS paid_at bigint;
@@ -69,6 +69,25 @@ ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS recurring_id text;
 -- TÂCHE 4 — devise du paiement (absent = CHF) : un paiement EUR ne revient
 -- JAMAIS du cloud comme un paiement CHF.
 ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS currency text;
+
+-- ─── A ter. Correctif P0 BUDGETS & restauration complète (additif) ─
+-- budgets : la LIMITE voyage dans la colonne HISTORIQUE `monthly`
+-- (mapping applicatif limit↔monthly — aucune colonne renommée, les
+-- anciennes lignes restent lisibles). Personnalisation synchronisée :
+ALTER TABLE public.budgets ADD COLUMN IF NOT EXISTS name text;
+ALTER TABLE public.budgets ADD COLUMN IF NOT EXISTS color text;
+ALTER TABLE public.budgets ADD COLUMN IF NOT EXISTS alerts_enabled boolean;
+-- recurring_expenses : périodicité et paiements — sans ces colonnes, une
+-- charge marquée « payée ce mois » redevient due sur un 2e appareil
+-- (disponible FAUX). payment_history = historique rapproché (jsonb).
+ALTER TABLE public.recurring_expenses ADD COLUMN IF NOT EXISTS day_of_month numeric;
+ALTER TABLE public.recurring_expenses ADD COLUMN IF NOT EXISTS end_date text;
+ALTER TABLE public.recurring_expenses ADD COLUMN IF NOT EXISTS last_paid_month text;
+ALTER TABLE public.recurring_expenses ADD COLUMN IF NOT EXISTS payment_history jsonb;
+-- savings_goals : montant d'épargne automatique (donnée financière)
+ALTER TABLE public.savings_goals ADD COLUMN IF NOT EXISTS auto_save numeric;
+-- investments : devise affichée (JAMAIS de conversion implicite en CHF)
+ALTER TABLE public.investments ADD COLUMN IF NOT EXISTS currency text;
 
 -- ─── A bis. Tombstones de synchronisation (audit §1) ─────────────
 -- Une suppression n'est JAMAIS déduite de l'absence d'un élément dans une

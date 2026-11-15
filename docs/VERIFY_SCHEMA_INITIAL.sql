@@ -34,7 +34,11 @@ SELECT table_name, column_name FROM information_schema.columns
 WHERE table_schema = 'public' AND (
    (table_name = 'transactions' AND column_name IN ('invoice_id','currency','type','source','debt_id','recurring_id'))
  OR (table_name = 'documents'   AND column_name IN ('document_type','remote_path','spc_payload'))
- OR (table_name = 'invoices'    AND column_name IN ('document_id','qr_payload','chf_amount','fx_rate','fx_date','fx_source','paid_at','recurring_id')));
+ OR (table_name = 'invoices'    AND column_name IN ('document_id','qr_payload','chf_amount','fx_rate','fx_date','fx_source','paid_at','recurring_id'))
+ OR (table_name = 'budgets'     AND column_name IN ('name','color','alerts_enabled'))
+ OR (table_name = 'recurring_expenses' AND column_name IN ('day_of_month','end_date','last_paid_month','payment_history'))
+ OR (table_name = 'savings_goals' AND column_name = 'auto_save')
+ OR (table_name = 'investments' AND column_name = 'currency'));
 
 -- 5) RLS activée sur les 14 tables (attendu : rls_enabled = true partout)
 SELECT c.relname AS table_name, c.relrowsecurity AS rls_enabled
@@ -51,12 +55,22 @@ SELECT tablename, policyname, cmd, qual FROM pg_policies
 WHERE schemaname = 'public' AND qual NOT LIKE '%auth.uid()%' AND qual IS NOT NULL;
 -- (2e requête : attendu 0 ligne — aucune politique sans filtre auth.uid())
 
--- 7) Fonction + déclencheurs user_id (attendu : 1 fonction, 14 triggers)
+-- 7) Fonction + déclencheurs user_id (attendu : 1 fonction, 13 triggers —
+--    user_preferences est clé user_id et n'a PAS de déclencheur)
 SELECT proname FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
 WHERE n.nspname = 'public' AND proname = 'set_user_id_default';
 SELECT count(*) AS nb_triggers_user_id
 FROM information_schema.triggers
 WHERE trigger_schema = 'public' AND trigger_name LIKE 'set_user_id_%';
+
+-- 7bis) SÉCURITÉ de la fonction (audit Supabase) :
+--   AVANT le correctif docs/SECURITY_FIX_set_user_id.sql :
+--     security_definer = true, config = NULL → appliquer le correctif.
+--   APRÈS : security_definer = false, config contient search_path="",
+--     et anon/authenticated ABSENTS de l'ACL.
+SELECT p.prosecdef AS security_definer, p.proconfig AS config, p.proacl AS acl
+FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'public' AND p.proname = 'set_user_id_default';
 
 -- 8) AUCUNE donnée réelle importée (attendu : 0 partout)
 SELECT 'transactions' AS t, count(*) FROM public.transactions

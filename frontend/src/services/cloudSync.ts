@@ -17,7 +17,8 @@
 
 import { getSupabase, isSupabaseConfigured } from '../lib/supabase';
 import {
-  mergeCollectionsV2, diffDirty, hashItem, legacyHashOf, isConfirmedHash, isDirtyForPush,
+  mergeCollectionsV2, legacyHashOf, isConfirmedHash, isDirtyForPush,
+  mapOutboundRow, mapInboundRow, fullHashFor,
 } from '../lib/syncMerge';
 
 // P0 — verrou : push et pull ne s'exécutent jamais en parallèle (ni entre
@@ -47,6 +48,11 @@ const EXT_PROBE_COL: Record<string, string> = {
   receipts: 'transaction_id',
   invoices: 'fx_source',
   documents: 'spc_payload',
+  // P0 BUDGETS — colonnes de personnalisation/restauration (migration A ter)
+  budgets: 'alerts_enabled',
+  recurring_expenses: 'payment_history',
+  savings_goals: 'auto_save',
+  investments: 'currency',
 };
 
 function storeHydrated(): boolean {
@@ -150,12 +156,20 @@ const TABLE_FIELDS: Record<string, string[]> = {
   // TÂCHE 3 — champs anti-double-comptage (liens par ID) désormais synchronisés
   transactions:       ['id', 'user_id', 'title', 'amount', 'category', 'date', 'payment_method', 'note', 'type', 'source', 'invoice_id', 'debt_id', 'recurring_id', 'currency', 'created_at', 'updated_at'],
   incomes:            ['id', 'user_id', 'title', 'amount', 'frequency', 'type', 'category', 'created_at'],
-  savings_goals:      ['id', 'user_id', 'title', 'emoji', 'color', 'target', 'saved', 'deadline', 'category', 'created_at'],
-  budgets:            ['id', 'user_id', 'category', 'monthly', 'spent', 'created_at'],
-  recurring_expenses: ['id', 'user_id', 'title', 'amount', 'category', 'frequency', 'active', 'next_date', 'created_at'],
+  // P0 BUDGETS — auto_save (montant d'épargne auto, donnée financière) après migration
+  savings_goals:      ['id', 'user_id', 'title', 'emoji', 'color', 'target', 'saved', 'deadline', 'category', 'auto_save', 'created_at'],
+  // P0 BUDGETS — la LIMITE voyage dans la colonne historique `monthly`
+  // (mapping limit↔monthly dans syncMerge.mapOutboundRow/mapInboundRow) ;
+  // name/color/alerts_enabled après migration A ter.
+  budgets:            ['id', 'user_id', 'category', 'monthly', 'spent', 'created_at', 'name', 'color', 'alerts_enabled'],
+  // P0 BUDGETS — périodicité + paiements (day_of_month, end_date,
+  // last_paid_month, payment_history) : restauration complète 2e appareil.
+  recurring_expenses: ['id', 'user_id', 'title', 'amount', 'category', 'frequency', 'active', 'next_date', 'day_of_month', 'end_date', 'last_paid_month', 'payment_history', 'created_at'],
   contracts:          ['id', 'user_id', 'title', 'issuer', 'amount', 'category', 'expiration_date', 'start_date', 'urgent', 'auto_renew', 'notes', 'document_id', 'notice_period', 'created_at'],
   debts:              ['id', 'user_id', 'title', 'color', 'total', 'paid', 'interest_rate', 'monthly_payment', 'created_at'],
-  investments:        ['id', 'user_id', 'symbol', 'shares', 'avg_cost', 'current_price', 'name', 'type', 'created_at'],
+  // P0 BUDGETS — mapping title→name, quantity→shares, buy_price→avg_cost
+  // (colonnes SQL historiques) ; currency après migration A ter.
+  investments:        ['id', 'user_id', 'symbol', 'shares', 'avg_cost', 'current_price', 'name', 'type', 'currency', 'created_at'],
   receipts:           ['id', 'user_id', 'merchant', 'amount', 'date', 'category', 'image_uri', 'currency', 'type', 'note', 'transaction_id', 'document_id', 'created_at'],
   // TÂCHE 5 — document_id (lien vers le document conservé) et qr_payload
   // (payload SPC BRUT, texte) sont synchronisés APRÈS migration : la relation
@@ -183,6 +197,12 @@ const TABLE_FIELDS_LEGACY: Record<string, string[]> = {
   receipts:     ['id', 'user_id', 'merchant', 'amount', 'date', 'category', 'image_uri', 'created_at'],
   invoices:     ['id', 'user_id', 'title', 'issuer', 'amount', 'currency', 'due_date', 'invoice_date', 'iban', 'reference', 'category', 'status', 'source', 'created_at'],
   documents:    ['id', 'user_id', 'title', 'category', 'data_uri', 'notes', 'created_at'],
+  // P0 BUDGETS — avant migration A ter : la LIMITE (→ monthly) part quand
+  // même ; name/color/alerts_enabled restent « en attente de migration ».
+  budgets:            ['id', 'user_id', 'category', 'monthly', 'spent', 'created_at'],
+  recurring_expenses: ['id', 'user_id', 'title', 'amount', 'category', 'frequency', 'active', 'next_date', 'created_at'],
+  savings_goals:      ['id', 'user_id', 'title', 'emoji', 'color', 'target', 'saved', 'deadline', 'category', 'created_at'],
+  investments:        ['id', 'user_id', 'symbol', 'shares', 'avg_cost', 'current_price', 'name', 'type', 'created_at'],
 };
 
 // PK column for upsert conflict resolution. Most tables use 'id' (default),
@@ -346,8 +366,10 @@ export async function pushAllToCloud(): Promise<{
     const fullHashesById: Record<string, string> = {};
     for (const it of items as any[]) {
       const id = String(it.id);
-      const row = toRow(snake(it), userId);
-      const fullH = hashItem(it);
+      // P0 BUDGETS — mapping limit→monthly (etc.) appliqué AVANT la liste
+      // blanche et AVANT le hash legacy : la limite atteint réellement le cloud.
+      const row = toRow(mapOutboundRow(table, snake(it)), userId);
+      const fullH = fullHashFor(table, it);
       fullHashesById[id] = fullH;
       const st = stored[id];
       if (st && st.startsWith('L:') && !extAvailable) pendingMigration.add(table);
@@ -355,7 +377,7 @@ export async function pushAllToCloud(): Promise<{
       dirtyItems.push(it);
     }
     if (dirtyItems.length === 0) continue;
-    const rows = dirtyItems.map((it) => toRow(snake(it), userId));
+    const rows = dirtyItems.map((it) => toRow(mapOutboundRow(table, snake(it)), userId));
     await safeUpsert(table, rows, fullHashesById);
   }
 
@@ -418,7 +440,10 @@ export async function pullAllFromCloud(): Promise<{ ok: boolean; pulled: number;
     const fetch = async (table: string) => {
       const { data, error } = await sb.from(table).select('*').eq('user_id', userId);
       if (error) throw new Error(`${table}: ${error.message}`);
-      return (data || []).map(cleanCamel);
+      // P0 BUDGETS — mapping inverse monthly→limit (etc.) : l'élément reprend
+      // EXACTEMENT la forme du type local ; un `monthly` NULL ne produit
+      // JAMAIS `limit: 0` (clé absente → la fusion préserve la valeur locale).
+      return (data || []).map((r: any) => mapInboundRow(table, cleanCamel(r)));
     };
 
     const [
@@ -521,8 +546,8 @@ export async function pullAllFromCloud(): Promise<{ ok: boolean; pulled: number;
       const dirtyIds = new Set<string>();
       for (const it of (local || []) as any[]) {
         const id = String(it.id);
-        const lh = legacy ? legacyHashOf(toRow(snake(it), userId), legacy) : null;
-        if (!isConfirmedHash(stored[id], hashItem(it), lh)) dirtyIds.add(id);
+        const lh = legacy ? legacyHashOf(toRow(mapOutboundRow(table, snake(it)), userId), legacy) : null;
+        if (!isConfirmedHash(stored[id], fullHashFor(table, it), lh)) dirtyIds.add(id);
       }
       const res = mergeCollectionsV2((local || []) as any[], remote as any[], {
         dirtyIds,
@@ -536,7 +561,7 @@ export async function pullAllFromCloud(): Promise<{ ok: boolean; pulled: number;
         const id = String(m.id);
         if (dirtyIds.has(id)) continue;
         const wasLegacy = (stored[id] || '').startsWith('L:');
-        confirmed[id] = wasLegacy && legacy ? legacyHashOf(toRow(snake(m), userId), legacy) : hashItem(m);
+        confirmed[id] = wasLegacy && legacy ? legacyHashOf(toRow(mapOutboundRow(table, snake(m)), userId), legacy) : fullHashFor(table, m);
       }
       postPullHashes[table] = { ...stored, ...confirmed };
       return res.merged as T[];

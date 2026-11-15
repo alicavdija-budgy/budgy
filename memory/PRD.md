@@ -462,3 +462,13 @@ test
 - Audit migration vs schéma initial : uniquement ADD COLUMN sur tables existantes + backfill + tombstones + bucket/politiques — compatible, rien d effacé.
 - Aucun code applicatif modifié, rien exécuté sur aucune base, build 91 intact.
 - PROCHAINE ACTION UNIQUE pour l utilisateur : exécuter VERIFY_SCHEMA_INITIAL.sql dans le SQL Editor de budgy-preprod et transmettre les résultats.
+
+## CORRECTIFS P0 SÉCURITÉ + SYNCHRO BUDGETS (avant migration préprod)
+- Sécurité : docs/SECURITY_FIX_set_user_id.sql (SECURITY INVOKER, search_path='', REVOKE EXECUTE public/anon/authenticated, idempotent, non exécuté) ; SUPABASE_SCHEMA.sql durci à l'identique ; VERIFY_SCHEMA_INITIAL.sql : 13 triggers (corrigé) + contrôle 7bis prosecdef/proconfig/proacl.
+- Budgets P0 : Budget.limit n'atteignait JAMAIS le cloud (liste blanche filtrait `limit`, colonne SQL = `monthly`). Correctif : mapping limit↔monthly (mapOutboundRow/mapInboundRow dans syncMerge.ts, appliqué push+pull+hash legacy dans cloudSync.ts) ; monthly NULL ne produit jamais limit:0 ; anciennes lignes (monthly renseigné) restaurées.
+- Resync forcé : hash préfixé R2: pour budgets/investments/recurring_expenses/savings_goals (fullHashFor) — anciennes confirmations invalidées UNE fois, re-push complet, pas de boucle.
+- Audit champs : investments (title→name, quantity→shares, buyPrice→avg_cost mappés — perte totale avant) ; recurring_expenses + day_of_month/end_date/last_paid_month/payment_history ; savings_goals + auto_save ; budgets + name/color/alerts_enabled ; investments + currency ; contracts.notice_period text→numeric (migration, dérive de type). Colonnes ajoutées en section A ter de MIGRATION_TASK3_storage_prive.sql (additives, non exécutées) + replis legacy + sondes EXT_PROBE_COL.
+- Non synchronisés (assumé, cosmétique) : incomes.color/icon, receipts.items, expense_groups.emoji/color/currency/inviteCode, documents.remoteUploadedAt (marqueur par appareil).
+- EAS §7 : piège d'héritage documenté — profil preprod SANS extends, EXPO_PUBLIC_BACKEND_URL explicite (sentinelle https://backend-preprod.invalid car network.ts/iap.ts retombent sur api.budgy.ch si vide).
+- Tests : scripts/test-budgets-sync.mjs (25 UNIT + 16 STATIC, 0 échec) ; régressions task3 117/117, task4 94/94, task5 69/69, budgets 67/67, engine 23/23, qrbill 49/49 ; tsc OK ; app OK (smoke).
+- Ordre préprod : SECURITY_FIX → Section A → backup → MIGRATION (avec A ter) → Section B → tests RLS A/B. Rien exécuté sur aucune base, build 91 intact.

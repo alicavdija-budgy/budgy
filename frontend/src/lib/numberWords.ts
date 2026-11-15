@@ -1,5 +1,9 @@
 /**
  * BUDGY — Montants dictés en toutes lettres (FR/DE/IT/EN).
+ * @i18n-technical-file
+ * Les chaînes de ce module sont des clés lexicales pour reconnaître des
+ * nombres prononcés, PAS des messages d'interface à traduire via i18n.
+ * Conserver les accents FR/DE/IT : les retirer casserait la reconnaissance.
  * 100 % pur (testable via Node). Utilisé par le parseur vocal local quand
  * aucun chiffre n'est présent : « vingt-cinq francs cinquante » → 25.50.
  * Règle stricte : en cas d'ambiguïté, retourner null (jamais de montant

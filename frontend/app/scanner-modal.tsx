@@ -93,7 +93,7 @@ export default function ScannerModal() {
     ({ data }: { data: string }) => {
       // Un seul traitement toutes les 2 s, uniquement en phase caméra.
       const now = Date.now();
-      if (now - lastQrScanRef.current < 2000 || !data) return;
+      if (now - lastQrScanRef.current < 2000 || !data) return false;
       if (!isSwissQrBill(data)) {
         // QR lu mais pas une QR-facture (ou lecture partielle) : feedback
         // visible et nouvel essai immédiat possible — jamais d'échec muet.
@@ -102,7 +102,7 @@ export default function ScannerModal() {
           setQrHint(true);
           setTimeout(() => setQrHint(false), 2200);
         }
-        return;
+        return false;
       }
       lastQrScanRef.current = now;
       try {
@@ -115,6 +115,7 @@ export default function ScannerModal() {
         setQrDueDate(''); // une QR-facture ne fournit pas d'échéance : rien n'est inventé
         setQrNotes(bill.message || '');
         setStage('qrbill');
+        return true;
       } catch (e: any) {
         // Erreur métier (code stable) → message traduit ; sinon message générique
         // traduit. Jamais de message technique brut à l'utilisateur.
@@ -125,6 +126,7 @@ export default function ScannerModal() {
           t('qrbill.invalidTitle'),
           translated && translated !== key ? translated : t('qrbill.errors.generic'),
         );
+        return false;
       }
     },
     [invoices, t],
@@ -341,6 +343,7 @@ export default function ScannerModal() {
     setOcrError(null);
     setDetectedDocType('unknown');
     setOcrConfidence(null);
+    let qrHandled = false;
     const r = await apiFetchJson<any>(
       `/api/scanner/ocr`,
       {
@@ -353,6 +356,15 @@ export default function ScannerModal() {
     try {
       if (r.ok && r.data) {
         const data: any = r.data;
+        // Swiss QR recognized by the BACKEND (including QR within scanned
+        // photos/PDFs) uses the same verified QR-bill review flow as the
+        // native camera. Never treat this response as an empty ticket.
+        if (data.success && typeof data.swiss_qr_content === 'string' &&
+            isSwissQrBill(data.swiss_qr_content)) {
+          lastQrScanRef.current = 0;
+          qrHandled = handleBarcodeScanned({ data: data.swiss_qr_content });
+          if (qrHandled) return;
+        }
         // Run regex fallback to RESCUE missing fields from raw text
         const merged = mergeOcrWithFallback(
           {
@@ -422,7 +434,7 @@ export default function ScannerModal() {
         setOcrError(t('errors.ocrFailed'));
       }
     } finally {
-      setStage('edit');
+      if (!qrHandled) setStage('edit');
     }
   };
 

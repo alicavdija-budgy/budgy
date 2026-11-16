@@ -125,7 +125,10 @@ export function parseSwissQrBill(payload: string): SwissQrBill {
   if (L[0] !== 'SPC') throw new QrBillError('spc');
   if (!/^02\d\d$/.test(L[1] || '')) throw new QrBillError('version');
   if ((L[2] || '') !== '1') throw new QrBillError('coding');
-  if (L.length < 32) throw new QrBillError('length');
+  // SIX: minimum 31 fields. When optional billing information (line 32) is
+  // absent, the last populated field may be EPD on line 31 with NO terminal
+  // newline. Do not reject a valid Swiss QR invoice as "illegible".
+  if (L.length < 31) throw new QrBillError('length');
 
   // IBAN
   const iban = (L[3] || '').replace(/\s+/g, '').toUpperCase();

@@ -27,12 +27,13 @@ USER_B = "22222222-2222-2222-2222-222222222222"
 
 
 # ─── JWT helpers ───────────────────────────────────────────────────────────
-def make_jwt(sub=USER_A, exp_delta=7200, aud=AUD, include_sub=True, email="usera@budgy.ch", secret=JWT_SECRET):
+def make_jwt(sub=USER_A, exp_delta=7200, aud=AUD, include_sub=True, email="usera@budgy.ch", secret=JWT_SECRET, operator=False):
     payload = {
         "aud": aud,
         "exp": int(time.time()) + exp_delta,
         "email": email,
         "role": "authenticated",
+        "app_metadata": {"budgy_operator": operator},
     }
     if include_sub:
         payload["sub"] = sub
@@ -47,6 +48,11 @@ def token_a():
 @pytest.fixture(scope="session")
 def token_b():
     return make_jwt(sub=USER_B, email="userb@budgy.ch")
+
+
+@pytest.fixture(scope="session")
+def token_operator():
+    return make_jwt(sub=USER_A, operator=True)
 
 
 @pytest.fixture
@@ -99,15 +105,25 @@ class TestPublicEndpoints:
         assert r.status_code == 200
         assert r.json()["status"] == "ok"
 
-    def test_config_status(self, api):
-        r = api.get(f"{BASE_URL}/api/config/status")
-        assert r.status_code == 200
-        data = r.json()
-        # Never expose actual secret VALUES
-        for k, v in data.items():
-            if k in ("app_env", "version", "cors_origins_count"):
-                continue
-            assert v in ("configured", "missing"), f"{k}={v!r} leaks something other than status"
+    def test_config_status(self, api, token_a, token_operator):
+        # Both legacy and new status are restricted to server-signed operators.
+        for path in ("/api/config/status", "/api/config/readiness"):
+            r_anon = api.get(f"{BASE_URL}{path}")
+            assert r_anon.status_code == 401
+            r_user = api.get(f"{BASE_URL}{path}", headers={"Authorization": f"Bearer {token_a}"})
+            assert r_user.status_code == 403
+            r_op = api.get(f"{BASE_URL}{path}", headers={"Authorization": f"Bearer {token_operator}"})
+            assert r_op.status_code == 200
+            data = r_op.json()
+            if path.endswith("readiness"):
+                for group in data["required_by_feature"].values():
+                    assert all(v in ("defined", "missing") for v in group.values())
+            else:
+                # Never expose actual secret VALUES
+                for k, v in data.items():
+                    if k in ("app_env", "version", "cors_origins_count"):
+                        continue
+                    assert v in ("configured", "missing"), f"{k}={v!r} leaks something other than status"
 
     def test_iap_health(self, api):
         r = api.get(f"{BASE_URL}/api/iap/health")

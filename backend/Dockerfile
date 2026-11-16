@@ -31,7 +31,14 @@ RUN pip install --upgrade pip wheel setuptools \
 # ───────────────────────────────────────────────────────────────
 FROM python:3.11-slim AS runtime
 
-ENV PYTHONDONTWRITEBYTECODE=1 \
+# Coolify's Docker build context is backend/, not the git checkout root.
+# The commit cannot be discovered safely from that context. Supply the exact
+# pinned 40-character Git SHA as a Coolify build argument; otherwise
+# /health intentionally reports "unknown" rather than inventing provenance.
+ARG BUDGY_GIT_SHA=unknown
+
+ENV BUDGY_GIT_SHA=${BUDGY_GIT_SHA} \
+    PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \

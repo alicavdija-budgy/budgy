@@ -23,7 +23,9 @@ jobs:
           set -euo pipefail
           curl -fsS --retry 1 --max-time 15 https://api.budgy.ch/api/health -o /tmp/health.json
           curl -fsS --retry 1 --max-time 15 https://api.budgy.ch/openapi.json -o /tmp/openapi.json
-          curl -fsS --retry 1 --max-time 15 https://api.budgy.ch/api/config/status -o /tmp/config.json
+          # The config/status and config/readiness routes are now restricted
+          # to server-authorized operators. Do not try to bypass their JWT
+          # protection from an unauthenticated public CI job.
           # Supabase health is public, do not authenticate or inspect customer data
           code=$(curl -L -sS --max-time 15 -o /tmp/supabase-health.json -w '%{http_code}' https://supabase.budgy.ch/auth/v1/health || true)
           echo "Self-hosted Supabase Auth /health HTTP status: ${code}"
@@ -34,7 +36,7 @@ jobs:
           const fs=require('node:fs');
           const health=JSON.parse(fs.readFileSync('/tmp/health.json','utf8'));
           const spec=JSON.parse(fs.readFileSync('/tmp/openapi.json','utf8'));
-          const cfg=JSON.parse(fs.readFileSync('/tmp/config.json','utf8'));
+          // Provider readiness is no longer publicly observable; check only the OpenAPI contract.
           const r=spec.components?.schemas?.OCRResponse?.properties||{};
           const q=spec.components?.schemas?.OCRRequest?.properties||{};
           const ocr=spec.paths?.['/api/scanner/ocr']?.post;
@@ -44,13 +46,13 @@ jobs:
             hasDocumentType:!!r.document_type,
             hasSwissQrContent:!!r.swiss_qr_content,
             hasNeedsConfirmation:!!r.needs_user_confirmation,
-            requestSupportsPdf:!!q.mime_type,
-            openAiConfigured:cfg.openai==='configured'
+            requestSupportsPdf:!!q.mime_type
           };
           console.log('Deployed APP_VERSION (env metadata, not a code fingerprint):',String(health.version||'unknown'));
           console.log('Deployed service APP_ENV:',String(health.env||'unknown'));
           for(const [k,v] of Object.entries(checks))console.log((v?'PASS':'FAIL')+': '+k);
           const missing=Object.entries(checks).filter(([_,v])=>!v).map(([k])=>k);
           console.log('Compatibility gaps:',missing.length?missing.join(', '):'none detected');
+          console.log('AI provider readiness: restricted to signed operator; intentionally NOT evaluated by public CI');
           if(!checks.liveHealth||!checks.hasOcrEndpoint)process.exitCode=1;
           NODE

@@ -27,6 +27,9 @@ import re
 import base64
 import math
 import qr_decode
+from release_identity import APP_VERSION, deployed_git_sha
+from config_readiness import readiness_report
+from operator_auth import require_operator
 
 # Load .env BEFORE importing modules that read os.getenv at import time
 load_dotenv()
@@ -52,7 +55,6 @@ log = logging.getLogger("budgy")
 # ─────────────────────────────────────────────────────────────
 # Env / Config
 # ─────────────────────────────────────────────────────────────
-APP_VERSION = os.getenv("APP_VERSION", "3.9.0")
 APP_ENV = os.getenv("APP_ENV", "production")  # production | staging | dev
 
 # LLM key kept for backwards-compat with code paths that still check it.
@@ -136,7 +138,7 @@ app.add_middleware(
     max_age=3600,
 )
 
-log.info("[startup] Budgy API v%s env=%s", APP_VERSION, APP_ENV)
+log.info("[startup] Budgy API v%s commit=%s env=%s", APP_VERSION, deployed_git_sha(), APP_ENV)
 log.info("[startup] CORS origins: %s", ALLOWED_ORIGINS)
 log.info("[startup] CORS regex: %s", _CORS_REGEX)
 
@@ -156,21 +158,22 @@ async def health_root():
         "status": "ok",
         "service": "budgy-api",
         "version": APP_VERSION,
+        "commit_sha": deployed_git_sha(),
         "env": APP_ENV,
     }
 
 
 @app.get("/api/health")
 async def health_check():
-    return {"status": "ok", "version": APP_VERSION, "app": "Budgy", "env": APP_ENV}
+    return {"status": "ok", "version": APP_VERSION, "commit_sha": deployed_git_sha(), "app": "Budgy", "env": APP_ENV}
 
 
 @app.get("/api/config/status")
-async def config_status():
+async def config_status(user: AuthenticatedUser = Depends(require_operator)):
     """
-    Non-secret env diagnostic — confirms which optional integrations are
-    configured WITHOUT ever exposing the actual values. Used by the operator
-    to validate Coolify deployment without grepping logs.
+    Legacy non-secret env diagnostic — restricted to operator JWT claims.
+    Formerly public; do not expose which backend integrations are configured
+    to normal app users. Values/secrets are never returned.
     """
     def state(name: str, *aliases: str) -> str:
         for n in (name, *aliases):
@@ -206,6 +209,16 @@ async def config_status():
         ),
         "cors_origins_count": len(ALLOWED_ORIGINS),
     }
+
+
+@app.get("/api/config/readiness")
+async def config_readiness(user: AuthenticatedUser = Depends(require_operator)):
+    """Signed app_metadata.budgy_operator=true required. Presence only.
+
+    Never return or log credentials or URLs. Ordinary users get 403,
+    unauthenticated clients get 401. Both routes are operator-only.
+    """
+    return readiness_report()
 
 
 # ──────────────────────────────────────────────────

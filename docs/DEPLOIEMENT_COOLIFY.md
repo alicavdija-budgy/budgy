@@ -100,16 +100,40 @@ Vérifier exactement :
 - La route `/api/scanner/ocr` reste protégée (JWT Supabase) et répond
   normalement sur de vrais fichiers **fictifs** JPEG/PNG/PDF/Swiss QR.
 - Les fonctions de paiements Apple et de synchronisation ne régressent pas.
-- L'endpoint privé `/api/config/readiness` exige un JWT Supabase et renvoie
-  des indicateurs `defined` / `missing` **sans valeur de secret**.
-  Il est protégé pour les utilisateurs authentifiés, **pas limité à un rôle
-  administrateur** ; éviter de copier ses sorties dans des espaces publics.
+- Les deux endpoints de diagnostic `/api/config/status` (historique) et
+  `/api/config/readiness` requièrent désormais **un JWT Supabase valide
+  portant `app_metadata.budgy_operator=true`**, valeur définie uniquement
+  côté serveur par un administrateur Supabase Auth après vérification du
+  compte. La simple connexion d'un utilisateur ne suffit pas : 401 sans
+  JWT, 403 pour un utilisateur ordinaire, 200 pour l'opérateur autorisé.
+  Les réponses n'exposent que `defined` / `missing` ou des métadonnées
+  non secrètes. Ne jamais copier un JWT ou une clé dans le chat.
+- Les anciens scripts externes qui interrogeaient publiquement
+  `/api/config/status` devront cesser de le faire ou utiliser un compte
+  opérateur autorisé. Les tests de santé publics restent `/health` et
+  `/api/health`, sans jeton.
 
 Si le SHA retourné est `unknown` ou différent de la révision épinglée,
 **ne pas annoncer une livraison vérifiée** : contrôler l'ARG du Dockerfile,
 le cache Docker, l'image et l'historique Coolify.
 
-## 4. Inventaire des variables : noms seulement
+## 4. Habiliter un compte de diagnostic (sans migration)
+
+**Seulement si un opérateur doit utiliser les diagnostics depuis un appareil
+authentifié**, ouvrir le panneau **Auth Users de la vraie instance**
+`supabase.budgy.ch`, identifier et vérifier le compte de l'opérateur.
+Définir **sur son app_metadata gérée côté serveur**, et JAMAIS dans
+`user_metadata`, le booléen `budgy_operator=true`. La modification de
+ce rôle est une action administrative sensible à valider distinctement :
+cette PR ne l'effectue pas. Forcer le renouvellement du JWT pour que le
+nouveau claim signé apparaisse dans la session opérateur. Ce droit donne
+uniquement accès aux diagnostics de présence, **pas aux données métier**.
+
+Les opérateurs peuvent tester par la suite, avec leur propre client
+authentifié, que le diagnostic renvoie 200 et des indicateurs, et qu'un
+compte ordinaire reçoit 403. Ne jamais partager le token ni les clés.
+
+## 5. Inventaire des variables : noms seulement
 
 Ces groupes sont requis **pour la fonctionnalité indiquée**, pas tous pour
 que la route de santé fonctionne :
@@ -131,7 +155,7 @@ Un **état `defined`** ne prouve pas que le secret est correct, que l'API
 répond, ni que les abonnements sont valides ; il atteste seulement la présence
 d'une chaîne non vide.
 
-## 5. Retour arrière obligatoire en cas d'écart
+## 6. Retour arrière obligatoire en cas d'écart
 
 1. Garder le déploiement automatique **désactivé**.
 2. Remettre dans Coolify la branche `main`, le **SHA précis de l'ancien
@@ -146,7 +170,7 @@ d'une chaîne non vide.
    Un rollback applicatif ne remplace pas une restauration testée lorsqu'un
    schéma a été changé, d'où l'obligation de sauvegarde avant toute migration.
 
-## 6. Restrictions
+## 7. Restrictions
 
 - Aucune action sur une autre base Supabase.
 - Aucun déploiement automatique depuis cette PR.

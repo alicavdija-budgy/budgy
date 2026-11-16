@@ -72,9 +72,10 @@ class ReleaseIdentityTests(unittest.TestCase):
             isinstance(d, ast.Call)
             and isinstance(d.func, ast.Name)
             and d.func.id == 'Depends'
-            and any(isinstance(a, ast.Name) and a.id == 'require_user' for a in d.args)
+            and any(isinstance(a, ast.Name) and a.id == 'require_operator' for a in d.args)
             for d in readiness.args.defaults
         ), 'Readiness endpoint must require verified Supabase JWT')
+        self.assertIn('from operator_auth import require_operator', source)
         self.assertIn('from release_identity import APP_VERSION', source)
         self.assertNotIn('APP_VERSION = os.getenv(', source)
 

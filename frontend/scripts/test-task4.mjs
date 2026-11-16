@@ -110,6 +110,14 @@ S('Commande 3 — GetBillsIntent : impayées + échéance + devises à part', in
 S('Commande 4 — GetMonthlyBudgetIntent : budget restant ≠ disponible', intents.includes('struct GetMonthlyBudgetIntent: AppIntent') && intents.includes('budgetTotal') && shared.includes('Votre disponible réel'));
 S('exposition Siri/Raccourcis : les 4 commandes dans AppShortcutsProvider', ['AddExpenseIntent()', 'GetBudgetIntent()', 'GetBillsIntent()', 'GetSavingsIntent()', 'GetMonthlyBudgetIntent()'].every((x) => shortcuts.includes(x)));
 S('phrases FR + DE + IT + EN présentes', shortcuts.includes('Füge eine Ausgabe') && shortcuts.includes('Aggiungi una spesa') && shortcuts.includes('Add an expense') && shortcuts.includes('Quali fatture'));
+S('Siri : formulation naturelle « avec Budgy » et « dans application Budgy » indexées',
+  shortcuts.includes('Ajoute une dépense avec') &&
+  shortcuts.includes("Ajoute une dépense dans l'application") &&
+  shortcuts.includes('Enregistre ma dépense dans'));
+S('Siri : libellés conservent le jeton obligatoire appName',
+  shortcuts.includes('\\\\(.applicationName)') &&
+  (shortcuts.match(/Ajoute une dépense/g) || []).length >= 3);
+
 S('App Group group.com.budgy.ch.budgy (entitlements + stockage partagé)', cfg.includes("'group.com.budgy.ch.budgy'") && shared.includes('"group.com.budgy.ch.budgy"'));
 S('bundle identifier com.budgy.ch.budgy conservé', appJson.includes('"bundleIdentifier": "com.budgy.ch.budgy"'));
 S('build iOS 91 conservé', appJson.includes('"buildNumber": "91"'));
@@ -146,6 +154,7 @@ const invScreen = read('app/more/invoices.tsx');
 S('dashboard : note « hors devises étrangères » quand partiel (héro + détail)', (home.match(/availableIsPartial/g) || []).length >= 2 && home.includes("t('home.foreignPartial'"));
 S('paiement d\'une facture EUR → transaction marquée de SA devise', invScreen.includes('{ currency: inv.currency }'));
 S('écran Siri : les 4 commandes natives découvrables (FR/DE/IT/EN via i18n)', ['cmd1Phrase', 'cmd2Phrase', 'cmd3Phrase', 'cmd4Phrase'].every((k) => siriScreen.includes(k)) && siriScreen.includes("t('siriAssistant.sectionNative')"));
+S('Aide Siri : diagnostic Raccourcis dans les 4 langues', (read('src/i18n/translations.ts').match(/Raccourcis > Apps > Budgy|Shortcuts > Apps > Budgy|Kurzbefehle > Apps > Budgy|Comandi rapidi > App > Budgy/g) || []).length === 4);
 
 console.log('\n═ CORRECTIFS FINAUX T4 — budget Siri = écran Budgets (exécution réelle) ═');
 {

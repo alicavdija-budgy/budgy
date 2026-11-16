@@ -252,13 +252,14 @@ const st = StyleSheet.create({
     textShadowColor: 'rgba(0,0,0,0.6)', textShadowRadius: 4,
     textShadowOffset: { width: 0, height: 2 },
   },
-  greenBarWrap: { marginTop: 7 },
+  // Toute la largeur de la section (jusqu'aux marges horizontales du contenu).
+  greenBarWrap: { marginTop: 7, width: '100%', alignSelf: 'stretch' },
   greenBar: {
-    width: 44, height: 2, borderRadius: 1, backgroundColor: P.green,
+    width: '100%', height: 2, borderRadius: 1, backgroundColor: P.green,
     shadowColor: P.green, shadowOpacity: 0.55, shadowRadius: 5,
     shadowOffset: { width: 0, height: 0 }, elevation: 2,
   },
-  greenBarShadow: { width: 44, height: 1, backgroundColor: 'rgba(0,0,0,0.5)', marginTop: 1, borderRadius: 1 },
+  greenBarShadow: { width: '100%', height: 1, backgroundColor: 'rgba(0,0,0,0.5)', marginTop: 1, borderRadius: 1 },
   // Lignes
   row: {
     minHeight: 48, flexDirection: 'row', alignItems: 'center',

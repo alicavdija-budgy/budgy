@@ -115,7 +115,7 @@ S('Siri : formulation naturelle « avec Budgy » et « dans application Budgy »
   shortcuts.includes("Ajoute une dépense dans l'application") &&
   shortcuts.includes('Enregistre ma dépense dans'));
 S('Siri : libellés conservent le jeton obligatoire appName',
-  shortcuts.includes('\\\\(.applicationName)') &&
+  shortcuts.includes(String.raw`\(.applicationName)`) &&
   (shortcuts.match(/Ajoute une dépense/g) || []).length >= 3);
 
 S('App Group group.com.budgy.ch.budgy (entitlements + stockage partagé)', cfg.includes("'group.com.budgy.ch.budgy'") && shared.includes('"group.com.budgy.ch.budgy"'));

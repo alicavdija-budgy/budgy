@@ -87,8 +87,22 @@ check('NON : référence vide acceptée', b3.refType === 'NON' && b3.reference =
 check('empreintes distinctes', new Set([b1.fingerprint, b2.fingerprint, b3.fingerprint]).size === 3);
 check('isSwissQrBill vrai/faux', isSwissQrBill(validQRR) && !isSwissQrBill('https://example.com'));
 
+// Une QR-facture SIX peut avoir 31 champs : EPD à la ligne 31,
+// sans ligne de facturation optionnelle ni saut final.
+// Cas 100 % fictif : aucun fichier client dans le dépôt.
+const noBillingField = validQRR.split('\n').slice(0, -1).join('\n');
+const withoutBilling = parseSwissQrBill(noBillingField);
+check('31 lignes sans billing facultatif (conformité SIX)', noBillingField.split('\n').length === 31 &&
+  noBillingField.endsWith('EPD') && withoutBilling.refType === 'QRR' &&
+  withoutBilling.reference === QRR && withoutBilling.billingInfo === '');
+const withTrailingNewline = parseSwissQrBill(noBillingField + '\n');
+check('saut de ligne final facultatif également accepté',
+  withTrailingNewline.billingInfo === '' && withTrailingNewline.amount === 1949.75);
+
+
 console.log('\n— QR-factures invalides (contrôles SIX) —');
 expectError('pas de SPC', 'HELLO\n0200\n1', 'spc');
+expectError('30 lignes sans trailer rejetées', noBillingField.split('\n').slice(0, -1).join('\n'), 'length');
 expectError('IBAN étranger refusé', validQRR.replace(QR_IBAN, 'DE89370400440532013000'), 'iban');
 expectError('IBAN checksum faux', validQRR.replace(QR_IBAN, 'CH4431999123000889013'), 'iban');
 expectError('QRR checksum mod10 faux', validQRR.replace(QRR, '210000000003139471430009018'), 'reference');

@@ -30,7 +30,7 @@ import { useStore } from '../../src/stores/useStore';
 import { Card, EmptyState, Button } from '../../src/components/ui';
 import ZoomableImage from '../../src/components/ZoomableImage';
 import CornerEditor from '../../src/components/CornerEditor';
-import type { BudgyDocumentType, DocumentCategory, PersonalDocument } from '../../src/types';
+import type { DocumentCategory, PersonalDocument } from '../../src/types';
 import { docTypeOf } from '../../src/lib/syncMerge';
 import { ensureLocalCopy, docFileStatus } from '../../src/services/documentStorage';
 import { useTranslation } from '../../src/hooks/useTranslation';
@@ -878,7 +878,7 @@ ${pageDataUrls.map((src, i) => `
               <TouchableOpacity
                 key={sp.id}
                 style={[styles.filterChip, typeFilter === sp.id && styles.filterChipActive]}
-                onPress={() => setTypeFilter(sp.id)}
+                onPress={() => { setTypeFilter(sp.id); setFilter('all'); }}
                 testID={`space-${sp.id}`}
               >
                 <Text style={[styles.filterText, typeFilter === sp.id && styles.filterTextActive]}>{t(`docSpaces.${sp.tKey}`)}</Text>

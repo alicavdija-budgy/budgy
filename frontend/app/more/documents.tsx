@@ -78,7 +78,7 @@ export default function DocumentsScreen() {
   );
   const [selectedContract, setSelectedContract] = useState<string | null>(null);
   // TÂCHE 3 — trois espaces documentaires STRICTS (type ≠ catégorie métier)
-  const [typeFilter, setTypeFilter] = useState<'all' | BudgyDocumentType>('all');
+  const [typeFilter, setTypeFilter] = useState<'contract' | 'unclassified'>('contract');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<string | null>(null);
 
@@ -118,10 +118,10 @@ export default function DocumentsScreen() {
   // Les pièces jointes de contrats ne sont PAS doublées dans la grille
   const linkedDocIds = useMemo(() => new Set(contracts.map((c) => c.documentId).filter((id): id is string => !!id)), [contracts]);
   const filtered = useMemo(() => documents.filter((d) => {
-    if (linkedDocIds.has(d.id) && (filter === 'all' || filter === 'contracts')) return false;
+    if (linkedDocIds.has(d.id)) return false;
     // TÂCHE 3 — espace documentaire : un contrat d'assurance reste dans
     // Contrats même si sa catégorie métier est « assurance ».
-    if (typeFilter !== 'all' && docTypeOf(d, linkedDocIds) !== typeFilter) return false;
+    if (docTypeOf(d, linkedDocIds) !== typeFilter) return false;
     if (filter !== 'all' && d.category !== filter) return false;
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -130,12 +130,15 @@ export default function DocumentsScreen() {
     return true;
   }), [documents, filter, search, linkedDocIds, typeFilter]);
 
+  // Le classeur compte uniquement ses documents visibles : jamais les factures
+  // et tickets conservés dans leurs espaces respectifs.
   const counts = useMemo(() => {
-    const m: Record<string, number> = { all: documents.length };
-    for (const c of CATEGORIES) m[c.id] = 0;
-    for (const d of documents) m[d.category] = (m[d.category] || 0) + 1;
+    const inSpace = documents.filter((d) => !linkedDocIds.has(d.id) && docTypeOf(d, linkedDocIds) === typeFilter);
+    const m: Record<string, number> = { all: inSpace.length };
+    for (const c of CATEGORY_KEYS) m[c.id] = 0;
+    for (const d of inSpace) m[d.category] = (m[d.category] || 0) + 1;
     return m;
-  }, [documents]);
+  }, [documents, linkedDocIds, typeFilter]);
 
   const sel = documents.find((d) => d.id === selected);
   // ── TÂCHE 2 — VRAIE section Contrats (collection contracts[], pas
@@ -865,16 +868,13 @@ ${pageDataUrls.map((src, i) => `
           placeholderTextColor={theme.textTertiary}
         />
 
-        {/* TÂCHE 3 — espaces documentaires : Factures / Contrats / Tickets / À classer */}
+        {/* Le classeur est réservé aux contrats et aux documents encore à classer. Les factures/tickets restent dans leurs espaces dédiés. */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }}>
           <View style={styles.filterRow}>
             {([
-              { id: 'all', tKey: 'spaceAll' },
-              { id: 'invoice', tKey: 'spaceInvoices' },
               { id: 'contract', tKey: 'spaceContracts' },
-              { id: 'expense_receipt', tKey: 'spaceReceipts' },
               { id: 'unclassified', tKey: 'spaceUnclassified' },
-            ] as { id: 'all' | BudgyDocumentType; tKey: string }[]).map((sp) => (
+            ] as { id: 'contract' | 'unclassified'; tKey: string }[]).map((sp) => (
               <TouchableOpacity
                 key={sp.id}
                 style={[styles.filterChip, typeFilter === sp.id && styles.filterChipActive]}
@@ -915,7 +915,7 @@ ${pageDataUrls.map((src, i) => `
 
         {/* TÂCHE 2 (audit) — VRAIE section Contrats : affichée depuis
             contracts[] indépendamment de documents[], recherche incluse */}
-        {(filter === 'all' || filter === 'contracts') && (typeFilter === 'all' || typeFilter === 'contract') && visibleContracts.length > 0 && (
+        {(filter === 'all' || filter === 'contracts') && typeFilter === 'contract' && visibleContracts.length > 0 && (
             <View style={{ marginBottom: 14 }}>
               <Text style={styles.sectionLabel}>{t('contractsV2.sectionTitle')} ({contracts.length})</Text>
               {visibleContracts.map((c) => {
@@ -941,7 +941,7 @@ ${pageDataUrls.map((src, i) => `
               })}
             </View>
           )}
-        {filtered.length === 0 && visibleContracts.length === 0 ? (
+        {filtered.length === 0 && (typeFilter !== 'contract' || visibleContracts.length === 0) ? (
           <View style={styles.emptyPremium}>
             <LinearGradient
               colors={[`${theme.primary}25`, `${theme.primary}05`]}

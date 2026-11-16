@@ -26,7 +26,7 @@ const eas = JSON.parse(readFileSync(join(root, 'eas.json'), 'utf8'));
   S('AUCUNE URL de production dans le profil preprod', !JSON.stringify(p).includes('api.budgy.ch') && !JSON.stringify(p).includes('supabase.budgy.ch'));
   const others = ['development', 'preview', 'production', 'testflight'];
   S('les 4 profils actifs sont INTACTS (URLs de prod inchangées)', others.every((k) => eas.build[k] && eas.build[k].env.EXPO_PUBLIC_BACKEND_URL === 'https://api.budgy.ch' && eas.build[k].env.EXPO_PUBLIC_SUPABASE_URL === 'https://supabase.budgy.ch'));
-  S('build 91 non géré ici (appVersionSource local, aucun autoIncrement)', eas.cli.appVersionSource === 'local' && !JSON.stringify(eas).includes('autoIncrement'));
+  S('build 92 non géré ici (appVersionSource local, aucun autoIncrement)', eas.cli.appVersionSource === 'local' && !JSON.stringify(eas).includes('autoIncrement'));
 }
 
 console.log('\n═══ §B Durcissement réseau (plus d\'URL prod codée en dur) ═══');
@@ -83,7 +83,7 @@ console.log('\n═══ §E Isolation NATIVE — config Expo RÉSOLUE (exécuti
   U('DEUX App Groups DISTINCTS (aucun mélange de stockage partagé)', p.ios.entitlements['com.apple.security.application-groups'][0] === 'group.com.budgy.ch.budgy.preprod');
   U('package Android DISTINCT (sandbox locale séparée)', p.android.package === 'com.budgy.ch.budgy.preprod');
   U('preprod : AUCUNE association aux domaines de production (iOS + Android)', p.ios.associatedDomains === undefined && p.android.intentFilters === undefined);
-  U('build 91 CONSERVÉ dans les deux variantes', d.ios.buildNumber === '91' && p.ios.buildNumber === '91');
+  U('build 92 conservé dans les deux variantes', d.ios.buildNumber === '92' && p.ios.buildNumber === '92');
   U('variante exposée au runtime (extra.appVariant)', p.extra.appVariant === 'preprod' && d.extra.appVariant === undefined);
   U('OTA sans mélange : runtimeVersion fingerprint + canaux distincts', d.runtimeVersion?.policy === 'fingerprint' && eas.build.preprod.channel === 'preprod' && eas.build.preview.channel === 'preview');
 }

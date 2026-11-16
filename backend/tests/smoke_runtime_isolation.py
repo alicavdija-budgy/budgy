@@ -91,6 +91,58 @@ class LocalRuntimeSecurityTests(unittest.TestCase):
         self.assertEqual(ok.status_code, 200, ok.text[:100])
         self.assertFalse(ok.json()["success"])
 
+    def test_swiss_qr_png_and_pdf_work_without_any_ai_key(self):
+        # Financially fictitious SPC payload; no real document or private data.
+        # This exercises FastAPI -> PNG/PDF rendering -> QR decoder, rather
+        # than just matching function names in the source code.
+        import base64
+        import io
+        import qrcode
+        import pymupdf
+
+        fields = [
+            "SPC", "0200", "1", "CH5800791123000889012", "S",
+            "EXEMPLE TEST SA", "Rue Exemple", "1", "1000", "Testville", "CH",
+            "", "", "", "", "", "", "",
+            "123.45", "CHF", "S", "CLIENT TEST", "Rue Fictive",
+            "2", "1000", "Testville", "CH", "NON", "", "EPD",
+        ]
+        def png_bytes(payload):
+            qr = qrcode.make(payload)
+            out = io.BytesIO()
+            qr.save(out, format="PNG")
+            return out.getvalue()
+
+        token = token_for(USER_A)
+        for amount in ("123.45", ""):
+            fields[18] = amount
+            payload = "\\r\\n".join(fields) + "\\r\\n"
+            image = png_bytes(payload)
+            body = {"image_base64": base64.b64encode(image).decode(), "mime_type": "image/png"}
+            r = self.post("/api/scanner/ocr", token=token, body=body)
+            self.assertEqual(r.status_code, 200, r.text[:120])
+            data = r.json()
+            self.assertTrue(data["success"], str(data.get("error")))
+            self.assertEqual(data["document_type"], "invoice")
+            self.assertEqual(data["swiss_qr_content"], payload)
+            self.assertIsNone(data["currency"])
+            self.assertEqual(data["confidence"], 1.0)
+
+        fields[18] = ""
+        payload = "\\r\\n".join(fields) + "\\r\\n"
+        document = pymupdf.open()
+        page = document.new_page(width=595, height=842)
+        page.insert_image(pymupdf.Rect(70, 400, 330, 660), stream=png_bytes(payload))
+        pdf_bytes = document.tobytes()
+        document.close()
+        r = self.post("/api/scanner/ocr", token=token, body={
+            "image_base64": base64.b64encode(pdf_bytes).decode(),
+            "mime_type": "application/pdf",
+        })
+        self.assertEqual(r.status_code, 200, r.text[:120])
+        self.assertTrue(r.json()["success"], str(r.json().get("error")))
+        self.assertEqual(r.json()["swiss_qr_content"], payload)
+
     def test_family_access_follows_signed_jwt_not_body_user_id(self):
         a = token_for(USER_A)
         b = token_for(USER_B)

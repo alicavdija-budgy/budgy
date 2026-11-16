@@ -47,8 +47,8 @@ const ext = existsSync('targets/intents/BudgyIntentsExtension.swift') ? read('ta
 ok('@main struct BudgyIntentsExtension: AppIntentsExtension', ext.includes('@main') && ext.includes('BudgyIntentsExtension: AppIntentsExtension'));
 const appJson = JSON.parse(read('app.json'));
 ok('Version marketing 4.0.0', appJson.expo.version === '4.0.0');
-ok('Build iOS >= 91 (89 et 90 déjà consommés par Apple — jamais réutilisés)', parseInt(appJson.expo.ios.buildNumber, 10) >= 91);
-ok('Build iOS configuré exactement à 91 (prochain build à générer)', appJson.expo.ios.buildNumber === '91');
+ok('Build iOS >= 92 (91 déjà utilisé par TestFlight — jamais réutilisé)', parseInt(appJson.expo.ios.buildNumber, 10) >= 92);
+ok('Build iOS configuré exactement à 92 (prochain build à générer)', appJson.expo.ios.buildNumber === '92');
 ok('Bundle identifier inchangé', appJson.expo.ios.bundleIdentifier === 'com.budgy.ch.budgy');
 const appJsonStr = read('app.json');
 ok('App Group group.com.budgy.ch.budgy préservé', appJsonStr.includes('group.com.budgy.ch.budgy') && read('targets/intents/expo-target.config.js').includes('group.com.budgy.ch.budgy'));

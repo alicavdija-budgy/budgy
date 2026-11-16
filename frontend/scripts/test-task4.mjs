@@ -120,7 +120,7 @@ S('Siri : libellés conservent le jeton obligatoire appName',
 
 S('App Group group.com.budgy.ch.budgy (entitlements + stockage partagé)', cfg.includes("'group.com.budgy.ch.budgy'") && shared.includes('"group.com.budgy.ch.budgy"'));
 S('bundle identifier com.budgy.ch.budgy conservé', appJson.includes('"bundleIdentifier": "com.budgy.ch.budgy"'));
-S('build iOS 91 conservé', appJson.includes('"buildNumber": "91"'));
+S('build iOS 92 préparé pour le prochain TestFlight', appJson.includes('"buildNumber": "92"'));
 S('extension @main préservée (ITMS-90896)', read('targets/intents/BudgyIntentsExtension.swift').includes('@main'));
 S('snapshot partagé étendu rétro-compatible (champs optionnels Swift)', shared.includes('var billsCount: Int?') && shared.includes('var savedTotal: Double?') && shared.includes('var budgetSpent: Double?'));
 S('confidentialité : montants énoncés SEULEMENT si siriAmounts + non masqué + données < 36 h', intents.includes('s.siriAmounts') && intents.includes('36 * 3600') && (intents.match(/guardedSnapshot\(route:/g) || []).length >= 4);

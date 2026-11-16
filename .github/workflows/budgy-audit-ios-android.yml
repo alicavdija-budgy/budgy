@@ -157,7 +157,13 @@ jobs:
       - name: Start isolated container and verify HTTP 8000 + real OpenAPI
         run: |
           set -euo pipefail
+          # Isolated synthetic credentials only. NO production auth, OpenAI,
+          # Supabase keys, or access to customer records.
           docker run -d --name budgy-pr-smoke \
+            -e APP_ENV=staging \
+            -e SUPABASE_URL=http://127.0.0.1:9999 \
+            -e SUPABASE_JWT_ALLOW_HS256_FALLBACK=1 \
+            -e SUPABASE_JWT_SECRET=budgy-offline-only-synthetic-jwt-never-production-2026 \
             -p 127.0.0.1:18000:8000 budgy-pr-smoke:local
           trap 'docker logs --tail 35 budgy-pr-smoke || true; docker rm -f budgy-pr-smoke >/dev/null 2>&1 || true' EXIT
           ready=0
@@ -184,3 +190,7 @@ jobs:
           assert '/api/scanner/ocr' in a['paths']
           print('PASS: production Dockerfile built and served real port 8000; SHA/4.0.0/Swiss QR verified')
           PY
+          # Runtime isolation: two synthetic Supabase users, signed operator,
+          # anonymous denial, OCR authorization and financial-account isolation.
+          docker exec budgy-pr-smoke python tests/smoke_runtime_isolation.py
+          echo "PASS: synthetic JWT operator, 2-account isolation, OCR auth, no production calls"

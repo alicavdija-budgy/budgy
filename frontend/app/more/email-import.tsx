@@ -24,6 +24,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
 import { apiFetchJson } from '../../src/lib/network';
 import { normalizeImageForUpload } from '../../src/lib/imageUpload';
+import { resolveImportMime } from '../../src/lib/importMime';
 import { parseSwissQrBill } from '../../src/services/qrBill';
 import { normalizeChfAmount } from '../../src/utils/amount';
 import { findInvoiceDuplicate } from '../../src/lib/invoiceDocs';
@@ -74,7 +75,7 @@ export default function ImportInvoiceScreen() {
       try {
         if (su) {
           await assertFileAcceptable(su, sharedParams.sharedMime, sharedParams.sharedName);
-          await parseImageFile(su, sharedParams.sharedMime);
+          await parseImageFile(su, sharedParams.sharedMime, sharedParams.sharedName);
         } else if (stx) {
           await parseEmailText(stx, sharedParams.sharedName || 'partage');
         }
@@ -139,18 +140,18 @@ export default function ImportInvoiceScreen() {
     }
   };
 
-  const parseImageFile = async (uriOrPath: string, mimeHint?: string) => {
+  const parseImageFile = async (uriOrPath: string, mimeHint?: string, originalName?: string) => {
     setBusy(true);
     setBusyLabel(t('emailImport.busyOcrAi'));
     setResult(null);
-    let mime = mimeHint || 'image/jpeg';
+    let mime = resolveImportMime(mimeHint, originalName, uriOrPath);
     try {
       let base64 = '';
       if (uriOrPath.startsWith('data:')) {
         base64 = uriOrPath.split(',')[1] || '';
         const m = /^data:([^;]+);/.exec(uriOrPath);
         if (m) mime = m[1];
-      } else if (mimeHint === 'application/pdf' || uriOrPath.toLowerCase().endsWith('.pdf') || uriOrPath.includes('application/pdf')) {
+      } else if (mime === 'application/pdf') {
         base64 = await readAsBase64(uriOrPath);
         mime = 'application/pdf';
         console.log('[email-import] PDF detected, sending raw bytes for OCR');
@@ -175,8 +176,8 @@ export default function ImportInvoiceScreen() {
       const r = await apiFetchJson<any>(`/api/scanner/ocr`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Accept-Language': getApiLocale(lang) },
-        body: JSON.stringify({ image_base64: `data:${mime};base64,${base64}`, locale: getApiLocale(lang) }),
-      }, { timeoutMs: 25000, retries: 1, silent: true });
+        body: JSON.stringify({ image_base64: `data:${mime};base64,${base64}`, mime_type: mime, locale: getApiLocale(lang) }),
+      }, { timeoutMs: mime === 'application/pdf' ? 45000 : 25000, retries: mime === 'application/pdf' ? 0 : 1, silent: true });
       if (r.status === 401 || r.status === 403) {
         Alert.alert(t('importErrors.authTitle'), t('importErrors.authBody'));
         return;
@@ -266,7 +267,7 @@ export default function ImportInvoiceScreen() {
       if (res.canceled) return;
       const file = res.assets[0];
       await assertFileAcceptable(file.uri, file.mimeType, file.name);
-      await parseImageFile(file.uri, file.mimeType);
+      await parseImageFile(file.uri, file.mimeType, file.name);
     } catch (e: any) {
       if (e instanceof VaultError) { Alert.alert(t('contractsV2.fileErrorTitle'), t(`contractsV2.${e.code}`)); return; }
       const h = humanizeError(e, { title: t('emailImport.pdfImpossibleTitle') });
@@ -288,7 +289,7 @@ export default function ImportInvoiceScreen() {
         await parseEmailText(text, file.name);
       } else {
         await assertFileAcceptable(file.uri, file.mimeType, file.name);
-        await parseImageFile(file.uri, file.mimeType);
+        await parseImageFile(file.uri, file.mimeType, file.name);
       }
     } catch (e: any) {
       if (e instanceof VaultError) { Alert.alert(t('contractsV2.fileErrorTitle'), t(`contractsV2.${e.code}`)); return; }
@@ -312,7 +313,7 @@ export default function ImportInvoiceScreen() {
       if (res.canceled) return;
       const a = res.assets[0];
       await assertFileAcceptable(a.uri, a.mimeType ?? undefined, a.fileName ?? undefined);
-      await parseImageFile(a.uri, a.mimeType ?? undefined);
+      await parseImageFile(a.uri, a.mimeType ?? undefined, a.fileName ?? undefined);
     } catch (e: any) {
       if (e instanceof VaultError) { Alert.alert(t('contractsV2.fileErrorTitle'), t(`contractsV2.${e.code}`)); return; }
       const h = humanizeError(e, { title: t('emailImport.importImpossibleTitle') });

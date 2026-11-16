@@ -74,9 +74,10 @@ let last = -1, ordered = true;
 for (const k of secOrder) { const i = more.indexOf(`key: '${k}'`); if (i < last) ordered = false; last = i; }
 ok('ordre exact des 5 sections', ordered && last > 0);
 ok('traits verts des 5 sections sur TOUTE la largeur, jamais 44 px fixes',
-  /greenBarWrap:\\s*\\{[^}]*width:\\s*'100%'/.test(more) &&
-  /greenBar:\\s*\\{\\s*width:\\s*'100%'/.test(more) &&
-  /greenBarShadow:\\s*\\{[^}]*width:\\s*'100%'/.test(more));
+  more.includes("greenBarWrap: { marginTop: 7, width: '100%'") &&
+  more.includes("width: '100%', height: 2, borderRadius: 1, backgroundColor: P.green") &&
+  more.includes("greenBarShadow: { width: '100%'") &&
+  !more.includes("greenBarShadow: { width: 44"));
 ok('lignes sans icônes ni sous-titres (chevron uniquement)', !more.includes('subtitleKey') && (more.match(/Ionicons name="/g) || []).length <= 2);
 ok('garde FREE/PRO conservée (tier pro → /pro)', more.includes("f.tier === 'pro' && !isPro") && more.includes("router.push('/pro'"));
 ok('statut Pro réel (StoreKit), badge ACTIF jamais codé en dur', more.includes('hasPremiumAccess') && more.includes('isPro &&'));

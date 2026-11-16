@@ -29,6 +29,7 @@ import math
 import qr_decode
 from release_identity import APP_VERSION, deployed_git_sha
 from config_readiness import readiness_report
+from operator_auth import require_operator
 
 # Load .env BEFORE importing modules that read os.getenv at import time
 load_dotenv()
@@ -168,11 +169,11 @@ async def health_check():
 
 
 @app.get("/api/config/status")
-async def config_status():
+async def config_status(user: AuthenticatedUser = Depends(require_operator)):
     """
-    Non-secret env diagnostic — confirms which optional integrations are
-    configured WITHOUT ever exposing the actual values. Used by the operator
-    to validate Coolify deployment without grepping logs.
+    Legacy non-secret env diagnostic — restricted to operator JWT claims.
+    Formerly public; do not expose which backend integrations are configured
+    to normal app users. Values/secrets are never returned.
     """
     def state(name: str, *aliases: str) -> str:
         for n in (name, *aliases):
@@ -211,11 +212,11 @@ async def config_status():
 
 
 @app.get("/api/config/readiness")
-async def config_readiness(user: AuthenticatedUser = Depends(require_user)):
-    """Authenticated operator aid: presence only; no env values or credentials.
+async def config_readiness(user: AuthenticatedUser = Depends(require_operator)):
+    """Signed app_metadata.budgy_operator=true required. Presence only.
 
-    Any valid Supabase user JWT can access this endpoint. Restrict to an
-    operator-only auth claim in a future change if an admin role is available.
+    Never return or log credentials or URLs. Ordinary users get 403,
+    unauthenticated clients get 401. Both routes are operator-only.
     """
     return readiness_report()
 

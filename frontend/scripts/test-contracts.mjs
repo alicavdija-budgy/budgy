@@ -54,9 +54,12 @@ const sync = read('src/services/cloudSync.ts');
 ok('mapping contracts étendu AVEC repli legacy (synchro jamais cassée avant migration)', sync.includes("'document_id'") && sync.includes('TABLE_FIELDS_LEGACY'));
 
 console.log('— Audit complémentaire TÂCHE 2 —');
-ok('contrats affichés INDÉPENDAMMENT de documents[] (hors ternaire vide)', docs.includes('visibleContracts.length === 0 ?') && docs.includes('visibleContracts.map((c)'));
+ok('contrats affichés INDÉPENDAMMENT de documents[] (hors ternaire vide)', docs.includes("typeFilter !== 'contract' || visibleContracts.length === 0") && docs.includes('visibleContracts.map((c)'));
 ok('recherche sur titres ET émetteurs des contrats', docs.includes("(c.issuer || '').toLowerCase().includes(q)"));
 ok('pas de doublon visuel : PJ liées exclues de la grille', docs.includes('linkedDocIds.has(d.id)'));
+ok('classeur réservé aux contrats et documents à classer', docs.includes("useState<'contract' | 'unclassified'>('contract')") && docs.includes("{ id: 'unclassified', tKey: 'spaceUnclassified' }") && !docs.includes("{ id: 'invoice', tKey: 'spaceInvoices' }") && !docs.includes("{ id: 'expense_receipt', tKey: 'spaceReceipts' }"));
+ok('factures non affichées par défaut', docs.includes('docTypeOf(d, linkedDocIds) !== typeFilter') && docs.includes('if (linkedDocIds.has(d.id)) return false;'));
+ok('compteurs du classeur limités aux documents pertinents', docs.includes('const inSpace = documents.filter') && docs.includes('all: inSpace.length'));
 ok('bouton « Ouvrir le PDF » + lecteur natif (WebView) séparé du Partager', docs.includes('contract-open-pdf') && docs.includes('pdfViewerUri') && docs.includes('shareContractPdf'));
 ok('pièce jointe inaccessible → erreur claire (fileMissing)', docs.includes('fileMissingTitle'));
 ok('rattacher un fichier à un ANCIEN contrat sans PJ', docs.includes('attachFileToContract') && docs.includes('contract-attach-file'));

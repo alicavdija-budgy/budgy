@@ -76,7 +76,7 @@ jobs:
           const a=require('./app.json').expo;
           const e=require('./eas.json');
           const assert=(x,msg)=>{ if(!x)throw new Error(msg); };
-          assert(a.version==='4.0.0' && a.ios?.buildNumber==='91','Wrong Budgy iOS version');
+          assert(a.version==='4.0.0' && a.ios?.buildNumber==='92','Wrong Budgy iOS version');
           assert(a.ios?.bundleIdentifier==='com.budgy.ch.budgy','Wrong existing Apple app');
           assert(a.android?.package==='com.budgy.ch.budgy','Wrong Google Play package');
           assert(Number.isInteger(a.android?.versionCode) && a.android.versionCode>0,'Missing Android versionCode');

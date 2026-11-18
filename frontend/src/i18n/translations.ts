@@ -4978,8 +4978,8 @@ export const BUDGY_GUIDES: Record<'fr' | 'en' | 'de' | 'it', UserGuideLocale> =
       {
         "id": "securite",
         "title": "10. Protéger vos documents",
-        "summary": "Les documents importés sont conservés dans l'application ; des fonctions de synchronisation peuvent dépendre de votre compte et de la configuration du service.",
-        "steps": "Plus → Sécurité et paramètres. Vérifiez la synchronisation et les sauvegardes avant de changer d'appareil.",
+        "summary": "Les factures, tickets et contrats restent sur votre appareil. La sauvegarde iCloud de l’appareil dépend des réglages Apple ; l’export iCloud Drive est volontaire et manuel.",
+        "steps": "Plus → Stockage privé et iCloud. Vérifiez la sauvegarde iCloud de l’appareil et exportez vos copies dans Fichiers / iCloud Drive avant de changer d’appareil.",
         "benefit": "Garder la maîtrise de vos données et retrouver vos justificatifs.",
         "featureId": "security"
       },
@@ -5098,8 +5098,8 @@ export const BUDGY_GUIDES: Record<'fr' | 'en' | 'de' | 'it', UserGuideLocale> =
       {
         "id": "securite",
         "title": "10. Protect your data",
-        "summary": "Stored documents remain in-app; cloud recovery depends on account and service setup.",
-        "steps": "More → Security and Settings. Verify sync and backups before switching devices.",
+        "summary": "Private documents remain on the device. iCloud device backup depends on Apple settings; personal iCloud Drive export is manual.",
+        "steps": "More → Private storage and iCloud. Check the iCloud device backup, or export copies to Files / iCloud Drive before switching devices.",
         "benefit": "Keep control of your records.",
         "featureId": "security"
       },

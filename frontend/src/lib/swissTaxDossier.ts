@@ -86,3 +86,43 @@ export function isValidDossier(input: unknown): input is DossierState {
      && typeof d.paid3a === 'string' && d.paid3a.length <= 40
      && typeof d.avsIncome === 'string' && d.avsIncome.length <= 40;
 }
+
+/** Local signals only. A matching expense is NOT necessarily tax deductible. */
+export interface TaxPreparationSignal {
+  document: TaxDocumentKey;
+  count: number;
+  observedCHF: number;
+}
+const TAX_CATEGORY_HINTS: Record<string, TaxDocumentKey> = {
+  sante: 'health', soins: 'health', medical: 'health', pharmacie: 'health',
+  garde: 'childcare', garde_enfants: 'childcare', childcare: 'childcare', creche: 'childcare',
+  dons: 'donations', donation: 'donations', donations: 'donations',
+  formation: 'training', perfectionnement: 'training', education: 'training',
+  deplacement: 'transport', deplacements: 'transport', transport: 'transport',
+  frais_professionnels: 'work',
+};
+export function findTaxPreparationSignals(
+  transactions: ReadonlyArray<any> | null | undefined,
+  year: TaxYear,
+): TaxPreparationSignal[] {
+  const acc = new Map<TaxDocumentKey, TaxPreparationSignal>();
+  for (const tx of transactions || []) {
+    if (!tx || (tx.type && tx.type !== 'expense')) continue;
+    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(String(tx.date || ''))) continue;
+    if (Number(String(tx.date).slice(0, 4)) !== year) continue;
+    if (tx.currency && String(tx.currency).toUpperCase() !== 'CHF') continue;
+    if (/^(invoice|recurring|transfer)$/i.test(String(tx.source || ''))) continue;
+    const cat = String(tx.category || '')
+      .toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '')
+      .replace(/[\\s-]+/g, '_');
+    const document = TAX_CATEGORY_HINTS[cat];
+    const amount = Number(tx.amount);
+    if (!document || !Number.isFinite(amount) || amount <= 0) continue;
+    const prior = acc.get(document) || { document, count: 0, observedCHF: 0 };
+    acc.set(document, {
+      document, count: prior.count + 1,
+      observedCHF: Math.round((prior.observedCHF + amount) * 100) / 100,
+    });
+  }
+  return Array.from(acc.values()).sort((a, b) => b.observedCHF - a.observedCHF);
+}

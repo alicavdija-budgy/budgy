@@ -120,15 +120,34 @@ const STASH_TABLE: Record<string, string> = {
 export function buildLogoutStash(prev: any): Record<string, any> {
   const uid = prev.syncAccountId || '';
   const hashes = prev.syncedHashes || {};
-  const entry: any = { savedAt: Date.now(), syncedHashes: hashes };
+  const priorVault = prev.accountVault || {};
+  const prior = priorVault[uid] || {};
+  // Build 92: server hash confirmations from builds <=91 CANNOT be used to
+  // determine whether a document is safe to discard. The document records
+  // are now LOCAL-ONLY and the cloud pull intentionally ignores them.
+  const documentKeys = new Set(['documents', 'contracts', 'invoices', 'receipts']);
+  const entry: any = {
+    ...prior,
+    savedAt: Date.now(),
+    syncedHashes: { ...(prior.syncedHashes || {}), ...hashes },
+  };
   let hasData = false;
   for (const key of STASHED_COLLECTIONS) {
-    const unsynced = stashUnsyncedDocs(prev[key] || [], hashes[STASH_TABLE[key]]);
-    entry[key] = unsynced;
-    if (unsynced.length > 0) hasData = true;
+    const items = documentKeys.has(key)
+      ? (prev[key] || []) // preserve even records previously synced to cloud
+      : stashUnsyncedDocs(prev[key] || [], hashes[STASH_TABLE[key]]);
+    // A previous logout may contain records still waiting for account restore:
+    // don't silently overwrite those with the newest session's subset.
+    const merged = new Map<string, any>();
+    for (const item of [...items, ...(prior[key] || [])]) {
+      if (item?.id && !merged.has(String(item.id))) merged.set(String(item.id), item);
+    }
+    const deleted = prev.tombstones?.[uid] || {};
+    entry[key] = [...merged.values()].filter(item => !deleted[`${STASH_TABLE[key]}:${item.id}`]);
+    if (entry[key].length > 0) hasData = true;
   }
-  if (!hasData) return prev.accountVault || {};
-  return { ...(prev.accountVault || {}), [uid]: entry };
+  if (!hasData) return priorVault;
+  return { ...priorVault, [uid]: entry };
 }
 
 /**

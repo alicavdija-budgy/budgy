@@ -164,6 +164,15 @@ export async function deleteEntityWithCloud(
   removeLocally: () => void,
   deps: CloudDeleteDeps = defaultDeps
 ): Promise<CloudDeleteResult> {
+  // Build 92: invoices are private local documents, not cloud entities.
+  // Never require a Supabase connection or send/delete document metadata.
+  // Older remote rows are preserved for a separate, confirmed migration.
+  if (table === 'invoices') {
+    if (!id) return { ok: false, cloudUsed: false, error: 'invalid_id' };
+    removeLocally();
+    try { useStore.getState().addTombstone(table, id); } catch {}
+    return { ok: true, cloudUsed: false };
+  }
   const res = await deleteFromCloud(table, id, deps);
   if (res.ok) {
     removeLocally();

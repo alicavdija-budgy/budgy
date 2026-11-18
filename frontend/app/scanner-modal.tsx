@@ -575,7 +575,9 @@ export default function ScannerModal() {
           title: title.trim(),
           amount: amt > 0 ? String(amt) : '',
           notes: note.trim(),
-          photoUri: receiptData || '',
+          // URI de la photo réelle ; le wizard crée une copie durable.
+          // Ne pas transmettre un base64 volumineux par Expo Router.
+          photoUri: photo?.uri || '',
           category: category || 'abonnements',
         },
       });

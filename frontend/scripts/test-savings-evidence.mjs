@@ -29,6 +29,11 @@ assert.equal(buildSavingsEvidence([],[{title:'Assurance',amount:1000,category:'a
 const ai=readFileSync('app/more/ai-optimizer.tsx','utf8');
 assert.match(ai,/buildSavingsEvidence\(store.transactions, store.recurringExpenses\)/);
 assert.match(ai,/Backend LLM suggestions are NOT used as CHF savings/);
+assert(!ai.includes('title: tx.title'));
+assert(!ai.includes('issuer: inv.issuer'));
+assert(!ai.includes('name: d.name'));
+assert(!ai.includes('title: c.title'));
+assert.match(ai,/genericCategory\(tx.category\)/);
 const tax=readFileSync('app/more/tax-optimizer.tsx','utf8');
 assert.match(tax,/gross_salary: ''/);
 assert.match(tax,/normalizeChfAmount\(form.gross_salary\)/);

@@ -536,12 +536,9 @@ export const useStore = create<AppState>()(
           const cur = s.tombstones[uid] || {};
           return { tombstones: { ...s.tombstones, [uid]: { ...cur, [`${table}:${id}`]: Date.now() } } };
         }),
-      queueUpload: (docId) =>
-        set((s) => {
-          const accountId = s.syncAccountId || '';
-          const exists = s.pendingUploads.some((e: any) => (typeof e === 'string' ? e === docId : e.docId === docId));
-          return exists ? {} : { pendingUploads: [...s.pendingUploads, { docId, accountId }] };
-        }),
+      // Build 92 — documents are device-owned; no Budgy Cloud upload
+      // is ever queued. Legacy entries are cleared by processUploadQueue().
+      queueUpload: (_docId) => { /* local-only: do not enqueue */ },
       dequeueUpload: (docId) =>
         set((s) => ({
           pendingUploads: s.pendingUploads.filter((e: any) => (typeof e === 'string' ? e !== docId : e.docId !== docId)),

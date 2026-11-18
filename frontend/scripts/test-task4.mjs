@@ -99,9 +99,9 @@ console.log('\n═ TÂCHE 4 §4 — une dépense Siri locale n\'est JAMAIS écra
 }
 
 console.log('\n═ TÂCHE 4 §3 — App Intents natifs (contrôles statiques) ═');
-const intents = read('targets/intents/BudgyIntents.swift');
-const shortcuts = read('targets/intents/BudgyShortcuts.swift');
-const shared = read('targets/intents/BudgyShared.swift');
+const intents = read('targets/intents/_shared/BudgyIntents.swift');
+const shortcuts = read('targets/intents/_shared/BudgyShortcuts.swift');
+const shared = read('targets/intents/_shared/BudgyShared.swift');
 const cfg = read('targets/intents/expo-target.config.js');
 const appJson = read('app.json');
 S('Commande 1 — AddExpenseIntent natif (pas un raccourci URL)', intents.includes('struct AddExpenseIntent: AppIntent') && intents.includes('BudgyIntentStore.enqueue'));
@@ -122,6 +122,14 @@ S('App Group group.com.budgy.ch.budgy (entitlements + stockage partagé)', cfg.i
 S('bundle identifier com.budgy.ch.budgy conservé', appJson.includes('"bundleIdentifier": "com.budgy.ch.budgy"'));
 S('build iOS 92 préparé pour le prochain TestFlight', appJson.includes('"buildNumber": "92"'));
 S('extension @main préservée (ITMS-90896)', read('targets/intents/BudgyIntentsExtension.swift').includes('@main'));
+S('App Intents compilés dans APP + EXTENSION par le dossier spécial _shared', 
+  ['BudgyIntents.swift', 'BudgyShared.swift', 'BudgyShortcuts.swift'].every((name) =>
+    existsSync('targets/intents/_shared/' + name) && !existsSync('targets/intents/' + name)));
+S('Intent de premier plan dans le target partagé (pas dans l’extension seule)',
+  intents.includes('static let openAppWhenRun: Bool = true') &&
+  read('targets/intents/BudgyIntentsExtension.swift').includes('AppIntentsExtension') &&
+  !read('targets/intents/BudgyIntentsExtension.swift').includes('openAppWhenRun'));
+
 S('snapshot partagé étendu rétro-compatible (champs optionnels Swift)', shared.includes('var billsCount: Int?') && shared.includes('var savedTotal: Double?') && shared.includes('var budgetSpent: Double?'));
 S('confidentialité : montants énoncés SEULEMENT si siriAmounts + non masqué + données < 36 h', intents.includes('s.siriAmounts') && intents.includes('36 * 3600') && (intents.match(/guardedSnapshot\(route:/g) || []).length >= 4);
 S('Siri ne dit jamais « enregistré » avant sauvegarde (dialogue = « confirmez »)', shared.includes('confirmez') && !intents.includes('a été enregistrée'));
@@ -229,7 +237,7 @@ console.log('\n═ CORRECTIFS FINAUX T4 — centimes Siri (port JS exact de l\'a
   U('CHF −12.75 → signe négatif préservé', chf(-12.75) === '\u221212.75');
   U('CHF 25 → entier sans décimales inutiles', chf(25) === '25');
   U('erreur binaire 0.1+0.2 → 0.30 exact (arrondi sur cents entiers)', chf(0.1 + 0.2) === '0.30');
-  const sharedSrc = read('targets/intents/BudgyShared.swift');
+  const sharedSrc = read('targets/intents/_shared/BudgyShared.swift');
   S('algorithme Swift identique (cents entiers, %02d, signe, apostrophe)', sharedSrc.includes('Int((abs(v) * 100).rounded())') && sharedSrc.includes('String(format: "%02d", rem)') && sharedSrc.includes('cents % 100') && !sharedSrc.includes('Int(v.rounded())'));
 }
 
@@ -274,7 +282,7 @@ console.log('\n═ CORRECTIFS FINAUX T4 — synchro devises/conversions ═');
 
 console.log('\n═ CORRECTIFS FINAUX T4 — réponses Siri localisées FR/DE/IT/EN ═');
 {
-  const sharedSrc = read('targets/intents/BudgyShared.swift');
+  const sharedSrc = read('targets/intents/_shared/BudgyShared.swift');
   const keys = ['openPrivacy', 'addAuth', 'addConfirm', 'budgetAnswer', 'partialSuffix', 'billsNone', 'billsOne', 'billsMany', 'billsOverdue', 'billsTotal', 'billsForeign', 'billsNext', 'savingsNone', 'savingsMain', 'savingsGoal', 'mbNoEnvelopes', 'mbMain', 'mbAvailable'];
   let allLoc = true;
   for (const k of keys) {
@@ -284,7 +292,7 @@ console.log('\n═ CORRECTIFS FINAUX T4 — réponses Siri localisées FR/DE/IT/
   S(`18 dialogues Siri localisés ×4 langues (${keys.length} clés fr/de/it/en)`, allLoc);
   S('langue pilotée par l\'app (snapshot.lang) avec repli système', sharedSrc.includes('BudgyIntentStore.loadSnapshot()?.lang') && sharedSrc.includes('Locale.preferredLanguages') && read('src/services/widgetBridge.ts').includes('lang: String(s.preferences?.language'));
   S('catalogue de chaînes (titres/paramètres) : Localizable.xcstrings en/de/it', (() => { try { const x = JSON.parse(read('targets/intents/Localizable.xcstrings')); const v = Object.values(x.strings); return x.sourceLanguage === 'fr' && v.length >= 19 && v.every((e) => e.localizations.en && e.localizations.de && e.localizations.it); } catch { return false; } })());
-  S('disponible PARTIEL énoncé par GetBudgetIntent ET en secours du budget mensuel', (read('targets/intents/BudgyIntents.swift').match(/partialSuffix/g) || []).length >= 3);
+  S('disponible PARTIEL énoncé par GetBudgetIntent ET en secours du budget mensuel', (read('targets/intents/_shared/BudgyIntents.swift').match(/partialSuffix/g) || []).length >= 3);
 }
 
 console.log('\n═ DERNIER CORRECTIF FINANCIER — devises dans les revenus, charges, dettes, budgets (exécution réelle) ═');

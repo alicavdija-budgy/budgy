@@ -118,7 +118,7 @@ S('QR disponible sur autre téléphone ET export PNG sur le même téléphone', 
 S('partage PDF/photo utilise le paramètre MIME réel et vérifie le résultat', inv.includes('await safeShareFile(res.uri, { mime:') && inv.includes('if (!shared.ok)'));
 S('iOS : fermer la fiche AVANT d’afficher une seconde modale ou partager', inv.includes('closeDetails();') && inv.includes('setTimeout(() => showQr(inv), 300)') && inv.includes('setTimeout(() => { void openOriginal(inv); }, 300)'));
 S('scanner galerie QR conserve l’image d’origine dans le vault', scan.includes('sourceUri: uri') && scan.includes('setQrSource(sourceUri ?') && scan.includes('await saveToVault(qrSource.uri, docId, qrSource.mime)'));
-S('scanner photo QR OCR conserve également le cliché d’origine', scan.includes('runOcr(norm.base64, norm.uri)') && scan.includes('sourceUri: originalUri'));
+S('scanner photo QR OCR conserve également le cliché d’origine', scan.includes('void runOcr(norm.base64!, norm.uri)') && scan.includes('sourceUri: originalUri') && scan.includes("t('documentPrivacy.ocrContinue')"));
 S('scanner image QR ne crée pas de facture si conservation de l’image impossible', scan.includes('if (!(await vaultFileExists(vaultUri)))') && scan.includes('const item = await buildInvoice(recurringId);') && scan.includes('addInvoice(item as any)'));
 
 
@@ -139,7 +139,7 @@ const cs = read('src/services/cloudSync.ts');
 const mig = readFileSync(join(root, '..', 'docs/MIGRATION_TASK3_storage_prive.sql'), 'utf8');
 S('migration additive : invoices.document_id + qr_payload', mig.includes('ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS document_id text') && mig.includes('ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS qr_payload text'));
 S('migration additive : documents.spc_payload', mig.includes('ALTER TABLE public.documents ADD COLUMN IF NOT EXISTS spc_payload text'));
-S('TABLE_FIELDS invoices transmet document_id + qr_payload', /invoices:\s*\[[^\]]*'document_id'[^\]]*'qr_payload'[^\]]*\]/.test(cs));
+S('build 92 : aucune facture privée n\'est poussée ou tirée', cs.includes('if (isPrivateDocumentTable(table)) continue;') && cs.includes('if (isPrivateDocumentTable(table)) return [];'));
 S('TABLE_FIELDS documents transmet spc_payload', /documents:\s*\[[^\]]*'spc_payload'[^\]]*\]/.test(cs));
 S('aucun binaire en colonne (pas de base64/file_uri dans TABLE_FIELDS)', !/TABLE_FIELDS[^;]*'(image_base64|pdf_base64|file_uri|pdf_uri|pages)'/s.test(cs));
 S('repli legacy SANS les nouveaux champs (compatible ancien schéma)', !/TABLE_FIELDS_LEGACY[\s\S]{0,900}qr_payload/.test(cs) && !/TABLE_FIELDS_LEGACY[\s\S]{0,900}spc_payload/.test(cs));

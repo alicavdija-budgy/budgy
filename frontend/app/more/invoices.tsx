@@ -797,7 +797,7 @@ export default function InvoicesScreen() {
             {detailHasOriginal && (
               <TouchableOpacity onPress={shareDetailOriginal} testID="invoice-detail-share-original" style={{ paddingVertical: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                 <Ionicons name="share-outline" color={theme.primary} size={22} />
-                <Text style={{ color: theme.text, fontSize: 16, flex: 1 }}>{t('invoiceDocs.shareOriginal')}</Text>
+                <Text style={{ color: theme.text, fontSize: 16, flex: 1 }}>{t('documentPrivacy.exportToFiles')}</Text>
                 <Ionicons name="chevron-forward" color={theme.textSecondary} size={18} />
               </TouchableOpacity>
             )}

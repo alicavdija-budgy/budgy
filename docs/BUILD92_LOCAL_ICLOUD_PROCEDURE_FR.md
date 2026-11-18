@@ -47,26 +47,61 @@ Cette exportation est **manuelle, pièce par pièce**. Elle n'implique ni synchr
 7. **Test de restauration iCloud réel** : uniquement sur un deuxième appareil de test / une procédure de restauration contrôlée avec copie de secours validée ; ne jamais effacer le téléphone principal juste pour tester.
 8. Vérifier les anciens documents hébergés et leurs métadonnées : ils peuvent nécessiter une **récupération locale contrôlée et volontaire**, puis une demande de suppression séparée côté Budgy. Il ne faut pas promettre qu'ils ont déjà disparu du serveur.
 
-## 5. Procédure GitHub/EAS pour construire le build 92
+## 5. Procédure réelle sur iPhone — deux PR, une construction, TestFlight privé
 
-### Prérequis
-- Examiner la **[pull request #4](https://github.com/alicavdija-budgy/budgy/pull/4)** et s'assurer que la CI iOS/Android, TypeScript, langues et tests documentaires est verte **sur le dernier SHA**.
-- Conserver les données de TestFlight déjà installées et une sauvegarde personnelle vérifiée.
-- Ne pas exécuter de migration Supabase ou de redéploiement Coolify pour cette modification de stockage, tant qu'aucun besoin technique distinct n'est attesté.
+### Prérequis vérifiés dans GitHub
 
-### Étapes depuis un iPhone, sans terminal
-1. Ouvrir GitHub, dépôt **alicavdija-budgy/budgy**, onglet **Pull requests** → **#4**, examiner les différences et résultats des tests.
-2. **Après validation seulement**, fusionner la PR dans `budgy-smart-4.0` ; vérifier que les modifications sont dans la branche utilisée par le build et noter son SHA final.
-3. GitHub → **Actions** → **EAS Build (iOS & Android)** → **Run workflow**.
-4. Sélectionner la branche **budgy-smart-4.0** (ou la branche finalisée contenant bien le code du build 92), paramètres :
-   - **platform :** `ios`
-   - **profile :** `testflight`
-   - **submit :** `false` pour le premier contrôle.
-5. Lancer l'action ; ouvrir ses logs et le détail du build EAS pour confirmer **status FINISHED**, `4.0.0 (92)`, bundle `com.budgy.ch.budgy` et SHA source attendu.
-6. Après les contrôles techniques, pour envoyer **ce** build dans TestFlight, utiliser le mécanisme de soumission lié à son **identifiant EAS exact**. La procédure existante propose `submit=true` à la relance du workflow, mais cela **reconstruit un nouveau binaire**, qu'il faut suivre séparément. Éviter toute soumission automatique « dernier build » non identifiée.
-7. Ouvrir **TestFlight** sur l'iPhone ; actualiser et installer la version **4.0.0 (92)** quand elle est disponible. Vérifier les scénarios de l'étape 4.
+- **[PR #5 : workflow EAS sécurisé](https://github.com/alicavdija-budgy/budgy/pull/5)** : doit être validée puis fusionnée dans la branche par défaut **`main`** afin que l'interface GitHub Actions propose `testflight` et utilise le **build ID exact** à la soumission. Les définitions `workflow_dispatch` et leurs champs ne sont pas automatiquement actualisés depuis une branche différente de `main`.
+- **[PR #4 : code applicatif build 92](https://github.com/alicavdija-budgy/budgy/pull/4)** : doit avoir une CI verte sur son dernier code et être fusionnée dans **`budgy-smart-4.0`**, jamais directement dans `main` pour ce lancement.
+- Les secrets EAS et les autorisations de signature Apple doivent être disponibles côté GitHub/Expo. Ne jamais communiquer ces secrets dans un message.
+- **Ne jamais supprimer l'application actuelle ni effacer les données** pour tester. Vérifier au préalable la sauvegarde iCloud personnelle.
 
-**Aucune de ces actions de fusion, construction ou soumission n'est effectuée par la rédaction de ce guide.**
+### Une seule compilation iOS, avec envoi de CE binaire vers TestFlight
+
+1. Sur l'iPhone : GitHub → **Pull requests** → valider puis **fusionner PR #5 dans `main`**. Cela ne déclenche pas de build.
+2. Valider puis **fusionner PR #4 dans `budgy-smart-4.0`** une fois tous les tests verts. Noter le SHA final de cette branche.
+3. GitHub → **Actions** → **EAS Build (iOS & Android)** → **Run workflow**. Rafraîchir la page après la fusion PR #5.
+4. Dans **Branch**, choisir précisément **`budgy-smart-4.0`** (pas `main`).
+5. Sélectionner **platform = `ios`**, **profile = `testflight`**, **submit = `true`**.
+6. Vérifier une dernière fois ces paramètres, puis lancer **Run workflow**. La construction et la soumission passent par le même job et concernent le **build EAS exact produit par cette exécution** ; pas de `--latest`.
+7. Dans les logs GitHub/Expo, confirmer le succès du **build natif**, le dépôt TestFlight, la version **4.0.0 (92)**, le bundle `com.budgy.ch.budgy` et la bonne branche source.
+8. Ouvrir **TestFlight** sur l'iPhone lorsque le binaire apparaît dans le groupe de test interne. Installer la version 92 **sans désinstaller Budgy**.
+9. **Tests manuels sur appareil réel obligatoires** (voir ci-dessous). Ne pas envoyer sur l'App Store public avant leur validation.
+
+**Pourquoi `submit=true` directement ?** La commande interne de la PR #5 soumet le binaire testé par cette construction, sans lancer un deuxième build, puis Apple le rend disponible dans TestFlight après traitement. Ce n'est **pas** une publication sur l'App Store public.
+
+Si GitHub affiche seulement `production` et pas `testflight`, **ne pas deviner et ne pas lancer** : la PR #5 n'est probablement pas encore fusionnée dans `main` ou l'interface Actions n'a pas été actualisée.
+
+### Matrice obligatoire sur un véritable iPhone
+
+| Cas à tester | Critère de validation |
+|---|---|
+| Premier lancement et compte | Compte personnel, Pro réel et navigation fonctionnent, sans perdre les données existantes |
+| Siri « Ajouter une dépense » | Aucun message « erreur interne » ; prévisualisation, validation, une seule dépense et bon calcul du solde |
+| Siri « Scanner une facture » et « Ouvrir Budgy » | L'application et le bon écran s'ouvrent sans erreur |
+| Facture QR suisse fictive | Montant CHF/EUR, IBAN/référence, document original et QR bancaire affichés ; aucun paiement sans action de l'utilisateur |
+| PDF, photo et facture sans montant | Original conservé ; facture consultable même en attente de montant |
+| Contrat scanné | Classé dans le bon dossier de Mon classeur, réouverture et partage possibles |
+| Ticket photographié et ticket ajouté manuellement | Image visible dans Tickets et reçus ; réouverture après fermeture de l'app |
+| OCR : refuser / accepter | Refus : aucune analyse distante ; acceptation : traitement annoncé et saisie vérifiable |
+| Local et hors ligne | Factures, contrats et tickets s'ouvrent sans réseau après redémarrage |
+| Déconnexion puis reconnexion | Les fichiers et toutes leurs fiches personnelles sont restaurés pour le même compte, jamais pour un autre |
+| Fichiers → iCloud Drive | PDF/image exportés volontairement, dossier choisi, document lisible depuis Fichiers |
+| Restauration iCloud | Test effectué **sur appareil de test** avec sauvegarde réelle, jamais sur le téléphone principal sans copie validée |
+| Budgets/Charges/Vie financière/Synchronisation | Aucun montant comptabilisé deux fois ; aucune donnée financière non documentaire perdue |
+| Abonnement Apple et langues | Statut Pro depuis StoreKit ; affichages FR/DE/IT/EN cohérents |
+
+### Bloquer le déploiement si
+
+- un document disparaît après déconnexion/reconnexion ou réinstallation test ;
+- Siri affiche une erreur interne ou annonce une dépense enregistrée alors qu'elle n'existe pas ;
+- un PDF/une image n'est pas lisible depuis Factures, Mon classeur ou Tickets ;
+- une analyse OCR est lancée sans consentement ;
+- le build natif Swift/Intents échoue ou l'identité/bundle/version est incorrect(e).
+
+**Important :** si le numéro **92** a déjà été envoyé et accepté par App Store Connect, une reconstruction corrigée doit utiliser le **build 93** (ou numéro ultérieur jamais soumis) : Apple n'autorise pas la réutilisation d'un build number pour une nouvelle soumission.
+
+**Aucune action de fusion, construction, suppression ou soumission n'est réalisée automatiquement par ce document.**
 
 ## 6. Politique de migration des anciennes pièces cloud
 

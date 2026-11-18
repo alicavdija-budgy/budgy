@@ -16,7 +16,7 @@ const C = {
   bg: '#0A0F1C', card: '#131C2D', border: '#26334A',
   title: '#F3F6FA', muted: '#A3AEC0', green: '#34D399', gold: '#F5C46B',
 };
-const PICTOS = ['clock-outline', 'analytics-outline', 'wallet-outline'] as const;
+const PICTOS = ['time-outline', 'analytics-outline', 'wallet-outline'] as const;
 
 export default function BudgyUserGuide() {
   const router = useRouter();
@@ -118,11 +118,11 @@ const st = StyleSheet.create({
   h2: { fontSize: 21, fontWeight: '800', color: C.title, marginBottom: 12 },
   paragraph: { color: C.muted, fontSize: 14, lineHeight: 21 },
   win: { flexDirection: 'row', gap: 14, borderBottomWidth: 1, borderColor: C.border, paddingVertical: 14, alignItems: 'flex-start' },
-  winTitle: { color: C.title, fontSize: 15, fontWeight: '750', marginBottom: 4 },
+  winTitle: { color: C.title, fontSize: 15, fontWeight: '700', marginBottom: 4 },
   winCopy: { color: C.muted, fontSize: 13, lineHeight: 20 },
   card: { backgroundColor: C.card, borderRadius: 16, borderWidth: 1, borderColor: C.border, marginBottom: 11, overflow: 'hidden' },
   cardHeader: { padding: 17, flexDirection: 'row', alignItems: 'center', gap: 10 },
-  sectionTitle: { color: C.title, fontWeight: '750', fontSize: 15, marginBottom: 7 },
+  sectionTitle: { color: C.title, fontWeight: '700', fontSize: 15, marginBottom: 7 },
   sectionSummary: { color: C.muted, fontSize: 13, lineHeight: 19 },
   expanded: { paddingHorizontal: 17, paddingBottom: 17, borderTopWidth: 1, borderColor: C.border, paddingTop: 13 },
   miniHeading: { fontSize: 12, fontWeight: '800', color: C.green, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 },

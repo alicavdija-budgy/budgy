@@ -28,6 +28,9 @@ import { EXPENSE_CATEGORIES } from '../../src/data/swiss-data';
 import { scheduleDeadlineRemindersForEntity } from '../../src/services/notifications';
 import type { DocumentCategory } from '../../src/types';
 import { normalizeChfAmount } from '../../src/utils/amount';
+import * as FileSystem from 'expo-file-system/legacy';
+import { assertFileAcceptable, saveToVault, vaultFileExists, VaultError } from '../../src/lib/fileVault';
+import { categoryForContractFolder, folderForContractCategory, tagsWithContractFolder } from '../../src/lib/contractFolders';
 import { useTranslation } from '../../src/hooks/useTranslation';
 
 const CONTRACT_TYPE_KEYS = [
@@ -37,6 +40,8 @@ const CONTRACT_TYPE_KEYS = [
   { id: 'transports', tKey: 'typeTransport', emoji: '🚗' },
   { id: 'sante', tKey: 'typeHealth', emoji: '💊' },
   { id: 'energie', tKey: 'typeEnergy', emoji: '⚡' },
+  { id: 'banking', tKey: 'typeBanking', emoji: '🏦' },
+  { id: 'employment', tKey: 'typeEmployment', emoji: '💼' },
   { id: 'autre', tKey: 'typeOther', emoji: '📄' },
 ] as const;
 
@@ -71,7 +76,7 @@ export default function AddContractScreen() {
     source?: string; // 'scan' | 'pdf' | 'manual' | 'email'
   }>();
 
-  const { addContract, addDocument } = useStore();
+  const { addContract, addDocument, queueUpload } = useStore();
   const source = params.source || 'manual';
   const hasExtractedData = source !== 'manual' && (
     !!params.title || !!params.issuer || !!params.amount || !!params.dueDate
@@ -81,7 +86,18 @@ export default function AddContractScreen() {
   const [title, setTitle] = useState(params.title || '');
   const [issuer, setIssuer] = useState(params.issuer || '');
   const [amount, setAmount] = useState(params.amount || '');
-  const [category, setCategory] = useState(params.category || 'abonnements');
+  const [category, setCategory] = useState(() => {
+    const suggested = folderForContractCategory(params.category);
+    const legacy = params.category || '';
+    return CONTRACT_TYPE_KEYS.some((c) => c.id === legacy)
+      ? legacy
+      : suggested === 'insurance' ? 'assurances'
+        : suggested === 'health' ? 'sante'
+          : suggested === 'housing' ? 'logement'
+            : suggested === 'transport' ? 'transports'
+              : suggested === 'energy' ? 'energie'
+                : suggested === 'other' ? 'autre' : suggested;
+  });
   const [startDate, setStartDate] = useState(params.startDate || '');
   const [dueDate, setDueDate] = useState(params.dueDate || '');
   // No auto-renewal or notice period can be inferred from a scan.
@@ -91,7 +107,8 @@ export default function AddContractScreen() {
   const [editing, setEditing] = useState(!hasExtractedData); // start in edit mode if manual
   const [saving, setSaving] = useState(false);
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
+    if (saving) return;
     const tt = title.trim();
     // The price is optional for contracts; zero is a storage sentinel for
     // 'not specified', not a verified recurring financial obligation.
@@ -112,29 +129,53 @@ export default function AddContractScreen() {
       const expirationDate = dueDate.trim() || '—';
       const noticeP = parseInt(noticePeriod) || 0;
 
-      // Save linked document into Mon Classeur if we have a photo
+      // Un contrat scanné garde sa pièce originale dans le vault de l'app.
+      // Ne jamais enregistrer un contrat comme « avec fichier » si la copie
+      // durable échoue. Le scan caméra transmet une URI, pas du base64 via la route.
       let documentId: string | undefined;
       if (params.photoUri) {
-        documentId = `doc_${Date.now()}`;
-        const docCategory: DocumentCategory =
-          category === 'sante' ? 'health'
-          : category === 'assurances' ? 'insurance'
-          : category === 'logement' ? 'other'
-          : 'contracts';
-        addDocument({
-          id: documentId,
-          title: tt,
-          category: docCategory,
-          documentType: 'contract',
-          importedAt: Date.now(),
-          imageBase64: params.photoUri,
-          pages: [params.photoUri],
-          tags: [issuer.trim(), category, 'contrat'].filter(Boolean),
-          note: notes.trim() || undefined,
-          expiresAt: toISODate(expirationDate) || undefined,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        });
+        const docId = `doc_${Date.now()}`;
+        let source = params.photoUri;
+        let temporarySource: string | undefined;
+        const mime = source.toLowerCase().includes('.pdf') ? 'application/pdf'
+          : source.startsWith('data:image/png') ? 'image/png'
+          : 'image/jpeg';
+        try {
+          if (source.startsWith('data:')) {
+            const match = /^data:(image\/(?:jpeg|png));base64,([A-Za-z0-9+/=]+)$/.exec(source);
+            if (!match) throw new VaultError('UNSUPPORTED_FORMAT');
+            const ext = match[1] === 'image/png' ? 'png' : 'jpg';
+            temporarySource = `${FileSystem.cacheDirectory}${docId}.${ext}`;
+            await FileSystem.writeAsStringAsync(temporarySource, match[2], { encoding: FileSystem.EncodingType.Base64 });
+            source = temporarySource;
+          }
+          await assertFileAcceptable(source, mime);
+          const vaultUri = await saveToVault(source, docId, mime);
+          if (!(await vaultFileExists(vaultUri))) throw new VaultError('SAVE_FAILED');
+          const folder = folderForContractCategory(category);
+          const isPdf = mime === 'application/pdf';
+          const created = Date.now();
+          addDocument({
+            id: docId,
+            title: tt,
+            category: categoryForContractFolder(folder),
+            documentType: 'contract',
+            importedAt: created,
+            imageBase64: '',
+            fileUri: isPdf ? undefined : vaultUri,
+            pdfUri: isPdf ? vaultUri : undefined,
+            mimeType: mime,
+            tags: tagsWithContractFolder([issuer.trim(), 'contrat'].filter(Boolean), folder),
+            note: notes.trim() || undefined,
+            expiresAt: toISODate(expirationDate) || undefined,
+            createdAt: created,
+            updatedAt: created,
+          });
+          queueUpload(docId);
+          documentId = docId;
+        } finally {
+          if (temporarySource) await FileSystem.deleteAsync(temporarySource, { idempotent: true }).catch(() => {});
+        }
       }
 
       addContract({
@@ -150,7 +191,7 @@ export default function AddContractScreen() {
         autoRenew,
         noticePeriod: noticeP > 0 ? noticeP : undefined,
         notes: notes.trim() || undefined,
-        photoUri: params.photoUri,
+        // La pièce existe via documentId ; ne pas dupliquer de photo temporaire.
         documentId,
       });
 
@@ -177,7 +218,11 @@ export default function AddContractScreen() {
         }]
       );
     } catch (e: any) {
-      Alert.alert(t('addContract.errorTitle'), e?.message || t('addContract.saveError'));
+      const code = e instanceof VaultError ? e.code : '';
+      Alert.alert(
+        code ? t('contractsV2.fileErrorTitle') : t('addContract.errorTitle'),
+        code ? t(`contractsV2.${code}`) : t('addContract.saveError'),
+      );
     } finally {
       setSaving(false);
     }

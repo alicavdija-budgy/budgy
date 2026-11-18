@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────
-// TÂCHE 3 — Stockage PRIVÉ des pièces jointes dans Supabase Storage.
+// HISTORIQUE (<= build 91) — Supabase Storage. Build 92: upload désactivé ; récupération lecture-seule d'anciennes pièces conservée.
 //  • Bucket privé `user-documents` (créé par docs/MIGRATION_TASK3_storage_prive.sql,
 //    NON appliquée en production : tant que le bucket n'existe pas, l'envoi
 //    échoue proprement et le fichier reste dans la file durable).
@@ -12,6 +12,7 @@
 import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import { getSupabase } from '../lib/supabase';
+import { PRIVATE_DOCUMENTS_LOCAL_ONLY } from '../lib/documentPrivacy';
 import { useStore } from '../stores/useStore';
 import { storagePathFor, normalizeUploadQueue, queueForAccount } from '../lib/syncMerge';
 
@@ -56,6 +57,9 @@ export type UploadResult = { ok: boolean; error?: string; permanent?: boolean };
  * aucune « copie cloud » n'est annoncée avant d'exister réellement.
  */
 export async function uploadDocumentToCloud(docId: string): Promise<UploadResult> {
+  // Build 92: no binary or base64 leaves the user's private vault.
+  // Keeping legacy read-only recovery below protects earlier synced files.
+  if (PRIVATE_DOCUMENTS_LOCAL_ONLY) return { ok: false, error: 'local-only', permanent: true };
   const s = useStore.getState();
   const doc = s.documents.find((d) => d.id === docId);
   if (!doc) return { ok: false, error: 'not-found', permanent: true };
@@ -137,6 +141,12 @@ const MAX_ATTEMPTS_PER_SESSION = 5;
  *    document est marqué `uploadError` (visible, jamais silencieux).
  */
 export async function processUploadQueue(): Promise<{ sent: number; left: number }> {
+  if (PRIVATE_DOCUMENTS_LOCAL_ONLY) {
+    // Old queued uploads (from build <= 91) are cancelled locally. Nothing
+    // remotely stored is deleted and no network access is performed.
+    if (useStore.getState().pendingUploads.length) useStore.setState({ pendingUploads: [] });
+    return { sent: 0, left: 0 };
+  }
   const left = () => useStore.getState().pendingUploads.length;
   if (processing) return { sent: 0, left: left() };
   processing = true;

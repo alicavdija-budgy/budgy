@@ -366,7 +366,8 @@ export default function InvoicesScreen() {
       const res = await ensureLocalCopy(d.id);
       if (!res) { Alert.alert(t('invoiceDocs.noDocTitle'), t('docSpaces.recoverFailed')); return; }
       const isPdf = (d.mimeType || '').includes('pdf') || res.uri.toLowerCase().includes('.pdf');
-      await safeShareFile(res.uri, { mimeType: d.mimeType || (isPdf ? 'application/pdf' : 'image/jpeg'), name: d.title || 'facture', dialogTitle: d.title } as any);
+      const shared = await safeShareFile(res.uri, { mime: d.mimeType || (isPdf ? 'application/pdf' : 'image/jpeg'), name: d.title || 'facture', dialogTitle: d.title });
+       if (!shared.ok) Alert.alert(t('invoiceDocs.noDocTitle'), t('docSpaces.recoverFailed'));
     } finally { setRecoveringDoc(false); }
   };
   const showQr = (inv: any) => {
@@ -403,6 +404,24 @@ export default function InvoicesScreen() {
     } finally {
       setSharingQr(false);
     }
+  };
+
+  // Les modales natives ne doivent pas s'empiler sur iOS : fermer la fiche
+  // avant de présenter le PDF, la feuille de partage ou le QR bancaire.
+  const openDetailOriginal = () => {
+    const inv = detailActionsInvoice;
+    closeDetails();
+    if (inv) setTimeout(() => { void openOriginal(inv); }, 300);
+  };
+  const shareDetailOriginal = () => {
+    const inv = detailActionsInvoice;
+    closeDetails();
+    if (inv) setTimeout(() => { void shareOriginal(inv); }, 300);
+  };
+  const showDetailQr = () => {
+    const inv = detailActionsInvoice;
+    closeDetails();
+    if (inv) setTimeout(() => showQr(inv), 300);
   };
 
   // §6 — « Montant à compléter » : documents facture conservés SANS obligation
@@ -769,28 +788,28 @@ export default function InvoicesScreen() {
               </TouchableOpacity>
             </View>
             {detailHasOriginal && (
-              <TouchableOpacity onPress={() => { if (detailActionsInvoice) void openOriginal(detailActionsInvoice); }} testID="invoice-detail-open-original" style={{ paddingVertical: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <TouchableOpacity onPress={openDetailOriginal} testID="invoice-detail-open-original" style={{ paddingVertical: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                 <Ionicons name="document-text-outline" color={theme.primary} size={22} />
                 <Text style={{ color: theme.text, fontSize: 16, flex: 1 }}>{t('invoiceDocs.openOriginal')}</Text>
                 <Ionicons name="chevron-forward" color={theme.textSecondary} size={18} />
               </TouchableOpacity>
             )}
             {detailHasOriginal && (
-              <TouchableOpacity onPress={() => { if (detailActionsInvoice) void shareOriginal(detailActionsInvoice); }} testID="invoice-detail-share-original" style={{ paddingVertical: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <TouchableOpacity onPress={shareDetailOriginal} testID="invoice-detail-share-original" style={{ paddingVertical: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                 <Ionicons name="share-outline" color={theme.primary} size={22} />
                 <Text style={{ color: theme.text, fontSize: 16, flex: 1 }}>{t('invoiceDocs.shareOriginal')}</Text>
                 <Ionicons name="chevron-forward" color={theme.textSecondary} size={18} />
               </TouchableOpacity>
             )}
             {detailHasQr && (
-              <TouchableOpacity onPress={() => { if (detailActionsInvoice) showQr(detailActionsInvoice); }} testID="invoice-detail-show-qr" style={{ paddingVertical: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <TouchableOpacity onPress={showDetailQr} testID="invoice-detail-show-qr" style={{ paddingVertical: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                 <Ionicons name="qr-code-outline" color={theme.primary} size={22} />
                 <Text style={{ color: theme.text, fontSize: 16, flex: 1 }}>{t('invoiceDocs.showQrForBank')}</Text>
                 <Ionicons name="chevron-forward" color={theme.textSecondary} size={18} />
               </TouchableOpacity>
             )}
             {detailDocumentId && (
-              <TouchableOpacity onPress={() => { setCompletingId(detailDocumentId); setCompleteAmt(''); closeDetails(); }} testID="invoice-detail-complete-amount" style={{ paddingVertical: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <TouchableOpacity onPress={() => { const id = detailDocumentId; closeDetails(); setTimeout(() => { setCompletingId(id); setCompleteAmt(''); }, 300); }} testID="invoice-detail-complete-amount" style={{ paddingVertical: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                 <Ionicons name="create-outline" color={theme.warning} size={22} />
                 <Text style={{ color: theme.text, fontSize: 16, flex: 1 }}>{t('invoiceDocs.completeTitle')}</Text>
               </TouchableOpacity>

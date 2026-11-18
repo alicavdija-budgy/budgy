@@ -218,13 +218,15 @@ enum BudgyIntentStore {
     }
 
     /// Ajoute à la file (persistée, plafonnée) SANS toucher au solde affiché.
-    /// REFUSE l'ajout si aucun compte n'est identifiable (pas de snapshot) :
-    /// aucune dépense d'origine non vérifiable ne doit pouvoir être proposée
-    /// à n'importe quel compte — Budgy s'ouvrira pour authentification.
+    /// Sans snapshot d'un compte, préserve la dictée comme BROUILLON non lié
+    /// ('unscoped'). Budgy ne l'affiche qu'à l'ouverture explicite demandée
+    /// par Siri, sous 5 minutes, et rien n'est enregistré sans confirmation.
+    /// Jamais d'association automatique à un autre compte.
     @discardableResult
     static func enqueue(amount: Double, label: String) -> Bool {
         guard let d = BudgyShared.defaults else { return false }
-        guard let scope = loadSnapshot()?.scope, !scope.isEmpty else { return false }
+        let snapshotScope = loadSnapshot()?.scope ?? ""
+        let scope = snapshotScope.hasPrefix("user:") ? snapshotScope : "unscoped"
         var list = pending()
         guard list.count < 20 else { return false }
         list.append(PendingExpense(

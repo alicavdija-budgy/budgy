@@ -198,3 +198,5 @@ iCloud Drive n'est revendiqué dans le build 92.
 La procédure opérationnelle et les réserves sur l'OCR externe figurent dans
 [BUILD92_LOCAL_ICLOUD_PROCEDURE_FR.md](BUILD92_LOCAL_ICLOUD_PROCEDURE_FR.md).
 Ne pas déployer la production en se fondant sur cet addendum.
+
+**Gate final de la PR #4 :** exécuter `test-document-privacy`, le test de stabilité des 17 lignes du menu et le contrôle Expo iOS/Android sur le SHA exact ; la validation native iCloud Backup et Fichiers/iCloud Drive reste à faire sur appareil Apple avant diffusion.

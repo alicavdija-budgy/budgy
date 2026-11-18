@@ -38,6 +38,7 @@ import type { Contract } from '../../src/types';
 import { Card, Button } from '../../src/components/ui';
 import { humanizeError } from '../../src/lib/errorSanitizer';
 import { saveToVault, assertFileAcceptable, vaultFileExists, VaultError } from '../../src/lib/fileVault';
+import { folderForContractCategory, categoryForContractFolder, tagsWithContractFolder } from '../../src/lib/contractFolders';
 import { useTranslation } from '../../src/hooks/useTranslation';
 import { getApiLocale } from '../../src/utils/apiLocale';
 
@@ -538,14 +539,14 @@ export default function ImportInvoiceScreen() {
         addDocument({
           id: docId,
           title: meta.title,
-          category: 'contracts',
-          imageBase64: isPdf ? '' : (originalUri.startsWith('data:') ? originalUri : ''),
+          category: categoryForContractFolder(folderForContractCategory(meta.category)),
+          imageBase64: '',
           pdfUri: isPdf ? vaultUri : undefined,
           fileUri: isPdf ? undefined : vaultUri,
           mimeType: mime,
           documentType: 'contract', // TÂCHE 3 — espace Contrats
           importedAt: now,
-          tags: ['contract', 'import'],
+          tags: tagsWithContractFolder(['contract', 'import'], folderForContractCategory(meta.category)),
           note: t('emailImport.importedByAiNote'),
           createdAt: now,
           updatedAt: now,
@@ -567,7 +568,7 @@ export default function ImportInvoiceScreen() {
       startDate: meta.startDate,
       urgent: false,
       autoRenew: undefined,
-      category: meta.category,
+      category: folderForContractCategory(meta.category),
       createdAt: now,
       notes: t('emailImport.importedByAiNote'),
       documentId,

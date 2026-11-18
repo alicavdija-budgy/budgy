@@ -498,24 +498,33 @@ ${pageDataUrls.map((src, i) => `
 
     setGenerating(true);
     try {
+      const newDocId = `doc_${Date.now()}`;
       let pdfUri: string | undefined;
       let pdfBase64: string | undefined;
       if (Platform.OS !== 'web') {
         const r = await generatePdf(title.trim(), pages);
+        await assertFileAcceptable(r.pdfUri, 'application/pdf');
+        pdfUri = await saveToVault(r.pdfUri, newDocId, 'application/pdf');
+        if (!(await vaultFileExists(pdfUri))) throw new VaultError('SAVE_FAILED');
+      } else {
+        const r = await generatePdf(title.trim(), pages);
         pdfUri = r.pdfUri;
         pdfBase64 = r.pdfBase64;
       }
+      const typedContract = typeFilter === 'contract';
       const tags = tagsInput.split(',').map((t) => t.trim()).filter(Boolean);
-      const newDocId = `doc_${Date.now()}`;
       addDocument({
         id: newDocId,
         title: title.trim(),
-        category,
-        imageBase64: pages[0],            // first page as thumbnail
-        pages,                             // all pages
+        category: typedContract ? categoryForContractFolder(scanFolder) : category,
+        documentType: typedContract ? 'contract' : 'unclassified',
+        mimeType: 'application/pdf',
+        importedAt: Date.now(),
+        imageBase64: pages[0],            // thumbnail (local)
+        pages,                             // pages de travail (local)
         pdfUri,
         pdfBase64,
-        tags,
+        tags: typedContract ? tagsWithContractFolder(tags, scanFolder) : tags,
         note: note.trim() || undefined,
         expiresAt: expiresAt.trim() || undefined,
         createdAt: Date.now(),
@@ -527,7 +536,7 @@ ${pageDataUrls.map((src, i) => `
       try { await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
       // reset
       setTitle(''); setNote(''); setExpiresAt(''); setTagsInput('');
-      setPages([]); setMode('list');
+      setPages([]); setScanFolder('other'); setMode('list');
       Alert.alert(t('documents.pdfCreatedTitle'), t('documents.pdfCreatedBody', { title: title.trim(), n: pages.length, s: pages.length > 1 ? 's' : '' }));
     } catch (e: any) {
       Alert.alert(t('documents.errorTitle'), e?.message || t('documents.pdfErrorBody'));

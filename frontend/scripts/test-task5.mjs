@@ -90,7 +90,7 @@ S('scanner image QR ne crée pas de facture si conservation de l’image impossi
 
 console.log('\n═ TÂCHE 5 §6 — factures sans montant ═');
 S('JAMAIS de facture CHF 0 (montant absent → document « à compléter »)', imp.includes("toComplete: true") && !imp.includes('amount: 0,'));
-S('scanner : conserver sans montant (document seul)', scan.includes("tags: ['invoice', 'qr', 'toComplete']"));
+S('scanner : conserver le QR et la photo sans montant, sans obligation', scan.includes("await persistQrDocument(['invoice', 'qr', 'toComplete'])") && scan.includes('spcPayload: qrRaw') && scan.includes('router.back()'));
 S('obligation créée UNIQUEMENT au montant confirmé', inv.includes('const amt = normalizeChfAmount(completeAmt)') && inv.includes("amt === null || amt <= 0"));
 S('complétion : IBAN/référence repris du payload SPC (jamais inventés)', inv.includes('parseSwissQrBill(payload)') && inv.includes('} catch {}'));
 S('section « Montant à compléter » visible dans Factures', inv.includes('pendingAmountDocs.map'));

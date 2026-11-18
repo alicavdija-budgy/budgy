@@ -24,7 +24,7 @@ const SUPPORTED_EXT = ['pdf', 'jpg', 'jpeg', 'png', 'heic', 'heif', 'webp'];
 const KNOWN_UNSUPPORTED = ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'zip'];
 
 export function extOf(uriOrName: string, mime?: string): string {
-  const m = (mime || '').toLowerCase();
+  const m = /\/Documents\/vault\/([^?#]+)$/.exec(uri);
   if (m === 'application/pdf') return 'pdf';
   if (m.startsWith('image/')) {
     const sub = m.slice(6);

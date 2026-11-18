@@ -43,7 +43,9 @@ export default function WidgetSync() {
 
     const consumeNative = () => {
       const route = popPendingRoute();
-      const pending = peekPendingExpenses();
+      // The unscoped draft is visible ONLY after Siri explicitly opens the
+      // quick-add route. It still requires confirmation in Budgy.
+      const pending = peekPendingExpenses(route === 'quick-add');
       if (pending.length > 0) {
         const e = pending[0];
         // Une seule présentation par dépense dictée : jamais de double push

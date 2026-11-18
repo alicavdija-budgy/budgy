@@ -368,7 +368,15 @@ export default function RecurringScreen() {
                 >
                 <Card style={[styles.recCard, !rec.active && styles.recCardInactive]}>
                   <View style={styles.recTopRow}>
-                    <BrandLogo merchant={rec.title} size="md" fallbackColor={catColorOf(rec.category)} />
+                    {/^(assurance|assurances|assurance maladie)$/i.test(rec.title.trim()) ? (
+                  // Generic "Assurance" is not an insurer. Never attach Assura
+                  // or the OFSP/Confederation logo to a private payment.
+                  <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: '#183C42', alignItems: 'center', justifyContent: 'center' }}>
+                    <Ionicons name="shield-checkmark-outline" size={25} color="#34D399" />
+                  </View>
+                ) : (
+                  <BrandLogo merchant={rec.title} size="md" fallbackColor={catColorOf(rec.category)} />
+                )}
                     <View style={styles.recInfo}>
                       <View style={styles.recTitleRow}>
                         <Text style={styles.recTitle}>{rec.title}</Text>

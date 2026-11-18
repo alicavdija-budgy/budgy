@@ -137,7 +137,11 @@ export default function InvoicesScreen() {
       return;
     }
     const id = `inv_${Date.now()}`;
-    const amount = parseFloat(newInvoice.amount);
+    const amount = normalizeChfAmount(newInvoice.amount);
+    if (amount === null) {
+      Alert.alert(t('invoices.errorTitle'), t('importErrors.amountInvalid'));
+      return;
+    }
     addInvoice({
       id,
       title: newInvoice.title,
@@ -284,7 +288,11 @@ export default function InvoicesScreen() {
 
   const handleEditInvoiceSubmit = (values: Record<string, any>) => {
     if (!editingInvoice) return;
-    const amount = parseFloat(String(values.amount).replace(',', '.')) || 0;
+    const amount = normalizeChfAmount(values.amount);
+    if (amount === null) {
+      Alert.alert(t('invoices.errorTitle'), t('importErrors.amountInvalid'));
+      return;
+    }
     updateInvoice(editingInvoice.id, {
       title: String(values.title || '').trim() || editingInvoice.title,
       issuer: String(values.issuer || '').trim() || editingInvoice.issuer,

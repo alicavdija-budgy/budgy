@@ -25,7 +25,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { apiFetchJson } from '../../src/lib/network';
 import { normalizeImageForUpload } from '../../src/lib/imageUpload';
 import { resolveImportMime } from '../../src/lib/importMime';
-import { parseSwissQrBill } from '../../src/services/qrBill';
+import { parseSwissQrBill, QrBillError } from '../../src/services/qrBill';
 import { normalizeChfAmount } from '../../src/utils/amount';
 import { findInvoiceDuplicate } from '../../src/lib/invoiceDocs';
 import * as ImagePicker from 'expo-image-picker';
@@ -266,7 +266,26 @@ export default function ImportInvoiceScreen() {
             confidence: 1,
           });
           return;
-        } catch {
+        } catch (e: any) {
+          // A decoded SPC payload can fail a field check (IBAN, reference,
+          // required lines, etc). That does NOT prove the PDF is blurry.
+          // Keep the original document available for manual review rather
+          // than stopping the import and losing the user-selected file.
+          const code = e instanceof QrBillError ? e.code : 'unknown';
+          console.warn('[email-import] Swiss QR validation failed:', code);
+          setPendingFile({ uri: uriOrPath, mime });
+          setShowManualCt(false);
+          setManualCt((m) => ({ ...m, title: originalName || m.title }));
+          setResult({
+            success: false,
+            document_type: 'invoice',
+            _failedOcr: true,
+            _qrValidationCode: code,
+            _source: 'qr',
+            _originalUri: uriOrPath,
+            _mime: mime,
+            _errorMessage: 'QR_VALIDATION_FAILED',
+          });
           Alert.alert(t('importErrors.qrInvalidTitle'), t('importErrors.qrInvalidBody'));
           return;
         }
@@ -963,7 +982,10 @@ export default function ImportInvoiceScreen() {
               </TouchableOpacity>
             </View>
             <Text style={styles.tipsText}>
-              {mode === 'contract' ? t('emailImport.importFailedFallback') : t('importErrors.extractFailedBody')}
+              {result._qrValidationCode ? t('importErrors.qrInvalidBody')
+                : result._errorMessage === 'PDF_RENDER_FAILED' ? t('importErrors.pdfReadBody')
+                : result._errorMessage === 'LLM_NOT_CONFIGURED' ? t('importErrors.serviceUnavailableBody')
+                : mode === 'contract' ? t('emailImport.importFailedFallback') : t('importErrors.extractFailedBody')}
             </Text>
             {!showManualCt ? (
               <TouchableOpacity

@@ -125,11 +125,11 @@ jobs:
             '| EAS projectId:', a.extra?.eas?.projectId);
           if (process.env.BUDGY_PROFILE === 'testflight' &&
               ['ios','all'].includes(process.env.BUDGY_PLATFORM)) {
-            if (a.version !== '4.0.0' || a.ios?.buildNumber !== '92' ||
+            if (a.version !== '4.0.0' || a.ios?.buildNumber !== '93' ||
                 a.ios?.bundleIdentifier !== 'com.budgy.ch.budgy') {
-              throw new Error('Build TestFlight refusé : attendu Budgy 4.0.0 (92) / com.budgy.ch.budgy. Fusionnez la PR #4 avant de lancer EAS.');
+              throw new Error('Build TestFlight refusé : attendu Budgy 4.0.0 (93) / com.budgy.ch.budgy. Fusionnez la PR #4 avant de lancer EAS.');
             }
-            console.log('✅ Identity gate: Budgy iOS 4.0.0 (92)');
+            console.log('✅ Identity gate: Budgy iOS 4.0.0 (93)');
           }
           NODE
 

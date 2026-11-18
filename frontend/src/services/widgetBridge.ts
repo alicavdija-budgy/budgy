@@ -68,6 +68,10 @@ if (Platform.OS === 'ios') {
 export const widgetBridgeAvailable = () => storage !== null;
 
 function activeScope(): string {
+  // An authenticated account must NEVER publish a guest-scoped Siri snapshot.
+  // After cold start alerts hydration may temporarily still report 'guest'.
+  const uid = useStore.getState().user?.id;
+  if (uid) return `user:${uid}`;
   try { return useAlertsStore.getState().activeScope || 'guest'; } catch { return 'guest'; }
 }
 
@@ -189,7 +193,7 @@ export async function clearWidgetData(): Promise<void> {
 }
 
 /** Dépenses dictées à Siri pour le compte ACTIF uniquement (sans les retirer). */
-export function peekPendingExpenses(): PendingExpense[] {
+export function peekPendingExpenses(allowUnscopedSiriDraft = false): PendingExpense[] {
   if (!storage) return [];
   try {
     const raw = storage.get(PENDING_KEY);
@@ -205,8 +209,13 @@ export function peekPendingExpenses(): PendingExpense[] {
     if (kept.length !== list.length) {
       try { storage.set(PENDING_KEY, JSON.stringify(kept)); } catch {}
     }
+    const now = Date.now() / 1000;
     return kept.filter(
-      (e) => e && typeof e.id === 'string' && e.amount > 0 && e.scope === scope,
+      (e) => e && typeof e.id === 'string' && e.amount > 0 &&
+        (e.scope === scope ||
+          // Only a Siri-triggered explicit open may show a draft without a
+          // verified account scope. Never auto-book; quick-add confirms first.
+          (allowUnscopedSiriDraft && e.scope === 'unscoped' && now - e.createdAt < 5 * 60)),
     );
   } catch {
     return [];

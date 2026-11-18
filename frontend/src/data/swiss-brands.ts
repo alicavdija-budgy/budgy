@@ -145,9 +145,23 @@ export const SWISS_BRANDS: Brand[] = [
 export function findBrand(text: string): Brand | null {
   if (!text) return null;
   const t = text.toLowerCase();
+  // Match complete brand tokens, not substrings of ordinary category names:
+  // "Assurance" is NOT "Assura", "taxi max" is NOT "HBO Max".
+  // Unicode-aware boundaries also protect accented Swiss merchant names.
+  const isAlnum = (c: string) => /[\p{L}\p{N}]/u.test(c);
   for (const b of SWISS_BRANDS) {
-    for (const kw of b.keywords) {
-      if (t.includes(kw)) return b;
+    for (const raw of b.keywords) {
+      const kw = raw.trim().toLowerCase();
+      if (!kw) continue;
+      let from = 0;
+      while (from < t.length) {
+        const pos = t.indexOf(kw, from);
+        if (pos < 0) break;
+        const prev = pos ? t[pos - 1] : '';
+        const next = t[pos + kw.length] || '';
+        if ((!prev || !isAlnum(prev)) && (!next || !isAlnum(next))) return b;
+        from = pos + 1;
+      }
     }
   }
   return null;

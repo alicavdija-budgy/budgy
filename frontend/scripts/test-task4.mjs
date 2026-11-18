@@ -120,7 +120,7 @@ S('Siri : libellés conservent le jeton obligatoire appName',
 
 S('App Group group.com.budgy.ch.budgy (entitlements + stockage partagé)', cfg.includes("'group.com.budgy.ch.budgy'") && shared.includes('"group.com.budgy.ch.budgy"'));
 S('bundle identifier com.budgy.ch.budgy conservé', appJson.includes('"bundleIdentifier": "com.budgy.ch.budgy"'));
-S('build iOS 92 préparé pour le prochain TestFlight', appJson.includes('"buildNumber": "92"'));
+S('build iOS 93 préparé pour le prochain TestFlight', appJson.includes('"buildNumber": "93"'));
 S('extension @main préservée (ITMS-90896)', read('targets/intents/BudgyIntentsExtension.swift').includes('@main'));
 S('App Intents compilés dans APP + EXTENSION par le dossier spécial _shared', 
   ['BudgyIntents.swift', 'BudgyShared.swift', 'BudgyShortcuts.swift'].every((name) =>

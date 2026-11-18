@@ -1,0 +1,89 @@
+name: Diagnose failed Budgy iOS 92 EAS build (READ ONLY)
+on:
+  pull_request:
+    types: [opened, synchronize]
+    branches: [budgy-smart-4.0]
+    paths:
+      - '.github/workflows/eas-ios92-diagnostic.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect-eas-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    defaults:
+      run:
+        working-directory: frontend
+        shell: bash
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      EAS_NO_VCS: '1'
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Confirm private Expo authentication configured
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo 'EXPO_TOKEN is not configured for this CI run'
+            exit 1
+          fi
+      - name: Install standalone EAS CLI for read-only inspection
+        run: npm install --global eas-cli@latest --no-audit --no-fund
+      - name: Read failed EAS build 92 metadata (NO EAS build or submit)
+        run: |
+          eas build:view 7d2711ab-6057-475a-84ee-9b5480972d0c --json > "$RUNNER_TEMP/budgy-build92.json"
+          node <<'NODE'
+          const fs = require('fs');
+          const b = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + '/budgy-build92.json', 'utf8'));
+          const safe = (s) => String(s || '').replace(/https?:\/\/\S+/g, '[URL]').replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi,'[EMAIL]').slice(0,1800);
+          const summary = {
+            id: b.id,
+            status: b.status,
+            platform: b.platform,
+            appVersion: b.appVersion,
+            appBuildVersion: b.appBuildVersion,
+            errorCode: b.error?.errorCode || b.errorCode || null,
+            errorMessage: safe(b.error?.message || b.errorMessage || b.message || ''),
+            logFields: Object.keys(b).filter(k => /log/i.test(k))
+          };
+          console.log('EAS BUILD 92 SUMMARY (NO SIGNED URLS / NO TOKENS)');
+          console.log(JSON.stringify(summary, null, 2));
+          const all = [];
+          for (const key of Object.keys(b).filter(k => /log/i.test(k))) {
+            const v = b[key];
+            if (typeof v === 'string') all.push(v);
+            else if (Array.isArray(v)) {
+              for (const f of v) {
+                if (typeof f === 'string') all.push(f);
+                else if (f && typeof f === 'object') all.push(f.url, f.uri, f.signedUrl);
+              }
+            } else if (v && typeof v === 'object') all.push(v.url, v.uri, v.signedUrl);
+          }
+          const urls = [...new Set(all.filter(x => typeof x === 'string' && x.startsWith('https://')))].slice(0,12);
+          const allowedHost = host => host === 'expo.dev' || host.endsWith('.expo.dev') ||
+            host === 'storage.googleapis.com' || host.endsWith('.googleapis.com') ||
+            host === 's3.amazonaws.com' || host.endsWith('.amazonaws.com') || host.endsWith('.cloudfront.net');
+          (async () => {
+            for (let i=0; i<urls.length; i++) {
+              try {
+                const u = new URL(urls[i]);
+                if (!allowedHost(u.hostname)) { console.log('Skipping unsupported log host'); continue; }
+                const r = await fetch(u.toString(), {signal: AbortSignal.timeout(18000)});
+                if (!r.ok) { console.log('Log',i+1,'not accessible: HTTP',r.status); continue; }
+                const body = (await r.text()).slice(-700000);
+                const hits = body.split(/\r?\n/).filter(s =>
+                   /(error:|fatal error|\*\* BUILD FAILED|CommandError|SwiftCompile|CompileSwift|PhaseScriptExecution|[Xx]codebuild.*failed|Exception:|[Ff]ailed to|Build input file cannot be found)/.test(s));
+                console.log('LOG', i+1, 'RELEVANT ERROR LINES:', hits.length);
+                for (const line of hits.slice(-45)) {
+                  if (/EXPO_TOKEN|Authorization:|Bearer |api[_-]?key|password\s*=|secret\s*=/i.test(line)) continue;
+                  console.log(safe(line).slice(0,380));
+                }
+              } catch (_) { console.log('Could not retrieve optional log',i+1); }
+            }
+          })().catch(() => process.exitCode=1);
+          NODE

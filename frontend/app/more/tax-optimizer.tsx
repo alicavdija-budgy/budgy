@@ -76,9 +76,11 @@ export default function TaxOptimizerScreen() {
     // The backend uses APPROXIMATE coefficients: avoid invented default income,
     // partial parseFloat results, and amounts beyond the 2026 employee 3a cap.
     const gross = normalizeChfAmount(form.gross_salary);
-    const spouse = form.spouse_income.trim() ? normalizeChfAmount(form.spouse_income) : 0;
-    const pillar3a = form.pillar_3a.trim() ? normalizeChfAmount(form.pillar_3a) : 0;
-    const transport = form.transport_costs.trim() ? normalizeChfAmount(form.transport_costs) : 0;
+    const optionalAmount = (v: string) =>
+      !v.trim() || /^0([.,]0{1,2})?$/.test(v.trim()) ? 0 : normalizeChfAmount(v);
+    const spouse = optionalAmount(form.spouse_income);
+    const pillar3a = optionalAmount(form.pillar_3a);
+    const transport = optionalAmount(form.transport_costs);
     if (gross === null || spouse === null || pillar3a === null || transport === null ||
         pillar3a > 7258) {
       Alert.alert(t('taxUi.calcError'), t('taxUi.salaryInvalid'));

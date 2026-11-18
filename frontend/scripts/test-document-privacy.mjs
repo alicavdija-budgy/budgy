@@ -31,7 +31,7 @@ check('remote fetch guard rejects every private table', cloud.includes('if (isPr
 for (const [key, name] of [['contracts','contracts'],['documents','documents'],['invoices','invoices'],['receipts','receipts']]) {
   check(name+' local values survive cloud pull', new RegExp(key+': cur\\.'+key+'[,}]').test(cloud));
 }
-check('tombstone filter rejects private records', cloud.includes('.filter(([\u006bey]) => !isPrivateDocumentTombstone(key))'));
+check('tombstone filter rejects private records', cloud.includes('!isPrivateDocumentTombstone(key)'));
 const storage = read('src/services/documentStorage.ts');
 check('direct upload blocked', storage.includes("if (PRIVATE_DOCUMENTS_LOCAL_ONLY) return { ok: false, error: 'local-only'"));
 check('queue processing blocked before auth/network', storage.includes('if (PRIVATE_DOCUMENTS_LOCAL_ONLY) {') &&

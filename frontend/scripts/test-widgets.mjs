@@ -69,10 +69,18 @@ check('déconnexion + suppression purgent le stockage partagé', settings.includ
 check('rafraîchissement sur données/compte/premier plan', sync.includes("st === 'active'") && sync.includes('activeScope') && sync.includes('for (const t of s.transactions)'));
 check('signature de contenu (montants, dates, statuts, objectifs — pas seulement les longueurs)',
   sync.includes('${t.amount}${t.date}') && sync.includes('${v.status}') && sync.includes('${r.active}') && sync.includes('saved'));
-check('Siri strictement lié au compte (scope === actif, jamais unknown)',
-  bridge.includes('e.amount > 0 && e.scope === scope') && !bridge.includes("|| e.scope === 'unknown'"));
+check('Siri lié au compte ou brouillon temporaire uniquement sur ouverture explicite',
+  bridge.includes('e.scope === scope') &&
+  bridge.includes("allowUnscopedSiriDraft && e.scope === 'unscoped'") &&
+  bridge.includes('now - e.createdAt < 5 * 60') &&
+  sync.includes("peekPendingExpenses(route === 'quick-add')") &&
+  !bridge.includes("|| e.scope === 'unknown'"));
 check('entrées d\'origine inconnue purgées (48 h), jamais enregistrées', bridge.includes('48 * 3600'));
-check('intent refuse d\'empiler sans compte identifiable', intentsShared.includes('guard let scope = loadSnapshot()?.scope'));
+check('intent garde un brouillon non lié si snapshot absent (jamais une dépense enregistrée)',
+  intentsShared.includes('snapshotScope.hasPrefix("user:") ? snapshotScope : "unscoped"') &&
+  intentsShared.includes('scope: scope') &&
+  intents.includes('BudgyIntentStore.enqueue') &&
+  intents.includes('confirmez'));
 check('écriture idempotente : transaction siri_<pid> jamais recréée', quickAdd.includes('transactions.some((tx) => tx.id === id)'));
 check('une dépense Siri reste une dépense (pas de requalification)', quickAdd.includes("pendingId ? 'expense'"));
 check('rafraîchissement débouncé (limites WidgetKit)', sync.includes('1500'));

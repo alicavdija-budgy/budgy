@@ -11,6 +11,40 @@ const S = (n, c) => { if (c) { stat++; console.log(`  ✅ [STATIC] ${n}`); } els
 const read = (f) => readFileSync(join(root, f), 'utf8');
 
 const { findInvoiceDuplicate } = await import(join(root, 'src/lib/invoiceDocs.ts'));
+const folderTools = await import(join(root, 'src/lib/contractFolders.ts'));
+console.log('\n═ CONTRATS — dossiers métier, réouverture et mode d’emploi ═');
+U('contrat assurance historique → Assurances', folderTools.folderForContractCategory('assurances') === 'insurance');
+U('contrat santé historique → Santé', folderTools.folderForContractCategory('sante') === 'health');
+U('télécom historique → Abonnements', folderTools.folderForContractCategory('abonnements') === 'subscriptions');
+U('catégorie inconnue → Autres, jamais un classement arbitraire', folderTools.folderForContractCategory('inconnue') === 'other');
+U('un dossier choisi est conservé dans les tags', folderTools.folderForContractDocument({ category: 'contracts', tags: ['contract', 'folder:banking'] }) === 'banking');
+U('déplacer supprime uniquement l’ancien tag dossier', folderTools.tagsWithContractFolder(['client', 'folder:health', 'contract'], 'insurance').join(',') === 'client,contract,folder:insurance');
+{
+  const wizard = read('app/more/add-contract.tsx');
+  const binder = read('app/more/documents.tsx');
+  const importer = read('app/more/email-import.tsx');
+  const plus = read('app/(tabs)/more.tsx');
+  const guide = read('app/more/user-guide.tsx');
+  S('contrat scanné : copie durable vérifiée avant fiche contrat',
+    wizard.includes('await saveToVault(source, docId, mime)') && wizard.includes('await vaultFileExists(vaultUri)') && wizard.indexOf('await saveToVault(source, docId, mime)') < wizard.indexOf('addContract({'));
+  S('scanner vers assistant contrat : URI source et non base64 via navigation',
+    read('app/scanner-modal.tsx').includes("photoUri: photo?.uri || ''"));
+  S('PDF multipage du classeur : conservé en vault avec tag de dossier',
+    binder.includes("await saveToVault(r.pdfUri, newDocId, 'application/pdf')") && binder.includes('tagsWithContractFolder(tags, scanFolder)'));
+  S('contrats liés et scans autonomes groupés sous le même dossier',
+    binder.includes('const cs = visibleContracts.filter') && binder.includes('const ds = filtered.filter') && binder.includes('binder-section-'));
+  S('l’utilisateur peut déplacer un ancien contrat sans suppression',
+    binder.includes('changeContractFolder(selCt.id, id)') && binder.includes('updateContract(id, { category: folder })'));
+  S('fichier original PDF ou photo récupéré avant ouverture',
+    binder.includes('const res = await ensureLocalCopy(doc.id)') && binder.includes('setPhotoViewerUri(uri)') && binder.includes('setPdfViewerUri(uri)'));
+  S('OCR PDF contrat enregistré avec sa catégorie métier',
+    importer.includes('category: folderForContractCategory(meta.category)') && importer.includes('tagsWithContractFolder(['));
+  S('guide accessible gratuitement depuis Plus',
+    plus.includes('plus-open-user-guide') && plus.includes("router.push('/more/user-guide' as any)") && guide.includes('BUDGY_GUIDES'));
+  S('guide explique limites et gains potentiels, sans fausse revendication n°1',
+    read('src/content/userGuide.ts').includes('Aucun gain') || read('src/content/userGuide.ts').includes('Aucun gain n'));
+}
+
 const sm = await import(join(root, 'src/lib/syncMerge.ts'));
 
 console.log('\n═ PRÉALABLE 1 — données anonymes JAMAIS attribuées automatiquement ═');

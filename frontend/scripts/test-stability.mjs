@@ -78,7 +78,7 @@ ok('traits verts des 5 sections sur TOUTE la largeur, jamais 44 px fixes',
   more.includes("width: '100%', height: 2, borderRadius: 1, backgroundColor: P.green") &&
   more.includes("greenBarShadow: { width: '100%'") &&
   !more.includes("greenBarShadow: { width: 44"));
-const fiveSectionRows = more.slice(more.indexOf('{/* 5 sections'), more.indexOf('{/* Guide librement accessible'));
+const fiveSectionRows = more.slice(more.indexOf('{/* 5 sections'), more.indexOf('{/* Confidentialité des documents : accès visible sans paywall. */}'));
 ok('les 17 lignes principales restent sans icônes ni sous-titres (chevron uniquement)',
   !more.includes('subtitleKey') &&
   fiveSectionRows.includes('sec.rows.map') &&

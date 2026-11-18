@@ -22,24 +22,20 @@
  * NEVER pass a raw share-intent URI to `shareAsync`, `fetch`, or `FileSystem.readAsStringAsync`.
  * Always go through `persistIncomingFile` (or `safeShareFile`) first.
  */
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { Platform } from 'react-native';
 import { humanizeError } from './errorSanitizer';
 
-// expo-file-system v19 hides documentDirectory behind the new modular API
-// but keeps the legacy paths working at runtime. Cast through `any` so TS
-// stays happy across versions.
-const FS = FileSystem as any;
-const BASE_DIR = ((FS.documentDirectory as string) || (FS.cacheDirectory as string) || '') + 'budgy-files/';
+// Expo SDK54: use the explicit legacy API; optional-chain methods could
+// silently return undefined and claim to have exported a non-existent file.
+const FS = FileSystem;
+const BASE_DIR = (FileSystem.documentDirectory || FileSystem.cacheDirectory || '') + 'budgy-files/';
 
 async function ensureBaseDir(): Promise<string> {
-  try {
-    const info = await FS.getInfoAsync?.(BASE_DIR);
-    if (info && !info.exists) {
-      await FS.makeDirectoryAsync?.(BASE_DIR, { intermediates: true });
-    }
-  } catch {}
+  if (!FileSystem.documentDirectory) throw new Error('DOCUMENTS_DIRECTORY_UNAVAILABLE');
+  const info = await FS.getInfoAsync(BASE_DIR);
+  if (!info.exists) await FS.makeDirectoryAsync(BASE_DIR, { intermediates: true });
   return BASE_DIR;
 }
 
@@ -83,12 +79,18 @@ export async function persistIncomingFile(
     const ext = pickExtension(uri, opts?.mime);
     const finalName = safeFileName(opts?.name || null, ext);
     const dest = `${dir}${Date.now()}_${finalName}`;
-    // Use copyAsync so the original temp file is left untouched
-    await FS.copyAsync?.({ from: uri, to: dest });
+    // Use copyAsync so the original remains untouched. Never report success
+    // before verifying the shared temporary copy exists and is nonempty.
+    await FS.copyAsync({ from: uri, to: dest });
+    const stat = await FS.getInfoAsync(dest, { size: true });
+    if (!stat.exists || !Number((stat as any).size)) {
+      await FS.deleteAsync(dest, { idempotent: true }).catch(() => {});
+      throw new Error('SHARE_COPY_FAILED');
+    }
     return dest;
   } catch (e) {
-    console.warn('[persistIncomingFile] copy failed, returning original URI', e);
-    return uri;
+    // Do not return a stale picker/cache path and pretend sharing succeeded.
+    throw e;
   }
 }
 

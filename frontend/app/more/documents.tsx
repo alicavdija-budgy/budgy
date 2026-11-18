@@ -35,6 +35,7 @@ import { docTypeOf } from '../../src/lib/syncMerge';
 import { ensureLocalCopy, docFileStatus } from '../../src/services/documentStorage';
 import { useTranslation } from '../../src/hooks/useTranslation';
 import { DATE_LOCALES } from '../../src/i18n/translations';
+import { CONTRACT_FOLDER_IDS, type ContractFolder, categoryForContractFolder, folderForContractCategory, folderForContractDocument, tagsWithContractFolder } from '../../src/lib/contractFolders';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -56,6 +57,12 @@ const CATEGORY_KEYS: { id: DocumentCategory; tKey: 'catContracts' | 'catInsuranc
   { id: 'identity', tKey: 'catIdentity', emoji: '🪪', color: '#F472B6' },
   { id: 'other', tKey: 'catOther', emoji: '📁', color: '#9CA3AF' },
 ];
+
+const FOLDER_EMOJIS: Record<ContractFolder, string> = {
+  insurance: '🛡️', housing: '🏠', subscriptions: '📱',
+  transport: '🚗', health: '💊', energy: '⚡',
+  banking: '🏦', employment: '💼', other: '📁',
+};
 
 type Mode = 'list' | 'capture' | 'review' | 'crop' | 'edit' | 'detail';
 
@@ -79,6 +86,8 @@ export default function DocumentsScreen() {
   const [selectedContract, setSelectedContract] = useState<string | null>(null);
   // TÂCHE 3 — trois espaces documentaires STRICTS (type ≠ catégorie métier)
   const [typeFilter, setTypeFilter] = useState<'contract' | 'unclassified'>('contract');
+  const [folderFilter, setFolderFilter] = useState<ContractFolder | 'all'>('all');
+  const [scanFolder, setScanFolder] = useState<ContractFolder>('other');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<string | null>(null);
 
@@ -111,10 +120,11 @@ export default function DocumentsScreen() {
 
   // Recherche contrats (titre + émetteur) — anciens contrats SANS documentId inclus
   const visibleContracts = useMemo(() => contracts.filter((c) => {
+    if (folderFilter !== 'all' && folderForContractCategory(c.category) !== folderFilter) return false;
     if (!search.trim()) return true;
     const q = search.toLowerCase();
     return c.title.toLowerCase().includes(q) || (c.issuer || '').toLowerCase().includes(q);
-  }), [contracts, search]);
+  }), [contracts, search, folderFilter]);
   // Les pièces jointes de contrats ne sont PAS doublées dans la grille
   const linkedDocIds = useMemo(() => new Set(contracts.map((c) => c.documentId).filter((id): id is string => !!id)), [contracts]);
   const filtered = useMemo(() => documents.filter((d) => {
@@ -122,13 +132,15 @@ export default function DocumentsScreen() {
     // TÂCHE 3 — espace documentaire : un contrat d'assurance reste dans
     // Contrats même si sa catégorie métier est « assurance ».
     if (docTypeOf(d, linkedDocIds) !== typeFilter) return false;
-    if (filter !== 'all' && d.category !== filter) return false;
+    if (typeFilter === 'contract') {
+      if (folderFilter !== 'all' && folderForContractDocument(d) !== folderFilter) return false;
+    } else if (filter !== 'all' && d.category !== filter) return false;
     if (search.trim()) {
       const q = search.toLowerCase();
       if (!d.title.toLowerCase().includes(q) && !(d.tags || []).some((t) => t.toLowerCase().includes(q)) && !(d.note || '').toLowerCase().includes(q)) return false;
     }
     return true;
-  }), [documents, filter, search, linkedDocIds, typeFilter]);
+  }), [documents, filter, search, linkedDocIds, typeFilter, folderFilter]);
 
   // Le classeur compte uniquement ses documents visibles : jamais les factures
   // et tickets conservés dans leurs espaces respectifs.
@@ -139,6 +151,35 @@ export default function DocumentsScreen() {
     for (const d of inSpace) m[d.category] = (m[d.category] || 0) + 1;
     return m;
   }, [documents, linkedDocIds, typeFilter]);
+
+  // Dossiers métier du classeur : contrats liés + PDF/scans autonomes,
+  // mais jamais factures ou reçus. Le filtre est une VUE, pas une migration.
+  const folderCounts = useMemo(() => {
+    const m: Record<string, number> = { all: 0 };
+    for (const id of CONTRACT_FOLDER_IDS) m[id] = 0;
+    for (const ct of contracts) { m[folderForContractCategory(ct.category)]++; m.all++; }
+    for (const doc of documents) {
+      if (linkedDocIds.has(doc.id) || docTypeOf(doc, linkedDocIds) !== 'contract') continue;
+      m[folderForContractDocument(doc)]++;
+      m.all++;
+    }
+    return m;
+  }, [contracts, documents, linkedDocIds]);
+  const changeContractFolder = (id: string, folder: ContractFolder) => {
+    const ct = contracts.find((x) => x.id === id);
+    if (!ct) return;
+    updateContract(id, { category: folder });
+    if (ct.documentId) {
+      const d = documents.find((x) => x.id === ct.documentId);
+      if (d) updateDocument(d.id, {
+        category: categoryForContractFolder(folder),
+        tags: tagsWithContractFolder(d.tags, folder),
+      } as any);
+    }
+  };
+  const moveContractDocument = (doc: PersonalDocument, folder: ContractFolder) => {
+    updateDocument(doc.id, { category: categoryForContractFolder(folder), tags: tagsWithContractFolder(doc.tags, folder) } as any);
+  };
 
   const sel = documents.find((d) => d.id === selected);
   // ── TÂCHE 2 — VRAIE section Contrats (collection contracts[], pas
@@ -209,14 +250,14 @@ export default function DocumentsScreen() {
       addDocument({
         id: docId,
         title: f.name || t('contractsV2.sectionTitle'),
-        category: 'contracts',
+        category: categoryForContractFolder(folderForContractCategory(contracts.find((c) => c.id === contractId)?.category)),
         imageBase64: '',
         pdfUri: isPdf ? vaultUri : undefined,
         fileUri: isPdf ? undefined : vaultUri,
         mimeType: f.mimeType,
         documentType: 'contract',
         importedAt: now,
-        tags: ['contract'],
+        tags: tagsWithContractFolder(['contract'], folderForContractCategory(contracts.find((c) => c.id === contractId)?.category)),
         createdAt: now,
         updatedAt: now,
       } as any);

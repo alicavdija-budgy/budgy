@@ -7,6 +7,7 @@ import Foundation
 /// prérempli. Rien n'est enregistré ni annoncé comme enregistré avant la
 /// confirmation dans l'app ; aucun solde affiché n'est modifié ici.
 /// Les montants décimaux (25.50) sont préservés tels quels.
+@available(iOS 16.0, *)
 struct AddExpenseIntent: AppIntent {
     static let title: LocalizedStringResource = "Ajouter une dépense"
     static let description = IntentDescription("Prépare une dépense à confirmer dans Budgy.")
@@ -55,6 +56,7 @@ private func guardedSnapshot(route: String) -> BudgySnapshot? {
 }
 
 /// « Dis Siri, combien me reste-t-il dans Budgy ? »
+@available(iOS 16.0, *)
 struct GetBudgetIntent: AppIntent {
     static let title: LocalizedStringResource = "Mon budget"
     static let description = IntentDescription("Indique le budget disponible du mois.")
@@ -75,6 +77,7 @@ struct GetBudgetIntent: AppIntent {
 /// Périmètre ÉNONCÉ : factures exigibles d'ici la fin du mois (y compris
 /// déjà en retard). billsCount et billsTotal portent sur ce même périmètre ;
 /// les devises étrangères sont énoncées À PART (jamais converties).
+@available(iOS 16.0, *)
 struct GetBillsIntent: AppIntent {
     static let title: LocalizedStringResource = "Mes factures à payer"
     static let description = IntentDescription("Indique les factures impayées dans Budgy.")
@@ -109,6 +112,7 @@ struct GetBillsIntent: AppIntent {
 /// « Dis Siri, combien ai-je économisé dans Budgy ? »
 /// Répond avec l'épargne réellement enregistrée et la progression du premier
 /// objectif — jamais de progression inventée.
+@available(iOS 16.0, *)
 struct GetSavingsIntent: AppIntent {
     static let title: LocalizedStringResource = "Mon épargne"
     static let description = IntentDescription("Indique l'épargne et la progression des objectifs Budgy.")
@@ -131,6 +135,7 @@ struct GetSavingsIntent: AppIntent {
 /// « Dis Siri, combien me reste-t-il dans mon budget ce mois-ci ? »
 /// Distinction stricte : BUDGET restant (enveloppes réelles, mêmes chiffres
 /// que l'écran Budgets via le sélecteur partagé) ≠ DISPONIBLE du mois.
+@available(iOS 16.0, *)
 struct GetMonthlyBudgetIntent: AppIntent {
     static let title: LocalizedStringResource = "Mon budget mensuel"
     static let description = IntentDescription("Indique le budget restant des enveloppes du mois.")
@@ -156,6 +161,7 @@ struct GetMonthlyBudgetIntent: AppIntent {
 }
 
 /// « Dis Siri, scanne une facture avec Budgy »
+@available(iOS 16.0, *)
 struct ScanBillIntent: AppIntent {
     static let title: LocalizedStringResource = "Scanner une facture"
     static let description = IntentDescription("Ouvre le scanner de factures Budgy (QR-facture suisse).")
@@ -168,6 +174,7 @@ struct ScanBillIntent: AppIntent {
 }
 
 /// « Dis Siri, ouvre Budgy »
+@available(iOS 16.0, *)
 struct OpenBudgyIntent: AppIntent {
     static let title: LocalizedStringResource = "Ouvrir Budgy"
     static let description = IntentDescription("Ouvre l'application Budgy.")

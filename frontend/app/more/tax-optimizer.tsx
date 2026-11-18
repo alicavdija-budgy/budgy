@@ -10,7 +10,7 @@
 import React, { useState, useMemo } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput,
-  ActivityIndicator, Alert, KeyboardAvoidingView, Platform,
+  ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -25,6 +25,7 @@ import { Card, Button } from '../../src/components/ui';
 import { useStore } from '../../src/stores/useStore';
 import { apiFetchJson } from '../../src/lib/network';
 import { humanErrorMessage } from '../../src/lib/errorSanitizer';
+import { normalizeChfAmount } from '../../src/utils/amount';
 
 const CANTONS = ['GE','VD','ZH','BE','FR','NE','VS','JU','TI','BS','LU','SG','AG','SO','GR','SH','ZG','SZ'];
 const FRANCHISES = [300, 500, 1000, 1500, 2000, 2500];
@@ -60,7 +61,7 @@ export default function TaxOptimizerScreen() {
   const [result, setResult] = useState<Result | null>(null);
 
   const [form, setForm] = useState({
-    gross_salary: '85000',
+    gross_salary: '',
     canton: (preferences as any).canton || 'VD',
     civil_status: 'single' as 'single' | 'married' | 'partnership',
     spouse_income: '',
@@ -72,18 +73,31 @@ export default function TaxOptimizerScreen() {
   });
 
   const run = async () => {
+    // The backend uses APPROXIMATE coefficients: avoid invented default income,
+    // partial parseFloat results, and amounts beyond the 2026 employee 3a cap.
+    const gross = normalizeChfAmount(form.gross_salary);
+    const optionalAmount = (v: string) =>
+      !v.trim() || /^0([.,]0{1,2})?$/.test(v.trim()) ? 0 : normalizeChfAmount(v);
+    const spouse = optionalAmount(form.spouse_income);
+    const pillar3a = optionalAmount(form.pillar_3a);
+    const transport = optionalAmount(form.transport_costs);
+    if (gross === null || spouse === null || pillar3a === null || transport === null ||
+        pillar3a > 7258) {
+      Alert.alert(t('taxUi.calcError'), t('taxUi.salaryInvalid'));
+      return;
+    }
     setLoading(true);
     try {
       const body = {
-        gross_salary: parseFloat(form.gross_salary) || 0,
+        gross_salary: gross,
         canton: form.canton,
         civil_status: form.civil_status,
-        spouse_income: parseFloat(form.spouse_income) || 0,
+        spouse_income: spouse,
         num_children: form.num_children,
         age: parseInt(form.age) || 35,
         lamal_franchise: form.lamal_franchise,
-        pillar_3a: parseFloat(form.pillar_3a) || 0,
-        transport_costs: parseFloat(form.transport_costs) || 0,
+        pillar_3a: pillar3a,
+        transport_costs: transport,
       };
       const r = await apiFetchJson<any>('/api/tax/simulate', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
@@ -95,7 +109,13 @@ export default function TaxOptimizerScreen() {
         Alert.alert(t('taxOptimizer.calcErrorTitle'), msg);
         return;
       }
-      setResult(r.data);
+      const data = r.data as Result;
+      if (!data.success || !Number.isFinite(data.total_tax) ||
+          !Array.isArray(data.deductions) || !Array.isArray(data.savings_tips)) {
+        Alert.alert(t('taxUi.calcError'), t('taxUi.servDown'));
+        return;
+      }
+      setResult(data);
       setStep('result');
     } catch (e: any) {
       Alert.alert('Erreur', humanErrorMessage(e, t('taxUi.calcError')));
@@ -126,6 +146,16 @@ export default function TaxOptimizerScreen() {
                     Impôts (IFD + ICC), déductions automatiques et prime LAMal selon votre situation familiale
                   </Text>
                 </LinearGradient>
+                <Text style={{ color: theme.textSecondary, marginTop: 12, lineHeight: 20 }}>
+                  {t('taxUi.estimateDisclaimer')}
+                </Text>
+                <TouchableOpacity
+                  accessibilityRole="link"
+                  onPress={() => { void Linking.openURL('https://www.estv.admin.ch/fr/simulateur-fiscal-calculer-vos-impots'); }}
+                  style={{ marginTop: 10, paddingVertical: 8 }}
+                >
+                  <Text style={{ color: theme.primary, fontWeight: '700' }}>{t('taxUi.officialCalculator')}</Text>
+                </TouchableOpacity>
               </Animated.View>
 
               {/* Salary */}
@@ -141,6 +171,7 @@ export default function TaxOptimizerScreen() {
 
               {/* Canton */}
               <Text style={styles.sectionTitle}>2. Canton</Text>
+              <Text style={styles.help}>{t('taxUi.cantonLimit')}</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 {CANTONS.map((c) => (
                   <TouchableOpacity
@@ -232,7 +263,7 @@ export default function TaxOptimizerScreen() {
 
               {/* 3a */}
               <Text style={styles.sectionTitle}>3ᵉ pilier lié (3a) versé cette année</Text>
-              <Text style={styles.help}>Max 2025 : CHF 7'258/an pour salariés</Text>
+              <Text style={styles.help}>{t('taxUi.pillarCap2026')}</Text>
               <TextInput
                 style={styles.input}
                 value={form.pillar_3a}
@@ -267,7 +298,7 @@ export default function TaxOptimizerScreen() {
             <>
               <Animated.View entering={FadeInDown.duration(500)}>
                 <LinearGradient colors={['#06D6A0', '#0891B2']} style={styles.resultHero}>
-                  <Text style={styles.heroLabel}>IMPÔTS ESTIMÉS</Text>
+                  <Text style={styles.heroLabel}>{t('taxUi.estimateTitle')}</Text>
                   <Text style={styles.resultBig}>CHF {fmt(result.total_tax)}</Text>
                   <Text style={styles.resultSub}>soit {result.effective_rate.toFixed(2)}% de votre revenu brut</Text>
 

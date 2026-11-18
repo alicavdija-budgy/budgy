@@ -61,7 +61,7 @@ jobs:
         run: |
           set -e
           for test in \
-            test-document-privacy test-import test-contracts test-qrbill test-build93-safety test-local-dates test-ios-intents-deployment test-budgets-sync \
+            test-document-privacy test-import test-contracts test-qrbill test-build93-safety test-savings-evidence test-local-dates test-ios-intents-deployment test-budgets-sync \
             test-budgets test-engine test-cloud-auth test-cloud-delete \
             test-task3 test-task4 test-task5 test-stability \
             test-premium test-pro-gating test-savings-tier \

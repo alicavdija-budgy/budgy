@@ -64,7 +64,7 @@ export function buildSavingsEvidence(transactions: any[], recurring: any[], at: 
     ['food', foodMonthly, 0.05, foodCount],
   ];
   return groups
-    .filter(([_, amount]) => amount >= 20)
+    .filter(([category, amount]) => amount >= (category === 'subscription' ? 10 : 20))
     .map(([category, amount, rate, count]) => ({
       category,
       currentMonthly: round2(amount),

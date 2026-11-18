@@ -32,6 +32,11 @@ jobs:
             echo 'EXPO_TOKEN is not configured for this CI run'
             exit 1
           fi
+      - name: Install project dependencies for Expo config resolution
+        run: |
+          corepack enable
+          corepack prepare yarn@1.22.22 --activate
+          yarn install --frozen-lockfile --non-interactive --network-timeout 120000
       - name: Install standalone EAS CLI for read-only inspection
         run: npm install --global eas-cli@latest --no-audit --no-fund
       - name: Read failed EAS build 92 metadata (NO EAS build or submit)

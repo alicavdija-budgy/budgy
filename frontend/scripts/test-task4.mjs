@@ -2,7 +2,7 @@
 // TÂCHE 4 — Siri & App Intents + correctif devises CHF/EUR.
 // Catégories SÉPARÉES : [UNIT] exécutés réellement / [STATIC] contrôles de
 // code. Tout ce qui exige un iPhone physique est documenté NON TESTÉ.
-import { readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { readFileSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');

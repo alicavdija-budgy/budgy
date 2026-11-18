@@ -148,7 +148,7 @@ export function findBrand(text: string): Brand | null {
   // Match complete brand tokens, not substrings of ordinary category names:
   // "Assurance" is NOT "Assura", "taxi max" is NOT "HBO Max".
   // Unicode-aware boundaries also protect accented Swiss merchant names.
-  const isAlnum = (c: string) => /[\\p{L}\\p{N}]/u.test(c);
+  const isAlnum = (c: string) => /[\p{L}\p{N}]/u.test(c);
   for (const b of SWISS_BRANDS) {
     for (const raw of b.keywords) {
       const kw = raw.trim().toLowerCase();

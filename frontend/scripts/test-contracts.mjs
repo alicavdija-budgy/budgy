@@ -31,7 +31,7 @@ ok('contrôle taille/format AVANT traitement dans les 3 pickers', (imp.match(/as
 console.log('— Section Contrats réelle (documents.tsx) —');
 const docs = read('app/more/documents.tsx');
 ok('liste les VRAIS contracts[] du store (plus seulement documents[])', docs.includes('contracts.map((c)') && docs.includes('contract-row-'));
-ok('détail : consulter / renommer / supprimer / pièce jointe', docs.includes('renameContract') && docs.includes('removeContract') && docs.includes('contract-open-attachment'));
+ok('détail : consulter / renommer / supprimer / pièce jointe', docs.includes('renameContract') && docs.includes('removeContract') && docs.includes('contract-open-original'));
 ok('suppression du contrat conserve la pièce jointe dans le classeur', docs.includes('deleteContract(id)') && !docs.slice(docs.indexOf('removeContract')).slice(0, 400).includes('deleteDocument'));
 ok('arrivée directe ?filter=contracts depuis l’import', docs.includes("incoming.filter === 'contracts'"));
 ok('viewer : affiche aussi les fichiers du vault (fileUri)', docs.includes('fileUri'));
@@ -54,13 +54,13 @@ const sync = read('src/services/cloudSync.ts');
 ok('mapping contracts étendu AVEC repli legacy (synchro jamais cassée avant migration)', sync.includes("'document_id'") && sync.includes('TABLE_FIELDS_LEGACY'));
 
 console.log('— Audit complémentaire TÂCHE 2 —');
-ok('contrats affichés INDÉPENDAMMENT de documents[] (hors ternaire vide)', docs.includes("typeFilter !== 'contract' || visibleContracts.length === 0") && docs.includes('visibleContracts.map((c)'));
+ok('contrats affichés INDÉPENDAMMENT de documents[] (hors ternaire vide)', docs.includes("typeFilter !== 'contract' || visibleContracts.length === 0") && docs.includes('const cs = visibleContracts.filter((c)') && docs.includes('cs.map((c)'));
 ok('recherche sur titres ET émetteurs des contrats', docs.includes("(c.issuer || '').toLowerCase().includes(q)"));
 ok('pas de doublon visuel : PJ liées exclues de la grille', docs.includes('linkedDocIds.has(d.id)'));
 ok('classeur réservé aux contrats et documents à classer', docs.includes("useState<'contract' | 'unclassified'>('contract')") && docs.includes("{ id: 'unclassified', tKey: 'spaceUnclassified' }") && !docs.includes("{ id: 'invoice', tKey: 'spaceInvoices' }") && !docs.includes("{ id: 'expense_receipt', tKey: 'spaceReceipts' }"));
 ok('factures non affichées par défaut', docs.includes('docTypeOf(d, linkedDocIds) !== typeFilter') && docs.includes('if (linkedDocIds.has(d.id)) return false;'));
 ok('compteurs du classeur limités aux documents pertinents', docs.includes('const inSpace = documents.filter') && docs.includes('all: inSpace.length'));
-ok('bouton « Ouvrir le PDF » + lecteur natif (WebView) séparé du Partager', docs.includes('contract-open-pdf') && docs.includes('pdfViewerUri') && docs.includes('shareContractPdf'));
+ok('bouton « Ouvrir le PDF » + lecteur natif (WebView) séparé du Partager', docs.includes('contract-open-original') && docs.includes('pdfViewerUri') && docs.includes('photoViewerUri') && docs.includes('shareContractPdf'));
 ok('pièce jointe inaccessible → erreur claire (fileMissing)', docs.includes('fileMissingTitle'));
 ok('rattacher un fichier à un ANCIEN contrat sans PJ', docs.includes('attachFileToContract') && docs.includes('contract-attach-file'));
 const imp2 = read('app/more/email-import.tsx');

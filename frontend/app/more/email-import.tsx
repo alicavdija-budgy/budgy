@@ -109,10 +109,64 @@ export default function ImportInvoiceScreen() {
   // réellement définies dans l'app (mêmes clés que l'assistant contrat).
   const [manualCt, setManualCt] = useState({ title: '', issuer: '', amount: '', expiry: '', category: 'autre' });
 
+  /** Temporary OCR transfer is strictly opt-in (not document storage). */
+  const confirmRemoteOcr = (): Promise<boolean> => new Promise((resolve) => {
+    if (Platform.OS === 'web') {
+      resolve(typeof window !== 'undefined' && window.confirm(t('documentPrivacy.ocrBody')));
+      return;
+    }
+    Alert.alert(t('documentPrivacy.ocrTitle'), t('documentPrivacy.ocrBody'), [
+      { text: t('documentPrivacy.ocrManual'), style: 'cancel', onPress: () => resolve(false) },
+      { text: t('documentPrivacy.ocrContinue'), onPress: () => resolve(true) },
+    ], { cancelable: false });
+  });
+
+  /** No OCR: keep the original file locally without inventing any amounts. */
+  const keepDocumentPrivate = async (uri: string, mime: string, name?: string) => {
+    if (mode === 'contract') {
+      // Contract wizard saves original into the durable vault after the user
+      // supplies a real name and selects a business folder.
+      router.push({ pathname: '/more/add-contract' as any,
+        params: { source: 'manual', photoUri: uri, title: '', category: 'autre' } });
+      return;
+    }
+    const now = Date.now();
+    const docId = `doc_private_${now}`;
+    await assertFileAcceptable(uri, mime, name);
+    const vaultUri = await saveToVault(uri, docId, mime, name);
+    if (!(await vaultFileExists(vaultUri))) throw new VaultError('SAVE_FAILED');
+    const isPdf = mime.includes('pdf') || vaultUri.toLowerCase().endsWith('.pdf');
+    const type = mode === 'invoice' ? 'invoice' : 'unclassified';
+    addDocument({
+      id: docId,
+      title: name || t('invoiceDocs.defaultTitle'),
+      category: 'other',
+      documentType: type,
+      importedAt: now,
+      mimeType: mime,
+      pdfUri: isPdf ? vaultUri : undefined,
+      fileUri: isPdf ? undefined : vaultUri,
+      imageBase64: '',
+      tags: ['local-only', 'manual-review'],
+      createdAt: now,
+      updatedAt: now,
+    } as any);
+    // Invoice documents without a verified amount appear under 'to complete':
+    // no fake CHF 0 invoice, no automatic financial obligation.
+    Alert.alert(t('common.success'), t('documentPrivacy.ocrManualHint'), [{
+      text: t('common.ok'), onPress: () => router.replace(
+        (mode === 'invoice' ? '/more/invoices' : '/more/documents') as any),
+    }]);
+  };
+
   // ── Backend calls ──
   const parseEmailText = async (content: string, subject = '') => {
     if (content.trim().length < 20) {
       Alert.alert(t('emailImport.contentTooShortTitle'), t('emailImport.contentTooShortBody'));
+      return;
+    }
+    if (!(await confirmRemoteOcr())) {
+      Alert.alert(t('documentPrivacy.ocrTitle'), t('documentPrivacy.ocrManualHint'));
       return;
     }
     setBusy(true);
@@ -142,10 +196,17 @@ export default function ImportInvoiceScreen() {
   };
 
   const parseImageFile = async (uriOrPath: string, mimeHint?: string, originalName?: string) => {
+    let mime = resolveImportMime(mimeHint, originalName, uriOrPath);
+    // Before ANY base64/network request, user chooses remote OCR or local
+    // retention with manual verification. Never upload on selecting a PDF.
+    if (!(await confirmRemoteOcr())) {
+      try { await keepDocumentPrivate(uriOrPath, mime, originalName); }
+      catch (e: any) { Alert.alert(t('contractsV2.fileErrorTitle'), t('contractsV2.SAVE_FAILED')); }
+      return;
+    }
     setBusy(true);
     setBusyLabel(t('emailImport.busyOcrAi'));
     setResult(null);
-    let mime = resolveImportMime(mimeHint, originalName, uriOrPath);
     try {
       let base64 = '';
       if (uriOrPath.startsWith('data:')) {

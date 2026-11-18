@@ -42,7 +42,7 @@ U('déplacer supprime uniquement l’ancien tag dossier', folderTools.tagsWithCo
   S('guide accessible gratuitement depuis Plus',
     plus.includes('plus-open-user-guide') && plus.includes("router.push('/more/user-guide' as any)") && guide.includes('BUDGY_GUIDES'));
   S('guide explique limites et gains potentiels, sans fausse revendication n°1',
-    read('src/content/userGuide.ts').includes('Aucun gain') || read('src/content/userGuide.ts').includes('Aucun gain n'));
+    read('src/i18n/translations.ts').includes('Aucun gain') && read('src/i18n/translations.ts').includes('export const BUDGY_GUIDES:'));
 }
 
 const sm = await import(join(root, 'src/lib/syncMerge.ts'));

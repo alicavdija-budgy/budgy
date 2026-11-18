@@ -283,7 +283,7 @@ console.log('\n— §4 séparation métadonnées / fichiers —');
 S('file_uri / pdf_uri / pages NE sont PLUS synchronisés en colonnes', !/documents:\s*\[[^\]]*'file_uri'/.test(cloud) && !/documents:\s*\[[^\]]*'pages'/.test(cloud));
 S('photo_uri (chemin local) non synchronisé', !/contracts:\s*\[[^\]]*'photo_uri'/.test(cloud));
 S('aucun base64 massif en colonnes', !cloud.includes("'image_base64'") && !cloud.includes("'pdf_base64'") && !cloud.includes("'data_uri', 'file_uri'"));
-S('remote_path (référence Storage portable) synchronisé', /documents:\s*\[[^\]]*'remote_path'/.test(cloud));
+S('build 92 : toute synchronisation documentaire est bloquée au runtime', cloud.includes('if (isPrivateDocumentTable(table)) continue;') && cloud.includes('if (isPrivateDocumentTable(table)) return [];'));
 S('anciens champs/fichiers conservés (migration additive)', mig.includes('data_uri') && !mig.includes('DROP TABLE') && !mig.includes('DROP COLUMN'));
 
 console.log('\n— §3 récupération cloud réelle —');
@@ -293,8 +293,8 @@ S('3 états distincts : local / cloud / indisponible', dstore.includes("'local' 
 S('jamais annoncé récupérable sans téléchargement vérifié', dstore.includes('pas annoncé récupéré'));
 S('cache local durable hors ligne après récupération', dstore.includes('_cloud.'));
 S('P1 — partage utilise le fichier RÉELLEMENT récupéré (uri résolue)', docs.includes('const r = await safeShareFile(uri,'));
-S('P1 — rattachement ancien contrat → file d\'envoi', docs.includes('queueUpload(docId); // pièce durable'));
-S('P1 — PDF généré (caméra) → file d\'envoi ; sans fichier, rien d\'annoncé', docs.includes('if (pdfUri) queueUpload(newDocId);'));
+S('P1 — rattachement ancien contrat → fichier local durable', docs.includes('const vaultUri = await saveToVault(f.uri, docId, f.mimeType, f.name)'));
+S('P1 — PDF généré (caméra) → copie locale durable vérifiée', docs.includes("await saveToVault(r.pdfUri, newDocId, 'application/pdf')") && docs.includes('await vaultFileExists(pdfUri)'));
 S('P1 — téléchargement : statut réseau + taille attendue contrôlés', dstore.includes('dl.status && dl.status !== 200') && dstore.includes('gotSize !== expected'));
 
 console.log('\n— §5 file d\'envoi fiable —');
@@ -307,7 +307,7 @@ console.log('\n— §6 isolation par compte —');
 S('logout réinitialise les marqueurs (jamais transférés)', store.includes('syncedHashes: {},\n        lastCloudPushAt: 0,\n        syncAccountId: null,'));
 S('file/tombstones conservés taggés par compte au logout', store.includes('pendingUploads/tombstones conservés'));
 S('changement de compte → clearSyncMarkers (centralisé dans prepareAccountState)', cloud.includes('clearSyncMarkers()'));
-S('queueUpload tague le compte courant', store.includes('const accountId = s.syncAccountId'));
+S('build 92 : aucune nouvelle pièce privée ajoutée à une file d’upload', store.includes('queueUpload: (_docId) => { /* local-only: do not enqueue */ }'));
 S('P0 — logout stashe TOUTES les entités non synchronisées (buildLogoutStash)', store.includes('buildLogoutStash(prev)'));
 S('P0 — restauration + adoption AVANT lecture d\'état (push ET pull)', cloud.split('prepareAccountState(userId)').length >= 3 && cloud.indexOf('prepareAccountState(userId);\n  const s = useStore.getState()') > 0);
 S('P0 — verrou anti-concurrence push/pull', cloud.includes('let syncBusy = false') && cloud.split('syncBusy = false').length >= 4);
@@ -318,6 +318,11 @@ S('P0 — migration détectée → marqueurs L: redeviennent dirty (isDirtyForPu
 S('P0 — tâche d\'envoi conservée si le document est dans l\'espace isolé', dstore.includes('if (vaultIds.has(e.docId)) continue;'));
 S('P0 — retrait de file introuvable = explicite, consigné', dstore.includes('upload abandonné, document introuvable'));
 
+
+S('build 92 : les téléchargements historiques sont autorisés en lecture seule',
+  dstore.includes('if (PRIVATE_DOCUMENTS_LOCAL_ONLY) return { ok: false') &&
+  dstore.includes('if (PRIVATE_DOCUMENTS_LOCAL_ONLY) {') &&
+  dstore.includes('getSignedUrlForDocument'));
 console.log('\n— §7 SQL révisé (non appliqué) —');
 S('table sync_tombstones + RLS propriétaire', mig.includes('CREATE TABLE IF NOT EXISTS public.sync_tombstones') && mig.includes('tombstones_owner_select'));
 S('policies idempotentes (DROP IF EXISTS avant CREATE)', (mig.match(/DROP POLICY IF EXISTS/g) || []).length >= 8);

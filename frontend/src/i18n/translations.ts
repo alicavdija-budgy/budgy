@@ -1564,10 +1564,10 @@ export const TRANSLATIONS = {
 
   // ─────────── Siri & Assistant Screen (v3.8.0) ───────────
   siriAssistant: {
-    fr: { title: 'Siri & Assistant', heroTitle: 'Ajoute une dépense à la voix', heroSub: 'Compatible avec Siri via Raccourcis iOS et avec Google Assistant via les raccourcis Android.', openQuickAdd: 'Ouvrir Ajout Intelligent', testExample: 'Tester un exemple', sectionIphone: 'iPhone — via Siri', sectionAndroid: 'Android — via Google Assistant', sectionExamples: 'Exemples de phrases', linkSiri: 'Lien Siri', linkGoogle: 'Lien Google Assistant', copySiri: 'Copier le lien Siri', copyGoogle: 'Copier le lien Google Assistant', copiedTitle: 'Copié ✅', copiedBody: '{{label}} copié dans le presse-papiers.', copyError: 'Impossible de copier le lien.', helpText: "Touchez un exemple pour l'envoyer directement dans Ajout Intelligent.", note: "Les commandes Siri natives (App Intents) sont intégrées à Budgy et actives après installation d'un build iOS. La méthode ci-dessous, via Raccourcis iOS et deep-link, reste disponible en complément.", iphoneStep1: "Ouvrez l'app « Raccourcis » de votre iPhone.", iphoneStep2: 'Créez un nouveau raccourci.', iphoneStep3: "Ajoutez l'action « Ouvrir une URL ».", iphoneStep4: 'Collez l\'URL Budgy ci-dessous (le texte dicté sera passé en paramètre).', iphoneStep5: 'Enregistrez le raccourci.', iphoneStep6: 'Phrase Siri suggérée : « Dis Siri, ajoute une dépense Budgy ».', androidStep1: 'Utilisez Google Assistant ou créez un raccourci système qui ouvre une URL.', androidStep2: 'Collez l\'URL Budgy ci-dessous (le texte dicté sera passé en paramètre).', example1: 'Ajoute 25 CHF chez Migros', example2: 'Salaire 3200 CHF', example3: 'Netflix 18 CHF chaque mois', example4: 'Facture Swisscom 89 CHF', example5: 'Contrat assurance voiture 95 CHF', voiceExample: 'Ajoute 25 CHF chez Migros', sectionNative: 'Commandes Siri natives', nativeNote: 'Commandes natives (App Intents) — nécessitent un build iOS installé. Touchez une phrase pour la copier. Les montants ne sont énoncés que si « Montants via Siri » est activé dans Réglages > Widgets.', cmd1Title: 'Ajouter une dépense', cmd1Phrase: 'Dis Siri, ajoute une dépense dans Budgy', cmd2Title: 'Solde & épargne', cmd2Phrase: 'Dis Siri, combien ai-je économisé dans Budgy ?', cmd3Title: 'Factures à payer', cmd3Phrase: 'Dis Siri, quelles factures dois-je payer dans Budgy ?', cmd4Title: 'Budget mensuel', cmd4Phrase: 'Dis Siri, combien me reste-t-il dans mon budget ce mois-ci dans Budgy ?' },
-    en: { title: 'Siri & Assistant', heroTitle: 'Add expenses by voice', heroSub: 'Compatible with Siri via iOS Shortcuts and with Google Assistant via Android shortcuts.', openQuickAdd: 'Open Smart Add', testExample: 'Test an example', sectionIphone: 'iPhone — via Siri', sectionAndroid: 'Android — via Google Assistant', sectionExamples: 'Example phrases', linkSiri: 'Siri link', linkGoogle: 'Google Assistant link', copySiri: 'Copy Siri link', copyGoogle: 'Copy Google Assistant link', copiedTitle: 'Copied ✅', copiedBody: '{{label}} copied to clipboard.', copyError: 'Could not copy the link.', helpText: 'Tap an example to send it straight to Smart Add.', note: 'Native Siri commands (App Intents) are built into Budgy and active once an iOS build is installed. The method below, via iOS Shortcuts and deep-link, remains available as a complement.', iphoneStep1: "Open the Shortcuts app on your iPhone.", iphoneStep2: 'Create a new shortcut.', iphoneStep3: "Add the 'Open URL' action.", iphoneStep4: 'Paste the Budgy URL below (the dictated text is passed as a parameter).', iphoneStep5: 'Save the shortcut.', iphoneStep6: "Suggested Siri phrase: 'Hey Siri, add a Budgy expense'.", androidStep1: 'Use Google Assistant or create a system shortcut that opens a URL.', androidStep2: 'Paste the Budgy URL below (the dictated text is passed as a parameter).', example1: 'Add 25 CHF at Migros', example2: 'Salary 3200 CHF', example3: 'Netflix 18 CHF every month', example4: 'Swisscom bill 89 CHF', example5: 'Car insurance contract 95 CHF', voiceExample: 'Add 25 CHF at Migros', sectionNative: 'Native Siri commands', nativeNote: 'Native commands (App Intents) — require an installed iOS build. Tap a phrase to copy it. Amounts are only spoken if “Amounts via Siri” is enabled in Settings > Widgets.', cmd1Title: 'Add an expense', cmd1Phrase: 'Hey Siri, add an expense in Budgy', cmd2Title: 'Balance & savings', cmd2Phrase: 'Hey Siri, how much have I saved in Budgy?', cmd3Title: 'Bills to pay', cmd3Phrase: 'Hey Siri, which bills do I still need to pay in Budgy?', cmd4Title: 'Monthly budget', cmd4Phrase: 'Hey Siri, how much is left in my monthly budget in Budgy?' },
-    de: { title: 'Siri & Assistent', heroTitle: 'Ausgaben per Stimme hinzufügen', heroSub: 'Kompatibel mit Siri über iOS-Kurzbefehle und mit Google Assistant über Android-Verknüpfungen.', openQuickAdd: 'Schnellerfassung öffnen', testExample: 'Beispiel testen', sectionIphone: 'iPhone — über Siri', sectionAndroid: 'Android — über Google Assistant', sectionExamples: 'Beispielsätze', linkSiri: 'Siri-Link', linkGoogle: 'Google Assistant-Link', copySiri: 'Siri-Link kopieren', copyGoogle: 'Google Assistant-Link kopieren', copiedTitle: 'Kopiert ✅', copiedBody: '{{label}} in die Zwischenablage kopiert.', copyError: 'Link konnte nicht kopiert werden.', helpText: 'Tippen Sie auf ein Beispiel, um es direkt an die Schnellerfassung zu senden.', note: 'Native Siri-Befehle (App Intents) sind in Budgy integriert und nach Installation eines iOS-Builds aktiv. Die Methode unten über iOS-Kurzbefehle und Deep-Link bleibt ergänzend verfügbar.', iphoneStep1: 'Öffnen Sie die App „Kurzbefehle" auf Ihrem iPhone.', iphoneStep2: 'Erstellen Sie einen neuen Kurzbefehl.', iphoneStep3: 'Fügen Sie die Aktion „URL öffnen" hinzu.', iphoneStep4: 'Fügen Sie die Budgy-URL unten ein (der diktierte Text wird als Parameter übergeben).', iphoneStep5: 'Speichern Sie den Kurzbefehl.', iphoneStep6: 'Vorgeschlagener Siri-Satz: „Hey Siri, füge eine Budgy-Ausgabe hinzu".', androidStep1: 'Nutzen Sie Google Assistant oder erstellen Sie eine System-Verknüpfung, die eine URL öffnet.', androidStep2: 'Fügen Sie die Budgy-URL unten ein (der diktierte Text wird als Parameter übergeben).', example1: '25 CHF bei Migros hinzufügen', example2: 'Gehalt 3200 CHF', example3: 'Netflix 18 CHF jeden Monat', example4: 'Swisscom-Rechnung 89 CHF', example5: 'Autoversicherungsvertrag 95 CHF', voiceExample: '25 CHF bei Migros hinzufügen', sectionNative: 'Native Siri-Befehle', nativeNote: 'Native Befehle (App Intents) — erfordern einen installierten iOS-Build. Tippen Sie auf einen Satz, um ihn zu kopieren. Beträge werden nur genannt, wenn „Beträge über Siri“ in Einstellungen > Widgets aktiviert ist.', cmd1Title: 'Ausgabe hinzufügen', cmd1Phrase: 'Hey Siri, füge eine Ausgabe in Budgy hinzu', cmd2Title: 'Saldo & Erspartes', cmd2Phrase: 'Hey Siri, wie viel habe ich in Budgy gespart?', cmd3Title: 'Offene Rechnungen', cmd3Phrase: 'Hey Siri, welche Rechnungen muss ich in Budgy noch bezahlen?', cmd4Title: 'Monatsbudget', cmd4Phrase: 'Hey Siri, wie viel bleibt in meinem Monatsbudget in Budgy?' },
-    it: { title: 'Siri e Assistente', heroTitle: 'Aggiungi spese con la voce', heroSub: 'Compatibile con Siri tramite Comandi rapidi iOS e con Google Assistant tramite le scorciatoie Android.', openQuickAdd: 'Apri Aggiunta Intelligente', testExample: 'Prova un esempio', sectionIphone: 'iPhone — tramite Siri', sectionAndroid: 'Android — tramite Google Assistant', sectionExamples: 'Frasi di esempio', linkSiri: 'Link Siri', linkGoogle: 'Link Google Assistant', copySiri: 'Copia il link Siri', copyGoogle: 'Copia il link Google Assistant', copiedTitle: 'Copiato ✅', copiedBody: '{{label}} copiato negli appunti.', copyError: 'Impossibile copiare il link.', helpText: "Tocca un esempio per inviarlo direttamente ad Aggiunta Intelligente.", note: "I comandi Siri nativi (App Intents) sono integrati in Budgy e attivi dopo l'installazione di un build iOS. Il metodo qui sotto, tramite Comandi rapidi iOS e deep-link, resta disponibile come complemento.", iphoneStep1: "Apri l'app « Comandi rapidi » del tuo iPhone.", iphoneStep2: 'Crea un nuovo comando rapido.', iphoneStep3: "Aggiungi l'azione « Apri URL ».", iphoneStep4: 'Incolla l\'URL Budgy qui sotto (il testo dettato viene passato come parametro).', iphoneStep5: 'Salva il comando rapido.', iphoneStep6: 'Frase Siri suggerita: « Dì Siri, aggiungi una spesa Budgy ».', androidStep1: 'Usa Google Assistant o crea una scorciatoia di sistema che apra un URL.', androidStep2: 'Incolla l\'URL Budgy qui sotto (il testo dettato viene passato come parametro).', example1: 'Aggiungi 25 CHF da Migros', example2: 'Stipendio 3200 CHF', example3: 'Netflix 18 CHF ogni mese', example4: 'Fattura Swisscom 89 CHF', example5: 'Contratto assicurazione auto 95 CHF', voiceExample: 'Aggiungi 25 CHF da Migros', sectionNative: 'Comandi Siri nativi', nativeNote: 'Comandi nativi (App Intents) — richiedono un build iOS installato. Tocca una frase per copiarla. Gli importi vengono pronunciati solo se «Importi tramite Siri» è attivo in Impostazioni > Widget.', cmd1Title: 'Aggiungi una spesa', cmd1Phrase: 'Ehi Siri, aggiungi una spesa in Budgy', cmd2Title: 'Saldo e risparmi', cmd2Phrase: 'Ehi Siri, quanto ho risparmiato in Budgy?', cmd3Title: 'Fatture da pagare', cmd3Phrase: 'Ehi Siri, quali fatture devo ancora pagare in Budgy?', cmd4Title: 'Budget mensile', cmd4Phrase: 'Ehi Siri, quanto resta nel mio budget mensile in Budgy?' },
+    fr: { title: 'Siri & Assistant', heroTitle: 'Ajoute une dépense à la voix', heroSub: 'Compatible avec Siri via Raccourcis iOS et avec Google Assistant via les raccourcis Android.', openQuickAdd: 'Ouvrir Ajout Intelligent', testExample: 'Tester un exemple', sectionIphone: 'iPhone — via Siri', sectionAndroid: 'Android — via Google Assistant', sectionExamples: 'Exemples de phrases', linkSiri: 'Lien Siri', linkGoogle: 'Lien Google Assistant', copySiri: 'Copier le lien Siri', copyGoogle: 'Copier le lien Google Assistant', copiedTitle: 'Copié ✅', copiedBody: '{{label}} copié dans le presse-papiers.', copyError: 'Impossible de copier le lien.', helpText: "Touchez un exemple pour l'envoyer directement dans Ajout Intelligent.", note: "Les commandes Siri natives (App Intents) sont intégrées à Budgy et actives après installation d'un build iOS. La méthode ci-dessous, via Raccourcis iOS et deep-link, reste disponible en complément.", iphoneStep1: "Ouvrez l'app « Raccourcis » de votre iPhone.", iphoneStep2: 'Créez un nouveau raccourci.', iphoneStep3: "Ajoutez l'action « Ouvrir une URL ».", iphoneStep4: 'Collez l\'URL Budgy ci-dessous (le texte dicté sera passé en paramètre).', iphoneStep5: 'Enregistrez le raccourci.', iphoneStep6: 'Phrase Siri suggérée : « Dis Siri, ajoute une dépense Budgy ».', androidStep1: 'Utilisez Google Assistant ou créez un raccourci système qui ouvre une URL.', androidStep2: 'Collez l\'URL Budgy ci-dessous (le texte dicté sera passé en paramètre).', example1: 'Ajoute 25 CHF chez Migros', example2: 'Salaire 3200 CHF', example3: 'Netflix 18 CHF chaque mois', example4: 'Facture Swisscom 89 CHF', example5: 'Contrat assurance voiture 95 CHF', voiceExample: 'Ajoute 25 CHF chez Migros', sectionNative: 'Commandes Siri natives', nativeNote: 'Si Siri ne comprend pas la commande, ouvrez Raccourcis > Apps > Budgy et vérifiez la présence de « Ajouter une dépense ». Dites ensuite la phrase exacte affichée ci-dessus. La dépense doit être confirmée dans Budgy avant son enregistrement.', cmd1Title: 'Ajouter une dépense', cmd1Phrase: 'Dis Siri, ajoute une dépense dans Budgy', cmd2Title: 'Solde & épargne', cmd2Phrase: 'Dis Siri, combien ai-je économisé dans Budgy ?', cmd3Title: 'Factures à payer', cmd3Phrase: 'Dis Siri, quelles factures dois-je payer dans Budgy ?', cmd4Title: 'Budget mensuel', cmd4Phrase: 'Dis Siri, combien me reste-t-il dans mon budget ce mois-ci dans Budgy ?' },
+    en: { title: 'Siri & Assistant', heroTitle: 'Add expenses by voice', heroSub: 'Compatible with Siri via iOS Shortcuts and with Google Assistant via Android shortcuts.', openQuickAdd: 'Open Smart Add', testExample: 'Test an example', sectionIphone: 'iPhone — via Siri', sectionAndroid: 'Android — via Google Assistant', sectionExamples: 'Example phrases', linkSiri: 'Siri link', linkGoogle: 'Google Assistant link', copySiri: 'Copy Siri link', copyGoogle: 'Copy Google Assistant link', copiedTitle: 'Copied ✅', copiedBody: '{{label}} copied to clipboard.', copyError: 'Could not copy the link.', helpText: 'Tap an example to send it straight to Smart Add.', note: 'Native Siri commands (App Intents) are built into Budgy and active once an iOS build is installed. The method below, via iOS Shortcuts and deep-link, remains available as a complement.', iphoneStep1: "Open the Shortcuts app on your iPhone.", iphoneStep2: 'Create a new shortcut.', iphoneStep3: "Add the 'Open URL' action.", iphoneStep4: 'Paste the Budgy URL below (the dictated text is passed as a parameter).', iphoneStep5: 'Save the shortcut.', iphoneStep6: "Suggested Siri phrase: 'Hey Siri, add a Budgy expense'.", androidStep1: 'Use Google Assistant or create a system shortcut that opens a URL.', androidStep2: 'Paste the Budgy URL below (the dictated text is passed as a parameter).', example1: 'Add 25 CHF at Migros', example2: 'Salary 3200 CHF', example3: 'Netflix 18 CHF every month', example4: 'Swisscom bill 89 CHF', example5: 'Car insurance contract 95 CHF', voiceExample: 'Add 25 CHF at Migros', sectionNative: 'Native Siri commands', nativeNote: 'If Siri cannot add an expense, open Shortcuts > Apps > Budgy and check that Add an expense is available. Then speak the exact phrase above. Confirm the expense in Budgy before it is saved.', cmd1Title: 'Add an expense', cmd1Phrase: 'Hey Siri, add an expense in Budgy', cmd2Title: 'Balance & savings', cmd2Phrase: 'Hey Siri, how much have I saved in Budgy?', cmd3Title: 'Bills to pay', cmd3Phrase: 'Hey Siri, which bills do I still need to pay in Budgy?', cmd4Title: 'Monthly budget', cmd4Phrase: 'Hey Siri, how much is left in my monthly budget in Budgy?' },
+    de: { title: 'Siri & Assistent', heroTitle: 'Ausgaben per Stimme hinzufügen', heroSub: 'Kompatibel mit Siri über iOS-Kurzbefehle und mit Google Assistant über Android-Verknüpfungen.', openQuickAdd: 'Schnellerfassung öffnen', testExample: 'Beispiel testen', sectionIphone: 'iPhone — über Siri', sectionAndroid: 'Android — über Google Assistant', sectionExamples: 'Beispielsätze', linkSiri: 'Siri-Link', linkGoogle: 'Google Assistant-Link', copySiri: 'Siri-Link kopieren', copyGoogle: 'Google Assistant-Link kopieren', copiedTitle: 'Kopiert ✅', copiedBody: '{{label}} in die Zwischenablage kopiert.', copyError: 'Link konnte nicht kopiert werden.', helpText: 'Tippen Sie auf ein Beispiel, um es direkt an die Schnellerfassung zu senden.', note: 'Native Siri-Befehle (App Intents) sind in Budgy integriert und nach Installation eines iOS-Builds aktiv. Die Methode unten über iOS-Kurzbefehle und Deep-Link bleibt ergänzend verfügbar.', iphoneStep1: 'Öffnen Sie die App „Kurzbefehle" auf Ihrem iPhone.', iphoneStep2: 'Erstellen Sie einen neuen Kurzbefehl.', iphoneStep3: 'Fügen Sie die Aktion „URL öffnen" hinzu.', iphoneStep4: 'Fügen Sie die Budgy-URL unten ein (der diktierte Text wird als Parameter übergeben).', iphoneStep5: 'Speichern Sie den Kurzbefehl.', iphoneStep6: 'Vorgeschlagener Siri-Satz: „Hey Siri, füge eine Budgy-Ausgabe hinzu".', androidStep1: 'Nutzen Sie Google Assistant oder erstellen Sie eine System-Verknüpfung, die eine URL öffnet.', androidStep2: 'Fügen Sie die Budgy-URL unten ein (der diktierte Text wird als Parameter übergeben).', example1: '25 CHF bei Migros hinzufügen', example2: 'Gehalt 3200 CHF', example3: 'Netflix 18 CHF jeden Monat', example4: 'Swisscom-Rechnung 89 CHF', example5: 'Autoversicherungsvertrag 95 CHF', voiceExample: '25 CHF bei Migros hinzufügen', sectionNative: 'Native Siri-Befehle', nativeNote: 'Wenn Siri keine Ausgabe hinzufügen kann, öffnen Sie Kurzbefehle > Apps > Budgy und prüfen Sie, ob Ausgabe hinzufügen vorhanden ist. Sprechen Sie dann den oben angezeigten Satz. Bestätigen Sie die Ausgabe vor dem Speichern in Budgy.', cmd1Title: 'Ausgabe hinzufügen', cmd1Phrase: 'Hey Siri, füge eine Ausgabe in Budgy hinzu', cmd2Title: 'Saldo & Erspartes', cmd2Phrase: 'Hey Siri, wie viel habe ich in Budgy gespart?', cmd3Title: 'Offene Rechnungen', cmd3Phrase: 'Hey Siri, welche Rechnungen muss ich in Budgy noch bezahlen?', cmd4Title: 'Monatsbudget', cmd4Phrase: 'Hey Siri, wie viel bleibt in meinem Monatsbudget in Budgy?' },
+    it: { title: 'Siri e Assistente', heroTitle: 'Aggiungi spese con la voce', heroSub: 'Compatibile con Siri tramite Comandi rapidi iOS e con Google Assistant tramite le scorciatoie Android.', openQuickAdd: 'Apri Aggiunta Intelligente', testExample: 'Prova un esempio', sectionIphone: 'iPhone — tramite Siri', sectionAndroid: 'Android — tramite Google Assistant', sectionExamples: 'Frasi di esempio', linkSiri: 'Link Siri', linkGoogle: 'Link Google Assistant', copySiri: 'Copia il link Siri', copyGoogle: 'Copia il link Google Assistant', copiedTitle: 'Copiato ✅', copiedBody: '{{label}} copiato negli appunti.', copyError: 'Impossibile copiare il link.', helpText: "Tocca un esempio per inviarlo direttamente ad Aggiunta Intelligente.", note: "I comandi Siri nativi (App Intents) sono integrati in Budgy e attivi dopo l'installazione di un build iOS. Il metodo qui sotto, tramite Comandi rapidi iOS e deep-link, resta disponibile come complemento.", iphoneStep1: "Apri l'app « Comandi rapidi » del tuo iPhone.", iphoneStep2: 'Crea un nuovo comando rapido.', iphoneStep3: "Aggiungi l'azione « Apri URL ».", iphoneStep4: 'Incolla l\'URL Budgy qui sotto (il testo dettato viene passato come parametro).', iphoneStep5: 'Salva il comando rapido.', iphoneStep6: 'Frase Siri suggerita: « Dì Siri, aggiungi una spesa Budgy ».', androidStep1: 'Usa Google Assistant o crea una scorciatoia di sistema che apra un URL.', androidStep2: 'Incolla l\'URL Budgy qui sotto (il testo dettato viene passato come parametro).', example1: 'Aggiungi 25 CHF da Migros', example2: 'Stipendio 3200 CHF', example3: 'Netflix 18 CHF ogni mese', example4: 'Fattura Swisscom 89 CHF', example5: 'Contratto assicurazione auto 95 CHF', voiceExample: 'Aggiungi 25 CHF da Migros', sectionNative: 'Comandi Siri nativi', nativeNote: 'Se Siri non riesce ad aggiungere una spesa, apri Comandi rapidi > App > Budgy e verifica che sia presente Aggiungi una spesa. Pronuncia quindi la frase mostrata sopra. Conferma la spesa in Budgy prima del salvataggio.', cmd1Title: 'Aggiungi una spesa', cmd1Phrase: 'Ehi Siri, aggiungi una spesa in Budgy', cmd2Title: 'Saldo e risparmi', cmd2Phrase: 'Ehi Siri, quanto ho risparmiato in Budgy?', cmd3Title: 'Fatture da pagare', cmd3Phrase: 'Ehi Siri, quali fatture devo ancora pagare in Budgy?', cmd4Title: 'Budget mensile', cmd4Phrase: 'Ehi Siri, quanto resta nel mio budget mensile in Budgy?' },
   },
 
   // ─────────── Family & Groups (v3.8.0) ───────────
@@ -2159,7 +2159,7 @@ export const TRANSLATIONS = {
   addContract: {
     fr: {
       typePhone: 'Téléphone / Internet', typeInsurance: 'Assurance', typeHousing: 'Logement / Loyer',
-      typeTransport: 'Transport / Auto', typeHealth: 'Santé / Mutuelle', typeEnergy: 'Énergie', typeOther: 'Autre',
+      typeTransport: 'Transport / Auto', typeHealth: 'Santé / Mutuelle', typeEnergy: 'Énergie', typeBanking: "Banque et crédit", typeEmployment: "Travail", typeOther: 'Autre',
       missingNameTitle: 'Nom manquant', missingNameBody: 'Saisissez le nom du contrat.',
       invalidAmountTitle: 'Montant invalide', invalidAmountBody: 'Saisissez un montant valide.',
       errorTitle: 'Erreur', saveError: 'Sauvegarde impossible.',
@@ -2191,7 +2191,7 @@ export const TRANSLATIONS = {
     },
     en: {
       typePhone: 'Phone / Internet', typeInsurance: 'Insurance', typeHousing: 'Housing / Rent',
-      typeTransport: 'Transport / Car', typeHealth: 'Health / Insurance', typeEnergy: 'Energy', typeOther: 'Other',
+      typeTransport: 'Transport / Car', typeHealth: 'Health / Insurance', typeEnergy: 'Energy', typeBanking: "Banking and credit", typeEmployment: "Employment", typeOther: 'Other',
       missingNameTitle: 'Name missing', missingNameBody: 'Enter the contract name.',
       invalidAmountTitle: 'Invalid amount', invalidAmountBody: 'Enter a valid amount.',
       errorTitle: 'Error', saveError: 'Could not save.',
@@ -2223,7 +2223,7 @@ export const TRANSLATIONS = {
     },
     de: {
       typePhone: 'Telefon / Internet', typeInsurance: 'Versicherung', typeHousing: 'Wohnen / Miete',
-      typeTransport: 'Transport / Auto', typeHealth: 'Gesundheit / Krankenkasse', typeEnergy: 'Energie', typeOther: 'Andere',
+      typeTransport: 'Transport / Auto', typeHealth: 'Gesundheit / Krankenkasse', typeEnergy: 'Energie', typeBanking: "Banken und Kredite", typeEmployment: "Arbeit", typeOther: 'Andere',
       missingNameTitle: 'Name fehlt', missingNameBody: 'Geben Sie den Vertragsnamen ein.',
       invalidAmountTitle: 'Ungültiger Betrag', invalidAmountBody: 'Geben Sie einen gültigen Betrag ein.',
       errorTitle: 'Fehler', saveError: 'Speichern nicht möglich.',
@@ -2255,7 +2255,7 @@ export const TRANSLATIONS = {
     },
     it: {
       typePhone: 'Telefono / Internet', typeInsurance: 'Assicurazione', typeHousing: 'Alloggio / Affitto',
-      typeTransport: 'Trasporto / Auto', typeHealth: 'Salute / Cassa malati', typeEnergy: 'Energia', typeOther: 'Altro',
+      typeTransport: 'Trasporto / Auto', typeHealth: 'Salute / Cassa malati', typeEnergy: 'Energia', typeBanking: "Banca e credito", typeEmployment: "Lavoro", typeOther: 'Altro',
       missingNameTitle: 'Nome mancante', missingNameBody: 'Inserisci il nome del contratto.',
       invalidAmountTitle: 'Importo non valido', invalidAmountBody: 'Inserisci un importo valido.',
       errorTitle: 'Errore', saveError: 'Salvataggio impossibile.',
@@ -3770,6 +3770,14 @@ dueThisMonth: 'Da pagare questo mese', paidThisMonth: 'Pagato questo mese', next
       alreadyLinked: 'Ce document est déjà lié à la facture « {title} ». Aucune nouvelle obligation n\'a été créée.',
       completeCurrency: 'Devise du QR : {currency}',
       originalDoc: 'Document original',
+      openDetails: "Ouvrir le détail de la facture",
+      openOriginal: "Ouvrir le PDF ou la photo",
+      shareOriginal: "Partager le PDF ou la photo",
+      showQrForBank: "Afficher le QR pour la banque",
+      shareQr: "Partager le QR en image",
+      shareQrErrorTitle: "Partage du QR impossible",
+      shareQrErrorBody: "Impossible de préparer l'image du QR. Vous pouvez toujours afficher le code pour le scanner avec un autre téléphone.",
+      paymentReminder: "Pour payer, scannez le QR avec votre application bancaire sur un autre téléphone ou partagez le PDF, la photo ou le QR sur celui-ci. Vérifiez le destinataire et le montant dans votre banque. Budgy ne déclenche aucun paiement.",
       qrKept: 'QR Code conservé',
       showQr: 'QR',
       qrRebuiltNote: 'QR reconstitué depuis le payload conservé — le document original est disponible séparément.',
@@ -3797,6 +3805,14 @@ dueThisMonth: 'Da pagare questo mese', paidThisMonth: 'Pagato questo mese', next
       alreadyLinked: 'This document is already linked to invoice “{title}”. No new obligation was created.',
       completeCurrency: 'QR currency: {currency}',
       originalDoc: 'Original document',
+      openDetails: "Open invoice details",
+      openOriginal: "Open PDF or photo",
+      shareOriginal: "Share PDF or photo",
+      showQrForBank: "Show QR for banking",
+      shareQr: "Share QR as image",
+      shareQrErrorTitle: "Cannot share QR",
+      shareQrErrorBody: "Unable to prepare the QR image. You can still display the code and scan it with another phone.",
+      paymentReminder: "To pay, scan this QR from your banking app on another phone, or share the PDF, photo or QR on this phone. Check the payee and amount in your bank. Budgy never starts a payment.",
       qrKept: 'QR code kept',
       showQr: 'QR',
       qrRebuiltNote: 'QR rebuilt from the stored payload — the original document is available separately.',
@@ -3824,6 +3840,14 @@ dueThisMonth: 'Da pagare questo mese', paidThisMonth: 'Pagato questo mese', next
       alreadyLinked: 'Dieses Dokument ist bereits mit der Rechnung «{title}» verknüpft. Es wurde keine neue Verpflichtung erstellt.',
       completeCurrency: 'QR-Währung: {currency}',
       originalDoc: 'Originaldokument',
+      openDetails: "Rechnungsdetails öffnen",
+      openOriginal: "PDF oder Foto öffnen",
+      shareOriginal: "PDF oder Foto teilen",
+      showQrForBank: "QR für Banking anzeigen",
+      shareQr: "QR als Bild teilen",
+      shareQrErrorTitle: "QR kann nicht geteilt werden",
+      shareQrErrorBody: "Das QR-Bild konnte nicht erstellt werden. Sie können den Code weiterhin mit einem anderen Telefon scannen.",
+      paymentReminder: "Zum Bezahlen den QR mit der Banking-App eines anderen Telefons scannen oder PDF, Foto bzw. QR auf diesem Telefon teilen. Empfänger und Betrag in der Bank prüfen. Budgy löst keine Zahlung aus.",
       qrKept: 'QR-Code aufbewahrt',
       showQr: 'QR',
       qrRebuiltNote: 'QR aus dem gespeicherten Payload rekonstruiert — das Originaldokument ist separat verfügbar.',
@@ -3851,6 +3875,14 @@ dueThisMonth: 'Da pagare questo mese', paidThisMonth: 'Pagato questo mese', next
       alreadyLinked: 'Questo documento è già collegato alla fattura «{title}». Nessun nuovo obbligo è stato creato.',
       completeCurrency: 'Valuta del QR: {currency}',
       originalDoc: 'Documento originale',
+      openDetails: "Apri dettagli fattura",
+      openOriginal: "Apri PDF o foto",
+      shareOriginal: "Condividi PDF o foto",
+      showQrForBank: "Mostra QR per la banca",
+      shareQr: "Condividi QR come immagine",
+      shareQrErrorTitle: "Impossibile condividere il QR",
+      shareQrErrorBody: "Impossibile preparare l'immagine QR. Puoi comunque mostrare il codice e scansionarlo con un altro telefono.",
+      paymentReminder: "Per pagare, scansiona il QR con l'app bancaria su un altro telefono oppure condividi PDF, foto o QR su questo. Verifica beneficiario e importo nella banca. Budgy non avvia pagamenti.",
       qrKept: 'QR Code conservato',
       showQr: 'QR',
       qrRebuiltNote: 'QR ricostruito dal payload conservato — il documento originale è disponibile separatamente.',
@@ -3864,6 +3896,178 @@ dueThisMonth: 'Da pagare questo mese', paidThisMonth: 'Pagato questo mese', next
       invalidAmount: 'Importo non valido. Esempio: 1\'234.50 o 1 234,50.',
       completedTitle: 'Fattura creata',
       completedBody: 'L\'importo è stato confermato: la fattura è ora tracciata.',
+    },
+  },
+  documentPrivacy: {
+    fr: {
+      title: "Stockage privé et iCloud",
+      subtitle: "Vos documents restent sur votre appareil.",
+      local: "Enregistrés sur l'iPhone ou l'iPad",
+      localDetail: "Factures, contrats, tickets et pièces jointes sont conservés dans le stockage privé de Budgy. Ils ne sont plus envoyés automatiquement à un serveur Budgy.",
+      icloudBackup: "Sauvegarde iCloud de l'appareil",
+      icloudBackupDetail: "Si la sauvegarde iCloud est activée et inclut Budgy, iOS peut sauvegarder les documents locaux pour une restauration de l'appareil. Cette sauvegarde n'apparaît pas comme un dossier iCloud Drive.",
+      icloudDrive: "Votre iCloud Drive personnel",
+      icloudDriveDetail: "Ouvrez un document → Partager / Enregistrer dans Fichiers → choisissez iCloud Drive. Cette copie est volontaire et n'est pas une synchronisation automatique de Budgy.",
+      restore: "Attention lors d'un changement d'appareil",
+      restoreDetail: "Ne supprimez pas Budgy et ne changez pas de téléphone avant d'avoir vérifié votre sauvegarde. La sauvegarde iCloud ne synchronise pas instantanément les documents entre appareils.",
+      legacy: "Anciennes copies serveur",
+      legacyDetail: "Des fichiers ou informations envoyés avant le build 92 peuvent encore exister sur les serveurs Budgy. Ils ne sont pas supprimés automatiquement ; une procédure de migration et de suppression contrôlée reste nécessaire.",
+      ocrTitle: "Analyse OCR distante",
+      ocrBody: "Pour reconnaître automatiquement ce document, Budgy transmet ponctuellement son contenu à son service de traitement. Le fichier reste ensuite local. Préférez la saisie manuelle pour ne pas transmettre le contenu.",
+      ocrContinue: "Analyser ce document",
+      ocrManual: "Saisie manuelle, sans envoi",
+      ocrManualHint: "Analyse distante refusée. Remplissez les informations manuellement.",
+      exportToFiles: "Enregistrer dans Fichiers / iCloud Drive",
+      exportHelp: "Choisissez « Enregistrer dans Fichiers » puis votre iCloud Drive personnel dans la feuille de partage iOS.",
+      noFile: "La pièce jointe est indisponible. Vérifiez le stockage local ou restaurez une sauvegarde iCloud de l'appareil.",
+      settings: "Réglages iCloud de l'iPhone",
+      help: "Comprendre le stockage",
+      notAutomatic: "iCloud Drive : export manuel, pas de synchronisation automatique",
+      summary: "Les documents et leurs informations restent locaux. Les autres données financières peuvent utiliser la synchronisation Budgy si elle est activée.",
+    },
+    en: {
+      title: "Private storage & iCloud",
+      subtitle: "Your documents stay on your device.",
+      local: "Saved on your iPhone or iPad",
+      localDetail: "Bills, contracts, receipts and attachments are kept inside Budgy's local storage. They are no longer uploaded automatically to Budgy servers.",
+      icloudBackup: "iCloud device backup",
+      icloudBackupDetail: "If iCloud Backup is enabled and includes Budgy, iOS can back up local documents for device restoration. This backup is not an iCloud Drive folder.",
+      icloudDrive: "Your personal iCloud Drive",
+      icloudDriveDetail: "Open a document → Share / Save to Files → choose iCloud Drive. This is an explicit copy, not automatic Budgy synchronization.",
+      restore: "Before changing devices",
+      restoreDetail: "Do not uninstall Budgy or switch devices until you have checked your backup. iCloud Backup does not instantly synchronize files across devices.",
+      legacy: "Older server copies",
+      legacyDetail: "Files or details uploaded before build 92 may still exist on Budgy servers. They are not removed automatically; a verified migration and deletion process is still required.",
+      ocrTitle: "Remote document recognition",
+      ocrBody: "For automatic recognition Budgy temporarily sends this document's contents to a processing service. The stored file remains local. Choose manual entry to avoid transmitting the contents.",
+      ocrContinue: "Analyze document",
+      ocrManual: "Enter manually, no upload",
+      ocrManualHint: "Remote analysis declined. Enter the details manually.",
+      exportToFiles: "Save to Files / iCloud Drive",
+      exportHelp: "Choose Save to Files and then your personal iCloud Drive in the iOS share sheet.",
+      noFile: "The attachment is unavailable. Check local storage or restore an iCloud device backup.",
+      settings: "iPhone iCloud settings",
+      help: "Understand storage",
+      notAutomatic: "iCloud Drive: manual export, not automatic sync",
+      summary: "Documents and their details stay local. Other financial records may still use Budgy sync if enabled.",
+    },
+    de: {
+      title: "Privater Speicher & iCloud",
+      subtitle: "Ihre Dokumente bleiben auf Ihrem Gerät.",
+      local: "Auf iPhone oder iPad gespeichert",
+      localDetail: "Rechnungen, Verträge und Belege bleiben lokal in Budgy. Es erfolgt kein automatischer Upload mehr auf Budgy-Server.",
+      icloudBackup: "iCloud-Gerätesicherung",
+      icloudBackupDetail: "Wenn iCloud-Backup aktiviert ist und Budgy umfasst, kann iOS lokale Dokumente bei der Gerätesicherung sichern. Dies ist kein Ordner in iCloud Drive.",
+      icloudDrive: "Ihr persönliches iCloud Drive",
+      icloudDriveDetail: "Dokument öffnen → Teilen / In Dateien sichern → iCloud Drive wählen. Dies ist eine manuelle Kopie, keine automatische Budgy-Synchronisation.",
+      restore: "Vor einem Gerätewechsel",
+      restoreDetail: "Löschen Sie Budgy nicht und wechseln Sie das Gerät erst, wenn die Sicherung geprüft ist. iCloud-Backup synchronisiert Dateien nicht sofort zwischen Geräten.",
+      legacy: "Ältere Serverkopien",
+      legacyDetail: "Vor Build 92 hochgeladene Dateien und Angaben können weiterhin auf Budgy-Servern liegen. Sie werden nicht automatisch gelöscht; eine geprüfte Migration ist nötig.",
+      ocrTitle: "Externe Dokumenterkennung",
+      ocrBody: "Zur automatischen Erkennung sendet Budgy den Dokumentinhalt vorübergehend an einen Verarbeitungsdienst. Die gespeicherte Datei bleibt lokal. Ohne Übermittlung wählen Sie die manuelle Eingabe.",
+      ocrContinue: "Dokument analysieren",
+      ocrManual: "Manuell ohne Übermittlung",
+      ocrManualHint: "Externe Analyse abgelehnt. Daten bitte manuell erfassen.",
+      exportToFiles: "In Dateien / iCloud Drive sichern",
+      exportHelp: "Im iOS-Teilen-Menü In Dateien sichern und Ihr eigenes iCloud Drive wählen.",
+      noFile: "Anhang nicht verfügbar. Prüfen Sie den lokalen Speicher oder stellen Sie ein iCloud-Gerätebackup wieder her.",
+      settings: "iCloud-Einstellungen des iPhone",
+      help: "Speicherung verstehen",
+      notAutomatic: "iCloud Drive: manueller Export, keine automatische Synchronisation",
+      summary: "Dokumente und Details bleiben lokal. Andere Finanzdaten können bei Aktivierung weiterhin Budgy-Sync nutzen.",
+    },
+    it: {
+      title: "Archivio privato e iCloud",
+      subtitle: "I tuoi documenti restano sul dispositivo.",
+      local: "Salvati su iPhone o iPad",
+      localDetail: "Fatture, contratti, ricevute e allegati restano nella memoria locale di Budgy. Non vengono più caricati automaticamente sui server Budgy.",
+      icloudBackup: "Backup iCloud del dispositivo",
+      icloudBackupDetail: "Se il backup iCloud è attivo e include Budgy, iOS può salvare i documenti locali per il ripristino del dispositivo. Non è una cartella iCloud Drive.",
+      icloudDrive: "Il tuo iCloud Drive personale",
+      icloudDriveDetail: "Apri un documento → Condividi / Salva su File → scegli iCloud Drive. È una copia volontaria, non una sincronizzazione automatica Budgy.",
+      restore: "Prima di cambiare dispositivo",
+      restoreDetail: "Non eliminare Budgy né cambiare dispositivo finché non hai verificato il backup. Il backup iCloud non sincronizza subito i file tra dispositivi.",
+      legacy: "Vecchie copie sul server",
+      legacyDetail: "File o dati caricati prima della build 92 potrebbero essere ancora sui server Budgy. Non vengono eliminati automaticamente; serve una migrazione e cancellazione verificate.",
+      ocrTitle: "Analisi remota del documento",
+      ocrBody: "Per il riconoscimento automatico Budgy invia temporaneamente il documento a un servizio di analisi. Il file salvato resta locale. Per evitare l'invio, scegli l'inserimento manuale.",
+      ocrContinue: "Analizza documento",
+      ocrManual: "Inserisci manualmente, senza invio",
+      ocrManualHint: "Analisi remota rifiutata. Inserisci i dati manualmente.",
+      exportToFiles: "Salva in File / iCloud Drive",
+      exportHelp: "Nel menu Condividi di iOS scegli Salva su File e il tuo iCloud Drive personale.",
+      noFile: "Allegato non disponibile. Verifica la memoria locale o ripristina un backup iCloud del dispositivo.",
+      settings: "Impostazioni iCloud di iPhone",
+      help: "Informazioni sull'archiviazione",
+      notAutomatic: "iCloud Drive: esportazione manuale, non sincronizzazione automatica",
+      summary: "Documenti e dettagli restano locali. Altri dati finanziari possono usare Budgy Sync, se attivato.",
+    },
+  },
+  contractFolders: {
+    fr: {
+      all: "Tous les dossiers",
+      choose: "Choisir le dossier",
+      moveTo: "Changer de dossier",
+      scannedDocument: "Document scanné",
+      openOriginal: "Ouvrir le document original",
+      insurance: "Assurances",
+      housing: "Logement",
+      subscriptions: "Télécoms et abonnements",
+      transport: "Transport et auto",
+      health: "Santé",
+      energy: "Énergie",
+      banking: "Banque et crédit",
+      employment: "Travail",
+      other: "Autres contrats",
+    },
+    en: {
+      all: "All folders",
+      choose: "Choose folder",
+      moveTo: "Move to folder",
+      scannedDocument: "Scanned document",
+      openOriginal: "Open original document",
+      insurance: "Insurance",
+      housing: "Housing",
+      subscriptions: "Telecom and subscriptions",
+      transport: "Transport and car",
+      health: "Health",
+      energy: "Energy",
+      banking: "Banking and credit",
+      employment: "Employment",
+      other: "Other contracts",
+    },
+    de: {
+      all: "Alle Ordner",
+      choose: "Ordner auswählen",
+      moveTo: "In Ordner verschieben",
+      scannedDocument: "Gescanntes Dokument",
+      openOriginal: "Originaldokument öffnen",
+      insurance: "Versicherungen",
+      housing: "Wohnen",
+      subscriptions: "Telekom und Abos",
+      transport: "Mobilität und Auto",
+      health: "Gesundheit",
+      energy: "Energie",
+      banking: "Banken und Kredite",
+      employment: "Arbeit",
+      other: "Weitere Verträge",
+    },
+    it: {
+      all: "Tutte le cartelle",
+      choose: "Scegli cartella",
+      moveTo: "Sposta nella cartella",
+      scannedDocument: "Documento scansionato",
+      openOriginal: "Apri documento originale",
+      insurance: "Assicurazioni",
+      housing: "Casa",
+      subscriptions: "Telecomunicazioni e abbonamenti",
+      transport: "Trasporti e auto",
+      health: "Salute",
+      energy: "Energia",
+      banking: "Banca e credito",
+      employment: "Lavoro",
+      other: "Altri contratti",
     },
   },
   contractsV2: {
@@ -4651,3 +4855,502 @@ export function interpolate(template: string, params?: Record<string, any>): str
   if (!params) return template;
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => String(params[key] ?? ''));
 }
+
+// Mode d’emploi localisé : le catalogue officiel regroupe les textes affichés.
+/** Guide intégré — description prudente des possibilités existantes.
+ * Aucune prétention à un classement « n°1 » ni économies garanties.
+ * La disponibilité effective des modules dépend du plan et du build.
+ */
+export type UserGuideSection = {
+  id: string; title: string; summary: string; steps: string; benefit: string; featureId: string | null;
+};
+export type UserGuideLocale = {
+  title: string; eyebrow: string; lead: string; why: string; whyBody: string;
+  winsTitle: string; wins: [string, string][];
+  intro: string; stepsLabel: string; benefitLabel: string; openLabel: string;
+  freeLabel: string; proLabel: string; footTitle: string; foot: string;
+  sections: UserGuideSection[];
+};
+export const BUDGY_GUIDES: Record<'fr' | 'en' | 'de' | 'it', UserGuideLocale> = 
+{
+  "fr": {
+    "title": "Découvrir Budgy",
+    "eyebrow": "LE GUIDE POUR VOTRE QUOTIDIEN EN SUISSE",
+    "lead": "Un seul endroit pour suivre votre budget, retrouver vos factures et contrats et décider plus sereinement.",
+    "why": "Pourquoi utiliser Budgy ?",
+    "whyBody": "Quand les dépenses, factures et contrats sont dispersés, il est difficile de voir ce qu’il reste réellement. Budgy les rassemble et met en évidence les engagements à surveiller.",
+    "winsTitle": "Ce que vous pouvez gagner",
+    "wins": [
+      [
+        "Du temps",
+        "Moins de recherches de justificatifs et d'échéances."
+      ],
+      [
+        "De la visibilité",
+        "Une meilleure lecture de vos dépenses, budgets et charges à venir."
+      ],
+      [
+        "Des économies possibles",
+        "Des dépenses oubliées ou des contrats à comparer peuvent apparaître. Aucun gain n'est garanti."
+      ]
+    ],
+    "intro": "Commencez avec vos revenus, puis vos dépenses et charges régulières. Ajoutez progressivement vos documents : mieux vaut des données complètes et vérifiées que des chiffres estimés.",
+    "stepsLabel": "Comment faire",
+    "benefitLabel": "Votre avantage",
+    "openLabel": "Découvrir cette fonction",
+    "freeLabel": "Inclus",
+    "proLabel": "Budgy Pro",
+    "footTitle": "À savoir",
+    "foot": "Budgy n'est pas une banque : elle ne paie pas vos factures et ne garantit aucun rendement ni rabais. Vérifiez toujours montants, dates, QR et résultats comparatifs. Certaines fonctions demandent Budgy Pro, une connexion ou un appareil compatible.",
+    "sections": [
+      {
+        "id": "revenus",
+        "title": "1. Poser votre base financière",
+        "summary": "Renseignez vos revenus pour connaître votre situation de départ.",
+        "steps": "Plus → Revenus → Ajouter le salaire et les entrées ponctuelles. Actualisez après un changement.",
+        "benefit": "Un budget cohérent avec vos ressources réelles.",
+        "featureId": "incomes"
+      },
+      {
+        "id": "budget",
+        "title": "2. Suivre vos dépenses et budgets",
+        "summary": "Enregistrez les dépenses par catégorie et fixez des limites mensuelles.",
+        "steps": "Plus → Budgets → Créer un budget. Saisissez vos achats dans Dépenses et contrôlez les alertes à 80 et 100 %.",
+        "benefit": "Repérer les postes qui dépassent vos prévisions.",
+        "featureId": "budgets"
+      },
+      {
+        "id": "charges",
+        "title": "3. Anticiper les charges fixes et dettes",
+        "summary": "Centralisez loyer, assurances, abonnements, mensualités et remboursements.",
+        "steps": "Plus → Charges fixes ou Dettes → Ajoutez chaque engagement et vérifiez les échéances.",
+        "benefit": "Limiter les oublis et éviter de compter deux fois une même dépense.",
+        "featureId": "recurring"
+      },
+      {
+        "id": "factures",
+        "title": "4. Importer une facture et retrouver son QR",
+        "summary": "Photographiez, scannez ou importez un PDF. La facture reste consultable dans Factures.",
+        "steps": "Plus → Factures → Importer. Vérifiez l'extraction. Touchez la facture pour ouvrir le document, afficher ou partager son QR suisse.",
+        "benefit": "Retrouver rapidement la facture pour la payer dans votre propre application bancaire.",
+        "featureId": "invoices"
+      },
+      {
+        "id": "contrats",
+        "title": "5. Classer et retrouver vos contrats",
+        "summary": "Conservez les contrats scannés par dossier : assurances, logement, télécoms, transport, santé, énergie, banque, travail et autres.",
+        "steps": "Plus → Mon classeur → Scanner ou importer → Choisir le dossier → Enregistrer. Ouvrez ensuite le contrat pour consulter ou partager sa pièce jointe.",
+        "benefit": "Retrouver vos documents et mieux anticiper renouvellements ou résiliations.",
+        "featureId": "documents"
+      },
+      {
+        "id": "epargne",
+        "title": "6. Préparer vos objectifs d'épargne",
+        "summary": "Suivez vos objectifs et votre progression sans mélanger épargne et dépenses.",
+        "steps": "Ouvrez l'onglet Épargne, créez un objectif et ajustez ses montants à mesure que vous épargnez.",
+        "benefit": "Donner une destination claire à votre argent.",
+        "featureId": null
+      },
+      {
+        "id": "suisse",
+        "title": "7. Utiliser les outils utiles en Suisse",
+        "summary": "Explorez le comparateur LAMal et les outils fiscaux, selon votre accès.",
+        "steps": "Plus → Suisse → Comparateur LAMal ou Fiscalité. Vérifiez toujours les données et les sources officielles avant une décision.",
+        "benefit": "Identifier des pistes de comparaison, sans rabais automatique ni conseil personnalisé.",
+        "featureId": "lamal"
+      },
+      {
+        "id": "intelligence",
+        "title": "8. Comprendre votre dynamique financière",
+        "summary": "Découvrez Budgy Twin (bêta) et les outils intelligents lorsqu'ils sont disponibles.",
+        "steps": "Plus → Budgy Twin, ou les outils Pro. Vérifiez les suggestions plutôt que de les considérer comme des certitudes.",
+        "benefit": "Repérer des habitudes et préparer de meilleures décisions.",
+        "featureId": "twin"
+      },
+      {
+        "id": "assistant",
+        "title": "9. Utiliser Siri et les raccourcis",
+        "summary": "Certaines commandes permettent d'ouvrir Budgy ou de préparer une action sur iPhone.",
+        "steps": "Configurez les raccourcis Budgy dans iOS ; vérifiez toujours dans l'application qu'une dépense est bien enregistrée.",
+        "benefit": "Saisir plus vite, lorsque la commande et la version iOS sont compatibles.",
+        "featureId": null
+      },
+      {
+        "id": "securite",
+        "title": "10. Protéger vos documents",
+        "summary": "Les factures, tickets et contrats restent sur votre appareil. La sauvegarde iCloud de l’appareil dépend des réglages Apple ; l’export iCloud Drive est volontaire et manuel.",
+        "steps": "Plus → Stockage privé et iCloud. Vérifiez la sauvegarde iCloud de l’appareil et exportez vos copies dans Fichiers / iCloud Drive avant de changer d’appareil.",
+        "benefit": "Garder la maîtrise de vos données et retrouver vos justificatifs.",
+        "featureId": "security"
+      },
+      {
+        "id": "pro",
+        "title": "11. Choisir les fonctions adaptées",
+        "summary": "Les outils de base coexistent avec des fonctions Budgy Pro (analyse, fiscalité, exports, etc.).",
+        "steps": "Ouvrez la page Budgy Pro pour voir l'accès, les conditions et le prix effectivement affichés.",
+        "benefit": "Ne payer que pour les fonctions qui vous apportent une vraie utilité.",
+        "featureId": "subscription"
+      }
+    ]
+  },
+  "en": {
+    "title": "Explore Budgy",
+    "eyebrow": "YOUR GUIDE TO MONEY IN SWITZERLAND",
+    "lead": "One place for budgets, bills, contracts and clearer financial decisions.",
+    "why": "Why use Budgy?",
+    "whyBody": "When bills, spending and contracts are scattered, it is hard to see what remains. Budgy brings them together and helps surface obligations to review.",
+    "winsTitle": "What you could gain",
+    "wins": [
+      [
+        "Time",
+        "Less searching for documents and due dates."
+      ],
+      [
+        "Clarity",
+        "A better view of spending, budgets and upcoming charges."
+      ],
+      [
+        "Potential savings",
+        "Spot forgotten spending or contracts worth comparing. Savings aren't guaranteed."
+      ]
+    ],
+    "intro": "Start with income, spending and recurring charges. Add your documents gradually, and confirm extracted details.",
+    "stepsLabel": "How to use it",
+    "benefitLabel": "Potential benefit",
+    "openLabel": "Explore this feature",
+    "freeLabel": "Included",
+    "proLabel": "Budgy Pro",
+    "footTitle": "Important",
+    "foot": "Budgy is not a bank: it does not pay your bills or guarantee savings. Verify amounts, deadlines, QR data and comparisons. Some features need Pro access, a connection or a compatible device.",
+    "sections": [
+      {
+        "id": "revenus",
+        "title": "1. Set up income",
+        "summary": "Add income to build an accurate starting point.",
+        "steps": "More → Income → Add regular and occasional income.",
+        "benefit": "Budget against real resources.",
+        "featureId": "incomes"
+      },
+      {
+        "id": "budget",
+        "title": "2. Track expenses and budgets",
+        "summary": "Set monthly category limits and enter spending.",
+        "steps": "More → Budgets → Create a budget. Add purchases under Expenses and review 80%/100% warnings.",
+        "benefit": "See potential overspending sooner.",
+        "featureId": "budgets"
+      },
+      {
+        "id": "charges",
+        "title": "3. Plan recurring bills and debt",
+        "summary": "Track rent, insurance, subscriptions and repayments.",
+        "steps": "More → Recurring charges or Debts → Add commitments and check deadlines.",
+        "benefit": "Avoid surprises and double counting.",
+        "featureId": "recurring"
+      },
+      {
+        "id": "factures",
+        "title": "4. Store bills and Swiss QR codes",
+        "summary": "Scan, photograph or import a PDF bill.",
+        "steps": "More → Invoices → Import. Confirm the data, then tap the bill to open or share its original document or Swiss QR.",
+        "benefit": "Find bills to pay with your own banking app.",
+        "featureId": "invoices"
+      },
+      {
+        "id": "contrats",
+        "title": "5. Organize contracts in folders",
+        "summary": "Store scans under insurance, housing, telecom, transport, health, energy, banking, work or other.",
+        "steps": "More → My Binder → Scan or import → Choose a folder. Reopen or share the attached original.",
+        "benefit": "Find contracts and keep renewal dates in view.",
+        "featureId": "documents"
+      },
+      {
+        "id": "epargne",
+        "title": "6. Set savings goals",
+        "summary": "Track what you save without mixing it with spending.",
+        "steps": "Open Savings, add a goal and update its progress.",
+        "benefit": "See progress toward a goal.",
+        "featureId": null
+      },
+      {
+        "id": "suisse",
+        "title": "7. Explore Swiss tools",
+        "summary": "LAMal comparison and tax tools are available according to access.",
+        "steps": "More → Switzerland → LAMal or Tax. Confirm information with official sources.",
+        "benefit": "Explore possible comparisons; no guaranteed discount.",
+        "featureId": "lamal"
+      },
+      {
+        "id": "intelligence",
+        "title": "8. Explore insights",
+        "summary": "Budgy Twin (beta) and smart tools can suggest patterns.",
+        "steps": "More → Budgy Twin or Pro tools. Review suggestions critically.",
+        "benefit": "Find useful spending patterns.",
+        "featureId": "twin"
+      },
+      {
+        "id": "assistant",
+        "title": "9. iPhone shortcuts",
+        "summary": "Siri and Shortcuts can open or prepare Budgy actions.",
+        "steps": "Configure Budgy shortcuts in iOS; confirm that each action actually appears in the app.",
+        "benefit": "Faster entry when supported.",
+        "featureId": null
+      },
+      {
+        "id": "securite",
+        "title": "10. Protect your data",
+        "summary": "Private documents remain on the device. iCloud device backup depends on Apple settings; personal iCloud Drive export is manual.",
+        "steps": "More → Private storage and iCloud. Check the iCloud device backup, or export copies to Files / iCloud Drive before switching devices.",
+        "benefit": "Keep control of your records.",
+        "featureId": "security"
+      },
+      {
+        "id": "pro",
+        "title": "11. Choose your plan",
+        "summary": "Core tools coexist with Pro analysis and exports.",
+        "steps": "Open Budgy Pro to check current price, access and conditions.",
+        "benefit": "Pay only for tools useful to you.",
+        "featureId": "subscription"
+      }
+    ]
+  },
+  "de": {
+    "title": "Budgy entdecken",
+    "eyebrow": "IHR FINANZBEGLEITER FÜR DIE SCHWEIZ",
+    "lead": "Ein Ort für Budget, Rechnungen, Verträge und bessere finanzielle Entscheidungen.",
+    "why": "Warum Budgy?",
+    "whyBody": "Verstreute Ausgaben, Rechnungen und Verträge erschweren die Übersicht. Budgy fasst sie zusammen und macht Verpflichtungen sichtbar.",
+    "winsTitle": "Ihr möglicher Nutzen",
+    "wins": [
+      [
+        "Zeit",
+        "Weniger Suche nach Belegen und Terminen."
+      ],
+      [
+        "Überblick",
+        "Mehr Klarheit über Ausgaben und künftige Belastungen."
+      ],
+      [
+        "Mögliche Ersparnisse",
+        "Vergessene Kosten oder vergleichbare Verträge entdecken. Ohne Garantie."
+      ]
+    ],
+    "intro": "Beginnen Sie mit Einkommen, Ausgaben und Fixkosten. Fügen Sie Dokumente schrittweise hinzu und prüfen Sie erkannte Angaben.",
+    "stepsLabel": "So geht's",
+    "benefitLabel": "Ihr Vorteil",
+    "openLabel": "Funktion öffnen",
+    "freeLabel": "Enthalten",
+    "proLabel": "Budgy Pro",
+    "footTitle": "Wichtig",
+    "foot": "Budgy ist keine Bank und bezahlt keine Rechnungen. Ersparnisse sind nicht garantiert. Prüfen Sie Beträge, Fristen, QR-Angaben und Vergleiche. Manche Funktionen benötigen Pro, Internet oder kompatible Geräte.",
+    "sections": [
+      {
+        "id": "revenus",
+        "title": "1. Einkommen erfassen",
+        "summary": "Einnahmen bilden die Grundlage des Budgets.",
+        "steps": "Mehr → Einkommen → Regelmässige und einmalige Einnahmen erfassen.",
+        "benefit": "Mit realistischen Mitteln planen.",
+        "featureId": "incomes"
+      },
+      {
+        "id": "budget",
+        "title": "2. Ausgaben und Budget",
+        "summary": "Monatsbudgets erstellen und Ausgaben kategorisieren.",
+        "steps": "Mehr → Budgets → Limit festlegen, Ausgaben erfassen, Warnungen prüfen.",
+        "benefit": "Überschreitungen früher erkennen.",
+        "featureId": "budgets"
+      },
+      {
+        "id": "charges",
+        "title": "3. Fixkosten und Schulden",
+        "summary": "Miete, Versicherungen, Abos und Raten verfolgen.",
+        "steps": "Mehr → Fixkosten oder Schulden → Beträge und Termine erfassen.",
+        "benefit": "Verpflichtungen besser planen.",
+        "featureId": "recurring"
+      },
+      {
+        "id": "factures",
+        "title": "4. Rechnungen und QR",
+        "summary": "Rechnungen fotografieren, scannen oder als PDF importieren.",
+        "steps": "Mehr → Rechnungen → Importieren und prüfen. Danach Original oder QR öffnen/teilen.",
+        "benefit": "Rechnungen für die eigene Banking-App finden.",
+        "featureId": "invoices"
+      },
+      {
+        "id": "contrats",
+        "title": "5. Verträge in Ordnern",
+        "summary": "Nach Versicherung, Wohnung, Telekom, Transport, Gesundheit, Energie, Bank, Arbeit usw. sortieren.",
+        "steps": "Mehr → Mein Ordner → Scannen oder importieren → Ordner wählen.",
+        "benefit": "Unterlagen und Ablauffristen wiederfinden.",
+        "featureId": "documents"
+      },
+      {
+        "id": "epargne",
+        "title": "6. Sparziele",
+        "summary": "Sparfortschritt getrennt von Ausgaben verfolgen.",
+        "steps": "Im Tab Sparen ein Ziel anlegen und den Fortschritt erfassen.",
+        "benefit": "Fortschritt sehen.",
+        "featureId": null
+      },
+      {
+        "id": "suisse",
+        "title": "7. Schweizer Werkzeuge",
+        "summary": "LAMal-Vergleich und Steuerwerkzeuge je nach Zugang.",
+        "steps": "Mehr → Schweiz → LAMal oder Steuern. Mit offiziellen Quellen abgleichen.",
+        "benefit": "Vergleichsmöglichkeiten entdecken.",
+        "featureId": "lamal"
+      },
+      {
+        "id": "intelligence",
+        "title": "8. Finanzanalyse",
+        "summary": "Budgy Twin (Beta) und intelligente Werkzeuge.",
+        "steps": "Mehr → Budgy Twin oder Pro-Tools. Hinweise kritisch prüfen.",
+        "benefit": "Muster erkennen.",
+        "featureId": "twin"
+      },
+      {
+        "id": "assistant",
+        "title": "9. Siri und Kurzbefehle",
+        "summary": "Unterstützte Aktionen auf dem iPhone öffnen.",
+        "steps": "Kurzbefehle in iOS einrichten und Ergebnisse in der App kontrollieren.",
+        "benefit": "Schnellere Eingabe, falls unterstützt.",
+        "featureId": null
+      },
+      {
+        "id": "securite",
+        "title": "10. Daten schützen",
+        "summary": "Dokumente in der App, Cloud-Wiederherstellung abhängig von Konto und Dienst.",
+        "steps": "Mehr → Sicherheit/Einstellungen. Synchronisation und Backups prüfen.",
+        "benefit": "Unterlagen unter Kontrolle halten.",
+        "featureId": "security"
+      },
+      {
+        "id": "pro",
+        "title": "11. Passende Funktionen",
+        "summary": "Grundfunktionen und zusätzliche Pro-Tools.",
+        "steps": "Budgy Pro öffnen und Bedingungen sowie Preise prüfen.",
+        "benefit": "Nur Nützliches abonnieren.",
+        "featureId": "subscription"
+      }
+    ]
+  },
+  "it": {
+    "title": "Scopri Budgy",
+    "eyebrow": "LA GUIDA ALLE FINANZE IN SVIZZERA",
+    "lead": "Un unico posto per budget, fatture, contratti e decisioni più chiare.",
+    "why": "Perché usare Budgy?",
+    "whyBody": "Quando spese, fatture e contratti sono sparsi, è difficile capire cosa rimane. Budgy li riunisce e rende visibili gli impegni.",
+    "winsTitle": "Cosa puoi guadagnare",
+    "wins": [
+      [
+        "Tempo",
+        "Meno ricerca di documenti e scadenze."
+      ],
+      [
+        "Controllo",
+        "Una visione più chiara di spese, budget e costi futuri."
+      ],
+      [
+        "Possibili risparmi",
+        "Notare spese dimenticate o contratti da confrontare. Nessun risparmio garantito."
+      ]
+    ],
+    "intro": "Inizia da entrate, spese e costi fissi. Aggiungi i documenti gradualmente e verifica i dati estratti.",
+    "stepsLabel": "Come fare",
+    "benefitLabel": "Il vantaggio",
+    "openLabel": "Apri funzione",
+    "freeLabel": "Incluso",
+    "proLabel": "Budgy Pro",
+    "footTitle": "Da sapere",
+    "foot": "Budgy non è una banca e non paga fatture. Nessun risparmio è garantito. Verifica importi, scadenze, QR e confronti. Alcune funzioni richiedono Pro, Internet o un dispositivo compatibile.",
+    "sections": [
+      {
+        "id": "revenus",
+        "title": "1. Inserire le entrate",
+        "summary": "Le entrate sono la base del budget.",
+        "steps": "Altro → Entrate → Aggiungi entrate fisse e occasionali.",
+        "benefit": "Pianificare con risorse reali.",
+        "featureId": "incomes"
+      },
+      {
+        "id": "budget",
+        "title": "2. Gestire spese e budget",
+        "summary": "Imposta limiti mensili e registra le spese.",
+        "steps": "Altro → Budget → Crea un limite e controlla gli avvisi.",
+        "benefit": "Individuare prima gli sforamenti.",
+        "featureId": "budgets"
+      },
+      {
+        "id": "charges",
+        "title": "3. Costi fissi e debiti",
+        "summary": "Segui affitto, assicurazioni, abbonamenti e rate.",
+        "steps": "Altro → Spese ricorrenti o Debiti → Aggiungi impegni e scadenze.",
+        "benefit": "Ridurre dimenticanze e duplicati.",
+        "featureId": "recurring"
+      },
+      {
+        "id": "factures",
+        "title": "4. Fatture e QR svizzero",
+        "summary": "Scansiona, fotografa o importa una fattura PDF.",
+        "steps": "Altro → Fatture → Importa e verifica. Tocca la fattura per aprire o condividere originale e QR.",
+        "benefit": "Ritrovare documenti per pagare nella tua banca.",
+        "featureId": "invoices"
+      },
+      {
+        "id": "contrats",
+        "title": "5. Contratti nelle cartelle",
+        "summary": "Classifica per assicurazione, casa, telecom, trasporti, salute, energia, banca, lavoro e altro.",
+        "steps": "Altro → Il mio archivio → Scansiona o importa → Scegli cartella.",
+        "benefit": "Ritrovare contratti e scadenze.",
+        "featureId": "documents"
+      },
+      {
+        "id": "epargne",
+        "title": "6. Obiettivi di risparmio",
+        "summary": "Segui i risparmi separatamente dalle spese.",
+        "steps": "Apri Risparmio, crea un obiettivo e aggiorna il progresso.",
+        "benefit": "Visualizzare i progressi.",
+        "featureId": null
+      },
+      {
+        "id": "suisse",
+        "title": "7. Strumenti svizzeri",
+        "summary": "Confronto LAMal e strumenti fiscali secondo il piano.",
+        "steps": "Altro → Svizzera → LAMal o Fisco. Verifica sempre le fonti ufficiali.",
+        "benefit": "Esplorare possibili confronti.",
+        "featureId": "lamal"
+      },
+      {
+        "id": "intelligence",
+        "title": "8. Analisi finanziaria",
+        "summary": "Budgy Twin (beta) e altri strumenti intelligenti.",
+        "steps": "Altro → Budgy Twin o strumenti Pro. Verifica i consigli.",
+        "benefit": "Notare schemi di spesa.",
+        "featureId": "twin"
+      },
+      {
+        "id": "assistant",
+        "title": "9. Siri e Comandi Rapidi",
+        "summary": "Apri azioni supportate su iPhone.",
+        "steps": "Configura i comandi in iOS e verifica il risultato nell'app.",
+        "benefit": "Inserimento più rapido, se compatibile.",
+        "featureId": null
+      },
+      {
+        "id": "securite",
+        "title": "10. Proteggere i dati",
+        "summary": "Documenti conservati nell'app; recupero cloud secondo account e configurazione.",
+        "steps": "Altro → Sicurezza/Impostazioni. Verifica sincronizzazione e backup.",
+        "benefit": "Mantenere controllo sui documenti.",
+        "featureId": "security"
+      },
+      {
+        "id": "pro",
+        "title": "11. Scegliere il piano",
+        "summary": "Funzioni base e strumenti Pro aggiuntivi.",
+        "steps": "Apri Budgy Pro per prezzi e condizioni aggiornati.",
+        "benefit": "Pagare solo per ciò che serve.",
+        "featureId": "subscription"
+      }
+    ]
+  }
+};

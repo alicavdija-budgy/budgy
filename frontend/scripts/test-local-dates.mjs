@@ -58,7 +58,7 @@ assert.ok(expenses.includes('amount: validatedAmount,'),'Expense creation must u
 assert.ok(expenses.includes('const amt = normalizeChfAmount(values.amount ?? editingTx.amount);'),'Expense editing must validate Swiss amounts');
 assert.ok(expenses.includes('const parseTxDate = (s: string): Date | null => parseFinancialDate(s);'),'List and budget must use same calendar parser');
 const scanner=readFileSync(resolve(root,'app/scanner-modal.tsx'),'utf8');
-assert.ok(scanner.includes('qrHandled = handleBarcodeScanned({ data: data.swiss_qr_content });'),'Backend Swiss QR must reach native QR review UI');
+assert.ok(scanner.includes("qrHandled = handleBarcodeScanned({ data: data.swiss_qr_content, sourceUri: originalUri, sourceMime: 'image/jpeg' });"),'Backend Swiss QR must reach native QR review UI');
 assert.ok(scanner.includes("if (!qrHandled) setStage('edit');"),'QR review must not be overwritten by receipt editor');
 assert.ok(scanner.includes("setScannedCurrency(/^[A-Z]{3}$/.test(detectedCurrency)"),'Detected currency must not silently become CHF');
 assert.ok((scanner.match(/currency: scannedCurrency/g)||[]).length>=3,'Invoice, ticket and receipt must all preserve scanned currency');

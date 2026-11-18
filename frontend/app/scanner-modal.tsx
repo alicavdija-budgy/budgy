@@ -81,6 +81,8 @@ export default function ScannerModal() {
   const invoices = useStore((s) => s.invoices);
   const [qrBill, setQrBill] = useState<SwissQrBill | null>(null);
   const [qrRaw, setQrRaw] = useState(''); // TÂCHE 5 — payload SPC BRUT conservé
+  const [qrSource, setQrSource] = useState<{ uri: string; mime: string } | null>(null);
+  const qrSavingRef = useRef(false);
   const [qrDupTitle, setQrDupTitle] = useState<string | null>(null);
   const [qrAmount, setQrAmount] = useState('');
   const [qrCategory, setQrCategory] = useState('autres');
@@ -91,7 +93,7 @@ export default function ScannerModal() {
   const lastHintRef = useRef(0);
 
   const handleBarcodeScanned = useCallback(
-    ({ data }: { data: string }) => {
+    ({ data, sourceUri, sourceMime }: { data: string; sourceUri?: string; sourceMime?: string }) => {
       // Un seul traitement toutes les 2 s, uniquement en phase caméra.
       const now = Date.now();
       if (now - lastQrScanRef.current < 2000 || !data) return false;
@@ -111,6 +113,9 @@ export default function ScannerModal() {
         try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
         setQrBill(bill);
         setQrRaw(String(data || ''));
+        // Source éventuelle : image importée ou photographie OCR.
+        // Un scan direct de QR par la caméra n'a PAS de photographie d'origine.
+        setQrSource(sourceUri ? { uri: sourceUri, mime: sourceMime || 'image/jpeg' } : null);
         setQrDupTitle(findDuplicateInvoice(bill, invoices as any)?.title ?? null);
         setQrAmount(bill.amount !== null ? bill.amount.toFixed(2) : '');
         setQrDueDate(''); // une QR-facture ne fournit pas d'échéance : rien n'est inventé
@@ -138,7 +143,8 @@ export default function ScannerModal() {
   const handleScanFromImage = useCallback(async () => {
     try {
       const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
-      const uri = res.assets?.[0]?.uri;
+      const asset = res.assets?.[0];
+      const uri = asset?.uri;
       if (res.canceled || !uri) return;
       const codes = await scanFromURLAsync(uri, ['qr']);
       const payload = codes.find((c) => isSwissQrBill(c.data))?.data;
@@ -147,14 +153,44 @@ export default function ScannerModal() {
         return;
       }
       lastQrScanRef.current = 0;
-      handleBarcodeScanned({ data: payload });
+      handleBarcodeScanned({ data: payload, sourceUri: uri, sourceMime: asset?.mimeType || 'image/jpeg' });
     } catch {
       Alert.alert(t('qrbill.invalidTitle'), t('qrbill.errors.generic'));
     }
   }, [handleBarcodeScanned, t]);
 
   const handleQrSave = useCallback(() => {
-    if (!qrBill) return;
+    if (!qrBill || qrSavingRef.current) return;
+    // Conserver image d'origine si elle existe, sinon au minimum le QR brut.
+    // L'enregistrement en Factures ne doit pas précéder la copie durable.
+    const persistQrDocument = async (tags: string[]): Promise<string | undefined> => {
+      if (!qrRaw) return undefined;
+      const docId = `doc_inv_${Date.now()}`;
+      let vaultUri: string | undefined;
+      if (qrSource?.uri) {
+        await assertFileAcceptable(qrSource.uri, qrSource.mime);
+        vaultUri = await saveToVault(qrSource.uri, docId, qrSource.mime);
+        if (!(await vaultFileExists(vaultUri))) throw new VaultError('SAVE_FAILED');
+      }
+      const time = Date.now();
+      addDocument({
+        id: docId,
+        title: qrBill.creditor.name.slice(0, 80),
+        category: 'other',
+        documentType: 'invoice',
+        imageBase64: '',
+        fileUri: vaultUri,
+        mimeType: vaultUri ? qrSource?.mime : undefined,
+        spcPayload: qrRaw,
+        importedAt: time,
+        tags,
+        createdAt: time,
+        updatedAt: time,
+      } as any);
+      if (vaultUri) queueUpload(docId);
+      return docId;
+    };
+
     // Normalisation CHF UNIQUE : 1'234.50 / 1 234,50 exacts — jamais tronques
     // en 1 CHF par une analyse partielle ; rejet strict des formats ambigus.
     const amt = normalizeChfAmount(qrAmount);
@@ -166,23 +202,18 @@ export default function ScannerModal() {
           { text: t('common.cancel'), style: 'cancel' },
           {
             text: t('invoiceDocs.keepNoAmount'),
-            onPress: () => {
-              const now2 = Date.now();
-              addDocument({
-                id: `doc_inv_${now2}`,
-                title: qrBill.creditor.name.slice(0, 80),
-                category: 'other',
-                documentType: 'invoice',
-                imageBase64: '',
-                spcPayload: qrRaw,
-                importedAt: now2,
-                tags: ['invoice', 'qr', 'toComplete'],
-                createdAt: now2,
-                updatedAt: now2,
-              } as any);
-              Alert.alert(t('invoiceDocs.savedNoAmountTitle'), t('invoiceDocs.savedNoAmountBody'));
-              router.back();
-            },
+            onPress: () => { void (async () => {
+              if (qrSavingRef.current) return;
+              qrSavingRef.current = true;
+              try {
+                await persistQrDocument(['invoice', 'qr', 'toComplete']);
+                Alert.alert(t('invoiceDocs.savedNoAmountTitle'), t('invoiceDocs.savedNoAmountBody'));
+                router.back();
+              } catch (e) {
+                const code = e instanceof VaultError ? e.code : 'SAVE_FAILED';
+                Alert.alert(t('contractsV2.fileErrorTitle'), t(`contractsV2.${code}`));
+              } finally { qrSavingRef.current = false; }
+            })(); },
           },
         ]);
         return;
@@ -197,29 +228,10 @@ export default function ScannerModal() {
     }
     const now = new Date();
     const invId = `inv_qr_${now.getTime()}`;
-    // TÂCHE 5 — le payload SPC BRUT est conservé dans un document lié.
-    // Scan caméra = pas de fichier original → « QR Code conservé » (jamais
-    // présenté comme le document d'origine).
-    const docId = `doc_inv_${now.getTime()}`;
-    const persistQrDocument = (tags: string[]) => {
-      if (!qrRaw) return undefined;
-      addDocument({
-        id: docId,
-        title: qrBill.creditor.name.slice(0, 80),
-        category: 'other',
-        documentType: 'invoice',
-        imageBase64: '',
-        spcPayload: qrRaw,
-        importedAt: now.getTime(),
-        tags,
-        createdAt: now.getTime(),
-        updatedAt: now.getTime(),
-      } as any);
-      return docId;
-    };
-    const buildInvoice = (recurringId?: string) => ({
+    // La copie durable doit réussir AVANT la création de l'obligation.
+    const buildInvoice = async (recurringId?: string) => ({
       id: invId,
-      documentId: persistQrDocument(['invoice', 'qr']),
+      documentId: await persistQrDocument(['invoice', 'qr']),
       qrPayload: qrRaw || undefined,
       title: qrBill.creditor.name.slice(0, 80),
       issuer: qrBill.creditor.name.slice(0, 80),
@@ -239,6 +251,18 @@ export default function ScannerModal() {
       try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
       router.back();
     };
+    const saveQrInvoice = async (recurringId?: string) => {
+      if (qrSavingRef.current) return;
+      qrSavingRef.current = true;
+      try {
+        const item = await buildInvoice(recurringId);
+        addInvoice(item as any);
+        finish();
+      } catch (e) {
+        const code = e instanceof VaultError ? e.code : 'SAVE_FAILED';
+        Alert.alert(t('contractsV2.fileErrorTitle'), t(`contractsV2.${code}`));
+      } finally { qrSavingRef.current = false; }
+    };
     const proceed = () => {
       // v4.0 — RAPPROCHEMENT facture ↔ charge récurrente : si une charge active
       // du même montant existe (ex. prime LAMal), on PROPOSE de lier la facture
@@ -256,14 +280,13 @@ export default function ScannerModal() {
           t('invoiceReconcile.recTitle'),
           t('invoiceReconcile.recBody', { title: candidate.title, amount: String(amt) }),
           [
-            { text: t('invoiceReconcile.recLink'), onPress: () => { addInvoice(buildInvoice(candidate.id) as any); finish(); } },
-            { text: t('invoiceReconcile.recSeparate'), onPress: () => { addInvoice(buildInvoice() as any); finish(); } },
+            { text: t('invoiceReconcile.recLink'), onPress: () => { void saveQrInvoice(candidate.id); } },
+            { text: t('invoiceReconcile.recSeparate'), onPress: () => { void saveQrInvoice(); } },
           ],
         );
         return;
       }
-      addInvoice(buildInvoice() as any);
-      finish();
+      void saveQrInvoice();
     };
     // P0 — DOUBLON re-vérifié AU MOMENT DE L'ENREGISTREMENT (pas seulement au
     // scan), via la logique CENTRALISÉE invoiceDocs.ts : référence QRR/SCOR,
@@ -291,7 +314,7 @@ export default function ScannerModal() {
       return;
     }
     proceed();
-  }, [qrBill, qrRaw, qrAmount, qrDueDate, qrCategory, addInvoice, addDocument, recurringExpenses, invoices, router, t]);
+  }, [qrBill, qrRaw, qrSource, qrAmount, qrDueDate, qrCategory, addInvoice, addDocument, queueUpload, recurringExpenses, invoices, router, t]);
 
   // Form state for edit stage
   const [title, setTitle] = useState('');
@@ -340,7 +363,7 @@ export default function ScannerModal() {
     router.back();
   };
 
-  const runOcr = async (b64: string) => {
+  const runOcr = async (b64: string, originalUri?: string) => {
     setStage('ocr');
     setOcrError(null);
     setDetectedDocType('unknown');
@@ -365,7 +388,7 @@ export default function ScannerModal() {
         if (data.success && typeof data.swiss_qr_content === 'string' &&
             isSwissQrBill(data.swiss_qr_content)) {
           lastQrScanRef.current = 0;
-          qrHandled = handleBarcodeScanned({ data: data.swiss_qr_content });
+          qrHandled = handleBarcodeScanned({ data: data.swiss_qr_content, sourceUri: originalUri, sourceMime: 'image/jpeg' });
           if (qrHandled) return;
         }
         // Run regex fallback to RESCUE missing fields from raw text
@@ -462,7 +485,18 @@ export default function ScannerModal() {
         });
         setPhoto({ uri: norm.uri, base64: norm.base64 });
         if (norm.base64) {
-          await runOcr(norm.base64);
+          // Build 92 — scanned documents never leave the phone without an
+          // explicit decision. Native QR scanning remains local; this prompt
+          // covers the optional remote OCR/AI analysis of a full image.
+          Alert.alert(t('documentPrivacy.ocrTitle'), t('documentPrivacy.ocrBody'), [
+            { text: t('documentPrivacy.ocrManual'), style: 'cancel', onPress: () => {
+              setOcrError(t('documentPrivacy.ocrManualHint'));
+              setStage('edit');
+            } },
+            { text: t('documentPrivacy.ocrContinue'), onPress: () => {
+              void runOcr(norm.base64!, norm.uri);
+            } },
+          ], { cancelable: false });
         } else {
           setStage('edit');
         }
@@ -552,7 +586,9 @@ export default function ScannerModal() {
           title: title.trim(),
           amount: amt > 0 ? String(amt) : '',
           notes: note.trim(),
-          photoUri: receiptData || '',
+          // URI de la photo réelle ; le wizard crée une copie durable.
+          // Ne pas transmettre un base64 volumineux par Expo Router.
+          photoUri: photo?.uri || '',
           category: category || 'abonnements',
         },
       });
@@ -606,6 +642,35 @@ export default function ScannerModal() {
         createdAt: now.getTime(),
       });
     } else {
+      // Store the original receipt photo in the same durable, iCloud-backup-
+      // eligible device vault used for invoices and contracts.
+      let receiptDocId: string | undefined;
+      if (receiptData && photo?.uri) {
+        const docId = `doc_ticket_${now.getTime()}`;
+        try {
+          await assertFileAcceptable(photo.uri, 'image/jpeg');
+          const vaultUri = await saveToVault(photo.uri, docId, 'image/jpeg');
+          if (!(await vaultFileExists(vaultUri))) throw new VaultError('SAVE_FAILED');
+          addDocument({
+            id: docId,
+            title: title.trim(),
+            category: 'other',
+            documentType: 'expense_receipt',
+            imageBase64: '',
+            fileUri: vaultUri,
+            mimeType: 'image/jpeg',
+            importedAt: now.getTime(),
+            tags: ['receipt', 'camera', 'local-only'],
+            createdAt: now.getTime(),
+            updatedAt: now.getTime(),
+          } as any);
+          receiptDocId = docId;
+        } catch (e) {
+          setStage('edit');
+          Alert.alert(t('contractsV2.fileErrorTitle'), t('contractsV2.SAVE_FAILED'));
+          return; // no false success if the original ticket cannot be saved
+        }
+      }
       addTransaction({
         id: txId,
         title: title.trim(),
@@ -634,6 +699,7 @@ export default function ScannerModal() {
           type: receiptType,
           note: note.trim() || undefined,
           transactionId: txId,
+          documentId: receiptDocId,
           createdAt: now.getTime(),
         });
       }
@@ -1114,7 +1180,7 @@ export default function ScannerModal() {
         error={appError}
         onClose={() => setAppError(null)}
         onRetry={() => {
-          if (photo?.base64) runOcr(photo.base64);
+          if (photo?.base64) runOcr(photo.base64, photo.uri);
         }}
       />
     </KeyboardAvoidingView>

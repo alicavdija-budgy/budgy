@@ -24,6 +24,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
 import { apiFetchJson } from '../../src/lib/network';
 import { normalizeImageForUpload } from '../../src/lib/imageUpload';
+import { resolveImportMime } from '../../src/lib/importMime';
 import { parseSwissQrBill } from '../../src/services/qrBill';
 import { normalizeChfAmount } from '../../src/utils/amount';
 import { findInvoiceDuplicate } from '../../src/lib/invoiceDocs';
@@ -37,6 +38,7 @@ import type { Contract } from '../../src/types';
 import { Card, Button } from '../../src/components/ui';
 import { humanizeError } from '../../src/lib/errorSanitizer';
 import { saveToVault, assertFileAcceptable, vaultFileExists, VaultError } from '../../src/lib/fileVault';
+import { folderForContractCategory, categoryForContractFolder, tagsWithContractFolder } from '../../src/lib/contractFolders';
 import { useTranslation } from '../../src/hooks/useTranslation';
 import { getApiLocale } from '../../src/utils/apiLocale';
 
@@ -74,7 +76,7 @@ export default function ImportInvoiceScreen() {
       try {
         if (su) {
           await assertFileAcceptable(su, sharedParams.sharedMime, sharedParams.sharedName);
-          await parseImageFile(su, sharedParams.sharedMime);
+          await parseImageFile(su, sharedParams.sharedMime, sharedParams.sharedName);
         } else if (stx) {
           await parseEmailText(stx, sharedParams.sharedName || 'partage');
         }
@@ -107,10 +109,64 @@ export default function ImportInvoiceScreen() {
   // réellement définies dans l'app (mêmes clés que l'assistant contrat).
   const [manualCt, setManualCt] = useState({ title: '', issuer: '', amount: '', expiry: '', category: 'autre' });
 
+  /** Temporary OCR transfer is strictly opt-in (not document storage). */
+  const confirmRemoteOcr = (): Promise<boolean> => new Promise((resolve) => {
+    if (Platform.OS === 'web') {
+      resolve(typeof window !== 'undefined' && window.confirm(t('documentPrivacy.ocrBody')));
+      return;
+    }
+    Alert.alert(t('documentPrivacy.ocrTitle'), t('documentPrivacy.ocrBody'), [
+      { text: t('documentPrivacy.ocrManual'), style: 'cancel', onPress: () => resolve(false) },
+      { text: t('documentPrivacy.ocrContinue'), onPress: () => resolve(true) },
+    ], { cancelable: false });
+  });
+
+  /** No OCR: keep the original file locally without inventing any amounts. */
+  const keepDocumentPrivate = async (uri: string, mime: string, name?: string) => {
+    if (mode === 'contract') {
+      // Contract wizard saves original into the durable vault after the user
+      // supplies a real name and selects a business folder.
+      router.push({ pathname: '/more/add-contract' as any,
+        params: { source: 'manual', photoUri: uri, title: '', category: 'autre' } });
+      return;
+    }
+    const now = Date.now();
+    const docId = `doc_private_${now}`;
+    await assertFileAcceptable(uri, mime, name);
+    const vaultUri = await saveToVault(uri, docId, mime, name);
+    if (!(await vaultFileExists(vaultUri))) throw new VaultError('SAVE_FAILED');
+    const isPdf = mime.includes('pdf') || vaultUri.toLowerCase().endsWith('.pdf');
+    const type = mode === 'invoice' ? 'invoice' : 'unclassified';
+    addDocument({
+      id: docId,
+      title: name || t('invoiceDocs.defaultTitle'),
+      category: 'other',
+      documentType: type,
+      importedAt: now,
+      mimeType: mime,
+      pdfUri: isPdf ? vaultUri : undefined,
+      fileUri: isPdf ? undefined : vaultUri,
+      imageBase64: '',
+      tags: type === 'invoice' ? ['invoice', 'toComplete', 'local-only', 'manual-review'] : ['local-only', 'manual-review'],
+      createdAt: now,
+      updatedAt: now,
+    } as any);
+    // Invoice documents without a verified amount appear under 'to complete':
+    // no fake CHF 0 invoice, no automatic financial obligation.
+    Alert.alert(t('common.success'), t('documentPrivacy.ocrManualHint'), [{
+      text: t('emailImport.okBtn'), onPress: () => router.replace(
+        (mode === 'invoice' ? '/more/invoices' : '/more/documents') as any),
+    }]);
+  };
+
   // ── Backend calls ──
   const parseEmailText = async (content: string, subject = '') => {
     if (content.trim().length < 20) {
       Alert.alert(t('emailImport.contentTooShortTitle'), t('emailImport.contentTooShortBody'));
+      return;
+    }
+    if (!(await confirmRemoteOcr())) {
+      Alert.alert(t('documentPrivacy.ocrTitle'), t('documentPrivacy.ocrManualHint'));
       return;
     }
     setBusy(true);
@@ -139,18 +195,25 @@ export default function ImportInvoiceScreen() {
     }
   };
 
-  const parseImageFile = async (uriOrPath: string, mimeHint?: string) => {
+  const parseImageFile = async (uriOrPath: string, mimeHint?: string, originalName?: string) => {
+    let mime = resolveImportMime(mimeHint, originalName, uriOrPath);
+    // Before ANY base64/network request, user chooses remote OCR or local
+    // retention with manual verification. Never upload on selecting a PDF.
+    if (!(await confirmRemoteOcr())) {
+      try { await keepDocumentPrivate(uriOrPath, mime, originalName); }
+      catch (e: any) { Alert.alert(t('contractsV2.fileErrorTitle'), t('contractsV2.SAVE_FAILED')); }
+      return;
+    }
     setBusy(true);
     setBusyLabel(t('emailImport.busyOcrAi'));
     setResult(null);
-    let mime = mimeHint || 'image/jpeg';
     try {
       let base64 = '';
       if (uriOrPath.startsWith('data:')) {
         base64 = uriOrPath.split(',')[1] || '';
         const m = /^data:([^;]+);/.exec(uriOrPath);
         if (m) mime = m[1];
-      } else if (mimeHint === 'application/pdf' || uriOrPath.toLowerCase().endsWith('.pdf') || uriOrPath.includes('application/pdf')) {
+      } else if (mime === 'application/pdf') {
         base64 = await readAsBase64(uriOrPath);
         mime = 'application/pdf';
         console.log('[email-import] PDF detected, sending raw bytes for OCR');
@@ -175,8 +238,8 @@ export default function ImportInvoiceScreen() {
       const r = await apiFetchJson<any>(`/api/scanner/ocr`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Accept-Language': getApiLocale(lang) },
-        body: JSON.stringify({ image_base64: `data:${mime};base64,${base64}`, locale: getApiLocale(lang) }),
-      }, { timeoutMs: 25000, retries: 1, silent: true });
+        body: JSON.stringify({ image_base64: `data:${mime};base64,${base64}`, mime_type: mime, locale: getApiLocale(lang) }),
+      }, { timeoutMs: mime === 'application/pdf' ? 45000 : 25000, retries: mime === 'application/pdf' ? 0 : 1, silent: true });
       if (r.status === 401 || r.status === 403) {
         Alert.alert(t('importErrors.authTitle'), t('importErrors.authBody'));
         return;
@@ -266,7 +329,7 @@ export default function ImportInvoiceScreen() {
       if (res.canceled) return;
       const file = res.assets[0];
       await assertFileAcceptable(file.uri, file.mimeType, file.name);
-      await parseImageFile(file.uri, file.mimeType);
+      await parseImageFile(file.uri, file.mimeType, file.name);
     } catch (e: any) {
       if (e instanceof VaultError) { Alert.alert(t('contractsV2.fileErrorTitle'), t(`contractsV2.${e.code}`)); return; }
       const h = humanizeError(e, { title: t('emailImport.pdfImpossibleTitle') });
@@ -288,7 +351,7 @@ export default function ImportInvoiceScreen() {
         await parseEmailText(text, file.name);
       } else {
         await assertFileAcceptable(file.uri, file.mimeType, file.name);
-        await parseImageFile(file.uri, file.mimeType);
+        await parseImageFile(file.uri, file.mimeType, file.name);
       }
     } catch (e: any) {
       if (e instanceof VaultError) { Alert.alert(t('contractsV2.fileErrorTitle'), t(`contractsV2.${e.code}`)); return; }
@@ -312,7 +375,7 @@ export default function ImportInvoiceScreen() {
       if (res.canceled) return;
       const a = res.assets[0];
       await assertFileAcceptable(a.uri, a.mimeType ?? undefined, a.fileName ?? undefined);
-      await parseImageFile(a.uri, a.mimeType ?? undefined);
+      await parseImageFile(a.uri, a.mimeType ?? undefined, a.fileName ?? undefined);
     } catch (e: any) {
       if (e instanceof VaultError) { Alert.alert(t('contractsV2.fileErrorTitle'), t(`contractsV2.${e.code}`)); return; }
       const h = humanizeError(e, { title: t('emailImport.importImpossibleTitle') });
@@ -537,14 +600,14 @@ export default function ImportInvoiceScreen() {
         addDocument({
           id: docId,
           title: meta.title,
-          category: 'contracts',
-          imageBase64: isPdf ? '' : (originalUri.startsWith('data:') ? originalUri : ''),
+          category: categoryForContractFolder(folderForContractCategory(meta.category)),
+          imageBase64: '',
           pdfUri: isPdf ? vaultUri : undefined,
           fileUri: isPdf ? undefined : vaultUri,
           mimeType: mime,
           documentType: 'contract', // TÂCHE 3 — espace Contrats
           importedAt: now,
-          tags: ['contract', 'import'],
+          tags: tagsWithContractFolder(['contract', 'import'], folderForContractCategory(meta.category)),
           note: t('emailImport.importedByAiNote'),
           createdAt: now,
           updatedAt: now,
@@ -566,7 +629,7 @@ export default function ImportInvoiceScreen() {
       startDate: meta.startDate,
       urgent: false,
       autoRenew: undefined,
-      category: meta.category,
+      category: folderForContractCategory(meta.category),
       createdAt: now,
       notes: t('emailImport.importedByAiNote'),
       documentId,

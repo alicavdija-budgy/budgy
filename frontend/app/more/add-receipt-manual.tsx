@@ -28,6 +28,7 @@ import { Button } from '../../src/components/ui';
 import { CategoryIcon } from '../../src/components/CategoryIcon';
 import { EXPENSE_CATEGORIES, PAYMENT_METHODS } from '../../src/data/swiss-data';
 import { normalizeImageForUpload } from '../../src/lib/imageUpload';
+import { saveToVault, vaultFileExists, VaultError } from '../../src/lib/fileVault';
 import type { ReceiptType } from '../../src/types';
 
 export default function AddReceiptManualScreen() {
@@ -37,7 +38,7 @@ export default function AddReceiptManualScreen() {
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { addReceipt, addTransaction } = useStore();
+  const { addReceipt, addTransaction, addDocument } = useStore();
 
   const [merchant, setMerchant] = useState('');
   const [amount, setAmount] = useState('');
@@ -47,6 +48,7 @@ export default function AddReceiptManualScreen() {
   const [type, setType] = useState<ReceiptType>('ticket');
   const [note, setNote] = useState('');
   const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null);
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const pickFromGallery = async () => {
@@ -63,7 +65,7 @@ export default function AddReceiptManualScreen() {
       });
       if (!result.canceled && result.assets?.[0]?.uri) {
         const norm = await normalizeImageForUpload(result.assets[0].uri, { includeBase64: true, quality: 0.8 });
-        if (norm.base64) setPhotoDataUrl(`data:image/jpeg;base64,${norm.base64}`);
+        if (norm.base64) { setPhotoDataUrl(`data:image/jpeg;base64,${norm.base64}`); setPhotoUri(norm.uri); }
       }
     } catch (e: any) {
       Alert.alert(t('common.error'), e?.message || t('receiptManual.photoFail'));
@@ -80,14 +82,14 @@ export default function AddReceiptManualScreen() {
       const result = await ImagePicker.launchCameraAsync({ quality: 0.7 });
       if (!result.canceled && result.assets?.[0]?.uri) {
         const norm = await normalizeImageForUpload(result.assets[0].uri, { includeBase64: true, quality: 0.8 });
-        if (norm.base64) setPhotoDataUrl(`data:image/jpeg;base64,${norm.base64}`);
+        if (norm.base64) { setPhotoDataUrl(`data:image/jpeg;base64,${norm.base64}`); setPhotoUri(norm.uri); }
       }
     } catch (e: any) {
       Alert.alert(t('common.error'), e?.message || t('addReceipt.captureErrorTitle'));
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const merchantTrim = merchant.trim();
     const amt = parseFloat(amount.replace(',', '.'));
     if (!merchantTrim) {
@@ -104,9 +106,32 @@ export default function AddReceiptManualScreen() {
       const id = `rec_${now}`;
       const txId = `tx_${now}`;
       const isoDate = new Date().toISOString().split('T')[0];
+      // Build 92: even manual camera/gallery imports must have a durable,
+      // backed-up file and a link usable in Tickets & reçus after restart.
+      let documentId: string | undefined;
+      if (photoUri) {
+        const docId = `doc_manual_receipt_${now}`;
+        const saved = await saveToVault(photoUri, docId, 'image/jpeg');
+        if (!(await vaultFileExists(saved))) throw new VaultError('SAVE_FAILED');
+        addDocument({
+          id: docId,
+          title: merchantTrim,
+          category: 'other',
+          documentType: 'expense_receipt',
+          imageBase64: '',
+          fileUri: saved,
+          mimeType: 'image/jpeg',
+          importedAt: now,
+          tags: ['receipt', 'manual', 'local-only'],
+          createdAt: now,
+          updatedAt: now,
+        } as any);
+        documentId = docId;
+      }
       addReceipt({
         id,
-        imageBase64: photoDataUrl || '',
+        imageBase64: documentId ? '' : (photoDataUrl || ''),
+        documentId,
         merchant: merchantTrim,
         amount: amt,
         currency: 'CHF',

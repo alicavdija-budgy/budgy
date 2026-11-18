@@ -30,11 +30,12 @@ import { useStore } from '../../src/stores/useStore';
 import { Card, EmptyState, Button } from '../../src/components/ui';
 import ZoomableImage from '../../src/components/ZoomableImage';
 import CornerEditor from '../../src/components/CornerEditor';
-import type { BudgyDocumentType, DocumentCategory, PersonalDocument } from '../../src/types';
+import type { DocumentCategory, PersonalDocument } from '../../src/types';
 import { docTypeOf } from '../../src/lib/syncMerge';
 import { ensureLocalCopy, docFileStatus } from '../../src/services/documentStorage';
 import { useTranslation } from '../../src/hooks/useTranslation';
 import { DATE_LOCALES } from '../../src/i18n/translations';
+import { CONTRACT_FOLDER_IDS, type ContractFolder, categoryForContractFolder, folderForContractCategory, folderForContractDocument, tagsWithContractFolder } from '../../src/lib/contractFolders';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -57,6 +58,12 @@ const CATEGORY_KEYS: { id: DocumentCategory; tKey: 'catContracts' | 'catInsuranc
   { id: 'other', tKey: 'catOther', emoji: '📁', color: '#9CA3AF' },
 ];
 
+const FOLDER_EMOJIS: Record<ContractFolder, string> = {
+  insurance: '🛡️', housing: '🏠', subscriptions: '📱',
+  transport: '🚗', health: '💊', energy: '⚡',
+  banking: '🏦', employment: '💼', other: '📁',
+};
+
 type Mode = 'list' | 'capture' | 'review' | 'crop' | 'edit' | 'detail';
 
 export default function DocumentsScreen() {
@@ -78,7 +85,9 @@ export default function DocumentsScreen() {
   );
   const [selectedContract, setSelectedContract] = useState<string | null>(null);
   // TÂCHE 3 — trois espaces documentaires STRICTS (type ≠ catégorie métier)
-  const [typeFilter, setTypeFilter] = useState<'all' | BudgyDocumentType>('all');
+  const [typeFilter, setTypeFilter] = useState<'contract' | 'unclassified'>('contract');
+  const [folderFilter, setFolderFilter] = useState<ContractFolder | 'all'>('all');
+  const [scanFolder, setScanFolder] = useState<ContractFolder>('other');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<string | null>(null);
 
@@ -111,31 +120,66 @@ export default function DocumentsScreen() {
 
   // Recherche contrats (titre + émetteur) — anciens contrats SANS documentId inclus
   const visibleContracts = useMemo(() => contracts.filter((c) => {
+    if (folderFilter !== 'all' && folderForContractCategory(c.category) !== folderFilter) return false;
     if (!search.trim()) return true;
     const q = search.toLowerCase();
     return c.title.toLowerCase().includes(q) || (c.issuer || '').toLowerCase().includes(q);
-  }), [contracts, search]);
+  }), [contracts, search, folderFilter]);
   // Les pièces jointes de contrats ne sont PAS doublées dans la grille
   const linkedDocIds = useMemo(() => new Set(contracts.map((c) => c.documentId).filter((id): id is string => !!id)), [contracts]);
   const filtered = useMemo(() => documents.filter((d) => {
-    if (linkedDocIds.has(d.id) && (filter === 'all' || filter === 'contracts')) return false;
+    if (linkedDocIds.has(d.id)) return false;
     // TÂCHE 3 — espace documentaire : un contrat d'assurance reste dans
     // Contrats même si sa catégorie métier est « assurance ».
-    if (typeFilter !== 'all' && docTypeOf(d, linkedDocIds) !== typeFilter) return false;
-    if (filter !== 'all' && d.category !== filter) return false;
+    if (docTypeOf(d, linkedDocIds) !== typeFilter) return false;
+    if (typeFilter === 'contract') {
+      if (folderFilter !== 'all' && folderForContractDocument(d) !== folderFilter) return false;
+    } else if (filter !== 'all' && d.category !== filter) return false;
     if (search.trim()) {
       const q = search.toLowerCase();
       if (!d.title.toLowerCase().includes(q) && !(d.tags || []).some((t) => t.toLowerCase().includes(q)) && !(d.note || '').toLowerCase().includes(q)) return false;
     }
     return true;
-  }), [documents, filter, search, linkedDocIds, typeFilter]);
+  }), [documents, filter, search, linkedDocIds, typeFilter, folderFilter]);
 
+  // Le classeur compte uniquement ses documents visibles : jamais les factures
+  // et tickets conservés dans leurs espaces respectifs.
   const counts = useMemo(() => {
-    const m: Record<string, number> = { all: documents.length };
-    for (const c of CATEGORIES) m[c.id] = 0;
-    for (const d of documents) m[d.category] = (m[d.category] || 0) + 1;
+    const inSpace = documents.filter((d) => !linkedDocIds.has(d.id) && docTypeOf(d, linkedDocIds) === typeFilter);
+    const m: Record<string, number> = { all: inSpace.length };
+    for (const c of CATEGORY_KEYS) m[c.id] = 0;
+    for (const d of inSpace) m[d.category] = (m[d.category] || 0) + 1;
     return m;
-  }, [documents]);
+  }, [documents, linkedDocIds, typeFilter]);
+
+  // Dossiers métier du classeur : contrats liés + PDF/scans autonomes,
+  // mais jamais factures ou reçus. Le filtre est une VUE, pas une migration.
+  const folderCounts = useMemo(() => {
+    const m: Record<string, number> = { all: 0 };
+    for (const id of CONTRACT_FOLDER_IDS) m[id] = 0;
+    for (const ct of contracts) { m[folderForContractCategory(ct.category)]++; m.all++; }
+    for (const doc of documents) {
+      if (linkedDocIds.has(doc.id) || docTypeOf(doc, linkedDocIds) !== 'contract') continue;
+      m[folderForContractDocument(doc)]++;
+      m.all++;
+    }
+    return m;
+  }, [contracts, documents, linkedDocIds]);
+  const changeContractFolder = (id: string, folder: ContractFolder) => {
+    const ct = contracts.find((x) => x.id === id);
+    if (!ct) return;
+    updateContract(id, { category: folder });
+    if (ct.documentId) {
+      const d = documents.find((x) => x.id === ct.documentId);
+      if (d) updateDocument(d.id, {
+        category: categoryForContractFolder(folder),
+        tags: tagsWithContractFolder(d.tags, folder),
+      } as any);
+    }
+  };
+  const moveContractDocument = (doc: PersonalDocument, folder: ContractFolder) => {
+    updateDocument(doc.id, { category: categoryForContractFolder(folder), tags: tagsWithContractFolder(doc.tags, folder) } as any);
+  };
 
   const sel = documents.find((d) => d.id === selected);
   // ── TÂCHE 2 — VRAIE section Contrats (collection contracts[], pas
@@ -143,6 +187,7 @@ export default function DocumentsScreen() {
   const selCt = contracts.find((c) => c.id === selectedContract) || null;
   const ctDoc = selCt?.documentId ? documents.find((d) => d.id === selCt.documentId) : undefined;
   const [pdfViewerUri, setPdfViewerUri] = useState<string | null>(null);
+  const [photoViewerUri, setPhotoViewerUri] = useState<string | null>(null);
   const [recovering, setRecovering] = useState(false);
   /**
    * TÂCHE 3 (audit §3) — copie locale GARANTIE avant lecture :
@@ -173,7 +218,9 @@ export default function DocumentsScreen() {
     const uri = await resolveAttachment(doc);
     if (!uri) return;
     if (Platform.OS === 'web') { try { window.open(uri, '_blank'); } catch {} return; }
-    setPdfViewerUri(uri);
+    const isPdf = (doc?.mimeType || '').includes('pdf') || uri.toLowerCase().endsWith('.pdf');
+    if (isPdf) setPdfViewerUri(uri);
+    else setPhotoViewerUri(uri);
   };
   const shareContractPdf = async (doc?: PersonalDocument) => {
     const uri = await resolveAttachment(doc);
@@ -182,11 +229,10 @@ export default function DocumentsScreen() {
       const { safeShareFile } = await import('../../src/lib/safeShare');
       const isPdf = (doc.mimeType || '').includes('pdf') || uri.toLowerCase().includes('.pdf');
       const r = await safeShareFile(uri, {
-        mimeType: (doc.mimeType || (isPdf ? 'application/pdf' : 'image/jpeg')) as any,
         mime: doc.mimeType || (isPdf ? 'application/pdf' : 'image/jpeg'),
         name: doc.title || 'document',
         dialogTitle: doc.title,
-      } as any);
+      });
       if (!r.ok && r.error) Alert.alert(t('documents.shareFailedTitle'), r.error);
     } catch (e: any) {
       Alert.alert(t('documents.errorTitle'), e?.message || t('documents.shareFailedFallback'));
@@ -206,14 +252,14 @@ export default function DocumentsScreen() {
       addDocument({
         id: docId,
         title: f.name || t('contractsV2.sectionTitle'),
-        category: 'contracts',
+        category: categoryForContractFolder(folderForContractCategory(contracts.find((c) => c.id === contractId)?.category)),
         imageBase64: '',
         pdfUri: isPdf ? vaultUri : undefined,
         fileUri: isPdf ? undefined : vaultUri,
         mimeType: f.mimeType,
         documentType: 'contract',
         importedAt: now,
-        tags: ['contract'],
+        tags: tagsWithContractFolder(['contract'], folderForContractCategory(contracts.find((c) => c.id === contractId)?.category)),
         createdAt: now,
         updatedAt: now,
       } as any);
@@ -454,24 +500,33 @@ ${pageDataUrls.map((src, i) => `
 
     setGenerating(true);
     try {
+      const newDocId = `doc_${Date.now()}`;
       let pdfUri: string | undefined;
       let pdfBase64: string | undefined;
       if (Platform.OS !== 'web') {
         const r = await generatePdf(title.trim(), pages);
+        await assertFileAcceptable(r.pdfUri, 'application/pdf');
+        pdfUri = await saveToVault(r.pdfUri, newDocId, 'application/pdf');
+        if (!(await vaultFileExists(pdfUri))) throw new VaultError('SAVE_FAILED');
+      } else {
+        const r = await generatePdf(title.trim(), pages);
         pdfUri = r.pdfUri;
         pdfBase64 = r.pdfBase64;
       }
+      const typedContract = typeFilter === 'contract';
       const tags = tagsInput.split(',').map((t) => t.trim()).filter(Boolean);
-      const newDocId = `doc_${Date.now()}`;
       addDocument({
         id: newDocId,
         title: title.trim(),
-        category,
-        imageBase64: pages[0],            // first page as thumbnail
-        pages,                             // all pages
+        category: typedContract ? categoryForContractFolder(scanFolder) : category,
+        documentType: typedContract ? 'contract' : 'unclassified',
+        mimeType: 'application/pdf',
+        importedAt: Date.now(),
+        imageBase64: pages[0],            // thumbnail (local)
+        pages,                             // pages de travail (local)
         pdfUri,
         pdfBase64,
-        tags,
+        tags: typedContract ? tagsWithContractFolder(tags, scanFolder) : tags,
         note: note.trim() || undefined,
         expiresAt: expiresAt.trim() || undefined,
         createdAt: Date.now(),
@@ -483,7 +538,7 @@ ${pageDataUrls.map((src, i) => `
       try { await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
       // reset
       setTitle(''); setNote(''); setExpiresAt(''); setTagsInput('');
-      setPages([]); setMode('list');
+      setPages([]); setScanFolder('other'); setMode('list');
       Alert.alert(t('documents.pdfCreatedTitle'), t('documents.pdfCreatedBody', { title: title.trim(), n: pages.length, s: pages.length > 1 ? 's' : '' }));
     } catch (e: any) {
       Alert.alert(t('documents.errorTitle'), e?.message || t('documents.pdfErrorBody'));
@@ -494,22 +549,7 @@ ${pageDataUrls.map((src, i) => `
 
   const sharePdf = async (doc: typeof sel) => {
     if (!doc) return;
-    if (!doc.pdfUri) {
-      Alert.alert(t('documents.noPdfTitle'), t('documents.noPdfBody'));
-      return;
-    }
-    try {
-      const { safeShareFile } = await import('../../src/lib/safeShare');
-      const r = await safeShareFile(doc.pdfUri, {
-        mimeType: 'application/pdf' as any,
-        mime: 'application/pdf',
-        name: doc.title || 'document',
-        dialogTitle: doc.title,
-      } as any);
-      if (!r.ok && r.error) Alert.alert(t('documents.shareFailedTitle'), r.error);
-    } catch (e: any) {
-      Alert.alert(t('documents.errorTitle'), e?.message || t('documents.shareFailedFallback'));
-    }
+    await shareContractPdf(doc); // même récupération cloud et même MIME que les contrats liés
   };
 
   const onDelete = (id: string) => {
@@ -765,7 +805,22 @@ ${pageDataUrls.map((src, i) => `
 
           <Text style={styles.label}>{t('documents.labelTitle')}</Text>
           <TextInput style={styles.input} value={title} onChangeText={setTitle} placeholder={t('documents.placeholderTitle')} placeholderTextColor={theme.textTertiary} />
-          <Text style={styles.label}>{t('documents.labelCategory')}</Text>
+          <Text style={styles.label}>{typeFilter === 'contract' ? t('contractFolders.choose') : t('documents.labelCategory')}</Text>
+          {typeFilter === 'contract' && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <View style={styles.catRow}>
+                {CONTRACT_FOLDER_IDS.map((id) => (
+                  <TouchableOpacity key={id} testID={`scan-contract-folder-${id}`}
+                    style={[styles.catChip, scanFolder === id && { backgroundColor: `${theme.primary}24`, borderColor: theme.primary }]}
+                    onPress={() => setScanFolder(id)}>
+                    <Text style={{ fontSize: 18 }}>{FOLDER_EMOJIS[id]}</Text>
+                    <Text style={[styles.catChipText, scanFolder === id && { color: theme.primary }]}>{t(`contractFolders.${id}`)}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+          )}
+          {typeFilter !== 'contract' && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View style={styles.catRow}>
               {CATEGORIES.map((c) => (
@@ -775,7 +830,7 @@ ${pageDataUrls.map((src, i) => `
                 </TouchableOpacity>
               ))}
             </View>
-          </ScrollView>
+          </ScrollView>)}
           <Text style={styles.label}>{t('documents.labelTags')}</Text>
           <TextInput style={styles.input} value={tagsInput} onChangeText={setTagsInput} placeholder={t('documents.placeholderTags')} placeholderTextColor={theme.textTertiary} />
           <Text style={styles.label}>{t('documents.labelExpiresAt')}</Text>
@@ -814,9 +869,28 @@ ${pageDataUrls.map((src, i) => `
             <Text style={styles.detailCat}>{CATEGORIES.find((c) => c.id === sel.category)?.emoji} {CATEGORIES.find((c) => c.id === sel.category)?.label}</Text>
             <Text style={styles.detailDate}>{new Date(sel.createdAt).toLocaleDateString(locale)}</Text>
           </View>
-          {sel.pdfUri ? (
-            <Button title={t('documents.openSharePdf')} onPress={() => sharePdf(sel)} fullWidth icon="share" size="lg" style={{ marginBottom: Spacing.lg }} />
+          {(sel.pdfUri || sel.fileUri || (sel as any).remotePath) ? (
+            <View style={{ gap: 10, marginBottom: Spacing.lg }}>
+              <Button title={t('contractFolders.openOriginal')} onPress={() => { setMode('list'); void openContractPdf(sel); }} fullWidth icon="document-text" size="lg" />
+              <Button title={t('documentPrivacy.exportToFiles')} onPress={() => { void sharePdf(sel); }} fullWidth icon="share" size="lg" />
+            </View>
           ) : null}
+          {typeFilter === 'contract' && (
+            <>
+              <Text style={styles.label}>{t('contractFolders.moveTo')}</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View style={styles.catRow}>
+                  {CONTRACT_FOLDER_IDS.map((id) => (
+                    <TouchableOpacity key={id} style={[styles.catChip, folderForContractDocument(sel) === id && { borderColor: theme.primary, backgroundColor: `${theme.primary}24` }]}
+                      onPress={() => moveContractDocument(sel, id)} testID={`move-contract-doc-${id}`}>
+                      <Text>{FOLDER_EMOJIS[id]}</Text>
+                      <Text style={styles.catChipText}>{t(`contractFolders.${id}`)}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
+            </>
+          )}
           <Text style={styles.label}>{t('documents.pagesLabel', { n: (sel.pages || [sel.imageBase64 || sel.fileUri].filter(Boolean)).length })}</Text>
           <View style={styles.zoomHint}>
             <Ionicons name="resize" size={12} color={theme.textTertiary} />
@@ -865,20 +939,17 @@ ${pageDataUrls.map((src, i) => `
           placeholderTextColor={theme.textTertiary}
         />
 
-        {/* TÂCHE 3 — espaces documentaires : Factures / Contrats / Tickets / À classer */}
+        {/* Le classeur est réservé aux contrats et aux documents encore à classer. Les factures/tickets restent dans leurs espaces dédiés. */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }}>
           <View style={styles.filterRow}>
             {([
-              { id: 'all', tKey: 'spaceAll' },
-              { id: 'invoice', tKey: 'spaceInvoices' },
               { id: 'contract', tKey: 'spaceContracts' },
-              { id: 'expense_receipt', tKey: 'spaceReceipts' },
               { id: 'unclassified', tKey: 'spaceUnclassified' },
-            ] as { id: 'all' | BudgyDocumentType; tKey: string }[]).map((sp) => (
+            ] as { id: 'contract' | 'unclassified'; tKey: string }[]).map((sp) => (
               <TouchableOpacity
                 key={sp.id}
                 style={[styles.filterChip, typeFilter === sp.id && styles.filterChipActive]}
-                onPress={() => setTypeFilter(sp.id)}
+                onPress={() => { setTypeFilter(sp.id); setFilter('all'); }}
                 testID={`space-${sp.id}`}
               >
                 <Text style={[styles.filterText, typeFilter === sp.id && styles.filterTextActive]}>{t(`docSpaces.${sp.tKey}`)}</Text>
@@ -887,17 +958,35 @@ ${pageDataUrls.map((src, i) => `
           </View>
         </ScrollView>
 
+        {/* Les dossiers métier filtrent les contrats ET les documents scannés. */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: Spacing.md }}>
           <View style={styles.filterRow}>
-            <TouchableOpacity style={[styles.filterChip, filter === 'all' && styles.filterChipActive]} onPress={() => setFilter('all')}>
-              <Text style={[styles.filterText, filter === 'all' && styles.filterTextActive]}>{t('documents.filterAll', { n: counts.all })}</Text>
-            </TouchableOpacity>
-            {CATEGORIES.map((c) => (
-              <TouchableOpacity key={c.id} style={[styles.filterChip, filter === c.id && { backgroundColor: `${c.color}30`, borderColor: c.color }]} onPress={() => setFilter(c.id)}>
-                <Text style={{ fontSize: 14 }}>{c.emoji}</Text>
-                <Text style={[styles.filterText, filter === c.id && { color: c.color }]}>{t('documents.filterCategoryCount', { label: c.label, n: counts[c.id] || 0 })}</Text>
-              </TouchableOpacity>
-            ))}
+            {typeFilter === 'contract' ? (
+              <>
+                <TouchableOpacity testID="contract-folder-all" style={[styles.filterChip, folderFilter === 'all' && styles.filterChipActive]} onPress={() => setFolderFilter('all')}>
+                  <Text style={[styles.filterText, folderFilter === 'all' && styles.filterTextActive]}>{t('contractFolders.all')} ({folderCounts.all})</Text>
+                </TouchableOpacity>
+                {CONTRACT_FOLDER_IDS.map((id) => (
+                  <TouchableOpacity key={id} testID={`contract-folder-${id}`}
+                    style={[styles.filterChip, folderFilter === id && styles.filterChipActive]}
+                    onPress={() => setFolderFilter(id)}>
+                    <Text style={[styles.filterText, folderFilter === id && styles.filterTextActive]}>{FOLDER_EMOJIS[id]} {t(`contractFolders.${id}`)} ({folderCounts[id] || 0})</Text>
+                  </TouchableOpacity>
+                ))}
+              </>
+            ) : (
+              <>
+                <TouchableOpacity style={[styles.filterChip, filter === 'all' && styles.filterChipActive]} onPress={() => setFilter('all')}>
+                  <Text style={[styles.filterText, filter === 'all' && styles.filterTextActive]}>{t('documents.filterAll', { n: counts.all })}</Text>
+                </TouchableOpacity>
+                {CATEGORIES.map((c) => (
+                  <TouchableOpacity key={c.id} style={[styles.filterChip, filter === c.id && { backgroundColor: `${c.color}30`, borderColor: c.color }]} onPress={() => setFilter(c.id)}>
+                    <Text style={{ fontSize: 14 }}>{c.emoji}</Text>
+                    <Text style={[styles.filterText, filter === c.id && { color: c.color }]}>{t('documents.filterCategoryCount', { label: c.label, n: counts[c.id] || 0 })}</Text>
+                  </TouchableOpacity>
+                ))}
+              </>
+            )}
           </View>
         </ScrollView>
 
@@ -913,35 +1002,49 @@ ${pageDataUrls.map((src, i) => `
           </TouchableOpacity>
         </View>
 
-        {/* TÂCHE 2 (audit) — VRAIE section Contrats : affichée depuis
-            contracts[] indépendamment de documents[], recherche incluse */}
-        {(filter === 'all' || filter === 'contracts') && (typeFilter === 'all' || typeFilter === 'contract') && visibleContracts.length > 0 && (
-            <View style={{ marginBottom: 14 }}>
-              <Text style={styles.sectionLabel}>{t('contractsV2.sectionTitle')} ({contracts.length})</Text>
-              {visibleContracts.map((c) => {
-                const linked = c.documentId ? documents.find((d) => d.id === c.documentId) : undefined;
-                return (
-                  <TouchableOpacity
-                    key={c.id}
-                    style={styles.ctRow}
-                    onPress={() => setSelectedContract(c.id)}
-                    testID={`contract-row-${c.id}`}
-                  >
-                    <View style={styles.ctIcon}><Text style={{ fontSize: 18 }}>📄</Text></View>
+        {/* Un vrai rangement en dossiers. Les documents sans entrée Contract
+            restent visibles dans le même dossier, mais jamais les factures. */}
+        {typeFilter === 'contract' && CONTRACT_FOLDER_IDS
+          .filter((id) => folderFilter === 'all' || folderFilter === id)
+          .map((id) => {
+            const cs = visibleContracts.filter((c) => folderForContractCategory(c.category) === id);
+            const ds = filtered.filter((d) => folderForContractDocument(d) === id);
+            if (cs.length === 0 && ds.length === 0) return null;
+            return (
+              <View key={id} style={{ marginBottom: 18 }} testID={`binder-section-${id}`}>
+                <Text style={styles.sectionLabel}>{FOLDER_EMOJIS[id]} {t(`contractFolders.${id}`)} ({cs.length + ds.length})</Text>
+                {cs.map((c) => {
+                  const linked = c.documentId ? documents.find((d) => d.id === c.documentId) : undefined;
+                  return (
+                    <TouchableOpacity key={c.id} style={styles.ctRow}
+                      onPress={() => setSelectedContract(c.id)} testID={`contract-row-${c.id}`}>
+                      <View style={styles.ctIcon}><Text style={{ fontSize: 18 }}>📄</Text></View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.ctTitle} numberOfLines={1}>{c.title}</Text>
+                        <Text style={styles.ctSub} numberOfLines={1}>
+                          {(c.issuer ? `${c.issuer} · ` : '') + (c.expirationDate ? c.expirationDate : t('contractsV2.noExpiry'))}
+                          {linked ? ` · ${t('contractsV2.hasFile')}` : ''}
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={16} color={theme.textTertiary} />
+                    </TouchableOpacity>
+                  );
+                })}
+                {ds.map((d) => (
+                  <TouchableOpacity key={d.id} style={styles.ctRow} testID={`contract-doc-${d.id}`}
+                    onPress={() => { setSelected(d.id); setMode('detail'); }}>
+                    <View style={styles.ctIcon}><Text style={{ fontSize: 18 }}>{d.pdfUri ? '📄' : '📷'}</Text></View>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.ctTitle} numberOfLines={1}>{c.title}</Text>
-                      <Text style={styles.ctSub} numberOfLines={1}>
-                        {(c.issuer ? `${c.issuer} · ` : '') + (c.expirationDate ? c.expirationDate : t('contractsV2.noExpiry'))}
-                        {linked ? ` · ${t('contractsV2.hasFile')}` : ''}
-                      </Text>
+                      <Text style={styles.ctTitle} numberOfLines={1}>{d.title}</Text>
+                      <Text style={styles.ctSub}>{t('contractFolders.scannedDocument')} · {new Date(d.createdAt).toLocaleDateString(locale)}</Text>
                     </View>
                     <Ionicons name="chevron-forward" size={16} color={theme.textTertiary} />
                   </TouchableOpacity>
-                );
-              })}
-            </View>
-          )}
-        {filtered.length === 0 && visibleContracts.length === 0 ? (
+                ))}
+              </View>
+            );
+          })}
+        {filtered.length === 0 && (typeFilter !== 'contract' || visibleContracts.length === 0) ? (
           <View style={styles.emptyPremium}>
             <LinearGradient
               colors={[`${theme.primary}25`, `${theme.primary}05`]}
@@ -993,7 +1096,7 @@ ${pageDataUrls.map((src, i) => `
           </View>
         ) : (
           <>
-          {filtered.map((d) => {
+          {typeFilter === 'unclassified' && filtered.map((d) => {
             const cat = CATEGORIES.find((c) => c.id === d.category);
             const numPages = d.pages?.length || 1;
             return (
@@ -1054,7 +1157,7 @@ ${pageDataUrls.map((src, i) => `
                   {!!selCt.issuer && (
                     <View style={styles.ctDetailRow}><Text style={styles.ctDetailLabel}>{t('contractsV2.issuer')}</Text><Text style={styles.ctDetailValue}>{selCt.issuer}</Text></View>
                   )}
-                  <View style={styles.ctDetailRow}><Text style={styles.ctDetailLabel}>{t('contractsV2.category')}</Text><Text style={styles.ctDetailValue}>{selCt.category}</Text></View>
+                  <View style={styles.ctDetailRow}><Text style={styles.ctDetailLabel}>{t('contractsV2.category')}</Text><Text style={styles.ctDetailValue}>{t(`contractFolders.${folderForContractCategory(selCt.category)}`)}</Text></View>
                   <View style={styles.ctDetailRow}><Text style={styles.ctDetailLabel}>{t('contractsV2.amount')}</Text><Text style={styles.ctDetailValue}>{selCt.amount > 0 ? `CHF ${selCt.amount}` : t('contractsV2.notSet')}</Text></View>
                   <View style={styles.ctDetailRow}><Text style={styles.ctDetailLabel}>{t('contractsV2.expiry')}</Text><Text style={styles.ctDetailValue}>{selCt.expirationDate || t('contractsV2.notSet')}</Text></View>
                   {!!selCt.startDate && (
@@ -1062,31 +1165,31 @@ ${pageDataUrls.map((src, i) => `
                   )}
                   <View style={styles.ctDetailRow}><Text style={styles.ctDetailLabel}>{t('contractsV2.autoRenew')}</Text><Text style={styles.ctDetailValue}>{selCt.autoRenew === undefined ? t('contractsV2.notSet') : (selCt.autoRenew ? t('common.yes') : t('common.no'))}</Text></View>
                 </View>
+                <Text style={[styles.sectionLabel, { marginTop: 14 }]}>{t('contractFolders.moveTo')}</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ maxHeight: 58 }}>
+                  <View style={styles.filterRow}>
+                    {CONTRACT_FOLDER_IDS.map((id) => (
+                      <TouchableOpacity key={id} testID={`move-contract-${id}`}
+                        onPress={() => changeContractFolder(selCt.id, id)}
+                        style={[styles.filterChip, folderForContractCategory(selCt.category) === id && styles.filterChipActive]}>
+                        <Text style={[styles.filterText, folderForContractCategory(selCt.category) === id && styles.filterTextActive]}>
+                          {FOLDER_EMOJIS[id]} {t(`contractFolders.${id}`)}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </ScrollView>
                 {ctDoc ? (
                   <>
-                    {(ctDoc.pdfUri || ((ctDoc as any).remotePath && (ctDoc.mimeType || '').includes('pdf'))) ? (
-                      <TouchableOpacity
-                        style={[styles.ctBtn, { backgroundColor: 'rgba(52,211,153,0.14)' }]}
-                        onPress={() => openContractPdf(ctDoc)}
-                        disabled={recovering}
-                        testID="contract-open-pdf"
-                      >
-                        {recovering ? <ActivityIndicator size="small" color={theme.primary} /> : <Ionicons name="document-text" size={18} color={theme.primary} />}
-                        <Text style={{ color: theme.primary, fontWeight: '700' }}>{recovering ? t('docSpaces.downloading') : t('contractsV2.openPdf')}</Text>
-                      </TouchableOpacity>
-                    ) : (
-                      <TouchableOpacity
-                        style={[styles.ctBtn, { backgroundColor: 'rgba(52,211,153,0.14)' }]}
-                        onPress={() => { setSelectedContract(null); setSelected(ctDoc.id); setMode('detail'); }}
-                        testID="contract-open-attachment"
-                      >
-                        <Ionicons name="attach" size={18} color={theme.primary} />
-                        <Text style={{ color: theme.primary, fontWeight: '700' }}>{t('contractsV2.openFile')}</Text>
-                      </TouchableOpacity>
-                    )}
-                    <TouchableOpacity style={[styles.ctBtn, { backgroundColor: 'rgba(96,165,250,0.10)' }]} onPress={() => shareContractPdf(ctDoc)}>
+                    <TouchableOpacity style={[styles.ctBtn, { backgroundColor: 'rgba(52,211,153,0.14)' }]}
+                      onPress={() => { setSelectedContract(null); setTimeout(() => { void openContractPdf(ctDoc); }, 300); }}
+                      disabled={recovering} testID="contract-open-original">
+                      {recovering ? <ActivityIndicator size="small" color={theme.primary} /> : <Ionicons name="document-text" size={18} color={theme.primary} />}
+                      <Text style={{ color: theme.primary, fontWeight: '700' }}>{t('contractFolders.openOriginal')}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.ctBtn, { backgroundColor: 'rgba(96,165,250,0.10)' }]} onPress={() => { setSelectedContract(null); setTimeout(() => { void shareContractPdf(ctDoc); }, 300); }}>
                       <Ionicons name="share-outline" size={18} color="#60A5FA" />
-                      <Text style={{ color: '#60A5FA', fontWeight: '700' }}>{t('contractsV2.share')}</Text>
+                      <Text style={{ color: '#60A5FA', fontWeight: '700' }}>{t('documentPrivacy.exportToFiles')}</Text>
                     </TouchableOpacity>
                   </>
                 ) : (
@@ -1110,6 +1213,16 @@ ${pageDataUrls.map((src, i) => `
               </>
             )}
           </View>
+        </View>
+      </Modal>
+
+      {/* Photo originale : même ouverture après récupération cloud vérifiée. */}
+      <Modal visible={!!photoViewerUri} animationType="slide" onRequestClose={() => setPhotoViewerUri(null)}>
+        <View style={{ flex: 1, backgroundColor: theme.background, paddingTop: insets.top }}>
+          <TouchableOpacity style={{ padding: 16, alignSelf: 'flex-end' }} onPress={() => setPhotoViewerUri(null)} testID="contract-photo-close">
+            <Ionicons name="close" size={28} color={theme.text} />
+          </TouchableOpacity>
+          {photoViewerUri && <Image source={{ uri: photoViewerUri }} resizeMode="contain" style={{ flex: 1 }} />}
         </View>
       </Modal>
 

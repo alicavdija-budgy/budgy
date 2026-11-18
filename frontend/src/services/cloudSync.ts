@@ -16,6 +16,7 @@
  */
 
 import { getSupabase, isSupabaseConfigured } from '../lib/supabase';
+import { isPrivateDocumentTable, isPrivateDocumentTombstone } from '../lib/documentPrivacy';
 import {
   mergeCollectionsV2, legacyHashOf, isConfirmedHash, isDirtyForPush,
   mapOutboundRow, mapInboundRow, fullHashFor,
@@ -347,6 +348,9 @@ export async function pushAllToCloud(): Promise<{
   const syncedHashes = useStore.getState().syncedHashes;
   const pendingMigration = new Set<string>();
   for (const [table, items] of collections) {
+    // Build 92: no private contract, invoice, receipt or scanned-document
+    // records are sent to Budgy's Supabase (including QR payloads/metadata).
+    if (isPrivateDocumentTable(table)) continue;
     if (!items || items.length === 0) continue;
     const stored = syncedHashes[table] || {};
     const legacy = TABLE_FIELDS_LEGACY[table];
@@ -386,7 +390,9 @@ export async function pushAllToCloud(): Promise<{
   // migration → ignoré proprement, les tombstones locaux restent persistés.
   try {
     const tombs = useStore.getState().tombstones[userId] || {};
-    const rows = Object.entries(tombs).map(([key, at]) => ({
+    const rows = Object.entries(tombs)
+      .filter(([key]) => !isPrivateDocumentTombstone(key))
+      .map(([key, at]) => ({
       id: `${userId}:${key}`,
       user_id: userId,
       entity_key: key,
@@ -438,6 +444,9 @@ export async function pullAllFromCloud(): Promise<{ ok: boolean; pulled: number;
   let total = 0;
   try {
     const fetch = async (table: string) => {
+      // Local-only records are never pulled from Budgy Cloud; this also
+      // prevents reintroducing previously uploaded documents on login.
+      if (isPrivateDocumentTable(table)) return [];
       const { data, error } = await sb.from(table).select('*').eq('user_id', userId);
       if (error) throw new Error(`${table}: ${error.message}`);
       // P0 BUDGETS — mapping inverse monthly→limit (etc.) : l'élément reprend
@@ -513,7 +522,8 @@ export async function pullAllFromCloud(): Promise<{ ok: boolean; pulled: number;
     } catch {}
     const localTombs = useStore.getState().tombstones[userId] || {};
     const allTombs: Record<string, number> = { ...localTombs };
-    for (const rt of remoteTombs) if (rt.entity_key) allTombs[rt.entity_key] = Number(rt.deleted_at) || Date.now();
+    for (const rt of remoteTombs) if (rt.entity_key && !isPrivateDocumentTombstone(rt.entity_key))
+      allTombs[rt.entity_key] = Number(rt.deleted_at) || Date.now();
     if (Object.keys(allTombs).length !== Object.keys(localTombs).length) {
       useStore.setState({ tombstones: { ...useStore.getState().tombstones, [userId]: allTombs } });
     }
@@ -572,12 +582,13 @@ export async function pullAllFromCloud(): Promise<{ ok: boolean; pulled: number;
       savingsGoals: mg('savingsGoals', cur.savingsGoals, savingsGoals) as SavingsGoal[],
       budgets: mg('budgets', cur.budgets, budgets) as Budget[],
       recurringExpenses: mg('recurringExpenses', cur.recurringExpenses, recurringExpenses) as RecurringExpense[],
-      contracts: mg('contracts', cur.contracts, contracts) as Contract[],
+      // Private document metadata stays on this device; cloud array is ignored.
+      contracts: cur.contracts,
       debts: mg('debts', cur.debts, debts) as Debt[],
       investments: mg('investments', cur.investments, investments) as Investment[],
-      receipts: mg('receipts', cur.receipts, receipts) as Receipt[],
-      invoices: mg('invoices', cur.invoices, invoices) as Invoice[],
-      documents: mg('documents', cur.documents, documents) as PersonalDocument[],
+      receipts: cur.receipts,
+      invoices: cur.invoices,
+      documents: cur.documents,
       groups: mg('groups', cur.groups, groups) as ExpenseGroup[],
       groupExpenses: mg('groupExpenses', cur.groupExpenses, groupExpenses) as GroupExpense[],
     });

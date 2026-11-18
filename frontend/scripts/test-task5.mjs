@@ -11,6 +11,40 @@ const S = (n, c) => { if (c) { stat++; console.log(`  ✅ [STATIC] ${n}`); } els
 const read = (f) => readFileSync(join(root, f), 'utf8');
 
 const { findInvoiceDuplicate } = await import(join(root, 'src/lib/invoiceDocs.ts'));
+const folderTools = await import(join(root, 'src/lib/contractFolders.ts'));
+console.log('\n═ CONTRATS — dossiers métier, réouverture et mode d’emploi ═');
+U('contrat assurance historique → Assurances', folderTools.folderForContractCategory('assurances') === 'insurance');
+U('contrat santé historique → Santé', folderTools.folderForContractCategory('sante') === 'health');
+U('télécom historique → Abonnements', folderTools.folderForContractCategory('abonnements') === 'subscriptions');
+U('catégorie inconnue → Autres, jamais un classement arbitraire', folderTools.folderForContractCategory('inconnue') === 'other');
+U('un dossier choisi est conservé dans les tags', folderTools.folderForContractDocument({ category: 'contracts', tags: ['contract', 'folder:banking'] }) === 'banking');
+U('déplacer supprime uniquement l’ancien tag dossier', folderTools.tagsWithContractFolder(['client', 'folder:health', 'contract'], 'insurance').join(',') === 'client,contract,folder:insurance');
+{
+  const wizard = read('app/more/add-contract.tsx');
+  const binder = read('app/more/documents.tsx');
+  const importer = read('app/more/email-import.tsx');
+  const plus = read('app/(tabs)/more.tsx');
+  const guide = read('app/more/user-guide.tsx');
+  S('contrat scanné : copie durable vérifiée avant fiche contrat',
+    wizard.includes('await saveToVault(source, docId, mime)') && wizard.includes('await vaultFileExists(vaultUri)') && wizard.indexOf('await saveToVault(source, docId, mime)') < wizard.indexOf('addContract({'));
+  S('scanner vers assistant contrat : URI source et non base64 via navigation',
+    read('app/scanner-modal.tsx').includes("photoUri: photo?.uri || ''"));
+  S('PDF multipage du classeur : conservé en vault avec tag de dossier',
+    binder.includes("await saveToVault(r.pdfUri, newDocId, 'application/pdf')") && binder.includes('tagsWithContractFolder(tags, scanFolder)'));
+  S('contrats liés et scans autonomes groupés sous le même dossier',
+    binder.includes('const cs = visibleContracts.filter') && binder.includes('const ds = filtered.filter') && binder.includes('binder-section-'));
+  S('l’utilisateur peut déplacer un ancien contrat sans suppression',
+    binder.includes('changeContractFolder(selCt.id, id)') && binder.includes('updateContract(id, { category: folder })'));
+  S('fichier original PDF ou photo récupéré avant ouverture',
+    binder.includes('const res = await ensureLocalCopy(doc.id)') && binder.includes('setPhotoViewerUri(uri)') && binder.includes('setPdfViewerUri(uri)'));
+  S('OCR PDF contrat enregistré avec sa catégorie métier',
+    importer.includes('category: folderForContractCategory(meta.category)') && importer.includes('tagsWithContractFolder(['));
+  S('guide accessible gratuitement depuis Plus',
+    plus.includes('plus-open-user-guide') && plus.includes("router.push('/more/user-guide' as any)") && guide.includes('BUDGY_GUIDES'));
+  S('guide explique limites et gains potentiels, sans fausse revendication n°1',
+    read('src/i18n/translations.ts').includes('Aucun gain') && read('src/i18n/translations.ts').includes('export const BUDGY_GUIDES:'));
+}
+
 const sm = await import(join(root, 'src/lib/syncMerge.ts'));
 
 console.log('\n═ PRÉALABLE 1 — données anonymes JAMAIS attribuées automatiquement ═');
@@ -76,9 +110,21 @@ S('partage/export de l\'original (uri résolue)', inv.includes('await safeShareF
 S('QR affiché depuis le payload conservé', inv.includes('<QRCode value={qrView.payload}'));
 S('visionneuse PDF (WebView) + photo (Image)', inv.includes('<WebView source={{ uri: docView.uri }}') && inv.includes('resizeMode="contain"'));
 
+S('un toucher sur toute facture ouvre son détail consultable', inv.includes('onPress={() => openInvoiceDetails(inv.id)}') && inv.includes('testID={`invoice-details-${inv.id}`}'));
+S('facture sans montant consultable AVANT complétion', inv.includes('onPress={() => openPendingDetails(d.id)}') && inv.includes('invoice-detail-complete-amount'));
+S('détail donne accès au PDF/photo et au partage natif', inv.includes('invoice-detail-open-original') && inv.includes('invoice-detail-share-original') && inv.includes('openDetailOriginal') && inv.includes('shareDetailOriginal'));
+S('détail affiche le QR bancaire du SPC original sans paiement automatique', inv.includes('invoice-detail-show-qr') && inv.includes('parseSwissQrBill(String(payload))') && inv.includes('invoiceDocs.paymentReminder'));
+S('QR disponible sur autre téléphone ET export PNG sur le même téléphone', inv.includes('getRef={(ref: any)') && inv.includes('toDataURL((data: string)') && inv.includes('FileSystem.writeAsStringAsync(dest, pngB64') && inv.includes('safeShareFile(dest, { mime:'));
+S('partage PDF/photo utilise le paramètre MIME réel et vérifie le résultat', inv.includes('await safeShareFile(res.uri, { mime:') && inv.includes('if (!shared.ok)'));
+S('iOS : fermer la fiche AVANT d’afficher une seconde modale ou partager', inv.includes('closeDetails();') && inv.includes('setTimeout(() => showQr(inv), 300)') && inv.includes('setTimeout(() => { void openOriginal(inv); }, 300)'));
+S('scanner galerie QR conserve l’image d’origine dans le vault', scan.includes('sourceUri: uri') && scan.includes('setQrSource(sourceUri ?') && scan.includes('await saveToVault(qrSource.uri, docId, qrSource.mime)'));
+S('scanner photo QR OCR conserve également le cliché d’origine', scan.includes('void runOcr(norm.base64!, norm.uri)') && scan.includes('sourceUri: originalUri') && scan.includes("t('documentPrivacy.ocrContinue')"));
+S('scanner image QR ne crée pas de facture si conservation de l’image impossible', scan.includes('if (!(await vaultFileExists(vaultUri)))') && scan.includes('const item = await buildInvoice(recurringId);') && scan.includes('addInvoice(item as any)'));
+
+
 console.log('\n═ TÂCHE 5 §6 — factures sans montant ═');
 S('JAMAIS de facture CHF 0 (montant absent → document « à compléter »)', imp.includes("toComplete: true") && !imp.includes('amount: 0,'));
-S('scanner : conserver sans montant (document seul)', scan.includes("tags: ['invoice', 'qr', 'toComplete']"));
+S('scanner : conserver le QR et la photo sans montant, sans obligation', scan.includes("await persistQrDocument(['invoice', 'qr', 'toComplete'])") && scan.includes('spcPayload: qrRaw') && scan.includes('router.back()'));
 S('obligation créée UNIQUEMENT au montant confirmé', inv.includes('const amt = normalizeChfAmount(completeAmt)') && inv.includes("amt === null || amt <= 0"));
 S('complétion : IBAN/référence repris du payload SPC (jamais inventés)', inv.includes('parseSwissQrBill(payload)') && inv.includes('} catch {}'));
 S('section « Montant à compléter » visible dans Factures', inv.includes('pendingAmountDocs.map'));
@@ -93,7 +139,7 @@ const cs = read('src/services/cloudSync.ts');
 const mig = readFileSync(join(root, '..', 'docs/MIGRATION_TASK3_storage_prive.sql'), 'utf8');
 S('migration additive : invoices.document_id + qr_payload', mig.includes('ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS document_id text') && mig.includes('ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS qr_payload text'));
 S('migration additive : documents.spc_payload', mig.includes('ALTER TABLE public.documents ADD COLUMN IF NOT EXISTS spc_payload text'));
-S('TABLE_FIELDS invoices transmet document_id + qr_payload', /invoices:\s*\[[^\]]*'document_id'[^\]]*'qr_payload'[^\]]*\]/.test(cs));
+S('build 92 : aucune facture privée n\'est poussée ou tirée', cs.includes('if (isPrivateDocumentTable(table)) continue;') && cs.includes('if (isPrivateDocumentTable(table)) return [];'));
 S('TABLE_FIELDS documents transmet spc_payload', /documents:\s*\[[^\]]*'spc_payload'[^\]]*\]/.test(cs));
 S('aucun binaire en colonne (pas de base64/file_uri dans TABLE_FIELDS)', !/TABLE_FIELDS[^;]*'(image_base64|pdf_base64|file_uri|pdf_uri|pages)'/s.test(cs));
 S('repli legacy SANS les nouveaux champs (compatible ancien schéma)', !/TABLE_FIELDS_LEGACY[\s\S]{0,900}qr_payload/.test(cs) && !/TABLE_FIELDS_LEGACY[\s\S]{0,900}spc_payload/.test(cs));

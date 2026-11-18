@@ -154,6 +154,11 @@ export default function CloudSyncScreen() {
       </View>
 
       <ScrollView contentContainerStyle={{ padding: Spacing.lg, paddingBottom: insets.bottom + 40 }}>
+        <Card style={{ padding: 13, marginBottom: 14 }}>
+          <Text style={{ color: theme.text, fontWeight: '700', marginBottom: 5 }}>{t('documentPrivacy.title')}</Text>
+          <Text style={{ color: theme.textSecondary, fontSize: 13, lineHeight: 19 }}>{t('documentPrivacy.summary')}</Text>
+          <Text style={{ color: theme.warning, fontSize: 12, marginTop: 5 }}>{t('documentPrivacy.notAutomatic')}</Text>
+        </Card>
         <LinearGradient
           colors={heroGradient}
           style={styles.hero}

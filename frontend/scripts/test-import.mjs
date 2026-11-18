@@ -52,6 +52,12 @@ ok('persistAsInvoice bloque montant manquant (jamais 0)', invBody.includes('amou
 ok('montant via normalisation UNIQUE', imp.includes('normalizeChfAmount(result?.amount)'));
 ok('échec OCR → carte erreur, jamais badge succès', imp.includes('result.success === false || result._failedOcr') && imp.includes('alert-circle'));
 ok('Swiss QR décodé côté serveur → parseur SPC éprouvé', imp.includes('swiss_qr_content') && imp.includes('parseSwissQrBill'));
+const mimeHelper = readFileSync('src/lib/importMime.ts', 'utf8');
+ok('PDF iOS reconnu même si le MIME du picker est générique', imp.includes('resolveImportMime(mimeHint, originalName, uriOrPath)') && mimeHelper.includes('.pdf') && mimeHelper.includes("'application/pdf'"));
+ok('PDF envoyé au backend avec un MIME explicite et un timeout adapté', imp.includes('mime_type: mime') && imp.includes("mime === 'application/pdf' ? 45000 : 25000"));
+ok('PDF ne réessaie pas aveuglément une requête OCR coûteuse', imp.includes("retries: mime === 'application/pdf' ? 0 : 1"));
+ok('sélection PDF et fichiers transmettent le nom original', (imp.match(/parseImageFile\(file\.uri, file\.mimeType, file\.name\)/g) || []).length === 2);
+
 ok('montant QR absent → champ de saisie OBLIGATOIRE', imp.includes('import-amount-input'));
 
 // ── 3) lecteur SPC intact (non réécrit)

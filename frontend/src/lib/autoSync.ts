@@ -37,14 +37,16 @@ let started = false;
  * Détecte renommages, dates, catégories, liens documentaires, pièces jointes…
  */
 function buildSnapshot(s: any): string {
+  // Build 92: private documents (and their record metadata) never trigger
+  // Budgy Cloud synchronization. Other finance collections remain unchanged.
   const keys = ['transactions','incomes','savingsGoals','budgets','recurringExpenses',
-    'contracts','debts','investments','receipts','invoices','documents','groups','groupExpenses'];
+    'debts','investments','groups','groupExpenses'];
   const parts: string[] = [];
   for (const k of keys) {
     const h = computeHashes(s[k] || []);
     parts.push(k + '=' + Object.keys(h).sort().map((id) => id + h[id]).join('|'));
   }
-  parts.push('up=' + (s.pendingUploads || []).length);
+  // Document upload queue was retired; ignore legacy pending entries.
   return parts.join(';');
 }
 

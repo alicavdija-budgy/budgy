@@ -47,12 +47,12 @@ const ext = existsSync('targets/intents/BudgyIntentsExtension.swift') ? read('ta
 ok('@main struct BudgyIntentsExtension: AppIntentsExtension', ext.includes('@main') && ext.includes('BudgyIntentsExtension: AppIntentsExtension'));
 const appJson = JSON.parse(read('app.json'));
 ok('Version marketing 4.0.0', appJson.expo.version === '4.0.0');
-ok('Build iOS >= 91 (89 et 90 déjà consommés par Apple — jamais réutilisés)', parseInt(appJson.expo.ios.buildNumber, 10) >= 91);
-ok('Build iOS configuré exactement à 91 (prochain build à générer)', appJson.expo.ios.buildNumber === '91');
+ok('Build iOS >= 92 (91 déjà utilisé par TestFlight — jamais réutilisé)', parseInt(appJson.expo.ios.buildNumber, 10) >= 92);
+ok('Build iOS configuré exactement à 92 (prochain build à générer)', appJson.expo.ios.buildNumber === '92');
 ok('Bundle identifier inchangé', appJson.expo.ios.bundleIdentifier === 'com.budgy.ch.budgy');
 const appJsonStr = read('app.json');
 ok('App Group group.com.budgy.ch.budgy préservé', appJsonStr.includes('group.com.budgy.ch.budgy') && read('targets/intents/expo-target.config.js').includes('group.com.budgy.ch.budgy'));
-const dialog = read('targets/intents/BudgyIntents.swift') + read('targets/intents/BudgyShared.swift');
+const dialog = read('targets/intents/_shared/BudgyIntents.swift') + read('targets/intents/_shared/BudgyShared.swift');
 ok('Siri demande CONFIRMATION (jamais « c’est fait » avant enregistrement)', dialog.includes('confirmez') && !dialog.toLowerCase().includes("c'est fait"));
 
 console.log('— P1 Menu Plus (structure éditoriale, 17 destinations réelles) —');
@@ -73,7 +73,18 @@ const secOrder = ['finances','documents','intelligence','suisse','account'];
 let last = -1, ordered = true;
 for (const k of secOrder) { const i = more.indexOf(`key: '${k}'`); if (i < last) ordered = false; last = i; }
 ok('ordre exact des 5 sections', ordered && last > 0);
-ok('lignes sans icônes ni sous-titres (chevron uniquement)', !more.includes('subtitleKey') && (more.match(/Ionicons name="/g) || []).length <= 2);
+ok('traits verts des 5 sections sur TOUTE la largeur, jamais 44 px fixes',
+  more.includes("greenBarWrap: { marginTop: 7, width: '100%'") &&
+  more.includes("width: '100%', height: 2, borderRadius: 1, backgroundColor: P.green") &&
+  more.includes("greenBarShadow: { width: '100%'") &&
+  !more.includes("greenBarShadow: { width: 44"));
+const fiveSectionRows = more.slice(more.indexOf('{/* 5 sections'), more.indexOf('{/* Confidentialité des documents : accès visible sans paywall. */}'));
+ok('les 17 lignes principales restent sans icônes ni sous-titres (chevron uniquement)',
+  !more.includes('subtitleKey') &&
+  fiveSectionRows.includes('sec.rows.map') &&
+  (fiveSectionRows.match(/Ionicons name="/g) || []).length === 1 &&
+  fiveSectionRows.includes('Ionicons name="chevron-forward"'));
+ok('guide complémentaire accessible hors des 17 lignes', more.includes('plus-open-user-guide'));
 ok('garde FREE/PRO conservée (tier pro → /pro)', more.includes("f.tier === 'pro' && !isPro") && more.includes("router.push('/pro'"));
 ok('statut Pro réel (StoreKit), badge ACTIF jamais codé en dur', more.includes('hasPremiumAccess') && more.includes('isPro &&'));
 ok('prénom/initiales depuis la session (jamais codés en dur)', more.includes('user?.name'));

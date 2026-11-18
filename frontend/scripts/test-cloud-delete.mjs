@@ -210,7 +210,7 @@ await ok('Supabase error → failed result, local item preserved', async () => {
   const svc = loadService({});
   const { sb } = makeFakeCloud({ session: SESSION, failDelete: true });
   let localDeleted = false;
-  const res = await svc.deleteEntityWithCloud('invoices', 'i1', () => { localDeleted = true; }, deps(sb));
+  const res = await svc.deleteEntityWithCloud('transactions', 't1', () => { localDeleted = true; }, deps(sb));
   assert.equal(res.ok, false);
   assert.equal(res.cloudUsed, true);
   assert.equal(localDeleted, false, 'local item must be kept on cloud failure');
@@ -278,11 +278,24 @@ await ok('after confirmed deletion, cloud pull no longer contains the item', asy
     session: SESSION,
     rows: [{ id: 'inv1', user_id: 'user-1' }, { id: 'inv2', user_id: 'user-1' }],
   });
-  const res = await svc.deleteEntityWithCloud('invoices', 'inv1', () => {}, deps(sb));
+  const res = await svc.deleteEntityWithCloud('transactions', 'inv1', () => {}, deps(sb));
   assert.equal(res.ok, true);
   const pulled = state.rows.map((r) => r.id); // what pullAllFromCloud would fetch
   assert.ok(!pulled.includes('inv1'), 'deleted row must be gone from the cloud');
   assert.ok(pulled.includes('inv2'), 'other rows must be untouched');
+});
+
+await ok('build 92: invoice deletion is local-only with NO server access', async () => {
+  const svc = loadService({});
+  const { sb, state } = makeFakeCloud({
+    session: SESSION, rows: [{ id: 'invoice1', user_id: 'user-1' }],
+  });
+  let localDeleted = false;
+  const res = await svc.deleteEntityWithCloud('invoices', 'invoice1', () => { localDeleted = true; }, deps(sb));
+  assert.deepEqual(res, { ok: true, cloudUsed: false });
+  assert.equal(localDeleted, true);
+  assert.equal(state.deleteCalls.length, 0, 'no document DELETE request');
+  assert.ok(svc.__tombstones.includes('invoices:invoice1'), 'local deletion marker retained');
 });
 
 // ── 8. Whitelist and input guards ────────────────────────────────────────

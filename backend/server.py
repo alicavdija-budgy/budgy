@@ -859,7 +859,7 @@ async def scanner_ocr(
     if is_pdf:
         try:
             full = base64.b64decode(img_b64 + "=" * (-len(img_b64) % 4))
-            page_images = qr_decode.pdf_first_pages_to_png_b64(full, max_pages=2)
+            page_images = qr_decode.pdf_first_pages_to_png_b64(full, max_pages=3)
             if not page_images:
                 return OCRResponse(success=False, error="PDF_RENDER_FAILED")
             log.info("[%s] step=pdf_render pages=%d ok", corr_id, len(page_images))

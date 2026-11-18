@@ -27,12 +27,26 @@ def detect_image_mime(header: bytes, hint: str = "image/jpeg", *, rendered_pdf: 
     return normalized if normalized in ("image/png", "image/jpeg", "image/webp") else "image/jpeg"
 
 
-def pdf_first_pages_to_png_b64(pdf_bytes: bytes, max_pages: int = 2) -> list:
-    """Rend les premières pages d'un PDF en PNG base64 (zoom 3x ≈ 220 dpi)."""
+def select_pdf_page_indices(page_count: int, max_pages: int = 3) -> list[int]:
+    """Priorité au début + à la dernière page (QR-facture souvent en annexe).
+
+    Limite le nombre de rendus pour éviter des coûts mémoire excessifs.
+    Pour un document de plus de 3 pages : [première, deuxième, dernière].
+    """
+    if page_count <= 0 or max_pages <= 0:
+        return []
+    indices = list(range(min(page_count, max_pages)))
+    if page_count > max_pages and max_pages > 1:
+        indices[-1] = page_count - 1
+    return indices
+
+
+def pdf_first_pages_to_png_b64(pdf_bytes: bytes, max_pages: int = 3) -> list:
+    """Rend quelques pages utiles d'un PDF en PNG base64 (zoom 3x)."""
     import pymupdf  # PyMuPDF
     out = []
     with pymupdf.open(stream=pdf_bytes, filetype="pdf") as doc:
-        for i in range(min(max_pages, doc.page_count)):
+        for i in select_pdf_page_indices(doc.page_count, max_pages):
             pix = doc[i].get_pixmap(matrix=pymupdf.Matrix(3, 3))
             out.append(_b64.b64encode(pix.tobytes("png")).decode("ascii"))
     return out

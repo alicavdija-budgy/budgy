@@ -14,6 +14,7 @@ import {
   Modal,
   Alert,
   TextInput,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -31,6 +32,11 @@ import { EntityActionsSheet, type EntityActionsContext } from '../../src/compone
 import { EntityEditModal, type EditField } from '../../src/components/EntityEditModal';
 import { EXPENSE_CATEGORIES } from '../../src/data/swiss-data';
 import { useTranslation } from '../../src/hooks/useTranslation';
+import * as FileSystem from 'expo-file-system/legacy';
+import { WebView } from 'react-native-webview';
+import { ensureLocalCopy } from '../../src/services/documentStorage';
+import { resolveVaultUri } from '../../src/lib/fileVault';
+import { safeShareFile } from '../../src/lib/safeShare';
 
 type Filter = 'all' | ReceiptType;
 
@@ -40,7 +46,7 @@ export default function ReceiptsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { t } = useTranslation();
-  const { receipts, deleteReceipt, updateReceipt, updateTransaction, deleteTransaction } = useStore();
+  const { receipts, documents, deleteReceipt, updateReceipt, updateTransaction, deleteTransaction } = useStore();
   const [filter, setFilter] = useState<Filter>('all');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<string | null>(null);
@@ -115,6 +121,47 @@ export default function ReceiptsScreen() {
   }, [receipts]);
 
   const sel = receipts.find((r) => r.id === selected) || null;
+  const linkedReceiptDoc = (receipt: typeof sel) => receipt?.documentId
+    ? documents.find((d) => d.id === receipt.documentId) : undefined;
+  const receiptPreviewUri = (receipt: typeof sel) => {
+    if (!receipt) return '';
+    const doc = linkedReceiptDoc(receipt);
+    return resolveVaultUri(doc?.fileUri || doc?.pdfUri) || receipt.imageBase64 || '';
+  };
+  const receiptIsPdf = (receipt: typeof sel) => {
+    const d = linkedReceiptDoc(receipt);
+    return (d?.mimeType || '').includes('pdf') || !!d?.pdfUri;
+  };
+  const exportReceiptToFiles = async (receipt: NonNullable<typeof sel>) => {
+    // Close sheet first: iOS must not stack two native presentations.
+    setSelected(null);
+    try {
+      const doc = linkedReceiptDoc(receipt);
+      let uri = doc ? (await ensureLocalCopy(doc.id))?.uri : undefined;
+      let mime = doc?.mimeType || 'image/jpeg';
+      if (!uri && receipt.imageBase64) {
+        if (receipt.imageBase64.startsWith('data:image/')) {
+          const match = /^data:(image\/(?:jpeg|png));base64,([A-Za-z0-9+/=]+)$/.exec(receipt.imageBase64);
+          if (match && Platform.OS !== 'web') {
+            mime = match[1];
+            uri = `${FileSystem.cacheDirectory}budgy-ticket-share-${Date.now()}.${mime === 'image/png' ? 'png' : 'jpg'}`;
+            await FileSystem.writeAsStringAsync(uri, match[2], { encoding: FileSystem.EncodingType.Base64 });
+          }
+        } else if (receipt.imageBase64.startsWith('file:')) {
+          uri = resolveVaultUri(receipt.imageBase64);
+        }
+      }
+      if (!uri) { Alert.alert(t('contractsV2.fileMissingTitle'), t('documentPrivacy.noFile')); return; }
+      const result = await safeShareFile(uri, {
+        name: receipt.merchant || 'ticket',
+        mime,
+        dialogTitle: t('documentPrivacy.exportToFiles'),
+      });
+      if (!result.ok) Alert.alert(t('contractsV2.fileErrorTitle'), t('documentPrivacy.noFile'));
+    } catch {
+      Alert.alert(t('contractsV2.fileErrorTitle'), t('documentPrivacy.noFile'));
+    }
+  };
 
   const handleDelete = (id: string) => {
     const r = receipts.find((x) => x.id === id);
@@ -264,7 +311,15 @@ export default function ReceiptsScreen() {
                 })}
                 activeOpacity={0.7}
               >
-                <Image source={{ uri: r.imageBase64 }} style={styles.gridImage} />
+                {receiptIsPdf(r) ? (
+                  <View style={[styles.gridImage, { alignItems: 'center', justifyContent: 'center', backgroundColor: theme.card }]}>
+                    <Ionicons name="document-text" size={36} color={theme.primary} />
+                  </View>
+                ) : receiptPreviewUri(r) ? (
+                  <Image source={{ uri: receiptPreviewUri(r) }} style={styles.gridImage} />
+                ) : (
+                  <View style={[styles.gridImage, { backgroundColor: theme.card }]} />
+                )}
                 <View style={styles.gridOverlay}>
                   <View style={styles.gridTypePill}>
                     <Text style={styles.gridTypeText}>
@@ -302,7 +357,14 @@ export default function ReceiptsScreen() {
                   </TouchableOpacity>
                 </View>
                 <ScrollView style={{ maxHeight: 500 }}>
-                  <ZoomableImage source={{ uri: sel.imageBase64 }} style={styles.modalImage} resizeMode="contain" />
+                  {receiptIsPdf(sel) && receiptPreviewUri(sel) ? (
+                    <WebView source={{ uri: receiptPreviewUri(sel) }} style={styles.modalImage}
+                      originWhitelist={['*']} allowFileAccess allowingReadAccessToURL={receiptPreviewUri(sel)} />
+                  ) : receiptPreviewUri(sel) ? (
+                    <ZoomableImage source={{ uri: receiptPreviewUri(sel) }} style={styles.modalImage} resizeMode="contain" />
+                  ) : (
+                    <Text style={{ color: theme.textSecondary, padding: 12 }}>{t('documentPrivacy.noFile')}</Text>
+                  )}
                   <View style={styles.zoomHintBar}>
                     <Ionicons name="resize" size={11} color={theme.textTertiary} />
                     <Text style={styles.zoomHintTxt}>{t('receipts.zoomHint')}</Text>
@@ -339,6 +401,13 @@ export default function ReceiptsScreen() {
                     )}
                   </View>
                 </ScrollView>
+                <Button
+                  title={t('documentPrivacy.exportToFiles')}
+                  variant="secondary"
+                  icon="share-outline"
+                  onPress={() => { void exportReceiptToFiles(sel); }}
+                  style={{ marginTop: Spacing.lg }}
+                  />
                 <View style={{ flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.lg }}>
                   <Button
                     title={t('receipts.editBtn')}

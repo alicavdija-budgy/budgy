@@ -16,6 +16,7 @@ on:
     branches:
       - budgy-smart-4.0
     paths:
+      - 'frontend/**'
       - 'backend/**'
       - 'docs/PRODUCTION_SELFHOST_READONLY_AUDIT.sql'
       - 'docs/DEPLOIEMENT_COOLIFY.md'
@@ -60,7 +61,7 @@ jobs:
         run: |
           set -e
           for test in \
-            test-import test-contracts test-qrbill test-local-dates test-budgets-sync \
+            test-document-privacy test-import test-contracts test-qrbill test-local-dates test-budgets-sync \
             test-budgets test-engine test-cloud-auth test-cloud-delete \
             test-task3 test-task4 test-task5 test-stability \
             test-premium test-pro-gating test-savings-tier \
@@ -76,7 +77,7 @@ jobs:
           const a=require('./app.json').expo;
           const e=require('./eas.json');
           const assert=(x,msg)=>{ if(!x)throw new Error(msg); };
-          assert(a.version==='4.0.0' && a.ios?.buildNumber==='91','Wrong Budgy iOS version');
+          assert(a.version==='4.0.0' && a.ios?.buildNumber==='92','Wrong Budgy iOS version');
           assert(a.ios?.bundleIdentifier==='com.budgy.ch.budgy','Wrong existing Apple app');
           assert(a.android?.package==='com.budgy.ch.budgy','Wrong Google Play package');
           assert(Number.isInteger(a.android?.versionCode) && a.android.versionCode>0,'Missing Android versionCode');

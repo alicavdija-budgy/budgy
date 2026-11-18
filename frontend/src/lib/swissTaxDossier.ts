@@ -108,13 +108,13 @@ export function findTaxPreparationSignals(
   const acc = new Map<TaxDocumentKey, TaxPreparationSignal>();
   for (const tx of transactions || []) {
     if (!tx || (tx.type && tx.type !== 'expense')) continue;
-    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(String(tx.date || ''))) continue;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(tx.date || ''))) continue;
     if (Number(String(tx.date).slice(0, 4)) !== year) continue;
     if (tx.currency && String(tx.currency).toUpperCase() !== 'CHF') continue;
     if (/^(invoice|recurring|transfer)$/i.test(String(tx.source || ''))) continue;
     const cat = String(tx.category || '')
-      .toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '')
-      .replace(/[\\s-]+/g, '_');
+      .toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/[\s-]+/g, '_');
     const document = TAX_CATEGORY_HINTS[cat];
     const amount = Number(tx.amount);
     if (!document || !Number.isFinite(amount) || amount <= 0) continue;

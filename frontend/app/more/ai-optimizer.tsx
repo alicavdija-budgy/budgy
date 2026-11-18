@@ -258,7 +258,7 @@ export default function AIOptimizerScreen() {
 
       console.log(`${TAG} POST /api/optimizer/analyze (signals=${(body.transactions||[]).length} txns)`);
 
-      if (!hasApiBaseUrl()) throw new Error('Backend offline; local evidence retained');
+      if (!hasApiBaseUrl()) throw new Error('offline');
       const r = await apiFetchJson<OptimizerResult>('/api/optimizer/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

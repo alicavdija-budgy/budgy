@@ -147,7 +147,7 @@ export default function ImportInvoiceScreen() {
       pdfUri: isPdf ? vaultUri : undefined,
       fileUri: isPdf ? undefined : vaultUri,
       imageBase64: '',
-      tags: ['local-only', 'manual-review'],
+      tags: type === 'invoice' ? ['invoice', 'toComplete', 'local-only', 'manual-review'] : ['local-only', 'manual-review'],
       createdAt: now,
       updatedAt: now,
     } as any);

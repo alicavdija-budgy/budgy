@@ -24,7 +24,7 @@ const SUPPORTED_EXT = ['pdf', 'jpg', 'jpeg', 'png', 'heic', 'heif', 'webp'];
 const KNOWN_UNSUPPORTED = ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'zip'];
 
 export function extOf(uriOrName: string, mime?: string): string {
-  const m = /\/Documents\/vault\/([^?#]+)$/.exec(uri);
+  const m = (mime || '').toLowerCase();
   if (m === 'application/pdf') return 'pdf';
   if (m.startsWith('image/')) {
     const sub = m.slice(6);
@@ -124,7 +124,7 @@ export async function saveToVault(srcUri: string, id: string, mime?: string, nam
  */
 export function resolveVaultUri(uri?: string): string | undefined {
   if (!uri || Platform.OS === 'web' || uri.startsWith('data:')) return uri;
-  const m = /\\/Documents\\/vault\\/([^?#]+)$/.exec(uri);
+  const m = /\/Documents\/vault\/([^?#]+)$/.exec(uri);
   if (!m || !FileSystem.documentDirectory) return uri;
   const name = m[1];
   // Deliberately restrict path traversal and percent-encoded escapes.

@@ -872,7 +872,7 @@ ${pageDataUrls.map((src, i) => `
           {(sel.pdfUri || sel.fileUri || (sel as any).remotePath) ? (
             <View style={{ gap: 10, marginBottom: Spacing.lg }}>
               <Button title={t('contractFolders.openOriginal')} onPress={() => { setMode('list'); void openContractPdf(sel); }} fullWidth icon="document-text" size="lg" />
-              <Button title={t('contractsV2.share')} onPress={() => { void sharePdf(sel); }} fullWidth icon="share" size="lg" />
+              <Button title={t('documentPrivacy.exportToFiles')} onPress={() => { void sharePdf(sel); }} fullWidth icon="share" size="lg" />
             </View>
           ) : null}
           {typeFilter === 'contract' && (
@@ -1189,7 +1189,7 @@ ${pageDataUrls.map((src, i) => `
                     </TouchableOpacity>
                     <TouchableOpacity style={[styles.ctBtn, { backgroundColor: 'rgba(96,165,250,0.10)' }]} onPress={() => { setSelectedContract(null); setTimeout(() => { void shareContractPdf(ctDoc); }, 300); }}>
                       <Ionicons name="share-outline" size={18} color="#60A5FA" />
-                      <Text style={{ color: '#60A5FA', fontWeight: '700' }}>{t('contractsV2.share')}</Text>
+                      <Text style={{ color: '#60A5FA', fontWeight: '700' }}>{t('documentPrivacy.exportToFiles')}</Text>
                     </TouchableOpacity>
                   </>
                 ) : (

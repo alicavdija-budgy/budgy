@@ -9,7 +9,7 @@ execFileSync('npx', ['tsc','src/lib/swissTaxDossier.ts','--outDir','/tmp/budgy-t
   '--module','commonjs','--target','es2020','--skipLibCheck'],{stdio:'pipe'});
 const require=createRequire(import.meta.url);
 const {
-  YEAR_LIMITS, TAX_DOCUMENT_KEYS, planPillar3a, optionalCHF, isValidDossier
+  YEAR_LIMITS, TAX_DOCUMENT_KEYS, planPillar3a, optionalCHF, isValidDossier, findTaxPreparationSignals
 } = require('/tmp/budgy-tax93/swissTaxDossier.js');
 
 assert.equal(YEAR_LIMITS[2026].with_lpp,7258);
@@ -29,6 +29,20 @@ assert.equal(planPillar3a(2027,'with_lpp','abc','').reason,'invalid_amount');
 assert.equal(optionalCHF('1’250.50'),1250.5);
 assert.equal(optionalCHF('-5'),null);
 assert.equal(optionalCHF('12abc'),null);
+assert.equal(optionalCHF('1’2’34'),null);
+const hints = findTaxPreparationSignals([
+ {id:'1',type:'expense',category:'santé',amount:110,date:'2027-03-07',currency:'CHF',source:'manual'},
+ {id:'2',type:'expense',category:'donations',amount:70,date:'2027-02-03',currency:'CHF',source:'manual'},
+ {id:'3',type:'expense',category:'sante',amount:80,date:'2026-05-12',currency:'CHF',source:'manual'},
+ {id:'4',type:'expense',category:'sante',amount:500,date:'2027-03-07',currency:'EUR',source:'manual'},
+ {id:'5',type:'income',category:'sante',amount:4000,date:'2027-03-07'},
+ {id:'6',type:'expense',category:'sante',amount:900,date:'2027-03-07',source:'invoice'},
+ ],2027);
+assert.equal(hints.length,2);
+assert.equal(hints.find(x=>x.document==='health').observedCHF,110);
+assert.equal(hints.find(x=>x.document==='donations').observedCHF,70);
+assert.equal(findTaxPreparationSignals([],2027).length,0);
+
 assert.equal(optionalCHF(''),0);
 assert.equal(TAX_DOCUMENT_KEYS.length,16);
 assert.equal(isValidDossier({checked:['pillar3a','salary'],pension:'with_lpp',paid3a:'2000',avsIncome:''}),true);
@@ -43,6 +57,7 @@ assert(!screen.includes('apiFetchJson'));
 assert(!screen.includes('fetch('));
 assert.match(screen,/OFFICIAL_3A/);
 assert.match(screen,/OFFICIAL_BUYBACK/);
+assert.match(screen,/findTaxPreparationSignals\(transactions, year\)/);
 assert.match(features, /id: 'tax-dossier'.*tier: 'pro'/);
 assert.match(tax,/router.push\('\/more\/tax-dossier'/);
 console.log('PASS: 2026/2027 3a ceilings, AVS 20% cap, invalid CHF, 16 fiscal documents, local secure progress, paywall protection');

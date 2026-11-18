@@ -32,6 +32,7 @@ import { deleteEntityWithCloud } from '../../src/services/cloudDelete';
 import { EntityEditModal, type EditField } from '../../src/components/EntityEditModal';
 // TÂCHE 5 — consultation des QR-factures : original, QR conservé, export
 import QRCode from 'react-native-qrcode-svg';
+import * as FileSystem from 'expo-file-system/legacy';
 import { WebView } from 'react-native-webview';
 import { ensureLocalCopy } from '../../src/services/documentStorage';
 import { safeShareFile } from '../../src/lib/safeShare';
@@ -308,6 +309,21 @@ export default function InvoicesScreen() {
   // ── TÂCHE 5 — document original / QR conservé / montant à compléter ──
   const [docView, setDocView] = useState<{ uri: string; isPdf: boolean } | null>(null);
   const [qrView, setQrView] = useState<{ payload: string; hasOriginal: boolean } | null>(null);
+  const qrImageRef = useRef<any>(null);
+  const [sharingQr, setSharingQr] = useState(false);
+  // Chaque facture est consultable d'un simple toucher : PDF/photo, QR, partage.
+  // Les documents « montant à compléter » restent consultables SANS créer une
+  // obligation financière artificielle.
+  const [detailInvoiceId, setDetailInvoiceId] = useState<string | null>(null);
+  const [detailDocumentId, setDetailDocumentId] = useState<string | null>(null);
+  const detailInvoice = storeInvoices.find((i) => i.id === detailInvoiceId);
+  const detailDocument = documents.find((d) => d.id === (detailInvoice?.documentId || detailDocumentId));
+  const detailActionsInvoice: any = detailInvoice || (detailDocument ? { documentId: detailDocument.id } : null);
+  const detailHasOriginal = !!(detailDocument && (detailDocument.pdfUri || detailDocument.fileUri || (detailDocument as any).remotePath));
+  const detailHasQr = !!((detailInvoice as any)?.qrPayload || (detailDocument as any)?.spcPayload);
+  const closeDetails = () => { setDetailInvoiceId(null); setDetailDocumentId(null); };
+  const openInvoiceDetails = (id: string) => { setDetailDocumentId(null); setDetailInvoiceId(id); };
+  const openPendingDetails = (id: string) => { setDetailInvoiceId(null); setDetailDocumentId(id); };
   const [completingId, setCompletingId] = useState<string | null>(null);
   const [completeAmt, setCompleteAmt] = useState('');
   const [recoveringDoc, setRecoveringDoc] = useState(false);
@@ -357,7 +373,36 @@ export default function InvoicesScreen() {
     const d = invDocOf(inv);
     const payload = inv.qrPayload || (d as any)?.spcPayload;
     if (!payload) return;
-    setQrView({ payload: String(payload), hasOriginal: !!(d && (d.pdfUri || d.fileUri || (d as any).remotePath)) });
+    try {
+      parseSwissQrBill(String(payload)); // pas de QR arbitraire présenté comme moyen de paiement
+      setQrView({ payload: String(payload), hasOriginal: !!(d && (d.pdfUri || d.fileUri || (d as any).remotePath)) });
+    } catch {
+      Alert.alert(t('qrbill.invalidTitle'), t('qrbill.errors.generic'));
+    }
+  };
+
+  /** Export volontaire du QR comme image PNG pour une application bancaire sur
+   * le même téléphone. Pour un second téléphone, afficher simplement le QR.
+   * Le payload SPC n'est JAMAIS réécrit ; Budgy ne transmet aucun paiement. */
+  const shareQrImage = async () => {
+    if (!qrView || sharingQr) return;
+    if (Platform.OS === 'web') return;
+    setSharingQr(true);
+    try {
+      const svg = qrImageRef.current;
+      if (!svg || typeof svg.toDataURL !== 'function') throw new Error('QR_IMAGE_UNAVAILABLE');
+      const pngB64 = await new Promise<string>((resolve, reject) => {
+        svg.toDataURL((data: string) => data ? resolve(data) : reject(new Error('QR_IMAGE_EMPTY')));
+      });
+      const dest = `${FileSystem.cacheDirectory}budgy-qr-facture-${Date.now()}.png`;
+      await FileSystem.writeAsStringAsync(dest, pngB64, { encoding: FileSystem.EncodingType.Base64 });
+      const shared = await safeShareFile(dest, { mime: 'image/png', name: 'budgy-qr-facture.png', dialogTitle: t('invoiceDocs.shareQr') });
+      if (!shared.ok) Alert.alert(t('invoiceDocs.shareQrErrorTitle'), t('invoiceDocs.shareQrErrorBody'));
+    } catch {
+      Alert.alert(t('invoiceDocs.shareQrErrorTitle'), t('invoiceDocs.shareQrErrorBody'));
+    } finally {
+      setSharingQr(false);
+    }
   };
 
   // §6 — « Montant à compléter » : documents facture conservés SANS obligation
@@ -523,9 +568,9 @@ export default function InvoicesScreen() {
             {pendingAmountDocs.map((d) => (
               <TouchableOpacity
                 key={d.id}
-                onPress={() => { setCompletingId(d.id); setCompleteAmt(''); }}
+                onPress={() => openPendingDetails(d.id)}
                 style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: theme.warning, backgroundColor: `${theme.warning}14`, marginBottom: 8 }}
-                testID={`complete-invoice-${d.id}`}
+                testID={`pending-invoice-details-${d.id}`}
               >
                 <Ionicons name="qr-code-outline" size={20} color={theme.warning} />
                 <View style={{ flex: 1 }}>
@@ -586,6 +631,10 @@ export default function InvoicesScreen() {
                 >
                   <TouchableOpacity
                     activeOpacity={0.85}
+                    onPress={() => openInvoiceDetails(inv.id)}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('invoiceDocs.openDetails')}
+                    testID={`invoice-details-${inv.id}`}
                     onLongPress={() => setActionsCtx({
                       id: inv.id,
                       title: inv.title,
@@ -703,6 +752,57 @@ export default function InvoicesScreen() {
         <View style={{ height: 40 }} />
       </ScrollView>
 
+      {/* Détail unique pour TOUTES les provenances : caméra, image, PDF,
+          QR direct, avec ou sans montant. Accès sans paiement automatique. */}
+      <Modal visible={!!detailInvoice || !!detailDocumentId} transparent animationType="slide" onRequestClose={closeDetails}>
+        <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.72)' }}>
+          <View style={{ backgroundColor: theme.card, borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 20, paddingBottom: insets.bottom + 24 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: theme.text, fontSize: 19, fontWeight: '800' }}>{detailInvoice?.title || detailDocument?.title || t('invoiceDocs.defaultTitle')}</Text>
+                <Text style={{ color: theme.textSecondary, marginTop: 5 }}>
+                  {detailInvoice ? `${detailInvoice.currency || 'CHF'} ${formatNumber(detailInvoice.amount, 2)} · ${getStatusLabel(detailInvoice.status)}` : t('invoiceDocs.toCompleteLabel')}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={closeDetails} accessibilityLabel={t('common.close')} testID="invoice-detail-close">
+                <Ionicons name="close-circle-outline" color={theme.text} size={28} />
+              </TouchableOpacity>
+            </View>
+            {detailHasOriginal && (
+              <TouchableOpacity onPress={() => { if (detailActionsInvoice) void openOriginal(detailActionsInvoice); }} testID="invoice-detail-open-original" style={{ paddingVertical: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <Ionicons name="document-text-outline" color={theme.primary} size={22} />
+                <Text style={{ color: theme.text, fontSize: 16, flex: 1 }}>{t('invoiceDocs.openOriginal')}</Text>
+                <Ionicons name="chevron-forward" color={theme.textSecondary} size={18} />
+              </TouchableOpacity>
+            )}
+            {detailHasOriginal && (
+              <TouchableOpacity onPress={() => { if (detailActionsInvoice) void shareOriginal(detailActionsInvoice); }} testID="invoice-detail-share-original" style={{ paddingVertical: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <Ionicons name="share-outline" color={theme.primary} size={22} />
+                <Text style={{ color: theme.text, fontSize: 16, flex: 1 }}>{t('invoiceDocs.shareOriginal')}</Text>
+                <Ionicons name="chevron-forward" color={theme.textSecondary} size={18} />
+              </TouchableOpacity>
+            )}
+            {detailHasQr && (
+              <TouchableOpacity onPress={() => { if (detailActionsInvoice) showQr(detailActionsInvoice); }} testID="invoice-detail-show-qr" style={{ paddingVertical: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <Ionicons name="qr-code-outline" color={theme.primary} size={22} />
+                <Text style={{ color: theme.text, fontSize: 16, flex: 1 }}>{t('invoiceDocs.showQrForBank')}</Text>
+                <Ionicons name="chevron-forward" color={theme.textSecondary} size={18} />
+              </TouchableOpacity>
+            )}
+            {detailDocumentId && (
+              <TouchableOpacity onPress={() => { setCompletingId(detailDocumentId); setCompleteAmt(''); closeDetails(); }} testID="invoice-detail-complete-amount" style={{ paddingVertical: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <Ionicons name="create-outline" color={theme.warning} size={22} />
+                <Text style={{ color: theme.text, fontSize: 16, flex: 1 }}>{t('invoiceDocs.completeTitle')}</Text>
+              </TouchableOpacity>
+            )}
+            {!detailHasOriginal && !detailHasQr && (
+              <Text style={{ color: theme.textSecondary, marginTop: 8 }}>{t('invoiceDocs.noDocBody')}</Text>
+            )}
+            <Text style={{ color: theme.textSecondary, marginTop: 12, fontSize: 12 }}>{t('invoiceDocs.paymentReminder')}</Text>
+          </View>
+        </View>
+      </Modal>
+
       {/* TÂCHE 5 — visionneuse de l'ORIGINAL (PDF/photo) */}
       <Modal visible={!!docView} animationType="slide" onRequestClose={() => setDocView(null)}>
         <View style={{ flex: 1, backgroundColor: theme.background }}>
@@ -721,12 +821,19 @@ export default function InvoicesScreen() {
       {/* TÂCHE 5 — QR reconstitué depuis le payload SPC (JAMAIS « original ») */}
       <Modal visible={!!qrView} transparent animationType="fade" onRequestClose={() => setQrView(null)}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-          <View style={{ backgroundColor: '#fff', borderRadius: 20, padding: 20, alignItems: 'center', maxWidth: 340 }}>
-            {!!qrView && <QRCode value={qrView.payload} size={250} ecl="M" />}
+          <View style={{ backgroundColor: '#fff', borderRadius: 20, padding: 20, alignItems: 'center', maxWidth: 340, width: '100%' }}>
+            {!!qrView && <QRCode value={qrView.payload} size={250} ecl="M" getRef={(ref: any) => { qrImageRef.current = ref; }} />}
             <Text style={{ marginTop: 12, fontWeight: '800', color: '#111' }}>{t('invoiceDocs.qrKept')}</Text>
             <Text style={{ marginTop: 4, fontSize: 12, color: '#555', textAlign: 'center' }}>
               {qrView?.hasOriginal ? t('invoiceDocs.qrRebuiltNote') : t('invoiceDocs.qrOnlyBody')}
             </Text>
+            <Text style={{ marginTop: 10, fontSize: 12, color: '#555', textAlign: 'center' }}>{t('invoiceDocs.paymentReminder')}</Text>
+            {Platform.OS !== 'web' && (
+              <TouchableOpacity disabled={sharingQr} onPress={() => { void shareQrImage(); }} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 16, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12, backgroundColor: '#0F7B68' }} testID="inv-qr-share-png">
+                {sharingQr ? <ActivityIndicator color="#fff" size="small" /> : <Ionicons name="share-outline" color="#fff" size={18} />}
+                <Text style={{ color: '#fff', fontWeight: '800' }}>{t('invoiceDocs.shareQr')}</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity onPress={() => setQrView(null)} style={{ marginTop: 14, paddingHorizontal: 22, paddingVertical: 10, borderRadius: 12, backgroundColor: '#111' }} testID="inv-qr-close">
               <Text style={{ color: '#fff', fontWeight: '700' }}>{t('common.close')}</Text>
             </TouchableOpacity>

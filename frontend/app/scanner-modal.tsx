@@ -642,6 +642,35 @@ export default function ScannerModal() {
         createdAt: now.getTime(),
       });
     } else {
+      // Store the original receipt photo in the same durable, iCloud-backup-
+      // eligible device vault used for invoices and contracts.
+      let receiptDocId: string | undefined;
+      if (receiptData && photo?.uri) {
+        const docId = `doc_ticket_${now.getTime()}`;
+        try {
+          await assertFileAcceptable(photo.uri, 'image/jpeg');
+          const vaultUri = await saveToVault(photo.uri, docId, 'image/jpeg');
+          if (!(await vaultFileExists(vaultUri))) throw new VaultError('SAVE_FAILED');
+          addDocument({
+            id: docId,
+            title: title.trim(),
+            category: 'other',
+            documentType: 'expense_receipt',
+            imageBase64: '',
+            fileUri: vaultUri,
+            mimeType: 'image/jpeg',
+            importedAt: now.getTime(),
+            tags: ['receipt', 'camera', 'local-only'],
+            createdAt: now.getTime(),
+            updatedAt: now.getTime(),
+          } as any);
+          receiptDocId = docId;
+        } catch (e) {
+          setStage('edit');
+          Alert.alert(t('contractsV2.fileErrorTitle'), t('contractsV2.SAVE_FAILED'));
+          return; // no false success if the original ticket cannot be saved
+        }
+      }
       addTransaction({
         id: txId,
         title: title.trim(),
@@ -670,6 +699,7 @@ export default function ScannerModal() {
           type: receiptType,
           note: note.trim() || undefined,
           transactionId: txId,
+          documentId: receiptDocId,
           createdAt: now.getTime(),
         });
       }

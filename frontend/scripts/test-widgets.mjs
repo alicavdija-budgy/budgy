@@ -19,9 +19,9 @@ const check = (name, cond, detail = '') => {
 
 const widgetSwift = read('targets/widgets/BudgyWidget.swift');
 const widgetShared = read('targets/widgets/BudgyShared.swift');
-const intents = read('targets/intents/BudgyIntents.swift');
-const intentsShared = read('targets/intents/BudgyShared.swift');
-const shortcuts = read('targets/intents/BudgyShortcuts.swift');
+const intents = read('targets/intents/_shared/BudgyIntents.swift');
+const intentsShared = read('targets/intents/_shared/BudgyShared.swift');
+const shortcuts = read('targets/intents/_shared/BudgyShortcuts.swift');
 const bridge = read('src/services/widgetBridge.ts');
 const sync = read('src/components/WidgetSync.tsx');
 const quickAdd = read('app/quick-add.tsx');

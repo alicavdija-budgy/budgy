@@ -80,7 +80,7 @@ check('intent garde un brouillon non lié si snapshot absent (jamais une dépens
   intentsShared.includes('snapshotScope.hasPrefix("user:") ? snapshotScope : "unscoped"') &&
   intentsShared.includes('scope: scope') &&
   intents.includes('BudgyIntentStore.enqueue') &&
-  intents.includes('confirmez'));
+  intentsShared.includes('confirmez'));
 check('écriture idempotente : transaction siri_<pid> jamais recréée', quickAdd.includes('transactions.some((tx) => tx.id === id)'));
 check('une dépense Siri reste une dépense (pas de requalification)', quickAdd.includes("pendingId ? 'expense'"));
 check('rafraîchissement débouncé (limites WidgetKit)', sync.includes('1500'));

@@ -407,7 +407,7 @@ export default function ReceiptsScreen() {
                   icon="share-outline"
                   onPress={() => { void exportReceiptToFiles(sel); }}
                   style={{ marginTop: Spacing.lg }}
-                  testID="receipt-save-to-files" />
+                  />
                 <View style={{ flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.lg }}>
                   <Button
                     title={t('receipts.editBtn')}

@@ -82,7 +82,7 @@ export async function persistIncomingFile(
     // Use copyAsync so the original remains untouched. Never report success
     // before verifying the shared temporary copy exists and is nonempty.
     await FS.copyAsync({ from: uri, to: dest });
-    const stat = await FS.getInfoAsync(dest, { size: true });
+    const stat = await FS.getInfoAsync(dest, { size: true } as any);
     if (!stat.exists || !Number((stat as any).size)) {
       await FS.deleteAsync(dest, { idempotent: true }).catch(() => {});
       throw new Error('SHARE_COPY_FAILED');

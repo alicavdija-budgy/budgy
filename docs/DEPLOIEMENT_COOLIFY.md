@@ -179,3 +179,22 @@ d'une chaîne non vide.
 - Aucune compilation Expo, TestFlight ou Google Play requise pour cette PR.
 - Si le déploiement précédent est impossible à restaurer, **stopper** et
   résoudre le rollback avant de changer Coolify.
+
+## Addendum build iOS 92 — confidentialité documentaire (18.11.2026)
+
+La politique **stockage local des documents + iCloud personnel** concerne le
+**frontend** et ne requiert **aucun déploiement Coolify**, aucune migration SQL,
+ni aucune modification des buckets Supabase de production pour compiler le
+build 92. Sur le client, les nouveaux envois binaires et la synchronisation des
+tables `documents`, `invoices`, `contracts`, `receipts` sont désactivés.
+Les anciennes copies cloud restent intactes afin de permettre une récupération
+contrôlée avant suppression autorisée et auditée.
+
+La sauvegarde iCloud iOS de l'appareil est conditionnelle aux réglages Apple ;
+l'export vers **iCloud Drive** est réalisé **manuellement** avec Partager →
+Enregistrer dans Fichiers. Aucun entitlement CloudKit ou sync automatique
+iCloud Drive n'est revendiqué dans le build 92.
+
+La procédure opérationnelle et les réserves sur l'OCR externe figurent dans
+[BUILD92_LOCAL_ICLOUD_PROCEDURE_FR.md](BUILD92_LOCAL_ICLOUD_PROCEDURE_FR.md).
+Ne pas déployer la production en se fondant sur cet addendum.

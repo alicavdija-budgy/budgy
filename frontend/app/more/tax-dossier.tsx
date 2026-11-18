@@ -14,7 +14,7 @@ import { useStore } from '../../src/stores/useStore';
 import { useTheme } from '../../src/hooks/useTheme';
 import { useTranslation } from '../../src/hooks/useTranslation';
 import {
-  YEAR_LIMITS, TAX_DOCUMENT_KEYS, EMPTY_DOSSIER,
+  TAX_DOCUMENT_KEYS, EMPTY_DOSSIER,
   isValidDossier, planPillar3a,
   type TaxYear, type PensionMode, type DossierState, type TaxDocumentKey
 } from '../../src/lib/swissTaxDossier';

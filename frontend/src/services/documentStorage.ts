@@ -13,6 +13,7 @@ import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import { getSupabase } from '../lib/supabase';
 import { PRIVATE_DOCUMENTS_LOCAL_ONLY } from '../lib/documentPrivacy';
+import { resolveVaultUri } from '../lib/fileVault';
 import { useStore } from '../stores/useStore';
 import { storagePathFor, normalizeUploadQueue, queueForAccount } from '../lib/syncMerge';
 
@@ -216,14 +217,20 @@ export function docFileStatus(doc: { fileUri?: string; pdfUri?: string; remotePa
 export async function ensureLocalCopy(docId: string): Promise<{ uri: string; from: LocalFileStatus } | null> {
   const doc = useStore.getState().documents.find((d) => d.id === docId);
   if (!doc) return null;
-  const localUri = doc.pdfUri || doc.fileUri;
+  const priorUri = doc.pdfUri || doc.fileUri;
+  const localUri = resolveVaultUri(priorUri);
   if (localUri) {
     try {
       if (Platform.OS === 'web') {
         if (localUri.startsWith('data:')) return { uri: localUri, from: 'local' };
       } else {
         const info = await FileSystem.getInfoAsync(localUri, { size: true } as any);
-        if (info.exists && Number((info as any).size) > 0) return { uri: localUri, from: 'local' };
+        if (info.exists && Number((info as any).size) > 0) {
+          // Repair stale app-container UUID after iCloud device restore.
+          if (localUri !== priorUri) useStore.getState().updateDocument(docId,
+            (doc.pdfUri ? { pdfUri: localUri } : { fileUri: localUri }) as any);
+          return { uri: localUri, from: 'local' };
+        }
       }
     } catch {}
     // URI locale invalide (ex: chemin d'un autre appareil) → tentative cloud.

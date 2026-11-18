@@ -76,6 +76,18 @@ S('partage/export de l\'original (uri résolue)', inv.includes('await safeShareF
 S('QR affiché depuis le payload conservé', inv.includes('<QRCode value={qrView.payload}'));
 S('visionneuse PDF (WebView) + photo (Image)', inv.includes('<WebView source={{ uri: docView.uri }}') && inv.includes('resizeMode="contain"'));
 
+S('un toucher sur toute facture ouvre son détail consultable', inv.includes('onPress={() => openInvoiceDetails(inv.id)}') && inv.includes('testID={`invoice-details-${inv.id}`}'));
+S('facture sans montant consultable AVANT complétion', inv.includes('onPress={() => openPendingDetails(d.id)}') && inv.includes('invoice-detail-complete-amount'));
+S('détail donne accès au PDF/photo et au partage natif', inv.includes('invoice-detail-open-original') && inv.includes('invoice-detail-share-original') && inv.includes('openDetailOriginal') && inv.includes('shareDetailOriginal'));
+S('détail affiche le QR bancaire du SPC original sans paiement automatique', inv.includes('invoice-detail-show-qr') && inv.includes('parseSwissQrBill(String(payload))') && inv.includes('invoiceDocs.paymentReminder'));
+S('QR disponible sur autre téléphone ET export PNG sur le même téléphone', inv.includes('getRef={(ref: any)') && inv.includes('toDataURL((data: string)') && inv.includes('FileSystem.writeAsStringAsync(dest, pngB64') && inv.includes('safeShareFile(dest, { mime:'));
+S('partage PDF/photo utilise le paramètre MIME réel et vérifie le résultat', inv.includes('await safeShareFile(res.uri, { mime:') && inv.includes('if (!shared.ok)'));
+S('iOS : fermer la fiche AVANT d’afficher une seconde modale ou partager', inv.includes('closeDetails();') && inv.includes('setTimeout(() => showQr(inv), 300)') && inv.includes('setTimeout(() => { void openOriginal(inv); }, 300)'));
+S('scanner galerie QR conserve l’image d’origine dans le vault', scan.includes('sourceUri: uri') && scan.includes('setQrSource(sourceUri ?') && scan.includes('await saveToVault(qrSource.uri, docId, qrSource.mime)'));
+S('scanner photo QR OCR conserve également le cliché d’origine', scan.includes('runOcr(norm.base64, norm.uri)') && scan.includes('sourceUri: originalUri'));
+S('scanner image QR ne crée pas de facture si conservation de l’image impossible', scan.includes('if (!(await vaultFileExists(vaultUri)))') && scan.includes('const item = await buildInvoice(recurringId);') && scan.includes('addInvoice(item as any)'));
+
+
 console.log('\n═ TÂCHE 5 §6 — factures sans montant ═');
 S('JAMAIS de facture CHF 0 (montant absent → document « à compléter »)', imp.includes("toComplete: true") && !imp.includes('amount: 0,'));
 S('scanner : conserver sans montant (document seul)', scan.includes("tags: ['invoice', 'qr', 'toComplete']"));

@@ -78,7 +78,13 @@ ok('traits verts des 5 sections sur TOUTE la largeur, jamais 44 px fixes',
   more.includes("width: '100%', height: 2, borderRadius: 1, backgroundColor: P.green") &&
   more.includes("greenBarShadow: { width: '100%'") &&
   !more.includes("greenBarShadow: { width: 44"));
-ok('lignes sans icônes ni sous-titres (chevron uniquement)', !more.includes('subtitleKey') && (more.match(/Ionicons name="/g) || []).length <= 2);
+const fiveSectionRows = more.slice(more.indexOf('{/* 5 sections'), more.indexOf('{/* Guide librement accessible'));
+ok('les 17 lignes principales restent sans icônes ni sous-titres (chevron uniquement)',
+  !more.includes('subtitleKey') &&
+  fiveSectionRows.includes('sec.rows.map') &&
+  (fiveSectionRows.match(/Ionicons name="/g) || []).length === 1 &&
+  fiveSectionRows.includes('Ionicons name="chevron-forward"'));
+ok('guide complémentaire accessible hors des 17 lignes', more.includes('plus-open-user-guide'));
 ok('garde FREE/PRO conservée (tier pro → /pro)', more.includes("f.tier === 'pro' && !isPro") && more.includes("router.push('/pro'"));
 ok('statut Pro réel (StoreKit), badge ACTIF jamais codé en dur', more.includes('hasPremiumAccess') && more.includes('isPro &&'));
 ok('prénom/initiales depuis la session (jamais codés en dur)', more.includes('user?.name'));

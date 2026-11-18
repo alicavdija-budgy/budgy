@@ -15,6 +15,7 @@ import { useRouter } from 'expo-router';
 import { BorderRadius, Spacing, FontSizes, FontWeights } from '../../src/constants/theme';
 import { useTheme } from '../../src/hooks/useTheme';
 import { useStore } from '../../src/stores/useStore';
+import { buildSavingsEvidence } from '../../src/lib/savingsEvidence';
 import { Card, Button } from '../../src/components/ui';
 import { apiFetchJson, hasApiBaseUrl } from '../../src/lib/network';
 import { useTranslation } from '../../src/hooks/useTranslation';
@@ -81,180 +82,37 @@ function enrichWithLocalProposals(
   t: (k: string, p?: any) => string,
   cur: string,
 ): any {
-  const existing = Array.isArray(data?.proposals) ? [...data.proposals] : [];
-  const existingCats = new Set(existing.map((p: any) => String(p.category || '').toLowerCase()));
-  const candidates: any[] = [];
-
-  const money = (n: number) => `${cur} ${Math.round(n)}`;
-
-  const recurringTotal = (store.recurringExpenses || [])
-    .filter((r: any) => r.active !== false)
-    .reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0);
-  const subsTotal = (store.recurringExpenses || [])
-    .filter((r: any) => r.active !== false && /(abonn|stream|telecom|cloud|media)/i.test(String(r.category || '')))
-    .reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0);
-  const restoTotal = (store.transactions || [])
-    .filter((t2: any) => /(restaurant|food|alim)/i.test(String(t2.category || '')))
-    .reduce((s: number, t2: any) => s + (Number(t2.amount) || 0), 0);
-  const coursesTotal = (store.transactions || [])
-    .filter((t2: any) => String(t2.category || '').toLowerCase() === 'courses')
-    .reduce((s: number, t2: any) => s + (Number(t2.amount) || 0), 0);
-  const hasContracts = (store.contracts || []).length > 0;
-
-  // 1. Audit abonnements / récurrent
-  if (!existingCats.has('abonnements') && (subsTotal > 0 || recurringTotal > 50)) {
-    const base = subsTotal > 0 ? subsTotal : recurringTotal;
-    candidates.push({
-      title: t('aiOptimizer.propSubs'),
-      category: 'subscription',
-      potential_saving_monthly: Math.round(base * 0.20 * 100) / 100,
-      potential_saving_yearly: Math.round(base * 0.20 * 12 * 100) / 100,
-      monthly_potential: Math.round(base * 0.20 * 100) / 100,
-      annual_potential: Math.round(base * 0.20 * 12 * 100) / 100,
-      current_monthly: base,
-      effort: 'easy',
-      action: t('aiOptimizer.propSubsAction', { amount: money(base) }),
-      explanation: '',
-    });
-  }
-  // 2. LAMal / santé
-  if (!existingCats.has('sante') && !existingCats.has('insurance')) {
-    candidates.push({
-      title: t('aiOptimizer.propHealth'),
-      category: 'insurance',
-      potential_saving_monthly: 60,
-      potential_saving_yearly: 720,
-      monthly_potential: 60,
-      annual_potential: 720,
-      current_monthly: 0,
-      effort: 'medium',
-      action: t('aiOptimizer.propHealthAction'),
-      explanation: '',
-    });
-  }
-  // 3. 3e pilier / fiscal
-  if (!existingCats.has('fiscal') && !existingCats.has('tax') && monthlyIncome > 1000) {
-    candidates.push({
-      title: t('aiOptimizer.prop3a'),
-      category: 'tax',
-      potential_saving_monthly: Math.round((Math.min(monthlyIncome * 0.10, 588)) * 100) / 100,
-      potential_saving_yearly: 7056,
-      monthly_potential: Math.round((Math.min(monthlyIncome * 0.10, 588)) * 100) / 100,
-      annual_potential: 7056,
-      current_monthly: 0,
-      effort: 'medium',
-      action: t('aiOptimizer.prop3aAction'),
-      explanation: '',
-    });
-  }
-  // 4. Télécoms
-  if (!existingCats.has('telecoms') && !existingCats.has('telco')) {
-    candidates.push({
-      title: t('aiOptimizer.propTelco'),
-      category: 'telco',
-      potential_saving_monthly: 25,
-      potential_saving_yearly: 300,
-      monthly_potential: 25,
-      annual_potential: 300,
-      current_monthly: 0,
-      effort: 'easy',
-      action: t('aiOptimizer.propTelcoAction'),
-      explanation: '',
-    });
-  }
-  // 5. Alimentation / restaurants
-  if (!existingCats.has('alimentation') && !existingCats.has('food') && (restoTotal + coursesTotal) > 200) {
-    const base = restoTotal > 100 ? restoTotal : coursesTotal;
-    candidates.push({
-      title: t('aiOptimizer.propFood'),
-      category: 'food',
-      potential_saving_monthly: Math.round(base * 0.25 * 100) / 100,
-      potential_saving_yearly: Math.round(base * 0.25 * 12 * 100) / 100,
-      monthly_potential: Math.round(base * 0.25 * 100) / 100,
-      annual_potential: Math.round(base * 0.25 * 12 * 100) / 100,
-      current_monthly: base,
-      effort: 'easy',
-      action: t('aiOptimizer.propFoodAction', { amount: money(base) }),
-      explanation: '',
-    });
-  }
-  // 6. Logement / loyer
-  if (!existingCats.has('logement') && !existingCats.has('other') && (store.recurringExpenses || []).some((r: any) => /loyer|logement|rent/i.test(String(r.title || '')))) {
-    candidates.push({
-      title: t('aiOptimizer.propHousing'),
-      category: 'other',
-      potential_saving_monthly: 50,
-      potential_saving_yearly: 600,
-      monthly_potential: 50,
-      annual_potential: 600,
-      current_monthly: 0,
-      effort: 'medium',
-      action: t('aiOptimizer.propHousingAction'),
-      explanation: '',
-    });
-  }
-  // 7. Contrats à renégocier
-  if (!existingCats.has('contrats') && hasContracts) {
-    candidates.push({
-      title: t('aiOptimizer.propContracts'),
-      category: 'insurance',
-      potential_saving_monthly: 40,
-      potential_saving_yearly: 480,
-      monthly_potential: 40,
-      annual_potential: 480,
-      current_monthly: 0,
-      effort: 'medium',
-      action: t('aiOptimizer.propContractsAction', { n: store.contracts.length }),
-      explanation: '',
-    });
-  }
-  // 8. Frais bancaires
-  if (!existingCats.has('bank') && !existingCats.has('frais_bancaires')) {
-    candidates.push({
-      title: t('aiOptimizer.propBank'),
-      category: 'bank',
-      potential_saving_monthly: 8,
-      potential_saving_yearly: 96,
-      monthly_potential: 8,
-      annual_potential: 96,
-      current_monthly: 0,
-      effort: 'easy',
-      action: t('aiOptimizer.propBankAction'),
-      explanation: '',
-    });
-  }
-
-  const minCount = Math.max(3, existing.length);
-  for (const c of candidates) {
-    if (existing.length >= minCount && new Set(existing.map((p: any) => p.category)).size >= 3) break;
-    existing.push(c);
-  }
-
-  const total_monthly = existing.reduce((s, p) => s + (p.potential_saving_monthly || p.monthly_potential || 0), 0);
-  const total_annual = existing.reduce((s, p) => s + (p.potential_saving_yearly || p.annual_potential || 0), 0);
-
-  const enriched = existing.length > (data?.proposals?.length || 0);
-  let summary = data?.summary;
-  if (enriched || !summary || /0 pistes|aucune piste|no proposals?/i.test(summary)) {
-    summary = enriched
-      ? t('aiOptimizer.summaryEnriched', { n: existing.length })
-      : t('aiOptimizer.summaryNormal', { n: existing.length });
-  }
-
+  // Only facts already recorded in Budgy may produce a quantified scenario.
+  // Backend LLM suggestions are NOT used as CHF savings: they can suggest
+  // unverified market prices, tax rebates, or insurers without a quote.
+  const observed = buildSavingsEvidence(store.transactions, store.recurringExpenses);
+  const meta: Record<string, { title: string; action: string }> = {
+    subscription: { title: 'propSubs', action: 'propSubsAction' },
+    telco: { title: 'propTelco', action: 'propTelcoAction' },
+    food: { title: 'propFood', action: 'propFoodAction' },
+  };
+  const proposals = observed.map((e) => ({
+    title: t(`aiOptimizer.${meta[e.category].title}`),
+    category: e.category,
+    current_monthly: e.currentMonthly,
+    potential_saving_monthly: e.scenarioMonthly,
+    potential_saving_yearly: Math.round(e.scenarioMonthly * 1200) / 100,
+    effort: 'medium',
+    action: t(`aiOptimizer.${meta[e.category].action}`, {
+      amount: `${cur} ${e.currentMonthly.toFixed(2)}`
+    }),
+    explanation: t('aiOptimizer.scenarioDisclaimer'),
+  }));
+  const total = Math.round(proposals.reduce(
+    (sum, p) => sum + p.potential_saving_monthly, 0
+  ) * 100) / 100;
   return {
-    ...data,
-    proposals: existing,
-    // v3.9.0 Build 74 — Guarantee `tips` is always an array to prevent
-    // `Cannot read property 'length' of undefined` at render time.
-    tips: Array.isArray(data?.tips)
-      ? data.tips.filter((t: any) => typeof t === 'string' && t.trim().length > 0)
-      : [],
-    total_monthly_potential: total_monthly,
-    total_annual_potential: total_annual,
-    monthly_potential: total_monthly,
-    yearly_potential: total_annual,
-    summary,
-    _enriched: enriched,
+    success: true,
+    summary: t('aiOptimizer.summaryNormal', { n: proposals.length }),
+    proposals,
+    tips: [],
+    monthly_potential: total,
+    yearly_potential: Math.round(total * 1200) / 100,
   };
 }
 
@@ -332,10 +190,8 @@ export default function AIOptimizerScreen() {
   const yearlyIncome = monthlyIncome * 12;
 
   const analyze = async () => {
-    if (!hasApiBaseUrl()) {
-      setError(t('aiOptimizer.errorBackendMissing'));
-      return;
-    }
+    // The local evidence engine still works without network access.
+    // Remote AI can add wording, never an unverified CHF promise.
     setLoading(true);
     setError(null);
     try {
@@ -344,7 +200,9 @@ export default function AIOptimizerScreen() {
         yearly_income: yearlyIncome,
         currency: CUR,
         canton: (store.preferences as any).canton || 'VD',
-        transactions: store.transactions.slice(0, 120).map((tx) => ({
+        transactions: store.transactions.filter((tx: any) =>
+          tx.type === 'expense' && Number(tx.amount) > 0
+        ).slice(-120).map((tx) => ({
           title: tx.title,
           amount: tx.amount,
           category: tx.category,
@@ -400,6 +258,7 @@ export default function AIOptimizerScreen() {
 
       console.log(`${TAG} POST /api/optimizer/analyze (signals=${(body.transactions||[]).length} txns)`);
 
+      if (!hasApiBaseUrl()) throw new Error('Backend offline; local evidence retained');
       const r = await apiFetchJson<OptimizerResult>('/api/optimizer/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

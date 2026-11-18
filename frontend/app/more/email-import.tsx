@@ -154,7 +154,7 @@ export default function ImportInvoiceScreen() {
     // Invoice documents without a verified amount appear under 'to complete':
     // no fake CHF 0 invoice, no automatic financial obligation.
     Alert.alert(t('common.success'), t('documentPrivacy.ocrManualHint'), [{
-      text: t('common.ok'), onPress: () => router.replace(
+      text: t('emailImport.okBtn'), onPress: () => router.replace(
         (mode === 'invoice' ? '/more/invoices' : '/more/documents') as any),
     }]);
   };

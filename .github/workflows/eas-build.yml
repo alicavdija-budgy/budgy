@@ -59,20 +59,28 @@ jobs:
             exit 1
           fi
 
-          for f in frontend/package.json frontend/package-lock.json frontend/app.json frontend/eas.json; do
+          for f in frontend/package.json frontend/yarn.lock frontend/app.json frontend/eas.json; do
             if [ ! -f "./$f" ]; then
               echo "❌ Required file missing: $f"
               exit 1
             fi
           done
-          echo "✅ Monorepo structure OK"
+          if [ -f frontend/package-lock.json ]; then
+            echo "❌ npm lockfile found alongside yarn.lock; Budgy uses Yarn 1 only."
+            exit 1
+          fi
+          echo "✅ Monorepo structure OK (Yarn 1)"
 
-      - name: Setup Node 20
+      - name: Setup Node 22
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
+          node-version: '22'
+
+      - name: Enable pinned Yarn 1.22.22
+        run: |
+          corepack enable
+          corepack prepare yarn@1.22.22 --activate
+          yarn --version
 
       - name: Setup Expo & EAS CLI
         uses: expo/expo-github-action@v8
@@ -80,32 +88,50 @@ jobs:
           eas-version: latest
           expo-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
-          packager: npm
+          packager: yarn
 
       - name: Install dependencies
-        run: npm ci --legacy-peer-deps --no-audit --no-fund
+        run: yarn install --frozen-lockfile --non-interactive --network-timeout 120000
 
       - name: Pre-build quality gate
         run: |
           echo "── TypeScript ──"
           npx tsc --noEmit
           echo "── i18n ──"
-          npm run check:i18n
-          npm run audit:i18n
+          yarn check:i18n
+          yarn audit:i18n
           echo "── Premium / IAP / feature contracts ──"
-          npm run test:premium
-          npm run test:pro-gating
-          npm run test:savings-tier
-          npm run test:cloud-auth
-          npm run test:ai-optimizer
-          npm run test:iap-v15
+          yarn test:premium
+          yarn test:pro-gating
+          yarn test:savings-tier
+          yarn test:cloud-auth
+          yarn test:ai-optimizer
+          yarn test:iap-v15
           echo "── Expo config resolution ──"
           npx expo config --type public >/tmp/budgy-expo-config.json
           echo "✅ Pre-build quality gate PASS"
 
-      - name: Print app version info
+      - name: Print version and protect iOS build 92
+        env:
+          BUDGY_PLATFORM: ${{ github.event.inputs.platform || 'ios' }}
+          BUDGY_PROFILE: ${{ github.event.inputs.profile || 'testflight' }}
         run: |
-          node -e "const a=require('./app.json').expo; console.log('Name:',a.name); console.log('Version:',a.version); console.log('iOS buildNumber:',a.ios?.buildNumber); console.log('Android versionCode:',a.android?.versionCode); console.log('Bundle ID:',a.ios?.bundleIdentifier); console.log('EAS projectId:',a.extra?.eas?.projectId);"
+          node <<'NODE'
+          const a = require('./app.json').expo;
+          console.log('Name:', a.name, '| Version:', a.version,
+            '| iOS buildNumber:', a.ios?.buildNumber,
+            '| Android versionCode:', a.android?.versionCode,
+            '| Bundle ID:', a.ios?.bundleIdentifier,
+            '| EAS projectId:', a.extra?.eas?.projectId);
+          if (process.env.BUDGY_PROFILE === 'testflight' &&
+              ['ios','all'].includes(process.env.BUDGY_PLATFORM)) {
+            if (a.version !== '4.0.0' || a.ios?.buildNumber !== '92' ||
+                a.ios?.bundleIdentifier !== 'com.budgy.ch.budgy') {
+              throw new Error('Build TestFlight refusé : attendu Budgy 4.0.0 (92) / com.budgy.ch.budgy. Fusionnez la PR #4 avant de lancer EAS.');
+            }
+            console.log('✅ Identity gate: Budgy iOS 4.0.0 (92)');
+          }
+          NODE
 
       - name: EAS CLI sanity
         run: |

@@ -25,6 +25,38 @@ for (const table of ['documents', 'invoices', 'contracts', 'receipts']) {
 for (const table of ['transactions', 'budgets', 'recurring_expenses', 'savings_goals']) {
   check(table + ' remains separate from documents', !policy.isPrivateDocumentTable(table));
 }
+// Regression P0: a build 91 server-confirmed document must NOT disappear
+// when build 92 logs out and back in (remote document pull is disabled).
+const sync = await import(join(root, 'src/lib/syncMerge.ts'));
+const oldDoc = { id: 'd91', title: 'Ancien contrat', fileUri: 'file:///Documents/vault/d91.pdf' };
+const oldContract = { id: 'ct91', title: 'Assurance', documentId: 'd91' };
+const owner = 'user-A';
+const stateOld = {
+  syncAccountId: owner,
+  accountVault: {},
+  syncedHashes: {
+    documents: { d91: sync.hashItem(oldDoc) },
+    contracts: { ct91: sync.hashItem(oldContract) },
+  },
+  tombstones: {},
+  documents: [oldDoc], contracts: [oldContract],
+  invoices: [], receipts: [], transactions: [],
+};
+const stashed = sync.buildLogoutStash(stateOld);
+check('P0 old synced document survives logout', stashed[owner]?.documents?.some(d => d.id === 'd91'));
+check('P0 linked old contract survives logout', stashed[owner]?.contracts?.some(d => d.documentId === 'd91'));
+const restore = sync.applyAccountRestore({
+  ...stateOld,
+  documents: [], contracts: [], syncAccountId: owner, accountVault: stashed,
+}, owner);
+check('P0 documents and contracts restore for their original owner',
+  restore?.documents?.some(d => d.id === 'd91') &&
+  restore?.contracts?.some(d => d.documentId === 'd91'));
+const other = sync.applyAccountRestore({
+  ...stateOld, documents: [], contracts: [], syncAccountId: 'user-B', accountVault: stashed,
+}, 'user-B');
+check('P0 documents never leak across accounts', other === null || !other.documents?.some(d => d.id === 'd91'));
+
 const cloud = read('src/services/cloudSync.ts');
 check('push guard rejects every private table', cloud.includes('if (isPrivateDocumentTable(table)) continue;'));
 check('remote fetch guard rejects every private table', cloud.includes('if (isPrivateDocumentTable(table)) return [];'));
@@ -64,7 +96,10 @@ check('contracts use iOS Save to Files', docs.includes("t('documentPrivacy.expor
 check('invoices use iOS Save to Files', invoices.includes("t('documentPrivacy.exportToFiles')"));
 check('tickets use iOS Save to Files', receipts.includes('exportReceiptToFiles(sel)') && receipts.includes('safeShareFile(uri'));
 const share=read('src/lib/safeShare.ts');
-check('share temp goes to cache, not a duplicated iCloud backup', share.includes('FileSystem.cacheDirectory') && share.includes('budgy-share/'));
+check('outgoing share copies are disposable cache files', share.includes('OUTGOING_DIR = (FileSystem.cacheDirectory') && share.includes('budgy-share/'));
+check('incoming shared files are preserved in iCloud-backup-eligible Documents', share.includes('INCOMING_DIR = (FileSystem.documentDirectory') && share.includes('ensureDirectory(INCOMING_DIR, true)'));
+check('outbound file sharing does NOT pass through incoming persistence', share.includes('copyVerified(uri, shareDir, opts)'));
+check('manual camera/gallery tickets are saved in vault', read('app/more/add-receipt-manual.tsx').includes('await saveToVault(photoUri, docId')));
 check('share validates created copy exists', share.includes('Number((stat as any).size)'));
 const more=read('app/(tabs)/more.tsx');
 check('privacy guide available inside Plus', more.includes("router.push('/more/document-privacy' as any)"));

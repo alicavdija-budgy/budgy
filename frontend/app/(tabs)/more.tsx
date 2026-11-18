@@ -198,6 +198,16 @@ export default function MoreScreen() {
             ))}
           </View>
         ))}
+        {/* Confidentialité des documents : accès visible sans paywall. */}
+        <PressScale haptic="selection" onPress={() => router.push('/more/document-privacy' as any)}
+          accessibilityRole="button" accessibilityLabel={t('documentPrivacy.title')}
+          testID="plus-open-document-privacy"
+          style={{ marginHorizontal: 20, marginTop: 28 }}
+          contentStyle={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 17, paddingHorizontal: 15, borderRadius: 14, borderWidth: 1, borderColor: '#26334A', backgroundColor: '#131C2D' }}>
+          <Ionicons name="shield-checkmark-outline" size={22} color={P.green} />
+          <Text style={{ flex: 1, color: P.text, fontSize: 16, fontWeight: '600' }}>{t('documentPrivacy.title')}</Text>
+          <Ionicons name="chevron-forward" size={18} color={P.chevron} />
+        </PressScale>
         {/* Guide librement accessible, hors des 5 sections historiques. */}
         <PressScale haptic="selection" onPress={() => router.push('/more/user-guide' as any)}
           accessibilityRole="button" accessibilityLabel={guideTitle}

@@ -171,6 +171,16 @@ export default function AIOptimizerScreen() {
   const { t } = useTranslation();
   const CUR = store.preferences.currency;
 
+  // Network AI receives only aggregates and generic labels — never original
+  // receipt filenames, merchant names, issuer identities or contract titles.
+  // Quantified scenarios are derived separately on device.
+  const genericCategory = (raw: unknown): string => {
+    const v = String(raw || '').toLowerCase();
+    const known = ['courses','restaurants','alimentation','transport','telecom','sante',
+      'assurance','abonnements','logement','loyer','loisirs','impots','epargne','autres'];
+    return known.includes(v) ? v : 'autres';
+  };
+
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<OptimizerResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -203,54 +213,54 @@ export default function AIOptimizerScreen() {
         transactions: store.transactions.filter((tx: any) =>
           tx.type === 'expense' && Number(tx.amount) > 0
         ).slice(-120).map((tx) => ({
-          title: tx.title,
+          title: 'Dépense',
           amount: tx.amount,
-          category: tx.category,
-          date: tx.date,
+          category: genericCategory(tx.category),
+          date: String(tx.date || '').slice(0, 7),
         })),
         pro_expenses: (store.proExpenses || []).slice(0, 50).map((e: any) => ({
-          title: e.title,
+          title: 'Frais professionnels',
           amount: e.amount,
-          category: e.category,
+          category: genericCategory(e.category),
           tva: e.tva,
         })),
         recurring_expenses: store.recurringExpenses.map((r) => ({
-          title: r.title,
+          title: 'Charge récurrente',
           amount: r.amount,
-          category: r.category,
+          category: genericCategory(r.category),
           frequency: r.frequency,
           active: r.active,
         })),
         contracts: (store.contracts || []).map((c: any) => ({
-          title: c.title || c.name,
-          amount: c.amount || c.monthlyCost,
-          category: c.category,
+          name: 'Contrat',
+          monthlyCost: c.monthlyCost || c.amount || 0,
+          category: genericCategory(c.category),
           expirationDate: c.expirationDate,
         })),
         invoices: (store.invoices || []).slice(0, 30).map((inv: any) => ({
-          title: inv.title,
-          issuer: inv.issuer,
+          title: 'Facture',
+          issuer: 'Émetteur masqué',
           amount: inv.amount,
-          category: inv.category,
+          category: genericCategory(inv.category),
           status: inv.status,
-          dueDate: inv.dueDate,
+          dueDate: String(inv.dueDate || '').slice(0, 7),
         })),
         budgets: (store.budgets || []).map((b: any) => ({
-          category: b.category,
+          category: genericCategory(b.category),
           monthly: b.monthly,
           spent: b.spent,
         })),
         debts: (store.debts || []).map((d: any) => ({
-          name: d.name,
+          name: 'Dette',
           balance: d.balance,
           rate: d.rate,
           monthlyPayment: d.monthlyPayment,
         })),
         goals: (store.savingsGoals || []).map((g) => ({
-          title: g.title,
+          title: 'Objectif',
           target: g.target,
           saved: g.saved,
-          deadline: g.deadline,
+          deadline: String(g.deadline || '').slice(0, 7),
         })),
         require_min_proposals: 3,
         require_categories_diversity: ['abonnements', 'sante', 'fiscal', 'logement', 'telecoms', 'alimentation', 'energie'],

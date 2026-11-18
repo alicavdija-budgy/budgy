@@ -92,7 +92,7 @@ console.log('\n═══ §F Extensions natives + App Group dynamique (statique)
 {
   const ti = readFileSync(join(root, 'targets/intents/expo-target.config.js'), 'utf8');
   const tw = readFileSync(join(root, 'targets/widgets/expo-target.config.js'), 'utf8');
-  const si = readFileSync(join(root, 'targets/intents/BudgyShared.swift'), 'utf8');
+  const si = readFileSync(join(root, 'targets/intents/_shared/BudgyShared.swift'), 'utf8');
   const sw = readFileSync(join(root, 'targets/widgets/BudgyShared.swift'), 'utf8');
   const wb = readFileSync(join(root, 'src/services/widgetBridge.ts'), 'utf8');
   S('cible App Intents : App Group piloté par APP_VARIANT', ti.includes("process.env.APP_VARIANT === 'preprod'") && ti.includes('group.com.budgy.ch.budgy.preprod'));

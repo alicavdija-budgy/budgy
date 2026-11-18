@@ -99,7 +99,7 @@ const share=read('src/lib/safeShare.ts');
 check('outgoing share copies are disposable cache files', share.includes('OUTGOING_DIR = (FileSystem.cacheDirectory') && share.includes('budgy-share/'));
 check('incoming shared files are preserved in iCloud-backup-eligible Documents', share.includes('INCOMING_DIR = (FileSystem.documentDirectory') && share.includes('ensureDirectory(INCOMING_DIR, true)'));
 check('outbound file sharing does NOT pass through incoming persistence', share.includes('copyVerified(uri, shareDir, opts)'));
-check('manual camera/gallery tickets are saved in vault', read('app/more/add-receipt-manual.tsx').includes('await saveToVault(photoUri, docId')));
+check('manual camera/gallery tickets are saved in vault', read('app/more/add-receipt-manual.tsx').includes('await saveToVault(photoUri, docId'));
 check('share validates created copy exists', share.includes('Number((stat as any).size)'));
 const more=read('app/(tabs)/more.tsx');
 check('privacy guide available inside Plus', more.includes("router.push('/more/document-privacy' as any)"));

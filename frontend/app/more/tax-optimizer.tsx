@@ -158,6 +158,22 @@ export default function TaxOptimizerScreen() {
                 </TouchableOpacity>
               </Animated.View>
 
+              <TouchableOpacity
+                onPress={() => router.push('/more/tax-dossier' as any)}
+                accessibilityRole="button"
+                style={{ borderRadius: 16, borderColor: theme.primary, borderWidth: 1,
+                  backgroundColor: theme.primary + '15', padding: 16, marginTop: 18, marginBottom: 18,
+                  flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+                <Ionicons name="folder-open-outline" color={theme.primary} size={25} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: theme.text, fontSize: 16, fontWeight: '800' }}>{t('taxDossier.title')}</Text>
+                  <Text style={{ color: theme.textSecondary, fontSize: 12, lineHeight: 18, marginTop: 3 }}>
+                    {t('taxDossier.checklistSub')}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" color={theme.primary} size={20} />
+              </TouchableOpacity>
+
               {/* Salary */}
               <Text style={styles.sectionTitle}>1. Salaire brut annuel</Text>
               <TextInput

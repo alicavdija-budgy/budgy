@@ -30,10 +30,10 @@ import { humanizeError } from './errorSanitizer';
 // Expo SDK54: use the explicit legacy API; optional-chain methods could
 // silently return undefined and claim to have exported a non-existent file.
 const FS = FileSystem;
-const BASE_DIR = (FileSystem.documentDirectory || FileSystem.cacheDirectory || '') + 'budgy-files/';
+const BASE_DIR = (FileSystem.cacheDirectory || '') + 'budgy-share/';
 
 async function ensureBaseDir(): Promise<string> {
-  if (!FileSystem.documentDirectory) throw new Error('DOCUMENTS_DIRECTORY_UNAVAILABLE');
+  if (!FileSystem.cacheDirectory) throw new Error('SHARE_CACHE_DIRECTORY_UNAVAILABLE');
   const info = await FS.getInfoAsync(BASE_DIR);
   if (!info.exists) await FS.makeDirectoryAsync(BASE_DIR, { intermediates: true });
   return BASE_DIR;

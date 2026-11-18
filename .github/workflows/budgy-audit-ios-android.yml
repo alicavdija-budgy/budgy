@@ -16,6 +16,7 @@ on:
     branches:
       - budgy-smart-4.0
     paths:
+      - 'frontend/**'
       - 'backend/**'
       - 'docs/PRODUCTION_SELFHOST_READONLY_AUDIT.sql'
       - 'docs/DEPLOIEMENT_COOLIFY.md'

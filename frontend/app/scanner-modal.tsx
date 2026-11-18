@@ -485,7 +485,18 @@ export default function ScannerModal() {
         });
         setPhoto({ uri: norm.uri, base64: norm.base64 });
         if (norm.base64) {
-          await runOcr(norm.base64, norm.uri);
+          // Build 92 — scanned documents never leave the phone without an
+          // explicit decision. Native QR scanning remains local; this prompt
+          // covers the optional remote OCR/AI analysis of a full image.
+          Alert.alert(t('documentPrivacy.ocrTitle'), t('documentPrivacy.ocrBody'), [
+            { text: t('documentPrivacy.ocrManual'), style: 'cancel', onPress: () => {
+              setOcrError(t('documentPrivacy.ocrManualHint'));
+              setStage('edit');
+            } },
+            { text: t('documentPrivacy.ocrContinue'), onPress: () => {
+              void runOcr(norm.base64!, norm.uri);
+            } },
+          ], { cancelable: false });
         } else {
           setStage('edit');
         }

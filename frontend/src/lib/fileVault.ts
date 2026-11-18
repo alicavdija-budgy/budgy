@@ -116,13 +116,29 @@ export async function saveToVault(srcUri: string, id: string, mime?: string, nam
   }
 }
 
+/**
+ * iCloud device restores can assign a NEW iOS application-container UUID.
+ * An absolute file:///.../Documents/vault/<name> persisted by an older build
+ * must therefore be resolved against the CURRENT Documents directory.
+ * Only our internal vault path is rewritten; external URLs are untouched.
+ */
+export function resolveVaultUri(uri?: string): string | undefined {
+  if (!uri || Platform.OS === 'web' || uri.startsWith('data:')) return uri;
+  const m = /\\/Documents\\/vault\\/([^?#]+)$/.exec(uri);
+  if (!m || !FileSystem.documentDirectory) return uri;
+  const name = m[1];
+  // Deliberately restrict path traversal and percent-encoded escapes.
+  if (!name || name.includes('/') || name.includes('\\\\') || name.includes('..') || /%2f|%5c/i.test(name)) return uri;
+  return `${FileSystem.documentDirectory}vault/${name}`;
+}
+
 /** Vérifie qu'une pièce jointe existe réellement (relecture après sauvegarde). */
 export async function vaultFileExists(uri?: string): Promise<boolean> {
   if (!uri) return false;
   if (uri.startsWith('data:')) return true;
   if (Platform.OS === 'web') return true;
   try {
-    const info = await FileSystem.getInfoAsync(uri);
+    const info = await FileSystem.getInfoAsync(resolveVaultUri(uri) || uri);
     return !!(info as any)?.exists;
   } catch {
     return false;

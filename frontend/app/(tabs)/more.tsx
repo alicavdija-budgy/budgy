@@ -17,6 +17,7 @@ import { usePremiumStore } from '../../src/stores/usePremiumStore';
 import { useTranslation } from '../../src/hooks/useTranslation';
 import PressScale from '../../src/components/PressScale';
 import { FEATURE_BY_ID } from '../../src/config/features';
+import { BUDGY_GUIDES } from '../../src/content/userGuide';
 
 // Palette éditoriale (design de référence — identique clair/sombre)
 const P = {
@@ -84,7 +85,8 @@ function SectionTitle({ children }: { children: string }) {
 export default function MoreScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { t } = useTranslation();
+  const { t, lang } = useTranslation();
+  const guideTitle = BUDGY_GUIDES[(lang in BUDGY_GUIDES ? lang : 'fr') as keyof typeof BUDGY_GUIDES].title;
   const user = useStore((s) => s.user);
   // Statut Pro : source canonique StoreKit/backend — JAMAIS codé en dur.
   const isPro = usePremiumStore((s) => s.hasPremiumAccess());
@@ -196,10 +198,20 @@ export default function MoreScreen() {
             ))}
           </View>
         ))}
+        {/* Guide librement accessible, hors des 5 sections historiques. */}
+        <PressScale haptic="selection" onPress={() => router.push('/more/user-guide' as any)}
+          accessibilityRole="button" accessibilityLabel={guideTitle}
+          testID="plus-open-user-guide"
+          style={{ marginHorizontal: 20, marginTop: 30, marginBottom: 18 }}
+          contentStyle={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 17, paddingHorizontal: 15, borderRadius: 14, borderWidth: 1, borderColor: '#26334A', backgroundColor: '#131C2D' }}>
+          <Ionicons name="book-outline" size={22} color={P.green} />
+          <Text style={{ flex: 1, color: P.text, fontSize: 16, fontWeight: '600' }}>{guideTitle}</Text>
+          <Ionicons name="chevron-forward" size={18} color={P.chevron} />
+        </PressScale>
       </ScrollView>
     </View>
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  ), [insets.top, insets.bottom, isPro, isTrial, trialDays, firstName, initials, t]);
+  ), [insets.top, insets.bottom, isPro, isTrial, trialDays, firstName, initials, t, guideTitle]);
 }
 
 const st = StyleSheet.create({

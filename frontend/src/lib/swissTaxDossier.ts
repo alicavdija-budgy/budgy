@@ -32,7 +32,10 @@ export const EMPTY_DOSSIER: DossierState = {
 export function optionalCHF(text: string): number | null {
   const v = text.trim();
   if (!v || /^0([.,]0{1,2})?$/.test(v)) return 0;
-  // No decimal ambiguity or silently accepted negative values.
+  // Grouping must be valid: 1’234.50 is accepted; 1’2’34 is not.
+  // This keeps the manual planner from silently transforming mistyped CHF.
+  if (/[’'\s]/.test(v) &&
+      !/^\d{1,3}(?:[’'\u00a0\u202f ]\d{3})+(?:[.,]\d{1,2})?$/.test(v)) return null;
   const compact = v.replace(/[’']/g, '').replace(/\s/g, '').replace(',', '.');
   if (!/^\d+(\.\d{1,2})?$/.test(compact)) return null;
   const n = Number(compact);

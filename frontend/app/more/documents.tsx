@@ -187,6 +187,7 @@ export default function DocumentsScreen() {
   const selCt = contracts.find((c) => c.id === selectedContract) || null;
   const ctDoc = selCt?.documentId ? documents.find((d) => d.id === selCt.documentId) : undefined;
   const [pdfViewerUri, setPdfViewerUri] = useState<string | null>(null);
+  const [photoViewerUri, setPhotoViewerUri] = useState<string | null>(null);
   const [recovering, setRecovering] = useState(false);
   /**
    * TÂCHE 3 (audit §3) — copie locale GARANTIE avant lecture :
@@ -217,7 +218,9 @@ export default function DocumentsScreen() {
     const uri = await resolveAttachment(doc);
     if (!uri) return;
     if (Platform.OS === 'web') { try { window.open(uri, '_blank'); } catch {} return; }
-    setPdfViewerUri(uri);
+    const isPdf = (doc?.mimeType || '').includes('pdf') || uri.toLowerCase().endsWith('.pdf');
+    if (isPdf) setPdfViewerUri(uri);
+    else setPhotoViewerUri(uri);
   };
   const shareContractPdf = async (doc?: PersonalDocument) => {
     const uri = await resolveAttachment(doc);
@@ -226,11 +229,10 @@ export default function DocumentsScreen() {
       const { safeShareFile } = await import('../../src/lib/safeShare');
       const isPdf = (doc.mimeType || '').includes('pdf') || uri.toLowerCase().includes('.pdf');
       const r = await safeShareFile(uri, {
-        mimeType: (doc.mimeType || (isPdf ? 'application/pdf' : 'image/jpeg')) as any,
         mime: doc.mimeType || (isPdf ? 'application/pdf' : 'image/jpeg'),
         name: doc.title || 'document',
         dialogTitle: doc.title,
-      } as any);
+      });
       if (!r.ok && r.error) Alert.alert(t('documents.shareFailedTitle'), r.error);
     } catch (e: any) {
       Alert.alert(t('documents.errorTitle'), e?.message || t('documents.shareFailedFallback'));
@@ -547,22 +549,7 @@ ${pageDataUrls.map((src, i) => `
 
   const sharePdf = async (doc: typeof sel) => {
     if (!doc) return;
-    if (!doc.pdfUri) {
-      Alert.alert(t('documents.noPdfTitle'), t('documents.noPdfBody'));
-      return;
-    }
-    try {
-      const { safeShareFile } = await import('../../src/lib/safeShare');
-      const r = await safeShareFile(doc.pdfUri, {
-        mimeType: 'application/pdf' as any,
-        mime: 'application/pdf',
-        name: doc.title || 'document',
-        dialogTitle: doc.title,
-      } as any);
-      if (!r.ok && r.error) Alert.alert(t('documents.shareFailedTitle'), r.error);
-    } catch (e: any) {
-      Alert.alert(t('documents.errorTitle'), e?.message || t('documents.shareFailedFallback'));
-    }
+    await shareContractPdf(doc); // même récupération cloud et même MIME que les contrats liés
   };
 
   const onDelete = (id: string) => {
@@ -882,9 +869,28 @@ ${pageDataUrls.map((src, i) => `
             <Text style={styles.detailCat}>{CATEGORIES.find((c) => c.id === sel.category)?.emoji} {CATEGORIES.find((c) => c.id === sel.category)?.label}</Text>
             <Text style={styles.detailDate}>{new Date(sel.createdAt).toLocaleDateString(locale)}</Text>
           </View>
-          {sel.pdfUri ? (
-            <Button title={t('documents.openSharePdf')} onPress={() => sharePdf(sel)} fullWidth icon="share" size="lg" style={{ marginBottom: Spacing.lg }} />
+          {(sel.pdfUri || sel.fileUri || (sel as any).remotePath) ? (
+            <View style={{ gap: 10, marginBottom: Spacing.lg }}>
+              <Button title={t('contractFolders.openOriginal')} onPress={() => { setMode('list'); void openContractPdf(sel); }} fullWidth icon="document-text" size="lg" />
+              <Button title={t('contractsV2.share')} onPress={() => { void sharePdf(sel); }} fullWidth icon="share" size="lg" />
+            </View>
           ) : null}
+          {typeFilter === 'contract' && (
+            <>
+              <Text style={styles.label}>{t('contractFolders.moveTo')}</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View style={styles.catRow}>
+                  {CONTRACT_FOLDER_IDS.map((id) => (
+                    <TouchableOpacity key={id} style={[styles.catChip, folderForContractDocument(sel) === id && { borderColor: theme.primary, backgroundColor: `${theme.primary}24` }]}
+                      onPress={() => moveContractDocument(sel, id)} testID={`move-contract-doc-${id}`}>
+                      <Text>{FOLDER_EMOJIS[id]}</Text>
+                      <Text style={styles.catChipText}>{t(`contractFolders.${id}`)}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
+            </>
+          )}
           <Text style={styles.label}>{t('documents.pagesLabel', { n: (sel.pages || [sel.imageBase64 || sel.fileUri].filter(Boolean)).length })}</Text>
           <View style={styles.zoomHint}>
             <Ionicons name="resize" size={12} color={theme.textTertiary} />
@@ -1151,7 +1157,7 @@ ${pageDataUrls.map((src, i) => `
                   {!!selCt.issuer && (
                     <View style={styles.ctDetailRow}><Text style={styles.ctDetailLabel}>{t('contractsV2.issuer')}</Text><Text style={styles.ctDetailValue}>{selCt.issuer}</Text></View>
                   )}
-                  <View style={styles.ctDetailRow}><Text style={styles.ctDetailLabel}>{t('contractsV2.category')}</Text><Text style={styles.ctDetailValue}>{selCt.category}</Text></View>
+                  <View style={styles.ctDetailRow}><Text style={styles.ctDetailLabel}>{t('contractsV2.category')}</Text><Text style={styles.ctDetailValue}>{t(`contractFolders.${folderForContractCategory(selCt.category)}`)}</Text></View>
                   <View style={styles.ctDetailRow}><Text style={styles.ctDetailLabel}>{t('contractsV2.amount')}</Text><Text style={styles.ctDetailValue}>{selCt.amount > 0 ? `CHF ${selCt.amount}` : t('contractsV2.notSet')}</Text></View>
                   <View style={styles.ctDetailRow}><Text style={styles.ctDetailLabel}>{t('contractsV2.expiry')}</Text><Text style={styles.ctDetailValue}>{selCt.expirationDate || t('contractsV2.notSet')}</Text></View>
                   {!!selCt.startDate && (
@@ -1159,29 +1165,29 @@ ${pageDataUrls.map((src, i) => `
                   )}
                   <View style={styles.ctDetailRow}><Text style={styles.ctDetailLabel}>{t('contractsV2.autoRenew')}</Text><Text style={styles.ctDetailValue}>{selCt.autoRenew === undefined ? t('contractsV2.notSet') : (selCt.autoRenew ? t('common.yes') : t('common.no'))}</Text></View>
                 </View>
+                <Text style={[styles.sectionLabel, { marginTop: 14 }]}>{t('contractFolders.moveTo')}</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ maxHeight: 58 }}>
+                  <View style={styles.filterRow}>
+                    {CONTRACT_FOLDER_IDS.map((id) => (
+                      <TouchableOpacity key={id} testID={`move-contract-${id}`}
+                        onPress={() => changeContractFolder(selCt.id, id)}
+                        style={[styles.filterChip, folderForContractCategory(selCt.category) === id && styles.filterChipActive]}>
+                        <Text style={[styles.filterText, folderForContractCategory(selCt.category) === id && styles.filterTextActive]}>
+                          {FOLDER_EMOJIS[id]} {t(`contractFolders.${id}`)}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </ScrollView>
                 {ctDoc ? (
                   <>
-                    {(ctDoc.pdfUri || ((ctDoc as any).remotePath && (ctDoc.mimeType || '').includes('pdf'))) ? (
-                      <TouchableOpacity
-                        style={[styles.ctBtn, { backgroundColor: 'rgba(52,211,153,0.14)' }]}
-                        onPress={() => openContractPdf(ctDoc)}
-                        disabled={recovering}
-                        testID="contract-open-pdf"
-                      >
-                        {recovering ? <ActivityIndicator size="small" color={theme.primary} /> : <Ionicons name="document-text" size={18} color={theme.primary} />}
-                        <Text style={{ color: theme.primary, fontWeight: '700' }}>{recovering ? t('docSpaces.downloading') : t('contractsV2.openPdf')}</Text>
-                      </TouchableOpacity>
-                    ) : (
-                      <TouchableOpacity
-                        style={[styles.ctBtn, { backgroundColor: 'rgba(52,211,153,0.14)' }]}
-                        onPress={() => { setSelectedContract(null); setSelected(ctDoc.id); setMode('detail'); }}
-                        testID="contract-open-attachment"
-                      >
-                        <Ionicons name="attach" size={18} color={theme.primary} />
-                        <Text style={{ color: theme.primary, fontWeight: '700' }}>{t('contractsV2.openFile')}</Text>
-                      </TouchableOpacity>
-                    )}
-                    <TouchableOpacity style={[styles.ctBtn, { backgroundColor: 'rgba(96,165,250,0.10)' }]} onPress={() => shareContractPdf(ctDoc)}>
+                    <TouchableOpacity style={[styles.ctBtn, { backgroundColor: 'rgba(52,211,153,0.14)' }]}
+                      onPress={() => { setSelectedContract(null); setTimeout(() => { void openContractPdf(ctDoc); }, 300); }}
+                      disabled={recovering} testID="contract-open-original">
+                      {recovering ? <ActivityIndicator size="small" color={theme.primary} /> : <Ionicons name="document-text" size={18} color={theme.primary} />}
+                      <Text style={{ color: theme.primary, fontWeight: '700' }}>{t('contractFolders.openOriginal')}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.ctBtn, { backgroundColor: 'rgba(96,165,250,0.10)' }]} onPress={() => { setSelectedContract(null); setTimeout(() => { void shareContractPdf(ctDoc); }, 300); }}>
                       <Ionicons name="share-outline" size={18} color="#60A5FA" />
                       <Text style={{ color: '#60A5FA', fontWeight: '700' }}>{t('contractsV2.share')}</Text>
                     </TouchableOpacity>
@@ -1207,6 +1213,16 @@ ${pageDataUrls.map((src, i) => `
               </>
             )}
           </View>
+        </View>
+      </Modal>
+
+      {/* Photo originale : même ouverture après récupération cloud vérifiée. */}
+      <Modal visible={!!photoViewerUri} animationType="slide" onRequestClose={() => setPhotoViewerUri(null)}>
+        <View style={{ flex: 1, backgroundColor: theme.background, paddingTop: insets.top }}>
+          <TouchableOpacity style={{ padding: 16, alignSelf: 'flex-end' }} onPress={() => setPhotoViewerUri(null)} testID="contract-photo-close">
+            <Ionicons name="close" size={28} color={theme.text} />
+          </TouchableOpacity>
+          {photoViewerUri && <Image source={{ uri: photoViewerUri }} resizeMode="contain" style={{ flex: 1 }} />}
         </View>
       </Modal>
 

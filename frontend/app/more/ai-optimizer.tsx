@@ -213,33 +213,33 @@ export default function AIOptimizerScreen() {
         transactions: store.transactions.filter((tx: any) =>
           tx.type === 'expense' && Number(tx.amount) > 0
         ).slice(-120).map((tx) => ({
-          title: 'Dépense',
+          title: 'expense',
           amount: tx.amount,
           category: genericCategory(tx.category),
           date: String(tx.date || '').slice(0, 7),
         })),
         pro_expenses: (store.proExpenses || []).slice(0, 50).map((e: any) => ({
-          title: 'Frais professionnels',
+          title: 'business_expense',
           amount: e.amount,
           category: genericCategory(e.category),
           tva: e.tva,
         })),
         recurring_expenses: store.recurringExpenses.map((r) => ({
-          title: 'Charge récurrente',
+          title: 'recurring_expense',
           amount: r.amount,
           category: genericCategory(r.category),
           frequency: r.frequency,
           active: r.active,
         })),
         contracts: (store.contracts || []).map((c: any) => ({
-          name: 'Contrat',
+          name: 'contract',
           monthlyCost: c.monthlyCost || c.amount || 0,
           category: genericCategory(c.category),
           expirationDate: c.expirationDate,
         })),
         invoices: (store.invoices || []).slice(0, 30).map((inv: any) => ({
-          title: 'Facture',
-          issuer: 'Émetteur masqué',
+          title: 'invoice',
+          issuer: 'hidden',
           amount: inv.amount,
           category: genericCategory(inv.category),
           status: inv.status,
@@ -251,13 +251,13 @@ export default function AIOptimizerScreen() {
           spent: b.spent,
         })),
         debts: (store.debts || []).map((d: any) => ({
-          name: 'Dette',
+          name: 'debt',
           balance: d.balance,
           rate: d.rate,
           monthlyPayment: d.monthlyPayment,
         })),
         goals: (store.savingsGoals || []).map((g) => ({
-          title: 'Objectif',
+          title: 'goal',
           target: g.target,
           saved: g.saved,
           deadline: String(g.deadline || '').slice(0, 7),

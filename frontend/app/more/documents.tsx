@@ -818,7 +818,22 @@ ${pageDataUrls.map((src, i) => `
 
           <Text style={styles.label}>{t('documents.labelTitle')}</Text>
           <TextInput style={styles.input} value={title} onChangeText={setTitle} placeholder={t('documents.placeholderTitle')} placeholderTextColor={theme.textTertiary} />
-          <Text style={styles.label}>{t('documents.labelCategory')}</Text>
+          <Text style={styles.label}>{typeFilter === 'contract' ? t('contractFolders.choose') : t('documents.labelCategory')}</Text>
+          {typeFilter === 'contract' && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <View style={styles.catRow}>
+                {CONTRACT_FOLDER_IDS.map((id) => (
+                  <TouchableOpacity key={id} testID={`scan-contract-folder-${id}`}
+                    style={[styles.catChip, scanFolder === id && { backgroundColor: `${theme.primary}24`, borderColor: theme.primary }]}
+                    onPress={() => setScanFolder(id)}>
+                    <Text style={{ fontSize: 18 }}>{FOLDER_EMOJIS[id]}</Text>
+                    <Text style={[styles.catChipText, scanFolder === id && { color: theme.primary }]}>{t(`contractFolders.${id}`)}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+          )}
+          {typeFilter !== 'contract' && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View style={styles.catRow}>
               {CATEGORIES.map((c) => (
@@ -828,7 +843,7 @@ ${pageDataUrls.map((src, i) => `
                 </TouchableOpacity>
               ))}
             </View>
-          </ScrollView>
+          </ScrollView>)}
           <Text style={styles.label}>{t('documents.labelTags')}</Text>
           <TextInput style={styles.input} value={tagsInput} onChangeText={setTagsInput} placeholder={t('documents.placeholderTags')} placeholderTextColor={theme.textTertiary} />
           <Text style={styles.label}>{t('documents.labelExpiresAt')}</Text>
@@ -937,17 +952,35 @@ ${pageDataUrls.map((src, i) => `
           </View>
         </ScrollView>
 
+        {/* Les dossiers métier filtrent les contrats ET les documents scannés. */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: Spacing.md }}>
           <View style={styles.filterRow}>
-            <TouchableOpacity style={[styles.filterChip, filter === 'all' && styles.filterChipActive]} onPress={() => setFilter('all')}>
-              <Text style={[styles.filterText, filter === 'all' && styles.filterTextActive]}>{t('documents.filterAll', { n: counts.all })}</Text>
-            </TouchableOpacity>
-            {CATEGORIES.map((c) => (
-              <TouchableOpacity key={c.id} style={[styles.filterChip, filter === c.id && { backgroundColor: `${c.color}30`, borderColor: c.color }]} onPress={() => setFilter(c.id)}>
-                <Text style={{ fontSize: 14 }}>{c.emoji}</Text>
-                <Text style={[styles.filterText, filter === c.id && { color: c.color }]}>{t('documents.filterCategoryCount', { label: c.label, n: counts[c.id] || 0 })}</Text>
-              </TouchableOpacity>
-            ))}
+            {typeFilter === 'contract' ? (
+              <>
+                <TouchableOpacity testID="contract-folder-all" style={[styles.filterChip, folderFilter === 'all' && styles.filterChipActive]} onPress={() => setFolderFilter('all')}>
+                  <Text style={[styles.filterText, folderFilter === 'all' && styles.filterTextActive]}>{t('contractFolders.all')} ({folderCounts.all})</Text>
+                </TouchableOpacity>
+                {CONTRACT_FOLDER_IDS.map((id) => (
+                  <TouchableOpacity key={id} testID={`contract-folder-${id}`}
+                    style={[styles.filterChip, folderFilter === id && styles.filterChipActive]}
+                    onPress={() => setFolderFilter(id)}>
+                    <Text style={[styles.filterText, folderFilter === id && styles.filterTextActive]}>{FOLDER_EMOJIS[id]} {t(`contractFolders.${id}`)} ({folderCounts[id] || 0})</Text>
+                  </TouchableOpacity>
+                ))}
+              </>
+            ) : (
+              <>
+                <TouchableOpacity style={[styles.filterChip, filter === 'all' && styles.filterChipActive]} onPress={() => setFilter('all')}>
+                  <Text style={[styles.filterText, filter === 'all' && styles.filterTextActive]}>{t('documents.filterAll', { n: counts.all })}</Text>
+                </TouchableOpacity>
+                {CATEGORIES.map((c) => (
+                  <TouchableOpacity key={c.id} style={[styles.filterChip, filter === c.id && { backgroundColor: `${c.color}30`, borderColor: c.color }]} onPress={() => setFilter(c.id)}>
+                    <Text style={{ fontSize: 14 }}>{c.emoji}</Text>
+                    <Text style={[styles.filterText, filter === c.id && { color: c.color }]}>{t('documents.filterCategoryCount', { label: c.label, n: counts[c.id] || 0 })}</Text>
+                  </TouchableOpacity>
+                ))}
+              </>
+            )}
           </View>
         </ScrollView>
 
@@ -963,34 +996,48 @@ ${pageDataUrls.map((src, i) => `
           </TouchableOpacity>
         </View>
 
-        {/* TÂCHE 2 (audit) — VRAIE section Contrats : affichée depuis
-            contracts[] indépendamment de documents[], recherche incluse */}
-        {(filter === 'all' || filter === 'contracts') && typeFilter === 'contract' && visibleContracts.length > 0 && (
-            <View style={{ marginBottom: 14 }}>
-              <Text style={styles.sectionLabel}>{t('contractsV2.sectionTitle')} ({contracts.length})</Text>
-              {visibleContracts.map((c) => {
-                const linked = c.documentId ? documents.find((d) => d.id === c.documentId) : undefined;
-                return (
-                  <TouchableOpacity
-                    key={c.id}
-                    style={styles.ctRow}
-                    onPress={() => setSelectedContract(c.id)}
-                    testID={`contract-row-${c.id}`}
-                  >
-                    <View style={styles.ctIcon}><Text style={{ fontSize: 18 }}>📄</Text></View>
+        {/* Un vrai rangement en dossiers. Les documents sans entrée Contract
+            restent visibles dans le même dossier, mais jamais les factures. */}
+        {typeFilter === 'contract' && CONTRACT_FOLDER_IDS
+          .filter((id) => folderFilter === 'all' || folderFilter === id)
+          .map((id) => {
+            const cs = visibleContracts.filter((c) => folderForContractCategory(c.category) === id);
+            const ds = filtered.filter((d) => folderForContractDocument(d) === id);
+            if (cs.length === 0 && ds.length === 0) return null;
+            return (
+              <View key={id} style={{ marginBottom: 18 }} testID={`binder-section-${id}`}>
+                <Text style={styles.sectionLabel}>{FOLDER_EMOJIS[id]} {t(`contractFolders.${id}`)} ({cs.length + ds.length})</Text>
+                {cs.map((c) => {
+                  const linked = c.documentId ? documents.find((d) => d.id === c.documentId) : undefined;
+                  return (
+                    <TouchableOpacity key={c.id} style={styles.ctRow}
+                      onPress={() => setSelectedContract(c.id)} testID={`contract-row-${c.id}`}>
+                      <View style={styles.ctIcon}><Text style={{ fontSize: 18 }}>📄</Text></View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.ctTitle} numberOfLines={1}>{c.title}</Text>
+                        <Text style={styles.ctSub} numberOfLines={1}>
+                          {(c.issuer ? `${c.issuer} · ` : '') + (c.expirationDate ? c.expirationDate : t('contractsV2.noExpiry'))}
+                          {linked ? ` · ${t('contractsV2.hasFile')}` : ''}
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={16} color={theme.textTertiary} />
+                    </TouchableOpacity>
+                  );
+                })}
+                {ds.map((d) => (
+                  <TouchableOpacity key={d.id} style={styles.ctRow} testID={`contract-doc-${d.id}`}
+                    onPress={() => { setSelected(d.id); setMode('detail'); }}>
+                    <View style={styles.ctIcon}><Text style={{ fontSize: 18 }}>{d.pdfUri ? '📄' : '📷'}</Text></View>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.ctTitle} numberOfLines={1}>{c.title}</Text>
-                      <Text style={styles.ctSub} numberOfLines={1}>
-                        {(c.issuer ? `${c.issuer} · ` : '') + (c.expirationDate ? c.expirationDate : t('contractsV2.noExpiry'))}
-                        {linked ? ` · ${t('contractsV2.hasFile')}` : ''}
-                      </Text>
+                      <Text style={styles.ctTitle} numberOfLines={1}>{d.title}</Text>
+                      <Text style={styles.ctSub}>{t('contractFolders.scannedDocument')} · {new Date(d.createdAt).toLocaleDateString(locale)}</Text>
                     </View>
                     <Ionicons name="chevron-forward" size={16} color={theme.textTertiary} />
                   </TouchableOpacity>
-                );
-              })}
-            </View>
-          )}
+                ))}
+              </View>
+            );
+          })}
         {filtered.length === 0 && (typeFilter !== 'contract' || visibleContracts.length === 0) ? (
           <View style={styles.emptyPremium}>
             <LinearGradient
@@ -1043,7 +1090,7 @@ ${pageDataUrls.map((src, i) => `
           </View>
         ) : (
           <>
-          {filtered.map((d) => {
+          {typeFilter === 'unclassified' && filtered.map((d) => {
             const cat = CATEGORIES.find((c) => c.id === d.category);
             const numPages = d.pages?.length || 1;
             return (

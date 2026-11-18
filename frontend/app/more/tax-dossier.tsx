@@ -15,7 +15,7 @@ import { useTheme } from '../../src/hooks/useTheme';
 import { useTranslation } from '../../src/hooks/useTranslation';
 import {
   TAX_DOCUMENT_KEYS, EMPTY_DOSSIER,
-  isValidDossier, planPillar3a,
+  isValidDossier, planPillar3a, findTaxPreparationSignals,
   type TaxYear, type PensionMode, type DossierState, type TaxDocumentKey
 } from '../../src/lib/swissTaxDossier';
 
@@ -30,6 +30,7 @@ export default function TaxDossierScreen() {
   const C = useTheme();
   const { t } = useTranslation();
   const owner = useStore((s) => s.user?.id);
+  const transactions = useStore((s) => s.transactions);
   const [year, setYear] = useState<TaxYear>(2026);
   const [record, setRecord] = useState<{ key: string; data: DossierState } | null>(null);
   const [loadError, setLoadError] = useState(false);
@@ -42,6 +43,7 @@ export default function TaxDossierScreen() {
   const ready = !loadError && record?.key === key;
   const data = ready ? record!.data : EMPTY_DOSSIER;
   const plan = planPillar3a(year, data.pension, data.paid3a, data.avsIncome);
+  const signals = useMemo(() => findTaxPreparationSignals(transactions, year), [transactions, year]);
   const done = data.checked.length;
   const pct = Math.round(done / TAX_DOCUMENT_KEYS.length * 100);
 
@@ -179,6 +181,24 @@ export default function TaxDossierScreen() {
           <TouchableOpacity accessibilityRole="link" onPress={() => open(OFFICIAL_BUYBACK)}>
             <Text style={styles.link}>{t('taxDossier.buybackSource')}</Text>
           </TouchableOpacity>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.section}>{t('taxDossier.signalsTitle')}</Text>
+          <Text style={styles.desc}>{t('taxDossier.signalsIntro', { year })}</Text>
+          {signals.length === 0 ? (
+            <Text style={styles.desc}>{t('taxDossier.signalsEmpty')}</Text>
+          ) : signals.map((signal) => (
+            <View key={signal.document} style={styles.item}>
+              <Ionicons name="search-outline" size={22} color={C.primary}/>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.itemText}>{t(`taxDossier.docs.${signal.document}`)}</Text>
+                <Text style={styles.note}>{t('taxDossier.signalsCount', { n: signal.count })}</Text>
+              </View>
+              <Text style={{ color: C.text, fontSize: 13, fontWeight: '700' }}>CHF {fmt(signal.observedCHF)}</Text>
+            </View>
+          ))}
+          <Text style={[styles.note, { marginTop: 12 }]}>{t('taxDossier.signalsDisclaimer')}</Text>
         </View>
 
         <View style={styles.card}>

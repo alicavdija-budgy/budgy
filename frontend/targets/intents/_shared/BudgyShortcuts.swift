@@ -4,6 +4,7 @@ import AppIntents
 /// le bouton Action et le Centre de contrôle (contrôle « Raccourci »).
 /// TÂCHE 4 — phrases FR/EN/DE/IT fournies comme variantes littérales (les
 /// quatre langues de Budgy) ; la correspondance Siri est littérale.
+@available(iOS 16.0, *)
 struct BudgyShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(

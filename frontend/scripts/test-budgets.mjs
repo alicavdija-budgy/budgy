@@ -95,7 +95,9 @@ check('capital restant correct : 5000 − 250 = 4750', 5000 - 250 === 4750);
 console.log('\n— Siri : consommation fiable au démarrage —');
 const ws = readFileSync(resolve(root, 'src/components/WidgetSync.tsx'), 'utf8');
 check('navigation seulement quand le routeur est prêt', ws.includes('useRootNavigationState') && ws.includes('navReady'));
-check('réessais au lancement à froid (hydratation couverte)', ws.includes('tries >= 15') && ws.includes('setInterval'));
+check('Siri : hydratation couverte et surveillance sans limite arbitraire',
+  ws.includes('setInterval') && ws.includes('hasHydrated') &&
+  ws.includes("AppState.currentState === 'active'") && !ws.includes('tries >= 15'));
 check('jamais de double présentation de la même dépense', ws.includes('pushedPid.current === e.id'));
 check('changement de compte → file consommée', ws.includes('refreshWidgetSnapshot();\n        consumeNative();'));
 

@@ -168,8 +168,10 @@ export default function RootLayout() {
         <OfflineBanner />
         <LanguageOnboardModal />
         <ShareIntentRouter />
-        <WidgetSync />
         <LockGate>
+        {/* Siri confirmation lives INSIDE the biometric lock gate; it cannot
+            display or record a financial draft over a locked account. */}
+        <WidgetSync />
         <Stack
           screenOptions={{
             headerShown: false,

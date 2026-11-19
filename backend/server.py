@@ -27,6 +27,7 @@ import re
 import base64
 import math
 import qr_decode
+from pdf_preview import extract_pdf_preview
 from release_identity import APP_VERSION, deployed_git_sha
 from config_readiness import readiness_report
 from operator_auth import require_operator
@@ -856,9 +857,13 @@ async def scanner_ocr(
     corr_id = f"ocr_{uuid.uuid4().hex[:12]}"
     is_pdf = head.startswith(b"%PDF") or (req.mime_type or "").lower() == "application/pdf"
     page_images: list = []
+    pdf_preview: dict = {}
     if is_pdf:
         try:
             full = base64.b64decode(img_b64 + "=" * (-len(img_b64) % 4))
+            # Local and deterministic: never send a readable PDF text layer
+            # to an external AI service unless absolutely necessary.
+            pdf_preview = extract_pdf_preview(full)
             page_images = qr_decode.pdf_first_pages_to_png_b64(full, max_pages=3)
             if not page_images:
                 return OCRResponse(success=False, error="PDF_RENDER_FAILED")
@@ -880,12 +885,22 @@ async def scanner_ocr(
             return OCRResponse(
                 success=True,
                 swiss_qr_content=qr_payload,
+                # The QR controls the payment fields. A separate PDF text
+                # preview only offers hints if strict SPC validation later
+                # fails on device; it is never trusted as bank coordinates.
+                merchant=pdf_preview.get("merchant"),
+                total_amount=pdf_preview.get("total_amount"),
                 currency=None,  # le client lit la devise depuis le payload SPC
                 document_type="invoice",
                 needs_user_confirmation=False,
                 confidence=1.0,
             )
-    log.info("[%s] step=qr_decode result=none → fallback OCR vision", corr_id)
+    log.info("[%s] step=qr_decode result=none → fallback PDF text/vision", corr_id)
+    if pdf_preview:
+        # Contract PDF and non-QR bills work OFFLINE using their embedded
+        # text layer. Low confidence forces explicit human review; no amounts,
+        # dates or bank/payment actions are ever silently fabricated.
+        return OCRResponse(success=True, **pdf_preview)
     # L'OCR vision externe n'est qu'un COMPLÉMENT : sans clé LLM, le décodage
     # Swiss QR ci-dessus reste pleinement fonctionnel.
     if not EMERGENT_LLM_KEY:

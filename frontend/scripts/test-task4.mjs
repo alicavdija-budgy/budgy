@@ -144,7 +144,11 @@ S('retrait UNIQUEMENT après sauvegarde confirmée dans le store', qa.includes('
 S('identifiant stable anti-doublon (siri_<pid> + registre processedIds)', qa.includes('`siri_${pendingId}`') && qa.includes('isAlreadyProcessed(pendingId)') && bridge.includes('PROCESSED_KEY'));
 S('écriture idempotente : transaction déjà présente → jamais recréée', qa.includes('transactions.some((tx) => tx.id === id)'));
 S('convention financière : dépense enregistrée avec montant POSITIF', qa.includes('Math.abs(result.amount || 0)'));
-S('reprise au démarrage à froid : réessais jusqu\'à hydratation (pas un minuteur aveugle)', wsync.includes('setInterval') && wsync.includes('tries >= 15'));
+S('Siri : hydratation respectée et écoute active sans limite arbitraire de 12 secondes',
+  wsync.includes('setInterval') &&
+  wsync.includes('hasHydrated') &&
+  wsync.includes("AppState.currentState === 'active'") &&
+  !wsync.includes('tries >= 15'));
 S('reprise au retour au premier plan + changement de compte', wsync.includes("st === 'active'") && wsync.includes('s.activeScope !== lastScope'));
 S('purge totale UNIQUEMENT sur action explicite (logout/suppression)', bridge.includes('clearWidgetData') && bridge.includes('déconnexion / suppression'));
 S('routes de consultation branchées (factures, budgets)', wsync.includes("'invoices': '/more/invoices'") && wsync.includes("'budgets': '/more/budgets'"));

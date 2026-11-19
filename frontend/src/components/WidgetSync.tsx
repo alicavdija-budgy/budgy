@@ -8,14 +8,23 @@
  * - Consomme la route demandée par Siri / le widget et la file des dépenses
  *   dictées (une à la fois, via le formulaire de confirmation /quick-add).
  */
-import { useEffect, useRef } from 'react';
-import { AppState, Platform } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import {
+  Alert, AppState, KeyboardAvoidingView, Modal, Platform, Text, TextInput,
+  TouchableOpacity, View,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+import { useTheme } from '../hooks/useTheme';
+import { useTranslation } from '../hooks/useTranslation';
 import { useRouter, useRootNavigationState } from 'expo-router';
 import { useStore } from '../stores/useStore';
 import { useAlertsStore } from '../stores/useAlertsStore';
 import {
-  widgetBridgeAvailable, refreshWidgetSnapshot, peekPendingRoute, popPendingRoute, peekPendingExpenses,
+  widgetBridgeAvailable, refreshWidgetSnapshot, peekPendingRoute, popPendingRoute,
+  peekPendingExpenses, resolvePendingExpense, type PendingExpense,
 } from '../services/widgetBridge';
+import { saveConfirmedSiriExpense } from '../services/saveSiriExpense';
 
 const ROUTES: Record<string, string> = {
   'home': '/',
@@ -31,7 +40,53 @@ export default function WidgetSync() {
   const rootState = useRootNavigationState();
   const navReady = !!rootState?.key; // expo-router avale les push avant montage
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pushedPid = useRef<string | null>(null);
+  const shownPid = useRef<string | null>(null);
+  const [draft, setDraft] = useState<PendingExpense | null>(null);
+  const [label, setLabel] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [missingDraft, setMissingDraft] = useState(false);
+  const waitingSince = useRef<number | null>(null);
+  const busyRef = useRef(false);
+  const theme = useTheme();
+  const { t } = useTranslation();
+
+  const discard = async () => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    try {
+      if (draft) await resolvePendingExpense(draft.id);
+      if (peekPendingRoute() === 'quick-add') popPendingRoute();
+      shownPid.current = null;
+      setDraft(null);
+      setMissingDraft(false);
+    } finally { busyRef.current = false; }
+  };
+
+  const confirm = async () => {
+    if (!draft || busyRef.current) return;
+    busyRef.current = true;
+    setSaving(true);
+    try {
+      const result = await saveConfirmedSiriExpense(draft.id, label);
+      if (result === 'saved' || result === 'already') {
+        if (peekPendingRoute() === 'quick-add') popPendingRoute();
+        shownPid.current = null;
+        setDraft(null);
+        setMissingDraft(false);
+        if (result === 'saved') {
+          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          Alert.alert(t('siriConfirm.savedTitle'), t('siriConfirm.savedBody'));
+        }
+      } else {
+        Alert.alert(t('siriConfirm.checkTitle'), t('siriConfirm.checkBody'));
+      }
+    } catch {
+      Alert.alert(t('siriConfirm.checkTitle'), t('siriConfirm.checkBody'));
+    } finally {
+      busyRef.current = false;
+      setSaving(false);
+    }
+  };
 
   useEffect(() => {
     if (Platform.OS !== 'ios' || !widgetBridgeAvailable() || !navReady) return;
@@ -42,31 +97,43 @@ export default function WidgetSync() {
     };
 
     const consumeNative = () => {
-      // Siri can launch the app BEFORE Swift finishes writing the amount.
-      // Also don't pop the route while Zustand is still hydrating: user-scoped
-      // drafts are not visible until the matching account has loaded.
-      const hasHydrated = (useStore as any).persist?.hasHydrated?.() !== false;
-      if (!hasHydrated) return false;
+      // Native App Intent may enqueue while its Siri overlay keeps AppState
+      // "inactive". Read the App Group regardless, on the main JS thread.
+      // A screen push can be swallowed by expo-router while the root Stack
+      // is changing. The direct confirmation Modal has no route race.
+      const hydrated = (useStore as any).persist?.hasHydrated?.() !== false;
+      const account = useStore.getState();
+      if (!hydrated || !account.user?.id || !account.isAuthenticated ||
+          account.isLocked) return false;
+
       const route = peekPendingRoute();
       const pending = peekPendingExpenses(route === 'quick-add');
       if (pending.length > 0) {
+        waitingSince.current = null;
         const e = pending[0];
-        // The native amount is copied only as a visible preview, NEVER saved
-        // until the user taps Add. Duplicate routing must not duplicate writes.
-        if (pushedPid.current === e.id) {
-          if (route === 'quick-add') popPendingRoute();
-          return true;
+        if (shownPid.current !== e.id) {
+          shownPid.current = e.id;
+          setLabel(e.label || 'Dépense');
+          setDraft(e);
+          setMissingDraft(false);
         }
-        pushedPid.current = e.id;
-        if (route === 'quick-add') popPendingRoute();
-        router.push(
-          `/quick-add?text=${encodeURIComponent(`${e.amount} CHF ${e.label}`)}&source=siri&pid=${encodeURIComponent(e.id)}` as any,
-        );
+        // Deliberately do NOT remove native route yet: unscoped drafts need
+        // it to remain verifiable until confirmation or cancellation.
         return true;
       }
-      pushedPid.current = null;
+      if (route === 'quick-add') {
+        // If Swift reported no usable draft (e.g. queue full or native
+        // storage could not be read), the user gets a real recovery action.
+        // Do not quietly open an unfilled expense form and lose the intent.
+        if (!waitingSince.current) waitingSince.current = Date.now();
+        if (Date.now() - waitingSince.current > 4000 &&
+            shownPid.current === null && !busyRef.current) {
+          setMissingDraft(true);
+        }
+        return false;
+      }
+      waitingSince.current = null;
       if (route && ROUTES[route]) {
-        // Only now consume native route, after hydration and account lookup.
         popPendingRoute();
         router.push(ROUTES[route] as any);
         return true;
@@ -74,18 +141,12 @@ export default function WidgetSync() {
       return false;
     };
 
-    // Démarrage (navigateur prêt) : republier, puis consommer avec réessais —
-    // sur un lancement à froid par Siri, la file et le compte actif ne sont
-    // visibles qu'après l'hydratation des stores persistés. On réessaie donc
-    // brièvement au lieu d'un unique minuteur aveugle.
+    // App Intents execute independently of JS. Their write can finish after
+    // app activation, with no new AppState event. Keep polling the small
+    // shared record even while Siri's overlay is visible.
     refreshWidgetSnapshot();
-    // Keep polling very cheap shared UserDefaults while the app is active:
-    // Siri's amount prompt may last longer than the old 12-second boot window,
-    // and Siri may be invoked while Budgy is already open (no AppState event).
-    // Inactive/background state never reads another account's draft.
-    const boot = setInterval(() => {
-      if (AppState.currentState === 'active') consumeNative();
-    }, 1500);
+    consumeNative();
+    const boot = setInterval(consumeNative, 800);
 
     const appSub = AppState.addEventListener('change', (st) => {
       if (st === 'active') {
@@ -139,5 +200,112 @@ export default function WidgetSync() {
     };
   }, [router, navReady]);
 
-  return null;
+  const visible = !!draft || missingDraft;
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      presentationStyle="overFullScreen"
+      onRequestClose={() => { void discard(); }}
+    >
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.58)' }}
+      >
+        <View style={{
+          backgroundColor: theme.backgroundSecondary,
+          borderTopLeftRadius: 28, borderTopRightRadius: 28,
+          borderWidth: 1, borderColor: theme.cardBorder,
+          paddingTop: 18, paddingHorizontal: 24, paddingBottom: 42,
+          gap: 15,
+        }}>
+          <View style={{ alignItems: 'center', marginBottom: 6 }}>
+            <View style={{ width: 44, height: 4, borderRadius: 4, backgroundColor: theme.textTertiary }} />
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <Ionicons name="mic-circle" size={32} color={theme.primary} />
+            <Text style={{ color: theme.text, fontSize: 22, fontWeight: '800', flex: 1 }}>
+              {t('siriConfirm.title')}
+            </Text>
+          </View>
+          {draft ? (
+            <>
+              <Text style={{ color: theme.textSecondary, fontSize: 14 }}>
+                {t('siriConfirm.reviewHint')}
+              </Text>
+              <View style={{ backgroundColor: theme.card, padding: 20, borderRadius: 18 }}>
+                <Text style={{ color: theme.textTertiary, fontSize: 13, textAlign: 'center' }}>
+                  {t('siriConfirm.amountLabel')}
+                </Text>
+                <Text style={{ color: theme.text, fontSize: 34, fontWeight: '900', textAlign: 'center' }}>
+                  CHF {draft.amount.toLocaleString('fr-CH', {
+                    minimumFractionDigits: 2, maximumFractionDigits: 2,
+                  })}
+                </Text>
+              </View>
+              <Text style={{ color: theme.textSecondary, fontSize: 13 }}>
+                {t('siriConfirm.descriptionLabel')}
+              </Text>
+              <TextInput
+                value={label}
+                onChangeText={(s) => setLabel(s.slice(0, 80))}
+                placeholder={t('siriConfirm.descriptionPlaceholder')}
+                placeholderTextColor={theme.textTertiary}
+                style={{
+                  borderRadius: 14, borderWidth: 1, borderColor: theme.inputBorder,
+                  backgroundColor: theme.inputBackground, color: theme.text,
+                  paddingHorizontal: 14, paddingVertical: 13, fontSize: 17,
+                }}
+              />
+              <Text style={{ color: theme.textTertiary, fontSize: 12 }}>
+                {t('siriConfirm.confirmNote')}
+              </Text>
+              <TouchableOpacity
+                testID="siri-expense-confirm"
+                disabled={saving}
+                onPress={() => { void confirm(); }}
+                style={{ backgroundColor: theme.primary, paddingVertical: 17, borderRadius: 17,
+                  justifyContent: 'center', alignItems: 'center', opacity: saving ? 0.5 : 1 }}
+              >
+                <Text style={{ color: '#071A16', fontWeight: '800', fontSize: 17 }}>
+                  {saving ? t('siriConfirm.saving') : t('siriConfirm.add')}
+                </Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <Text style={{ color: theme.textSecondary, fontSize: 15 }}>
+                {t('siriConfirm.missingBody')}
+              </Text>
+              <TouchableOpacity
+                testID="siri-fallback-manual"
+                onPress={() => {
+                  if (peekPendingRoute() === 'quick-add') popPendingRoute();
+                  setMissingDraft(false);
+                  router.push('/quick-add' as any);
+                }}
+                style={{ backgroundColor: theme.primary, paddingVertical: 17, borderRadius: 17,
+                  justifyContent: 'center', alignItems: 'center' }}
+              >
+                <Text style={{ color: '#071A16', fontWeight: '800', fontSize: 17 }}>
+                  {t('siriConfirm.openManual')}
+                </Text>
+              </TouchableOpacity>
+            </>
+          )}
+          <TouchableOpacity
+            testID="siri-expense-cancel"
+            disabled={saving}
+            onPress={() => { void discard(); }}
+            style={{ alignItems: 'center', paddingVertical: 12 }}
+          >
+            <Text style={{ color: theme.textSecondary, fontSize: 16 }}>
+              {t('siriConfirm.cancel')}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
 }

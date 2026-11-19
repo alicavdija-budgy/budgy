@@ -53,7 +53,8 @@ ok('Bundle identifier inchangé', appJson.expo.ios.bundleIdentifier === 'com.bud
 const appJsonStr = read('app.json');
 ok('App Group group.com.budgy.ch.budgy préservé', appJsonStr.includes('group.com.budgy.ch.budgy') && read('targets/intents/expo-target.config.js').includes('group.com.budgy.ch.budgy'));
 const dialog = read('targets/intents/_shared/BudgyIntents.swift') + read('targets/intents/_shared/BudgyShared.swift');
-ok('Siri demande CONFIRMATION (jamais « c’est fait » avant enregistrement)', dialog.includes('confirmez') && !dialog.toLowerCase().includes("c'est fait"));
+ok('Siri présente un brouillon à valider avec Ajouter (jamais « c’est fait » avant sauvegarde)',
+  dialog.includes('touchez Ajouter') && !dialog.toLowerCase().includes("c'est fait"));
 
 console.log('— P1 Menu Plus (structure éditoriale, 17 destinations réelles) —');
 const more = read('app/(tabs)/more.tsx');

@@ -91,10 +91,10 @@ enum BudgyL10n {
             "en": "Open Budgy to sign in and confirm the expense.",
         ],
         "addConfirm": [
-            "fr": "D'accord, confirmez {amt} francs pour {label} dans Budgy.",
-            "de": "Alles klar — bestätigen Sie {amt} Franken für {label} in Budgy.",
-            "it": "D'accordo, conferma {amt} franchi per {label} in Budgy.",
-            "en": "Okay — confirm {amt} francs for {label} in Budgy.",
+            "fr": "Dépense de {amt} francs pour {label} préparée. Ouvrez Budgy et touchez Ajouter pour l'enregistrer.",
+            "de": "{amt} Franken für {label} sind vorbereitet. Öffnen Sie Budgy und tippen Sie auf Hinzufügen, um zu speichern.",
+            "it": "Spesa di {amt} franchi per {label} preparata. Apri Budgy e tocca Aggiungi per salvarla.",
+            "en": "Expense of {amt} francs for {label} prepared. Open Budgy and tap Add to save it.",
         ],
         "budgetAnswer": [
             "fr": "Il vous reste {amt} francs ce mois-ci.",

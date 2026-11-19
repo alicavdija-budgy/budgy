@@ -52,7 +52,7 @@ check('identifiant unique par dépense (UUID)', intentsShared.includes('UUID().u
 check('rattachée au scope du compte', intentsShared.includes('scope: scope'));
 check('aucune mutation du solde affiché avant enregistrement', !intentsShared.includes('snap.available -='));
 check('montant validé (0 < m < 1 000 000)', intents.includes('amount > 0, amount < 1_000_000'));
-check('annonce honnête : « confirmez » (pas « enregistré »)', intentsShared.includes('confirmez') && !intentsShared.includes('Il te reste'));
+check('annonce honnête : la dictée est seulement préparée (et nécessite Ajouter)', intentsShared.includes('touchez Ajouter') && !intentsShared.includes('est enregistrée'));
 check('budget vocal : opt-in explicite + non masqué + frais', intents.includes('s.siriAmounts') && intents.includes('!s.hide') && intents.includes('36 * 3600'));
 check('sinon ouverture de Budgy (pas de montant énoncé)', intentsShared.includes('Ouvrez Budgy pour consulter vos chiffres'));
 check('4 raccourcis déclarés (dépense, budget, scanner, ouvrir)', ['AddExpenseIntent', 'GetBudgetIntent', 'ScanBillIntent', 'OpenBudgyIntent'].every((i) => shortcuts.includes(i)));
@@ -80,7 +80,7 @@ check('intent garde un brouillon non lié si snapshot absent (jamais une dépens
   intentsShared.includes('snapshotScope.hasPrefix("user:") ? snapshotScope : "unscoped"') &&
   intentsShared.includes('scope: scope') &&
   intents.includes('BudgyIntentStore.enqueue') &&
-  intentsShared.includes('confirmez'));
+  intentsShared.includes('touchez Ajouter'));
 check('écriture idempotente : transaction siri_<pid> jamais recréée', quickAdd.includes('transactions.some((tx) => tx.id === id)'));
 check('une dépense Siri reste une dépense (pas de requalification)', quickAdd.includes("pendingId ? 'expense'"));
 check('rafraîchissement débouncé (limites WidgetKit)', sync.includes('1500'));

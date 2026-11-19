@@ -120,7 +120,7 @@ S('Siri : libellés conservent le jeton obligatoire appName',
 
 S('App Group group.com.budgy.ch.budgy (entitlements + stockage partagé)', cfg.includes("'group.com.budgy.ch.budgy'") && shared.includes('"group.com.budgy.ch.budgy"'));
 S('bundle identifier com.budgy.ch.budgy conservé', appJson.includes('"bundleIdentifier": "com.budgy.ch.budgy"'));
-S('build iOS 93 préparé pour le prochain TestFlight', appJson.includes('"buildNumber": "93"'));
+S('build iOS 94 préparé pour le prochain TestFlight', appJson.includes('"buildNumber": "94"'));
 S('extension @main préservée (ITMS-90896)', read('targets/intents/BudgyIntentsExtension.swift').includes('@main'));
 S('App Intents compilés dans APP + EXTENSION par le dossier spécial _shared', 
   ['BudgyIntents.swift', 'BudgyShared.swift', 'BudgyShortcuts.swift'].every((name) =>
@@ -132,7 +132,7 @@ S('Intent de premier plan dans le target partagé (pas dans l’extension seule)
 
 S('snapshot partagé étendu rétro-compatible (champs optionnels Swift)', shared.includes('var billsCount: Int?') && shared.includes('var savedTotal: Double?') && shared.includes('var budgetSpent: Double?'));
 S('confidentialité : montants énoncés SEULEMENT si siriAmounts + non masqué + données < 36 h', intents.includes('s.siriAmounts') && intents.includes('36 * 3600') && (intents.match(/guardedSnapshot\(route:/g) || []).length >= 4);
-S('Siri ne dit jamais « enregistré » avant sauvegarde (dialogue = « confirmez »)', shared.includes('confirmez') && !intents.includes('a été enregistrée'));
+S('Siri indique clairement brouillon préparé et bouton Ajouter obligatoire', shared.includes('touchez Ajouter') && !intents.includes('a été enregistrée'));
 
 console.log('\n═ TÂCHE 4 §4 — sauvegarde fiable (contrôles statiques) ═');
 const bridge = read('src/services/widgetBridge.ts');
@@ -144,7 +144,11 @@ S('retrait UNIQUEMENT après sauvegarde confirmée dans le store', qa.includes('
 S('identifiant stable anti-doublon (siri_<pid> + registre processedIds)', qa.includes('`siri_${pendingId}`') && qa.includes('isAlreadyProcessed(pendingId)') && bridge.includes('PROCESSED_KEY'));
 S('écriture idempotente : transaction déjà présente → jamais recréée', qa.includes('transactions.some((tx) => tx.id === id)'));
 S('convention financière : dépense enregistrée avec montant POSITIF', qa.includes('Math.abs(result.amount || 0)'));
-S('reprise au démarrage à froid : réessais jusqu\'à hydratation (pas un minuteur aveugle)', wsync.includes('setInterval') && wsync.includes('tries >= 15'));
+S('Siri : hydratation respectée et écoute active sans limite arbitraire de 12 secondes',
+  wsync.includes('setInterval') &&
+  wsync.includes('hasHydrated') &&
+  wsync.includes("AppState.currentState === 'active'") &&
+  !wsync.includes('tries >= 15'));
 S('reprise au retour au premier plan + changement de compte', wsync.includes("st === 'active'") && wsync.includes('s.activeScope !== lastScope'));
 S('purge totale UNIQUEMENT sur action explicite (logout/suppression)', bridge.includes('clearWidgetData') && bridge.includes('déconnexion / suppression'));
 S('routes de consultation branchées (factures, budgets)', wsync.includes("'invoices': '/more/invoices'") && wsync.includes("'budgets': '/more/budgets'"));

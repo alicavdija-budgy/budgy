@@ -14,7 +14,7 @@ import { useRouter, useRootNavigationState } from 'expo-router';
 import { useStore } from '../stores/useStore';
 import { useAlertsStore } from '../stores/useAlertsStore';
 import {
-  widgetBridgeAvailable, refreshWidgetSnapshot, popPendingRoute, peekPendingExpenses,
+  widgetBridgeAvailable, refreshWidgetSnapshot, peekPendingRoute, popPendingRoute, peekPendingExpenses,
 } from '../services/widgetBridge';
 
 const ROUTES: Record<string, string> = {
@@ -42,25 +42,32 @@ export default function WidgetSync() {
     };
 
     const consumeNative = () => {
-      const route = popPendingRoute();
-      // The unscoped draft is visible ONLY after Siri explicitly opens the
-      // quick-add route. It still requires confirmation in Budgy.
+      // Siri can launch the app BEFORE Swift finishes writing the amount.
+      // Also don't pop the route while Zustand is still hydrating: user-scoped
+      // drafts are not visible until the matching account has loaded.
+      const hasHydrated = (useStore as any).persist?.hasHydrated?.() !== false;
+      if (!hasHydrated) return false;
+      const route = peekPendingRoute();
       const pending = peekPendingExpenses(route === 'quick-add');
       if (pending.length > 0) {
         const e = pending[0];
-        // Une seule présentation par dépense dictée : jamais de double push
-        // pendant que l'utilisateur confirme dans /quick-add.
-        if (pushedPid.current === e.id) return true;
+        // The native amount is copied only as a visible preview, NEVER saved
+        // until the user taps Add. Duplicate routing must not duplicate writes.
+        if (pushedPid.current === e.id) {
+          if (route === 'quick-add') popPendingRoute();
+          return true;
+        }
         pushedPid.current = e.id;
+        if (route === 'quick-add') popPendingRoute();
         router.push(
           `/quick-add?text=${encodeURIComponent(`${e.amount} CHF ${e.label}`)}&source=siri&pid=${encodeURIComponent(e.id)}` as any,
         );
         return true;
       }
-      // File vide : libère la présentation (prochaine commande annulée/traitée
-      // peut être présentée à nouveau, aucun blocage de pushedPid obsolète).
       pushedPid.current = null;
       if (route && ROUTES[route]) {
+        // Only now consume native route, after hydration and account lookup.
+        popPendingRoute();
         router.push(ROUTES[route] as any);
         return true;
       }
@@ -72,12 +79,13 @@ export default function WidgetSync() {
     // visibles qu'après l'hydratation des stores persistés. On réessaie donc
     // brièvement au lieu d'un unique minuteur aveugle.
     refreshWidgetSnapshot();
-    let tries = 0;
+    // Keep polling very cheap shared UserDefaults while the app is active:
+    // Siri's amount prompt may last longer than the old 12-second boot window,
+    // and Siri may be invoked while Budgy is already open (no AppState event).
+    // Inactive/background state never reads another account's draft.
     const boot = setInterval(() => {
-      tries += 1;
-      const consumed = consumeNative();
-      if (consumed || tries >= 15) clearInterval(boot);
-    }, 800);
+      if (AppState.currentState === 'active') consumeNative();
+    }, 1500);
 
     const appSub = AppState.addEventListener('change', (st) => {
       if (st === 'active') {

@@ -50,7 +50,12 @@ ok('persistAsInvoice bloque extraction échouée', imp.includes('extractionFaile
 const invBody = imp.slice(imp.indexOf('const persistAsInvoice'), imp.indexOf('const persistAsContract'));
 ok('persistAsInvoice bloque montant manquant (jamais 0)', invBody.includes('amount === null') && invBody.includes("importErrors.amountMissingTitle") && !invBody.includes('|| 0'));
 ok('montant via normalisation UNIQUE', imp.includes('normalizeChfAmount(result?.amount)'));
-ok('échec OCR → carte erreur, jamais badge succès', imp.includes('result.success === false || result._failedOcr') && imp.includes('alert-circle'));
+ok('OCR incomplet → carte de vérification non alarmante, jamais badge succès',
+  imp.includes('result.success === false || result._failedOcr') &&
+  imp.includes('document-text-outline') &&
+  imp.includes("t('importErrors.reviewCta')") &&
+  imp.includes('document-preserve-without-ocr') &&
+  !imp.includes("Alert.alert(t('importErrors.qrInvalidTitle')"));
 ok('Swiss QR décodé côté serveur → parseur SPC éprouvé', imp.includes('swiss_qr_content') && imp.includes('parseSwissQrBill'));
 const mimeHelper = readFileSync('src/lib/importMime.ts', 'utf8');
 ok('PDF iOS reconnu même si le MIME du picker est générique', imp.includes('resolveImportMime(mimeHint, originalName, uriOrPath)') && mimeHelper.includes('.pdf') && mimeHelper.includes("'application/pdf'"));

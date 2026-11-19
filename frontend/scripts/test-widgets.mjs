@@ -96,6 +96,11 @@ let bridgeSrc = bridge
   .replace(/import \{ getMonthlyFinancialSnapshot, computeBudgetConsumption, parseDate \}.*\n/, 'const getMonthlyFinancialSnapshot = () => ({});\nconst computeBudgetConsumption = () => ({ rows: [], totalLimit: 0, totalSpent: 0 });\nconst parseDate = () => null;\n')
   .replace(/export interface PendingExpense \{[\s\S]*?\}\n/, '')
   .replace(/type Storage = \{[\s\S]*?\};\n/, '')
+  // Bridge v95 does a real native read/write probe and has two additional
+  // TypeScript-only annotations. Strip them for this legacy Node no-op test.
+  .replace(/ as Storage/g, '')
+  .replace(/\(bridge: Storage\): boolean/g, '(bridge)')
+  .replace(/const direct: Storage =/g, 'const direct =')
   .replace(/let storage: Storage \| null/, 'let storage')
   .replace(/let reloadWidgets.*\n/, 'let reloadWidgets = () => {};\n')
   .replace(/: PendingExpense\[\]/g, '')

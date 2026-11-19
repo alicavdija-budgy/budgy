@@ -1,3 +1,6 @@
+> ⚠️ **ARCHIVE — v3.8.0 / build 70. NE PAS UTILISER pour publier Budgy 4.0.0 (95).**
+> Dossier actuel : [RELEASE_4_0_0_BUILD_95.md](./RELEASE_4_0_0_BUILD_95.md). Les prix, textes et captures ci-dessous sont historiques ; valider les informations dans App Store Connect.
+
 # 🍎 Budgy — App Store Submission Final Package (v3.8.0 · Build 70)
 
 > **Build 70 déjà présent dans TestFlight.** Ce document contient tout ce dont vous avez besoin pour cliquer sur *Submit for Review* — copier-coller uniquement.

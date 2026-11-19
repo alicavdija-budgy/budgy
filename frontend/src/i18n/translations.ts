@@ -966,7 +966,7 @@ export const TRANSLATIONS = {
   security: {
     fr: {
       title: 'Sécurité',
-      heroTitle: 'Vos données sont protégées', heroSub: '{{n}} éléments stockés localement • Aucun partage tiers',
+      heroTitle: 'Vos données sont protégées', heroSub: '{{n}} éléments locaux • synchronisation optionnelle',
       sectionLock: 'Verrouillage', sectionPanic: 'Mode panique 🚨', sectionStorage: 'Stockage',
       appLock: 'App lock', inactive: 'Inactif',
       changePin: 'Changer le code PIN',
@@ -975,7 +975,7 @@ export const TRANSLATIONS = {
       remove: 'Retirer', configure: 'Configurer',
       panicHelper: 'En cas de contrainte (ex: réquisition forcée), saisir ce code ouvre une version vide de Budgy, sans vos vraies données.',
       storageDevice: 'Appareil (chiffré)', storageItems: '{{n}} items', storageBackend: 'Backend', storageBackendValue: '0 (privé)', storageSupabase: 'Supabase (auth)', storageConfigured: 'Configuré',
-      storageHelper: '⚡ Toutes vos données financières restent sur votre téléphone. L\'IA OCR reçoit uniquement les images de reçus et ne stocke rien.',
+      storageHelper: '⚡ Vos documents restent dans le stockage privé de Budgy. Les autres données peuvent être synchronisées si vous l’activez ; l’OCR peut nécessiter un traitement temporaire distant après votre accord.',
       pinPanicTitle: 'Code de panique', pinNew: 'Nouveau code', pinCreate: 'Créer un code', pinEnter6: 'Saisissez 6 chiffres', pinConfirm: 'Confirmez le code',
       disableLockTitle: 'Désactiver le verrouillage ?', disableLockBody: 'Vos données ne seront plus protégées par PIN.', disable: 'Désactiver', cancel: 'Annuler',
       pinMismatch: 'Codes différents', pinMismatchBody: 'Recommencez.',
@@ -988,7 +988,7 @@ export const TRANSLATIONS = {
     },
     en: {
       title: 'Security',
-      heroTitle: 'Your data is protected', heroSub: '{{n}} items stored locally • No third-party sharing',
+      heroTitle: 'Your data is protected', heroSub: '{{n}} local items • optional synchronization',
       sectionLock: 'App lock', sectionPanic: 'Panic mode 🚨', sectionStorage: 'Storage',
       appLock: 'App lock', inactive: 'Inactive',
       changePin: 'Change PIN',
@@ -997,7 +997,7 @@ export const TRANSLATIONS = {
       remove: 'Remove', configure: 'Set up',
       panicHelper: 'Under duress (e.g. forced access), entering this code opens an empty version of Budgy without your real data.',
       storageDevice: 'Device (encrypted)', storageItems: '{{n}} items', storageBackend: 'Backend', storageBackendValue: '0 (private)', storageSupabase: 'Supabase (auth)', storageConfigured: 'Configured',
-      storageHelper: '⚡ All your financial data stays on your phone. The OCR AI receives only receipt images and stores nothing.',
+      storageHelper: '⚡ Your documents remain in Budgy’s private local storage. Other data may sync if enabled; OCR may require temporary remote processing with your consent.',
       pinPanicTitle: 'Panic code', pinNew: 'New code', pinCreate: 'Create a code', pinEnter6: 'Enter 6 digits', pinConfirm: 'Confirm the code',
       disableLockTitle: 'Disable lock?', disableLockBody: 'Your data will no longer be protected by a PIN.', disable: 'Disable', cancel: 'Cancel',
       pinMismatch: 'Codes do not match', pinMismatchBody: 'Please try again.',
@@ -1010,7 +1010,7 @@ export const TRANSLATIONS = {
     },
     de: {
       title: 'Sicherheit',
-      heroTitle: 'Ihre Daten sind geschützt', heroSub: '{{n}} Elemente lokal gespeichert • Keine Weitergabe an Dritte',
+      heroTitle: 'Ihre Daten sind geschützt', heroSub: '{{n}} lokale Elemente • optionale Synchronisierung',
       sectionLock: 'Sperre', sectionPanic: 'Panik-Modus 🚨', sectionStorage: 'Speicher',
       appLock: 'App-Sperre', inactive: 'Inaktiv',
       changePin: 'PIN ändern',
@@ -1019,7 +1019,7 @@ export const TRANSLATIONS = {
       remove: 'Entfernen', configure: 'Einrichten',
       panicHelper: 'Im Notfall (z. B. erzwungener Zugriff) öffnet dieser Code eine leere Version von Budgy ohne Ihre echten Daten.',
       storageDevice: 'Gerät (verschlüsselt)', storageItems: '{{n}} Objekte', storageBackend: 'Backend', storageBackendValue: '0 (privat)', storageSupabase: 'Supabase (Auth)', storageConfigured: 'Konfiguriert',
-      storageHelper: '⚡ Alle Finanzdaten bleiben auf Ihrem Telefon. Die OCR-KI erhält nur Belegbilder und speichert nichts.',
+      storageHelper: '⚡ Ihre Dokumente bleiben im privaten lokalen Speicher. Andere Daten können bei Aktivierung synchronisiert werden; OCR kann mit Ihrer Zustimmung eine vorübergehende Serveranalyse erfordern.',
       pinPanicTitle: 'Panik-Code', pinNew: 'Neuer Code', pinCreate: 'Code erstellen', pinEnter6: '6 Ziffern eingeben', pinConfirm: 'Code bestätigen',
       disableLockTitle: 'Sperre deaktivieren?', disableLockBody: 'Ihre Daten sind dann nicht mehr per PIN geschützt.', disable: 'Deaktivieren', cancel: 'Abbrechen',
       pinMismatch: 'PINs stimmen nicht überein', pinMismatchBody: 'Bitte erneut versuchen.',
@@ -1032,7 +1032,7 @@ export const TRANSLATIONS = {
     },
     it: {
       title: 'Sicurezza',
-      heroTitle: 'I tuoi dati sono protetti', heroSub: '{{n}} elementi salvati localmente • Nessuna condivisione con terzi',
+      heroTitle: 'I tuoi dati sono protetti', heroSub: '{{n}} elementi locali • sincronizzazione facoltativa',
       sectionLock: 'Blocco', sectionPanic: 'Modalità panico 🚨', sectionStorage: 'Archiviazione',
       appLock: 'Blocco app', inactive: 'Inattivo',
       changePin: 'Cambia PIN',
@@ -1041,7 +1041,7 @@ export const TRANSLATIONS = {
       remove: 'Rimuovi', configure: 'Configura',
       panicHelper: 'Sotto costrizione (es. accesso forzato), inserire questo codice apre una versione vuota di Budgy senza i tuoi dati reali.',
       storageDevice: 'Dispositivo (cifrato)', storageItems: '{{n}} elementi', storageBackend: 'Backend', storageBackendValue: '0 (privato)', storageSupabase: 'Supabase (auth)', storageConfigured: 'Configurato',
-      storageHelper: '⚡ Tutti i tuoi dati finanziari restano sul telefono. L\'IA OCR riceve solo le immagini delle ricevute e non memorizza nulla.',
+      storageHelper: '⚡ I documenti restano nell\'archivio privato locale di Budgy. Altri dati possono sincronizzarsi se attivi la funzione; l\'OCR può usare elaborazione remota temporanea con consenso.',
       pinPanicTitle: 'Codice di panico', pinNew: 'Nuovo codice', pinCreate: 'Crea un codice', pinEnter6: 'Inserisci 6 cifre', pinConfirm: 'Conferma il codice',
       disableLockTitle: 'Disattivare il blocco?', disableLockBody: 'I tuoi dati non saranno più protetti da PIN.', disable: 'Disattiva', cancel: 'Annulla',
       pinMismatch: 'Codici diversi', pinMismatchBody: 'Riprova.',
@@ -1936,7 +1936,7 @@ export const TRANSLATIONS = {
       defaultContractTitle: 'Contrat',
       // Tips
       tipsTitle: '💡 Astuces',
-      tipsBody: '• Scanner caméra : meilleure qualité OCR pour les tickets papier\n• PDF : recommandé pour les factures et contrats électroniques\n• L\'IA détecte automatiquement Facture vs Contrat et range au bon endroit\n• Tout reste en local sur votre appareil — aucune donnée vendue',
+      tipsBody: '• Scanner caméra : meilleure qualité OCR pour les tickets papier\n• PDF : recommandé pour les factures et contrats électroniques\n• L\'IA détecte automatiquement Facture vs Contrat et range au bon endroit\n• L\'original reste sur votre appareil. L\'analyse automatique peut envoyer temporairement le contenu au service OCR après votre accord.',
       okBtn: 'OK',
     },
     en: {
@@ -2009,7 +2009,7 @@ export const TRANSLATIONS = {
       defaultUnknownIssuer: 'Unknown',
       defaultContractTitle: 'Contract',
       tipsTitle: '💡 Tips',
-      tipsBody: '• Camera scanner: best OCR quality for paper receipts\n• PDF: recommended for electronic invoices and contracts\n• AI automatically detects Invoice vs Contract and files accordingly\n• Everything stays local on your device — no data is sold',
+      tipsBody: '• Camera scanner: best OCR quality for paper receipts\n• PDF: recommended for electronic invoices and contracts\n• AI automatically detects Invoice vs Contract and files accordingly\n• The original stays on your device. Automatic analysis may temporarily send content to the OCR service with your consent.',
       okBtn: 'OK',
     },
     de: {
@@ -2082,7 +2082,7 @@ export const TRANSLATIONS = {
       defaultUnknownIssuer: 'Unbekannt',
       defaultContractTitle: 'Vertrag',
       tipsTitle: '💡 Tipps',
-      tipsBody: '• Kamera-Scanner: beste OCR-Qualität für Papierbelege\n• PDF: empfohlen für elektronische Rechnungen und Verträge\n• Die KI erkennt automatisch Rechnung vs. Vertrag und legt sie richtig ab\n• Alles bleibt lokal auf Ihrem Gerät — keine Daten werden verkauft',
+      tipsBody: '• Kamera-Scanner: beste OCR-Qualität für Papierbelege\n• PDF: empfohlen für elektronische Rechnungen und Verträge\n• Die KI erkennt automatisch Rechnung vs. Vertrag und legt sie richtig ab\n• Das Original bleibt auf Ihrem Gerät. Die automatische Analyse kann Inhalte mit Ihrer Zustimmung vorübergehend an den OCR-Dienst senden.',
       okBtn: 'OK',
     },
     it: {
@@ -2155,7 +2155,7 @@ export const TRANSLATIONS = {
       defaultUnknownIssuer: 'Sconosciuto',
       defaultContractTitle: 'Contratto',
       tipsTitle: '💡 Consigli',
-      tipsBody: '• Scanner fotocamera: migliore qualità OCR per gli scontrini cartacei\n• PDF: consigliato per fatture e contratti elettronici\n• L\'IA rileva automaticamente Fattura vs Contratto e archivia nel posto giusto\n• Tutto resta locale sul tuo dispositivo — nessun dato venduto',
+      tipsBody: '• Scanner fotocamera: migliore qualità OCR per gli scontrini cartacei\n• PDF: consigliato per fatture e contratti elettronici\n• L\'IA rileva automaticamente Fattura vs Contratto e archivia nel posto giusto\n• L\'originale resta sul dispositivo. L\'analisi automatica può inviare temporaneamente il contenuto al servizio OCR con il tuo consenso.',
       okBtn: 'OK',
     },
   },

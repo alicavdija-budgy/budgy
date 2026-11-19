@@ -1041,7 +1041,7 @@ export const TRANSLATIONS = {
       remove: 'Rimuovi', configure: 'Configura',
       panicHelper: 'Sotto costrizione (es. accesso forzato), inserire questo codice apre una versione vuota di Budgy senza i tuoi dati reali.',
       storageDevice: 'Dispositivo (cifrato)', storageItems: '{{n}} elementi', storageBackend: 'Backend', storageBackendValue: '0 (privato)', storageSupabase: 'Supabase (auth)', storageConfigured: 'Configurato',
-      storageHelper: '⚡ I documenti restano nell'archivio privato locale di Budgy. Altri dati possono sincronizzarsi se attivi la funzione; l'OCR può usare elaborazione remota temporanea con consenso.',
+      storageHelper: '⚡ I documenti restano nell\'archivio privato locale di Budgy. Altri dati possono sincronizzarsi se attivi la funzione; l\'OCR può usare elaborazione remota temporanea con consenso.',
       pinPanicTitle: 'Codice di panico', pinNew: 'Nuovo codice', pinCreate: 'Crea un codice', pinEnter6: 'Inserisci 6 cifre', pinConfirm: 'Conferma il codice',
       disableLockTitle: 'Disattivare il blocco?', disableLockBody: 'I tuoi dati non saranno più protetti da PIN.', disable: 'Disattiva', cancel: 'Annulla',
       pinMismatch: 'Codici diversi', pinMismatchBody: 'Riprova.',
@@ -1936,7 +1936,7 @@ export const TRANSLATIONS = {
       defaultContractTitle: 'Contrat',
       // Tips
       tipsTitle: '💡 Astuces',
-      tipsBody: '• Scanner caméra : meilleure qualité OCR pour les tickets papier\n• PDF : recommandé pour les factures et contrats électroniques\n• L\'IA détecte automatiquement Facture vs Contrat et range au bon endroit\n• L'original reste sur votre appareil. L'analyse automatique peut envoyer temporairement le contenu au service OCR après votre accord.',
+      tipsBody: '• Scanner caméra : meilleure qualité OCR pour les tickets papier\n• PDF : recommandé pour les factures et contrats électroniques\n• L\'IA détecte automatiquement Facture vs Contrat et range au bon endroit\n• L\'original reste sur votre appareil. L\'analyse automatique peut envoyer temporairement le contenu au service OCR après votre accord.',
       okBtn: 'OK',
     },
     en: {
@@ -2155,7 +2155,7 @@ export const TRANSLATIONS = {
       defaultUnknownIssuer: 'Sconosciuto',
       defaultContractTitle: 'Contratto',
       tipsTitle: '💡 Consigli',
-      tipsBody: '• Scanner fotocamera: migliore qualità OCR per gli scontrini cartacei\n• PDF: consigliato per fatture e contratti elettronici\n• L\'IA rileva automaticamente Fattura vs Contratto e archivia nel posto giusto\n• L'originale resta sul dispositivo. L'analisi automatica può inviare temporaneamente il contenuto al servizio OCR con il tuo consenso.',
+      tipsBody: '• Scanner fotocamera: migliore qualità OCR per gli scontrini cartacei\n• PDF: consigliato per fatture e contratti elettronici\n• L\'IA rileva automaticamente Fattura vs Contratto e archivia nel posto giusto\n• L\'originale resta sul dispositivo. L\'analisi automatica può inviare temporaneamente il contenuto al servizio OCR con il tuo consenso.',
       okBtn: 'OK',
     },
   },

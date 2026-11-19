@@ -132,7 +132,11 @@ export function parseSwissQrBill(payload: string): SwissQrBill {
 
   // IBAN
   const iban = (L[3] || '').replace(/\s+/g, '').toUpperCase();
-  if (!/^(CH|LI)\d{19}$/.test(iban)) {
+  // ISO 13616 / Swiss QR: country(2) + check digits(2) + numeric IID(5)
+  // + alphanumeric account(12). Requiring 19 digits rejects legitimate
+  // Swiss QR-IBANs that contain a letter in the bank account segment.
+  // Mod-97 checksum is still validated independently below.
+  if (!/^(CH|LI)\d{7}[A-Z0-9]{12}$/.test(iban)) {
     throw new QrBillError('ibanFormat');
   }
   if (!mod97Valid(iban)) throw new QrBillError('ibanChecksum');

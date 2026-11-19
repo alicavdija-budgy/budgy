@@ -132,7 +132,7 @@ S('Intent de premier plan dans le target partagé (pas dans l’extension seule)
 
 S('snapshot partagé étendu rétro-compatible (champs optionnels Swift)', shared.includes('var billsCount: Int?') && shared.includes('var savedTotal: Double?') && shared.includes('var budgetSpent: Double?'));
 S('confidentialité : montants énoncés SEULEMENT si siriAmounts + non masqué + données < 36 h', intents.includes('s.siriAmounts') && intents.includes('36 * 3600') && (intents.match(/guardedSnapshot\(route:/g) || []).length >= 4);
-S('Siri ne dit jamais « enregistré » avant sauvegarde (dialogue = « confirmez »)', shared.includes('confirmez') && !intents.includes('a été enregistrée'));
+S('Siri indique clairement brouillon préparé et bouton Ajouter obligatoire', shared.includes('touchez Ajouter') && !intents.includes('a été enregistrée'));
 
 console.log('\n═ TÂCHE 4 §4 — sauvegarde fiable (contrôles statiques) ═');
 const bridge = read('src/services/widgetBridge.ts');

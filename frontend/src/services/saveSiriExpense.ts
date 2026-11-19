@@ -53,7 +53,8 @@ export async function saveConfirmedSiriExpense(
     return 'already';
   }
 
-  const title = String(editedLabel ?? draft.label).trim().slice(0, 80) || 'Dépense';
+  const title = String(editedLabel ?? draft.label).trim().slice(0, 80);
+  if (!title) return 'invalid';
   // ALWAYS positive in the store: display alone shows a negative debit.
   // The date must be LOCAL; ISO/UTC can assign a purchase after midnight
   // in Switzerland to the previous calendar day.

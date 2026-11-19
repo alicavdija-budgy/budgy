@@ -275,18 +275,26 @@ export default function ImportInvoiceScreen() {
           console.warn('[email-import] Swiss QR validation failed:', code);
           setPendingFile({ uri: uriOrPath, mime });
           setShowManualCt(false);
-          setManualCt((m) => ({ ...m, title: originalName || m.title }));
+          setManualCt((m) => ({
+            ...m,
+            title: data.merchant || originalName || m.title,
+            issuer: data.merchant || m.issuer,
+            amount: typeof data.total_amount === 'number' && data.total_amount > 0
+              ? String(data.total_amount) : m.amount,
+          }));
           setResult({
             success: false,
             document_type: 'invoice',
             _failedOcr: true,
             _qrValidationCode: code,
+            _originalName: originalName,
             _source: 'qr',
             _originalUri: uriOrPath,
             _mime: mime,
             _errorMessage: 'QR_VALIDATION_FAILED',
           });
-          Alert.alert(t('importErrors.qrInvalidTitle'), t('importErrors.qrInvalidBody'));
+          // Keep user in the same screen with next steps, never a second
+          // blocking red popup implying that the original PDF is bad.
           return;
         }
       }
@@ -295,10 +303,17 @@ export default function ImportInvoiceScreen() {
         setResult({ ...data, _source: 'photo', _originalUri: uriOrPath, _mime: mime });
       } else {
         setPendingFile({ uri: uriOrPath, mime });
+        setManualCt((m) => ({
+          ...m, title: data.merchant || originalName || m.title,
+          issuer: data.merchant || m.issuer,
+          amount: typeof data.total_amount === 'number' && data.total_amount > 0
+            ? String(data.total_amount) : m.amount,
+        }));
         setResult({
           success: false,
           _source: 'photo',
           _originalUri: uriOrPath,
+          _originalName: originalName,
           _mime: mime,
           _failedOcr: true,
           _errorMessage: data.error || 'OCR unavailable', // i18n-technical (internal, never shown)
@@ -314,15 +329,13 @@ export default function ImportInvoiceScreen() {
         success: false,
         _source: 'photo',
         _originalUri: uriOrPath,
+        _originalName: originalName,
         _mime: mime,
         _failedOcr: true,
-        _errorMessage: e?.message || 'network', // i18n-technical (interne)
+        _errorMessage: e?.message || 'network', // technical only
       });
-      const h = humanizeError(e, {
-        title: t('emailImport.importImpossibleTitle'),
-        message: t('emailImport.importImpossibleBody'),
-      });
-      Alert.alert(h.title, h.message);
+      // Show the document review card instead of a blocking failure modal.
+      // Authentication and invalid-file alerts remain explicit above.
     } finally {
       setBusy(false);
     }
@@ -971,12 +984,14 @@ export default function ImportInvoiceScreen() {
           </TouchableOpacity>
         ))}
 
-        {/* Échec d'extraction : carte d'erreur — JAMAIS de badge succès */}
+        {/* Document selected, but some fields need review. Neutral rather
+            than an alarming error state; never claim successful OCR. */}
         {result && (result.success === false || result._failedOcr) && (
-          <View style={[styles.resultCard, { borderColor: '#EF444455' }]}>
+          <View style={[styles.resultCard, { borderColor: theme.primary + '55' }]}>
             <View style={styles.resultHeader}>
-              <Ionicons name="alert-circle" size={22} color="#EF4444" />
-              <Text style={styles.resultTitle}>{t('importErrors.extractFailedTitle')}</Text>
+              <Ionicons name="document-text-outline" size={22} color={theme.primary} />
+              <Text style={styles.resultTitle}>{mode === 'contract'
+                ? t('importErrors.reviewContractTitle') : t('importErrors.reviewInvoiceTitle')}</Text>
               <TouchableOpacity onPress={dismissResult} style={{ marginLeft: 'auto' }}>
                 <Ionicons name="close" size={20} color={theme.textTertiary} />
               </TouchableOpacity>
@@ -985,7 +1000,7 @@ export default function ImportInvoiceScreen() {
               {result._qrValidationCode ? t('importErrors.qrInvalidBody')
                 : result._errorMessage === 'PDF_RENDER_FAILED' ? t('importErrors.pdfReadBody')
                 : result._errorMessage === 'LLM_NOT_CONFIGURED' ? t('importErrors.serviceUnavailableBody')
-                : mode === 'contract' ? t('emailImport.importFailedFallback') : t('importErrors.extractFailedBody')}
+                : t('importErrors.reviewBody')}
             </Text>
             {!showManualCt ? (
               <TouchableOpacity
@@ -994,7 +1009,7 @@ export default function ImportInvoiceScreen() {
                 testID="contract-manual-entry"
               >
                 <Ionicons name="create-outline" size={18} color={theme.text} />
-                <Text style={styles.saveBtnAltTxt}>{t('contractsV2.manualEntry')}</Text>
+                <Text style={styles.saveBtnAltTxt}>{t('importErrors.reviewCta')}</Text>
               </TouchableOpacity>
             ) : (
               <View style={{ marginTop: 12, gap: 8 }}>
@@ -1046,6 +1061,30 @@ export default function ImportInvoiceScreen() {
                   <Text style={styles.saveBtnAltTxt}>{mode === 'contract' ? t('contractsV2.manualSave') : t('emailImport.ctaSaveInvoice')}</Text>
                 </TouchableOpacity>
               </View>
+            )}
+            {!showManualCt && !!result._originalUri && (
+              <TouchableOpacity
+                style={[styles.saveBtnAlt, { marginTop: 12, backgroundColor: 'transparent',
+                  borderWidth: 1, borderColor: theme.primary + '50' }]}
+                onPress={async () => {
+                  try {
+                    setBusy(true);
+                    await keepDocumentPrivate(
+                      result._originalUri, result._mime || 'application/pdf',
+                      result._originalName,
+                    );
+                    setResult(null);
+                  } catch (e: any) {
+                    Alert.alert(t('contractsV2.fileErrorTitle'), t('contractsV2.SAVE_FAILED'));
+                  } finally { setBusy(false); }
+                }}
+                testID="document-preserve-without-ocr"
+              >
+                <Ionicons name="folder-outline" size={18} color={theme.primary} />
+                <Text style={[styles.saveBtnAltTxt, { color: theme.primary }]}>
+                  {t('importErrors.keepOriginal')}
+                </Text>
+              </TouchableOpacity>
             )}
           </View>
         )}

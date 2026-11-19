@@ -16,6 +16,8 @@ struct BudgyShortcuts: AppShortcutsProvider {
                 "Ajoute une dépense avec \(.applicationName)",
                 "Ajoute une dépense dans l'application \(.applicationName)",
                 "Enregistre ma dépense dans \(.applicationName)",
+                "Note une dépense dans \(.applicationName)",
+                "Saisis une dépense dans \(.applicationName)",
                 "Add an expense in \(.applicationName)",
                 "Füge eine Ausgabe in \(.applicationName) hinzu",
                 "Aggiungi una spesa in \(.applicationName)",

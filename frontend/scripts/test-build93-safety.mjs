@@ -19,7 +19,7 @@ const sync = read('src/components/WidgetSync.tsx');
 const app = JSON.parse(read('app.json')).expo;
 
 assert.equal(app.version, '4.0.0');
-assert.equal(app.ios.buildNumber, '94');
+assert.equal(app.ios.buildNumber, '95');
 assert.equal(app.ios.bundleIdentifier, 'com.budgy.ch.budgy');
 assert.match(brand, /isAlnum/);
 assert.match(recur, /shield-checkmark-outline/);

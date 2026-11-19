@@ -97,8 +97,8 @@ const ws = readFileSync(resolve(root, 'src/components/WidgetSync.tsx'), 'utf8');
 check('navigation seulement quand le routeur est prêt', ws.includes('useRootNavigationState') && ws.includes('navReady'));
 check('Siri : hydratation couverte et surveillance sans limite arbitraire',
   ws.includes('setInterval') && ws.includes('hasHydrated') &&
-  ws.includes("AppState.currentState === 'active'") && !ws.includes('tries >= 15'));
-check('jamais de double présentation de la même dépense', ws.includes('pushedPid.current === e.id'));
+  ws.includes('setInterval(consumeNative, 800)') && !ws.includes('tries >= 15'));
+check('jamais de double présentation de la même dépense', ws.includes('shownPid.current !== e.id'));
 check('changement de compte → file consommée', ws.includes('refreshWidgetSnapshot();\n        consumeNative();'));
 
 console.log('\n— QR : feedback visible + galerie —');

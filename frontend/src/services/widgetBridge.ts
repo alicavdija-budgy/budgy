@@ -52,15 +52,49 @@ let storage: Storage | null = null;
 let reloadWidgets: () => void = () => {};
 if (Platform.OS === 'ios') {
   try {
-    // Natif uniquement (module absent sur web / Android / Expo Go sans build)
-
     const mod = require('@bacons/apple-targets');
-    storage = new mod.ExtensionStorage(APP_GROUP);
-    reloadWidgets = () => {
-      try { mod.ExtensionStorage.reloadWidget(); } catch {}
+    // apple-targets may expose a no-op JS shim if its Expo native module
+    // wasn't registered when the JS bundle was evaluated. Constructing
+    // ExtensionStorage alone does NOT prove App Group access is working.
+    const candidate = new mod.ExtensionStorage(APP_GROUP) as Storage;
+    const probeKey = 'budgy.widget.bridge.ready';
+    const probe = (bridge: Storage): boolean => {
+      try {
+        bridge.set(probeKey, 'ready');
+        const ok = bridge.get(probeKey) === 'ready';
+        bridge.remove(probeKey);
+        return ok;
+      } catch { return false; }
     };
+    if (probe(candidate)) {
+      storage = candidate;
+      reloadWidgets = () => { try { mod.ExtensionStorage.reloadWidget(); } catch {} };
+    } else {
+      // Expo SDK 54+ can register the native module through
+      // requireOptionalNativeModule while the apple-targets JS singleton was
+      // evaluated before global expo.modules became ready.
+      const core = require('expo-modules-core');
+      const native = core.requireOptionalNativeModule?.('ExtensionStorage');
+      if (native && typeof native.get === 'function' &&
+          typeof native.setString === 'function') {
+        const direct: Storage = {
+          set: (key, value) => {
+            if (value === undefined) native.remove(key, APP_GROUP);
+            else native.setString(key, value, APP_GROUP);
+          },
+          get: (key) => native.get(key, APP_GROUP) ?? null,
+          remove: (key) => native.remove(key, APP_GROUP),
+        };
+        if (probe(direct)) {
+          storage = direct;
+          reloadWidgets = () => { try { native.reloadWidget?.(null); } catch {} };
+        }
+      }
+    }
+    if (!storage) console.warn('[budgy-siri] Native App Group bridge is unavailable');
   } catch {
     storage = null;
+    console.warn('[budgy-siri] App Group storage initialization failed');
   }
 }
 

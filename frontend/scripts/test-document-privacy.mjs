@@ -105,6 +105,6 @@ const more=read('app/(tabs)/more.tsx');
 check('privacy guide available inside Plus', more.includes("router.push('/more/document-privacy' as any)"));
 check('iCloud copy described as manual', read('src/i18n/translations.ts').includes('export manuel, pas de synchronisation automatique'));
 const app=JSON.parse(read('app.json')).expo;
-check('build is 4.0.0 (94) preserving bundle ID', app.version === '4.0.0' &&
-  app.ios?.buildNumber === '94' && app.ios.bundleIdentifier === 'com.budgy.ch.budgy');
+check('build is 4.0.0 (95) preserving bundle ID', app.version === '4.0.0' &&
+  app.ios?.buildNumber === '95' && app.ios.bundleIdentifier === 'com.budgy.ch.budgy');
 console.log('\nPASS: '+checked+' local-only/iCloud guards. Native iCloud restoration requires physical iOS QA.');

@@ -19,19 +19,19 @@ const api=read('../backend/server.py');
 const app=JSON.parse(read('app.json')).expo;
 const wf=read('../.github/workflows/eas-build.yml');
 
-assert.equal(app.ios.buildNumber, '94');
+assert.equal(app.ios.buildNumber, '95');
 assert.equal(app.ios.bundleIdentifier, 'com.budgy.ch.budgy');
-assert.match(wf,/a.ios\?\.buildNumber !== '94'/);
+assert.match(wf,/a.ios\?\.buildNumber !== '95'/);
 
 // Native route must be inspected non-destructively until the store is ready.
 assert.match(bridge,/export function peekPendingRoute\(\)/);
 assert.match(widget,/peekPendingRoute\(\)/);
 assert.match(widget,/hasHydrated/);
-assert.match(widget,/if \(!hasHydrated\) return false/);
-assert.match(widget,/AppState.currentState === 'active'/);
+assert.match(widget,/if \(!hydrated \|\| !account.user/);
+assert.match(widget,/setInterval\(consumeNative, 800\)/);
 assert(!widget.includes('tries >= 15'));
 assert.match(widget,/popPendingRoute\(\)/);
-assert.match(widget,/pushedPid.current === e.id/);
+assert.match(widget,/shownPid.current !== e.id/);
 assert.match(widget,/peekPendingExpenses\(route === 'quick-add'\)/);
 
 // A Siri amount is an exact native number, not a text/LLM approximation.
@@ -66,4 +66,4 @@ assert.match(api,/if pdf_preview:/);
 assert(api.indexOf('if pdf_preview:') < api.indexOf('if not EMERGENT_LLM_KEY:', api.indexOf('async def scanner_ocr')));
 assert.match(api,/swiss_qr_content=qr_payload/);
 
-console.log('PASS: Siri handoff, idempotency, 4-language document review, secure offline PDF fallback, iOS 94');
+console.log('PASS: Siri handoff, idempotency, 4-language document review, secure offline PDF fallback, iOS 95');

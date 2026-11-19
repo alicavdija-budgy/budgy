@@ -78,6 +78,17 @@ check('QRR : montant exact', b1.amount === 1949.75 && b1.currency === 'CHF');
 check('QRR : créancier structuré', b1.creditor.name === 'Robert Schneider AG' && b1.creditor.addressLine2 === '2501 Biel');
 check('QRR : débiteur lu', b1.debtor?.name === 'Pia-Maria Rutschmann-Schnyder');
 check('QRR : billing info lue', b1.billingInfo.startsWith('//S1'));
+// Swiss QR-IBAN may include letters in the account suffix, but NOT in
+// numeric bank IID / check digits. Synthetic checksum-valid IBAN, not a
+// customer's real account: CH36 30767 123A56789012.
+const ALNUM_QR_IBAN = 'CH3630767123A56789012';
+const alphaBill = parseSwissQrBill(validQRR.replace(QR_IBAN, ALNUM_QR_IBAN));
+check('QRR : IBAN alphanumérique CH conforme SIX (21 chars, mod97)',
+  alphaBill.iban === ALNUM_QR_IBAN && alphaBill.isQrIban &&
+  alphaBill.amount === 1949.75 && mod97Valid(ALNUM_QR_IBAN));
+expectError('IID bancaire doit rester numérique',
+  validQRR.replace(QR_IBAN, 'CH3630A67123A56789012'), 'iban');
+
 const b2 = parseSwissQrBill(validSCOR);
 check('SCOR : référence RF valide (mod 97) + EUR', b2.refType === 'SCOR' && b2.currency === 'EUR');
 check('SCOR : adresse combinée K acceptée (transition 2.3→2.4)', b2.creditor.addressLine1 === 'Musterstrasse 123');

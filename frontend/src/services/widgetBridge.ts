@@ -250,6 +250,13 @@ export async function isAlreadyProcessed(id: string): Promise<boolean> {
   }
 }
 
+/** Non-destructive native intent inspection: never lose a route during hydration. */
+export function peekPendingRoute(): string | null {
+  if (!storage) return null;
+  try { return storage.get(ROUTE_KEY) || null; }
+  catch { return null; }
+}
+
 /** Écran demandé par Siri / widget (consommé une seule fois). */
 export function popPendingRoute(): string | null {
   if (!storage) return null;

@@ -113,7 +113,7 @@ export default function WidgetSync() {
         const e = pending[0];
         if (shownPid.current !== e.id) {
           shownPid.current = e.id;
-          setLabel(e.label || 'Dépense');
+          setLabel(e.label || t('quickAdd.defaultExpense'));
           setDraft(e);
           setMissingDraft(false);
         }

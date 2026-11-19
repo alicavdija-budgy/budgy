@@ -98,6 +98,11 @@ check('31 lignes sans billing facultatif (conformité SIX)', noBillingField.spli
 const withTrailingNewline = parseSwissQrBill(noBillingField + '\n');
 check('saut de ligne final facultatif également accepté',
   withTrailingNewline.billingInfo === '' && withTrailingNewline.amount === 1949.75);
+const withBareCr = parseSwissQrBill(validQRR.replace(/\n/g, '\r'));
+check('ancienne séparation CR seule : 32 champs et somme exacte',
+  withBareCr.amount === 1949.75 && withBareCr.refType === 'QRR');
+const withUtf8Bom = parseSwissQrBill('\uFEFF' + validQRR);
+check('BOM UTF-8 toléré sans assouplir les validations bancaires', withUtf8Bom.amount === 1949.75);
 
 
 console.log('\n— QR-factures invalides (contrôles SIX) —');

@@ -35,7 +35,7 @@ ok('refreshWidgetSnapshot attend l’hydratation du store (cold start Siri)', re
 ok('Sans session hydratée : seuls les CHIFFRES (snapshot) sont retirés', refreshBody.includes('storage.remove(SNAPSHOT_KEY)'));
 ok('La purge totale reste disponible sur action explicite (clearWidgetData)', bridge.includes('export async function clearWidgetData') && bridge.includes('clearWidgetDataSync()'));
 const sync = read('src/components/WidgetSync.tsx');
-ok('WidgetSync libère pushedPid quand la file est vide (annulation/traitement)', sync.includes('pushedPid.current = null'));
+ok('WidgetSync libère shownPid après validation ou annulation explicite', sync.includes('shownPid.current = null') && sync.includes('await resolvePendingExpense(draft.id)'));
 const qa = read('app/quick-add.tsx');
 ok('Annulation quick-add : la commande Siri en attente est retirée de la file', /onPress=\{async \(\) => \{[\s\S]*?resolvePendingExpense\(pendingId\)[\s\S]*?router\.back\(\)/.test(qa));
 ok('Dépense Siri : montant POSITIF (convention moteur) + source siri', qa.includes("source === 'siri' ? 'siri' : 'manual'") && !/amount:\s*-/.test(qa));
@@ -48,7 +48,7 @@ ok('@main struct BudgyIntentsExtension: AppIntentsExtension', ext.includes('@mai
 const appJson = JSON.parse(read('app.json'));
 ok('Version marketing 4.0.0', appJson.expo.version === '4.0.0');
 ok('Build iOS >= 92 (91 déjà utilisé par TestFlight — jamais réutilisé)', parseInt(appJson.expo.ios.buildNumber, 10) >= 92);
-ok('Build iOS configuré exactement à 94 (prochain build à générer)', appJson.expo.ios.buildNumber === '94');
+ok('Build iOS configuré exactement à 95 (prochain build à générer)', appJson.expo.ios.buildNumber === '95');
 ok('Bundle identifier inchangé', appJson.expo.ios.bundleIdentifier === 'com.budgy.ch.budgy');
 const appJsonStr = read('app.json');
 ok('App Group group.com.budgy.ch.budgy préservé', appJsonStr.includes('group.com.budgy.ch.budgy') && read('targets/intents/expo-target.config.js').includes('group.com.budgy.ch.budgy'));

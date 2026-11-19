@@ -120,7 +120,7 @@ S('Siri : libellés conservent le jeton obligatoire appName',
 
 S('App Group group.com.budgy.ch.budgy (entitlements + stockage partagé)', cfg.includes("'group.com.budgy.ch.budgy'") && shared.includes('"group.com.budgy.ch.budgy"'));
 S('bundle identifier com.budgy.ch.budgy conservé', appJson.includes('"bundleIdentifier": "com.budgy.ch.budgy"'));
-S('build iOS 94 préparé pour le prochain TestFlight', appJson.includes('"buildNumber": "94"'));
+S('build iOS 95 préparé pour le prochain TestFlight', appJson.includes('"buildNumber": "95"'));
 S('extension @main préservée (ITMS-90896)', read('targets/intents/BudgyIntentsExtension.swift').includes('@main'));
 S('App Intents compilés dans APP + EXTENSION par le dossier spécial _shared', 
   ['BudgyIntents.swift', 'BudgyShared.swift', 'BudgyShortcuts.swift'].every((name) =>
@@ -147,7 +147,7 @@ S('convention financière : dépense enregistrée avec montant POSITIF', qa.incl
 S('Siri : hydratation respectée et écoute active sans limite arbitraire de 12 secondes',
   wsync.includes('setInterval') &&
   wsync.includes('hasHydrated') &&
-  wsync.includes("AppState.currentState === 'active'") &&
+  wsync.includes('setInterval(consumeNative, 800)') &&
   !wsync.includes('tries >= 15'));
 S('reprise au retour au premier plan + changement de compte', wsync.includes("st === 'active'") && wsync.includes('s.activeScope !== lastScope'));
 S('purge totale UNIQUEMENT sur action explicite (logout/suppression)', bridge.includes('clearWidgetData') && bridge.includes('déconnexion / suppression'));

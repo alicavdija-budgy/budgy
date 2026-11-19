@@ -120,7 +120,7 @@ function parseParty(L: string[], base: number, required: boolean): QrParty | nul
 }
 
 export function parseSwissQrBill(payload: string): SwissQrBill {
-  const L = payload.split(/\r?\n/).map((s) => s.trim());
+  const L = payload.replace(/^\uFEFF/, '').split(/\r\n|\n|\r/).map((s) => s.trim());
 
   if (L[0] !== 'SPC') throw new QrBillError('spc');
   if (!/^02\d\d$/.test(L[1] || '')) throw new QrBillError('version');

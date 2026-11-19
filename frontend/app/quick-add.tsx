@@ -43,7 +43,7 @@ import { useTranslation } from '../src/hooks/useTranslation';
 import type { ThemePalette } from '../src/constants/palettes';
 import { smartInput, type SmartInputSource, type SmartInputResult } from '../src/lib/smartInput';
 import {
-  resolvePendingExpense, isAlreadyProcessed, refreshWidgetSnapshot,
+  resolvePendingExpense, isAlreadyProcessed, peekPendingExpenses, refreshWidgetSnapshot,
 } from '../src/services/widgetBridge';
 import { useStore } from '../src/stores/useStore';
 import { Button } from '../src/components/ui';
@@ -89,6 +89,23 @@ export default function QuickAddScreen() {
     if (!text.trim()) return;
     setParsing(true);
     try {
+      if (source === 'siri' && pendingId) {
+        // This is a typed amount already parsed by Apple's App Intent.
+        // NEVER send it to the voice LLM or reinterpret the amount as text.
+        const draft = peekPendingExpenses(true).find((e) => e.id === pendingId);
+        if (!draft || !Number.isFinite(draft.amount) || draft.amount <= 0) {
+          setResult({ ok: false, source, resolvedBy: 'failed', rawText: text,
+            error: t('quickAdd.siriDraftUnavailable') });
+          return;
+        }
+        setResult({
+          ok: true, source: 'siri', resolvedBy: 'local', type: 'expense',
+          amount: draft.amount, currency: 'CHF',
+          merchant: draft.label.trim() || t('quickAdd.defaultExpense'),
+          category: 'other', confidence: 1, rawText: text,
+        });
+        return;
+      }
       const r = await smartInput(text, source);
       setResult(r);
       if (r.ok) {
@@ -111,6 +128,17 @@ export default function QuickAddScreen() {
 
   const commit = async () => {
     if (!result || !result.ok) return;
+    if (pendingId) {
+      // Protect against stale/deep-link-injected pid and cross-account writes.
+      const draft = source === 'siri'
+        ? peekPendingExpenses(true).find((e) => e.id === pendingId) : null;
+      const user = useStore.getState().user;
+      if (!draft || !user || !Number.isFinite(draft.amount) ||
+          Math.abs((result.amount || 0) - draft.amount) > 0.001) {
+        Alert.alert(t('quickAdd.saveError'), t('quickAdd.siriDraftUnavailable'));
+        return;
+      }
+    }
     // Anti-doublon absolu (Siri) : si cette demande a déjà été enregistrée
     // (interruption, redémarrage), on la retire de la file sans la resauver.
     if (pendingId && (await isAlreadyProcessed(pendingId))) {
